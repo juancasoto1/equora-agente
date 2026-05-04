@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from agent.brain import generar_respuesta
 from agent.memory import inicializar_db, guardar_mensaje, obtener_historial
 from agent.providers import obtener_proveedor
+from agent.providers.twilio import obtener_url_imagen
 
 load_dotenv()
 
@@ -67,6 +68,13 @@ async def webhook_handler(request: Request):
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
 
             await proveedor.enviar_mensaje(msg.telefono, respuesta)
+
+            # Enviar imagen del producto si el cliente preguntó por uno específico
+            url_imagen = obtener_url_imagen(msg.texto)
+            if url_imagen and hasattr(proveedor, "enviar_imagen"):
+                await proveedor.enviar_imagen(msg.telefono, url_imagen)
+                logger.info(f"Imagen enviada a {msg.telefono}: {url_imagen}")
+
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
 
         return {"status": "ok"}
