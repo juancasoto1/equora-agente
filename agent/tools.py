@@ -19,17 +19,22 @@ PRECIOS_SHEET_URL = os.getenv(
 )
 
 
-async def guardar_pedido_en_sheet(telefono: str, datos: dict) -> bool:
-    """Envía los datos del pedido al Google Sheet via Apps Script."""
+async def guardar_pedido_en_sheet(telefono: str, datos: dict) -> str | None:
+    """Envía los datos del pedido al Google Sheet via Apps Script.
+    Retorna el número de pedido (ej: ED-0001) o None si falló."""
     try:
         payload = {**datos, "telefono": telefono}
         async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
             r = await client.post(PEDIDOS_SCRIPT_URL, json=payload)
-            logger.info(f"Pedido guardado en sheet: {r.status_code}")
-            return r.status_code == 200
+            if r.status_code == 200:
+                numero_pedido = r.json().get("pedido")
+                logger.info(f"Pedido guardado en sheet: {numero_pedido}")
+                return numero_pedido
+            logger.error(f"Error sheet: {r.status_code} — {r.text}")
+            return None
     except Exception as e:
         logger.error(f"Error guardando pedido en sheet: {e}")
-        return False
+        return None
 
 
 async def obtener_precios_sheet() -> list[dict]:

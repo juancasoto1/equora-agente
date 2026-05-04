@@ -71,18 +71,24 @@ async def webhook_handler(request: Request):
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
 
             # Detectar y procesar marcador de pedido confirmado
+            numero_pedido = None
             match_pedido = re.search(r'\[\[PEDIDO:(.*?)\]\]', respuesta, re.DOTALL)
             if match_pedido:
                 try:
                     datos_pedido = json.loads(match_pedido.group(1))
-                    await guardar_pedido_en_sheet(msg.telefono, datos_pedido)
-                    logger.info(f"Pedido guardado en sheet para {msg.telefono}")
+                    numero_pedido = await guardar_pedido_en_sheet(msg.telefono, datos_pedido)
+                    logger.info(f"Pedido {numero_pedido} guardado en sheet para {msg.telefono}")
                 except Exception as e:
                     logger.error(f"Error procesando datos del pedido: {e}")
                 # Eliminar el marcador antes de enviar el mensaje al cliente
                 respuesta = re.sub(r'\s*\[\[PEDIDO:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
             await proveedor.enviar_mensaje(msg.telefono, respuesta)
+
+            # Enviar número de pedido al cliente si se generó uno
+            if numero_pedido:
+                msg_pedido = f"🧾 *Número de pedido:* {numero_pedido}\nGuárdalo para cualquier consulta sobre tu pedido."
+                await proveedor.enviar_mensaje(msg.telefono, msg_pedido)
 
             # Enviar imagen del producto si el cliente preguntó por uno específico
             url_imagen = obtener_url_imagen(msg.texto)
