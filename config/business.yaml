@@ -1,0 +1,46 @@
+# Configuración del negocio — Generado por AgentKit
+negocio:
+  nombre: "Equora Distribuciones"
+  descripcion: >
+    Equora Distribuciones es el distribuidor oficial de productos Biotú en Colombia.
+    Comercializa productos de limpieza biodegradables de origen vegetal, sin fosfatos,
+    que limpian profundo sin dañar el planeta. Atiende a restaurantes, hoteles,
+    cafeterías, hogares, talleres mecánicos y empresas industriales.
+  horario: "Lunes a Viernes 8am a 6pm, Sábados 9am a 1pm"
+  categorias:
+    - nombre: "Personal"
+      productos: ["Jabón Líquido Manos y Cuerpo (4 fragancias)"]
+    - nombre: "Lavandería"
+      productos:
+        - "Detergente Ropa Color (tecnología Texcare)"
+        - "Detergente Ropa Blanca (tecnología Texcare)"
+        - "Detergente Ropa Delicada"
+        - "Suavizante de Ropa"
+        - "Detergente Multiusos"
+    - nombre: "Hogar"
+      productos:
+        - "Lavaloza Antibacterial PRO MAX"
+        - "Desengrasante de Cocina"
+        - "Limpiavidrios"
+        - "Desmanchador de juntas y baños"
+        - "Eliminador de olores"
+        - "Ambientador y Limpiapisos Antibacterial"
+        - "Limpiador Desinfectante"
+    - nombre: "Industrial / Automotriz"
+      productos:
+        - "Desengrasante Profesional"
+        - "Shampoo para Vehículos"
+        - "Desengrasante de Motores"
+
+agente:
+  nombre: "Andrea"
+  tono: "Amigable y casual, vendedora y persuasiva, empática y cálida"
+  casos_de_uso:
+    - "Calificar y atender leads / ventas"
+    - "Tomar pedidos"
+    - "Soporte post-venta"
+
+metadata:
+  creado: "2026-05-04"
+  version: "1.0"
+  proveedor_whatsapp: "twilio"

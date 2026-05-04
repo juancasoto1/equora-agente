@@ -1,0 +1,39 @@
+# Secretos — NUNCA subir a GitHub
+.env
+
+# Base de datos local
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Knowledge (archivos privados del negocio)
+knowledge/*
+!knowledge/.gitkeep
+
+# Session state
+config/session.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node (si se usa para Claude Code)
+node_modules/
