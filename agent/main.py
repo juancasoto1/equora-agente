@@ -1,4 +1,6 @@
 import os
+import re
+import json
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
@@ -9,6 +11,7 @@ from agent.brain import generar_respuesta
 from agent.memory import inicializar_db, guardar_mensaje, obtener_historial
 from agent.providers import obtener_proveedor
 from agent.providers.twilio import obtener_url_imagen
+from agent.tools import guardar_pedido_en_sheet
 
 load_dotenv()
 
@@ -66,6 +69,18 @@ async def webhook_handler(request: Request):
 
             await guardar_mensaje(msg.telefono, "user", msg.texto)
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
+
+            # Detectar y procesar marcador de pedido confirmado
+            match_pedido = re.search(r'\[\[PEDIDO:(.*?)\]\]', respuesta, re.DOTALL)
+            if match_pedido:
+                try:
+                    datos_pedido = json.loads(match_pedido.group(1))
+                    await guardar_pedido_en_sheet(msg.telefono, datos_pedido)
+                    logger.info(f"Pedido guardado en sheet para {msg.telefono}")
+                except Exception as e:
+                    logger.error(f"Error procesando datos del pedido: {e}")
+                # Eliminar el marcador antes de enviar el mensaje al cliente
+                respuesta = re.sub(r'\s*\[\[PEDIDO:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
             await proveedor.enviar_mensaje(msg.telefono, respuesta)
 

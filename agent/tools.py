@@ -8,10 +8,28 @@ from datetime import datetime
 
 logger = logging.getLogger("agentkit")
 
+PEDIDOS_SCRIPT_URL = os.getenv(
+    "PEDIDOS_SCRIPT_URL",
+    "https://script.google.com/macros/s/AKfycbxxieSGuKuypKgublAXFKjlnOSj5Nm7fiQDTbdPeX9zoPaR97-zgBCxW-B2ow7Sq84e/exec"
+)
+
 PRECIOS_SHEET_URL = os.getenv(
     "PRECIOS_SHEET_URL",
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vSr2pT9wKPefcXti8cOQZKR-lvAHS64L8YdpT89QdNECcKSkmM8DOuuiOyLQqC9gfPC5pQfrrNd-jau/pub?gid=828131088&single=true&output=csv"
 )
+
+
+async def guardar_pedido_en_sheet(telefono: str, datos: dict) -> bool:
+    """Envía los datos del pedido al Google Sheet via Apps Script."""
+    try:
+        payload = {**datos, "telefono": telefono}
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
+            r = await client.post(PEDIDOS_SCRIPT_URL, json=payload)
+            logger.info(f"Pedido guardado en sheet: {r.status_code}")
+            return r.status_code == 200
+    except Exception as e:
+        logger.error(f"Error guardando pedido en sheet: {e}")
+        return False
 
 
 async def obtener_precios_sheet() -> list[dict]:
