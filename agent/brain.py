@@ -3,6 +3,7 @@ import yaml
 import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
+from agent.tools import obtener_precios_como_texto
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -39,6 +40,10 @@ async def generar_respuesta(mensaje: str, historial: list[dict]) -> str:
         return obtener_mensaje_fallback()
 
     system_prompt = cargar_system_prompt()
+
+    # Inyectar precios actualizados desde Google Sheets
+    precios = await obtener_precios_como_texto()
+    system_prompt = system_prompt + "\n\n" + precios
 
     mensajes = []
     for msg in historial:

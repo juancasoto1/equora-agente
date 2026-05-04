@@ -1,9 +1,44 @@
 import os
-import yaml
+import csv
+import io
 import logging
+import yaml
+import httpx
 from datetime import datetime
 
 logger = logging.getLogger("agentkit")
+
+PRECIOS_SHEET_URL = os.getenv(
+    "PRECIOS_SHEET_URL",
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vSr2pT9wKPefcXti8cOQZKR-lvAHS64L8YdpT89QdNECcKSkmM8DOuuiOyLQqC9gfPC5pQfrrNd-jau/pub?gid=828131088&single=true&output=csv"
+)
+
+
+async def obtener_precios_sheet() -> list[dict]:
+    """Descarga el catálogo de precios desde Google Sheets en tiempo real."""
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
+            r = await client.get(PRECIOS_SHEET_URL)
+            r.raise_for_status()
+            reader = csv.DictReader(io.StringIO(r.text))
+            return [row for row in reader]
+    except Exception as e:
+        logger.error(f"Error leyendo precios desde Google Sheets: {e}")
+        return []
+
+
+async def obtener_precios_como_texto() -> str:
+    """Retorna el catálogo de precios formateado como texto para el system prompt."""
+    productos = await obtener_precios_sheet()
+    if not productos:
+        return "No se pudo cargar el catálogo de precios en este momento."
+    lineas = ["## Lista de precios actualizada\n"]
+    for p in productos:
+        descripcion = p.get("descripcion", "")
+        precio = p.get("price", "")
+        if descripcion and precio:
+            lineas.append(f"- {descripcion}: {precio}")
+    return "\n".join(lineas)
 
 
 def cargar_info_negocio() -> dict:
