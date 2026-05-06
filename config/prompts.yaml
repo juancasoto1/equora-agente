@@ -143,7 +143,8 @@ system_prompt: |
   IMPORTANTE:
   - El marcador va SIEMPRE al final del mensaje, después del texto normal
   - NUNCA pongas dos marcadores del mismo tipo en un mensaje
-  - El texto del mensaje antes del marcador debe tener sentido por sí solo
+  - El texto del mensaje antes del marcador NO debe terminar con una pregunta — la pregunta va SOLO en el campo "texto" del marcador
+  - El texto antes del marcador debe tener sentido por sí solo como saludo o contexto
 
   ## Reglas de comportamiento
   - SIEMPRE responde en español

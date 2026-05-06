@@ -52,39 +52,30 @@ async def webhook_verificacion(request: Request):
     return {"status": "ok"}
 
 
-async def procesar_marcador_botones(telefono: str, respuesta: str) -> str:
-    """Detecta [[BOTONES:...]], envía el mensaje interactivo y elimina el marcador."""
+def extraer_marcador_botones(respuesta: str) -> tuple[str, dict | None]:
+    """Extrae datos del marcador [[BOTONES:...]] y lo elimina del texto."""
     match = re.search(r'\[\[BOTONES:(.*?)\]\]', respuesta, re.DOTALL)
     if not match:
-        return respuesta
+        return respuesta, None
     try:
         datos = json.loads(match.group(1))
-        texto = datos.get("texto", "")
-        botones = datos.get("botones", [])
-        if texto and botones and hasattr(proveedor, "enviar_botones"):
-            await proveedor.enviar_botones(telefono, texto, botones)
-            logger.info(f"Botones enviados a {telefono}: {botones}")
-    except Exception as e:
-        logger.error(f"Error procesando marcador BOTONES: {e}")
-    return re.sub(r'\s*\[\[BOTONES:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
+    except Exception:
+        datos = None
+    texto_limpio = re.sub(r'\s*\[\[BOTONES:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
+    return texto_limpio, datos
 
 
-async def procesar_marcador_lista(telefono: str, respuesta: str) -> str:
-    """Detecta [[LISTA:...]], envía el mensaje de lista y elimina el marcador."""
+def extraer_marcador_lista(respuesta: str) -> tuple[str, dict | None]:
+    """Extrae datos del marcador [[LISTA:...]] y lo elimina del texto."""
     match = re.search(r'\[\[LISTA:(.*?)\]\]', respuesta, re.DOTALL)
     if not match:
-        return respuesta
+        return respuesta, None
     try:
         datos = json.loads(match.group(1))
-        texto = datos.get("texto", "")
-        boton = datos.get("boton", "Ver opciones")
-        secciones = datos.get("secciones", [])
-        if texto and secciones and hasattr(proveedor, "enviar_lista"):
-            await proveedor.enviar_lista(telefono, texto, boton, secciones)
-            logger.info(f"Lista enviada a {telefono}")
-    except Exception as e:
-        logger.error(f"Error procesando marcador LISTA: {e}")
-    return re.sub(r'\s*\[\[LISTA:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
+    except Exception:
+        datos = None
+    texto_limpio = re.sub(r'\s*\[\[LISTA:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
+    return texto_limpio, datos
 
 
 @app.post("/webhook")
@@ -116,13 +107,37 @@ async def webhook_handler(request: Request):
                     logger.error(f"Error procesando pedido: {e}")
                 respuesta = re.sub(r'\s*\[\[PEDIDO:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
-            # Procesar marcadores de mensajes interactivos
-            respuesta = await procesar_marcador_botones(msg.telefono, respuesta)
-            respuesta = await procesar_marcador_lista(msg.telefono, respuesta)
+            # Extraer marcadores interactivos ANTES de enviar el texto
+            respuesta, datos_botones = extraer_marcador_botones(respuesta)
+            respuesta, datos_lista = extraer_marcador_lista(respuesta)
 
-            # Enviar respuesta de texto (si queda algo después de los marcadores)
+            # Enviar texto primero
             if respuesta:
                 await proveedor.enviar_mensaje(msg.telefono, respuesta)
+
+            # Luego enviar mensajes interactivos
+            if datos_botones and hasattr(proveedor, "enviar_botones"):
+                try:
+                    await proveedor.enviar_botones(
+                        msg.telefono,
+                        datos_botones.get("texto", ""),
+                        datos_botones.get("botones", [])
+                    )
+                    logger.info(f"Botones enviados a {msg.telefono}")
+                except Exception as e:
+                    logger.error(f"Error enviando botones: {e}")
+
+            if datos_lista and hasattr(proveedor, "enviar_lista"):
+                try:
+                    await proveedor.enviar_lista(
+                        msg.telefono,
+                        datos_lista.get("texto", ""),
+                        datos_lista.get("boton", "Ver opciones"),
+                        datos_lista.get("secciones", [])
+                    )
+                    logger.info(f"Lista enviada a {msg.telefono}")
+                except Exception as e:
+                    logger.error(f"Error enviando lista: {e}")
 
             # Enviar número de pedido si se generó
             if numero_pedido:
