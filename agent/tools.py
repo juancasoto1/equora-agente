@@ -33,6 +33,7 @@ SHOPIFY_QUERY = """
               title
               price { amount }
               availableForSale
+              quantityAvailable
             }
           }
         }
@@ -63,12 +64,16 @@ async def obtener_catalogo_shopify() -> str:
         lineas = ["## Catálogo de productos actualizado (Shopify)\n"]
         for p in products:
             node = p["node"]
+            variantes_disponibles = [
+                v["node"] for v in node["variants"]["edges"]
+                if v["node"]["availableForSale"] and float(v["node"]["price"]["amount"]) > 0
+            ]
+            if not variantes_disponibles:
+                continue  # Producto completamente agotado, no lo mostramos
             lineas.append(f"*{node['title']}*")
-            for v in node["variants"]["edges"]:
-                vn = v["node"]
+            for vn in variantes_disponibles:
                 precio = int(float(vn["price"]["amount"]))
-                disponible = "" if vn["availableForSale"] else " (agotado)"
-                lineas.append(f"  {vn['title']} → ${precio:,}{disponible}")
+                lineas.append(f"  {vn['title']} → ${precio:,}")
             lineas.append("")
 
         logger.info(f"Catálogo Shopify cargado: {len(products)} productos")
