@@ -49,7 +49,7 @@ async def health_check():
 async def webhook_verificacion(request: Request):
     resultado = await proveedor.validar_webhook(request)
     if resultado is not None:
-        return PlainTextResponse(str(resultado))
+        return resultado
     return {"status": "ok"}
 
 
