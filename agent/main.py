@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from agent.brain import generar_respuesta
 from agent.memory import inicializar_db, guardar_mensaje, obtener_historial
 from agent.providers import obtener_proveedor
-from agent.tools import guardar_pedido_en_sheet
+from agent.tools import crear_orden_shopify
 
 load_dotenv()
 
@@ -101,8 +101,8 @@ async def webhook_handler(request: Request):
             if match_pedido:
                 try:
                     datos_pedido = json.loads(match_pedido.group(1))
-                    numero_pedido = await guardar_pedido_en_sheet(msg.telefono, datos_pedido)
-                    logger.info(f"Pedido {numero_pedido} guardado para {msg.telefono}")
+                    numero_pedido = await crear_orden_shopify(msg.telefono, datos_pedido)
+                    logger.info(f"Orden Shopify {numero_pedido} creada para {msg.telefono}")
                 except Exception as e:
                     logger.error(f"Error procesando pedido: {e}")
                 respuesta = re.sub(r'\s*\[\[PEDIDO:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
@@ -139,9 +139,13 @@ async def webhook_handler(request: Request):
                 except Exception as e:
                     logger.error(f"Error enviando lista: {e}")
 
-            # Enviar número de pedido si se generó
+            # Enviar número de orden Shopify si se generó
             if numero_pedido:
-                msg_pedido = f"🧾 *Número de pedido:* {numero_pedido}\nGuárdalo para cualquier consulta."
+                msg_pedido = (
+                    f"🧾 *Número de pedido:* {numero_pedido}\n"
+                    f"Tu pedido ya está registrado. Guarda este número para cualquier consulta. "
+                    f"Pronto alguien del equipo te contactará para coordinar el pago y la entrega. ¡Gracias! 🙌"
+                )
                 await proveedor.enviar_mensaje(msg.telefono, msg_pedido)
 
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")

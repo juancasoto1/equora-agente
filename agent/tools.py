@@ -1,6 +1,4 @@
 import os
-import csv
-import io
 import logging
 import yaml
 import httpx
@@ -8,18 +6,9 @@ from datetime import datetime
 
 logger = logging.getLogger("agentkit")
 
-PEDIDOS_SCRIPT_URL = os.getenv(
-    "PEDIDOS_SCRIPT_URL",
-    "https://script.google.com/macros/s/AKfycbxxieSGuKuypKgublAXFKjlnOSj5Nm7fiQDTbdPeX9zoPaR97-zgBCxW-B2ow7Sq84e/exec"
-)
-
-PRECIOS_SHEET_URL = os.getenv(
-    "PRECIOS_SHEET_URL",
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vSr2pT9wKPefcXti8cOQZKR-lvAHS64L8YdpT89QdNECcKSkmM8DOuuiOyLQqC9gfPC5pQfrrNd-jau/pub?gid=828131088&single=true&output=csv"
-)
-
 SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "equora-6.myshopify.com")
 SHOPIFY_STOREFRONT_TOKEN = os.getenv("SHOPIFY_STOREFRONT_TOKEN", "d6fe89f265fed1b5f9572f19fc0ba3a7")
+SHOPIFY_ADMIN_TOKEN = os.getenv("SHOPIFY_ADMIN_TOKEN", "")
 
 SHOPIFY_QUERY = """
 {
@@ -86,21 +75,76 @@ async def obtener_catalogo_shopify() -> str:
         return ""
 
 
-async def guardar_pedido_en_sheet(telefono: str, datos: dict) -> str | None:
-    """Envía los datos del pedido al Google Sheet via Apps Script.
-    Retorna el número de pedido (ej: ED-0001) o None si falló."""
+async def crear_orden_shopify(telefono: str, datos: dict) -> str | None:
+    """Crea una orden en Shopify Admin API y retorna el número de orden (#1001, etc.)."""
+    if not SHOPIFY_ADMIN_TOKEN:
+        logger.error("SHOPIFY_ADMIN_TOKEN no configurado")
+        return None
     try:
-        payload = {**datos, "telefono": telefono}
-        async with httpx.AsyncClient(follow_redirects=True, timeout=10) as client:
-            r = await client.post(PEDIDOS_SCRIPT_URL, json=payload)
-            if r.status_code == 200:
-                numero_pedido = r.json().get("pedido")
-                logger.info(f"Pedido guardado en sheet: {numero_pedido}")
-                return numero_pedido
-            logger.error(f"Error sheet: {r.status_code} — {r.text}")
+        productos = datos.get("productos", [])
+        line_items = [
+            {
+                "title": f"{p.get('producto', '')} - {p.get('presentacion', '')}",
+                "quantity": int(p.get("cantidad", 1)),
+                "price": str(float(p.get("precio_unitario", 0))),
+                "requires_shipping": True,
+            }
+            for p in productos
+        ]
+
+        nota = (
+            f"Pedido via WhatsApp\n"
+            f"Teléfono: {telefono}\n"
+            f"CC/NIT: {datos.get('cc_nit', '')}\n"
+            f"Razón Social: {datos.get('razon_social', '')}\n"
+            f"Barrio: {datos.get('barrio', '')}\n"
+            f"Departamento: {datos.get('departamento', '')}"
+        )
+
+        payload = {
+            "order": {
+                "line_items": line_items,
+                "customer": {
+                    "first_name": datos.get("nombres", ""),
+                    "last_name": datos.get("apellidos", ""),
+                    "phone": telefono,
+                },
+                "shipping_address": {
+                    "first_name": datos.get("nombres", ""),
+                    "last_name": datos.get("apellidos", ""),
+                    "address1": datos.get("direccion", ""),
+                    "city": datos.get("ciudad", ""),
+                    "province": datos.get("departamento", ""),
+                    "country": "CO",
+                    "phone": telefono,
+                },
+                "note": nota,
+                "financial_status": "pending",
+                "fulfillment_status": None,
+                "send_receipt": False,
+                "send_fulfillment_receipt": False,
+                "tags": "whatsapp,andrea-bot",
+            }
+        }
+
+        url = f"https://{SHOPIFY_STORE}/admin/api/2024-10/orders.json"
+        headers = {
+            "X-Shopify-Access-Token": SHOPIFY_ADMIN_TOKEN,
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code == 201:
+                orden = r.json().get("order", {})
+                numero = orden.get("order_number")
+                logger.info(f"Orden Shopify creada: #{numero} para {telefono}")
+                return f"#{numero}"
+            logger.error(f"Error Shopify Admin API: {r.status_code} — {r.text}")
             return None
+
     except Exception as e:
-        logger.error(f"Error guardando pedido en sheet: {e}")
+        logger.error(f"Error creando orden en Shopify: {e}")
         return None
 
 
