@@ -66,10 +66,12 @@ async def obtener_catalogo_shopify() -> str:
             node = p["node"]
             variantes_disponibles = [
                 v["node"] for v in node["variants"]["edges"]
-                if v["node"]["availableForSale"] and float(v["node"]["price"]["amount"]) > 0
+                if v["node"]["availableForSale"]
+                and float(v["node"]["price"]["amount"]) > 0
+                and (v["node"].get("quantityAvailable") or 0) > 0
             ]
             if not variantes_disponibles:
-                continue  # Producto completamente agotado, no lo mostramos
+                continue  # Producto sin stock, no lo mostramos
             lineas.append(f"*{node['title']}*")
             for vn in variantes_disponibles:
                 precio = int(float(vn["price"]["amount"]))
