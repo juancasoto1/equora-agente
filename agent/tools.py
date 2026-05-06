@@ -18,6 +18,66 @@ PRECIOS_SHEET_URL = os.getenv(
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vSr2pT9wKPefcXti8cOQZKR-lvAHS64L8YdpT89QdNECcKSkmM8DOuuiOyLQqC9gfPC5pQfrrNd-jau/pub?gid=828131088&single=true&output=csv"
 )
 
+SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "equora-6.myshopify.com")
+SHOPIFY_STOREFRONT_TOKEN = os.getenv("SHOPIFY_STOREFRONT_TOKEN", "d6fe89f265fed1b5f9572f19fc0ba3a7")
+
+SHOPIFY_QUERY = """
+{
+  products(first: 50) {
+    edges {
+      node {
+        title
+        variants(first: 10) {
+          edges {
+            node {
+              title
+              price { amount }
+              availableForSale
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+async def obtener_catalogo_shopify() -> str:
+    """Obtiene el catálogo completo de productos desde Shopify Storefront API en tiempo real."""
+    try:
+        url = f"https://{SHOPIFY_STORE}/api/2024-10/graphql.json"
+        headers = {
+            "Content-Type": "application/json",
+            "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json={"query": SHOPIFY_QUERY}, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+
+        products = data.get("data", {}).get("products", {}).get("edges", [])
+        if not products:
+            return "No se pudo cargar el catálogo de Shopify."
+
+        lineas = ["## Catálogo de productos actualizado (Shopify)\n"]
+        for p in products:
+            node = p["node"]
+            lineas.append(f"*{node['title']}*")
+            for v in node["variants"]["edges"]:
+                vn = v["node"]
+                precio = int(float(vn["price"]["amount"]))
+                disponible = "" if vn["availableForSale"] else " (agotado)"
+                lineas.append(f"  {vn['title']} → ${precio:,}{disponible}")
+            lineas.append("")
+
+        logger.info(f"Catálogo Shopify cargado: {len(products)} productos")
+        return "\n".join(lineas)
+
+    except Exception as e:
+        logger.error(f"Error obteniendo catálogo Shopify: {e}")
+        return ""
+
 
 async def guardar_pedido_en_sheet(telefono: str, datos: dict) -> str | None:
     """Envía los datos del pedido al Google Sheet via Apps Script.

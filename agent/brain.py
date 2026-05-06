@@ -3,7 +3,7 @@ import yaml
 import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
-from agent.tools import obtener_precios_como_texto
+from agent.tools import obtener_catalogo_shopify
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -41,9 +41,10 @@ async def generar_respuesta(mensaje: str, historial: list[dict]) -> str:
 
     system_prompt = cargar_system_prompt()
 
-    # Inyectar precios actualizados desde Google Sheets
-    precios = await obtener_precios_como_texto()
-    system_prompt = system_prompt + "\n\n" + precios
+    # Inyectar catálogo actualizado desde Shopify en tiempo real
+    catalogo = await obtener_catalogo_shopify()
+    if catalogo:
+        system_prompt = system_prompt + "\n\n" + catalogo
 
     mensajes = []
     for msg in historial:
