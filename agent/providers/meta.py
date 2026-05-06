@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import httpx
 from fastapi import Request
@@ -18,7 +19,6 @@ class ProveedorMeta(ProveedorWhatsApp):
         self.api_version = "v21.0"
 
     async def validar_webhook(self, request: Request):
-        """Meta requiere verificación GET con hub.verify_token."""
         params = request.query_params
         mode = params.get("hub.mode")
         token = params.get("hub.verify_token")
@@ -28,24 +28,49 @@ class ProveedorMeta(ProveedorWhatsApp):
         return None
 
     async def parsear_webhook(self, request: Request) -> list[MensajeEntrante]:
-        """Parsea el payload JSON de Meta Cloud API."""
+        """Parsea mensajes de texto e interactivos (clicks de botones y listas)."""
         body = await request.json()
         mensajes = []
         for entry in body.get("entry", []):
             for change in entry.get("changes", []):
                 value = change.get("value", {})
                 for msg in value.get("messages", []):
-                    if msg.get("type") == "text":
-                        mensajes.append(MensajeEntrante(
-                            telefono=msg.get("from", ""),
-                            texto=msg.get("text", {}).get("body", ""),
-                            mensaje_id=msg.get("id", ""),
-                            es_propio=False,
-                        ))
+                    telefono = msg.get("from", "")
+                    msg_id = msg.get("id", "")
+                    tipo = msg.get("type", "")
+
+                    if tipo == "text":
+                        texto = msg.get("text", {}).get("body", "")
+                        if texto:
+                            mensajes.append(MensajeEntrante(
+                                telefono=telefono,
+                                texto=texto,
+                                mensaje_id=msg_id,
+                                es_propio=False,
+                            ))
+
+                    elif tipo == "interactive":
+                        interactivo = msg.get("interactive", {})
+                        tipo_interactivo = interactivo.get("type", "")
+
+                        if tipo_interactivo == "button_reply":
+                            texto = interactivo.get("button_reply", {}).get("title", "")
+                        elif tipo_interactivo == "list_reply":
+                            texto = interactivo.get("list_reply", {}).get("title", "")
+                        else:
+                            texto = ""
+
+                        if texto:
+                            mensajes.append(MensajeEntrante(
+                                telefono=telefono,
+                                texto=texto,
+                                mensaje_id=msg_id,
+                                es_propio=False,
+                            ))
         return mensajes
 
     async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
-        """Envía mensaje de texto via Meta WhatsApp Cloud API."""
+        """Envía mensaje de texto plano."""
         if not self.access_token or not self.phone_number_id:
             logger.warning("META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados")
             return False
@@ -63,5 +88,81 @@ class ProveedorMeta(ProveedorWhatsApp):
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
-                logger.error(f"Error Meta API: {r.status_code} — {r.text}")
+                logger.error(f"Error Meta API texto: {r.status_code} — {r.text}")
+            return r.status_code == 200
+
+    async def enviar_botones(self, telefono: str, texto: str, botones: list[str]) -> bool:
+        """Envía mensaje con hasta 3 botones de respuesta rápida."""
+        if not self.access_token or not self.phone_number_id:
+            return False
+
+        # WhatsApp limita títulos de botones a 20 caracteres
+        botones_payload = [
+            {"type": "reply", "reply": {"id": f"btn_{i}", "title": b[:20]}}
+            for i, b in enumerate(botones[:3])
+        ]
+
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": texto},
+                "action": {"buttons": botones_payload},
+            },
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API botones: {r.status_code} — {r.text}")
+            return r.status_code == 200
+
+    async def enviar_lista(self, telefono: str, texto: str, boton: str, secciones: list[dict]) -> bool:
+        """Envía mensaje con lista de opciones seleccionables."""
+        if not self.access_token or not self.phone_number_id:
+            return False
+
+        secciones_payload = []
+        for seccion in secciones:
+            rows = [
+                {
+                    "id": item.get("id", f"item_{i}"),
+                    "title": item.get("titulo", "")[:24],
+                    "description": item.get("descripcion", "")[:72],
+                }
+                for i, item in enumerate(seccion.get("items", []))
+            ]
+            secciones_payload.append({
+                "title": seccion.get("titulo", "")[:24],
+                "rows": rows,
+            })
+
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "list",
+                "body": {"text": texto},
+                "action": {
+                    "button": boton[:20],
+                    "sections": secciones_payload,
+                },
+            },
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API lista: {r.status_code} — {r.text}")
             return r.status_code == 200
