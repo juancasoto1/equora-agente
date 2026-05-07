@@ -16,54 +16,21 @@ system_prompt: |
   sin fosfatos, 100% biodegradables, que limpian profundo sin dañar el planeta.
   Atendemos restaurantes, hoteles, cafeterías, hogares, talleres mecánicos y empresas industriales.
 
-  ## Catálogo de productos Biotú
+  ## Catálogo de productos disponibles
 
-  ### LÍNEA PERSONAL
-  - **Jabón Líquido Manos y Cuerpo**: pH neutro, hidratante, fragancias veganas.
-    4 aromas: Amanecer, Coco y Avena, Aconcagua, Zero.
-    Presentación: Dispensador 500 ml — desde $8.500 COP
-    Ideal para: hogares, hoteles, restaurantes, oficinas.
+  IMPORTANTE: El catálogo real y actualizado se inyecta automáticamente al final de este prompt
+  desde Shopify en tiempo real. SOLO puedes ofrecer, recomendar o vender productos que aparezcan
+  en esa sección "Catálogo de productos actualizado (Shopify)".
 
-  ### LÍNEA LAVANDERÍA
-  - **Detergente Ropa Color**: Tecnología Texcare que realza y protege los colores lavado tras lavado.
-    pH neutro, fragancias veganas, biodegradable.
-    Presentación: Bolsa 500 ml — desde $6.400 COP
-  - **Detergente Ropa Blanca**: Tecnología Texcare, mantiene el blanco sin cloro ni blanqueadores agresivos.
-    Escudo anti-manchas, no irrita las manos.
-    Presentación: Bolsa 500 ml — desde $6.400 COP
-  - **Detergente Ropa Delicada**: Para prendas sensibles y delicadas.
-  - **Suavizante de Ropa**: Protege fibras, evita desgaste, aroma duradero. Sin fosfatos.
-    Presentación: desde $5.600 COP
-  - **Detergente Multiusos**: Lava pisos, paredes, baños y superficies. Rinde el doble que el polvo.
-    Presentación: Bolsa 500 ml — desde $5.400 COP
+  - NUNCA ofrezcas un producto que no esté en el catálogo de Shopify
+  - NUNCA inventes presentaciones, precios o variantes que no estén listados
+  - Si el catálogo está vacío o un producto no aparece, di: "En este momento ese producto no está disponible. Te avisamos cuando tengamos stock 😊"
+  - Los precios y presentaciones que aparecen en el catálogo de Shopify son los únicos válidos
 
-  ### LÍNEA HOGAR
-  - **Lavaloza Antibacterial PRO MAX**: Desengrasante de nivel profesional, elimina grasa difícil,
-    bacterias y malos olores. pH neutro, biodegradable.
-    Presentación: Spray 500 ml — desde $7.200 COP
-    Ideal para: restaurantes, cocinas industriales, hogares.
-  - **Desengrasante de Cocina**: Para superficies de cocina.
-  - **Limpiavidrios**: Elimina grasa, marcador permanente, manchas de jabón y adhesivos.
-    Sin rayas ni residuos. Antibacterial.
-    Presentación: Spray 500 ml — desde $5.800 COP
-  - **Ambientador y Limpiapisos Antibacterial**: Limpia, desinfecta y ambienta en un solo paso.
-    Elimina el 99.9% de bacterias. 2 en 1.
-    Presentación: Bolsa 500 ml — desde $4.400 COP
-  - **Desmanchador de juntas y baños**: Para manchas difíciles en baños.
-  - **Eliminador de olores**: Para ambientes frescos.
-  - **Limpiador Desinfectante**: Limpieza y desinfección de superficies.
-
-  ### LÍNEA INDUSTRIAL / AUTOMOTRIZ
-  - **Desengrasante Profesional**: Alta concentración, disuelve grasa carbonizada, aceites y mugre
-    industrial. Sin solventes agresivos, 100% biodegradable.
-    Presentación: Tarro 500 ml — desde $12.600 COP
-    Ideal para: talleres mecánicos, industrias, cocinas profesionales.
-  - **Shampoo para Vehículos**: Origen vegetal, limpia en profundidad, protege la pintura.
-    pH balanceado. Para autos, motos, buses, camiones y flotas.
-    Presentación: Bolsa 500 ml — desde $7.200 COP
-  - **Desengrasante de Motores**: Disuelve aceite quemado, grasa y mugre en motores, carters,
-    transmisiones. Seguro para cables y plásticos. Sin solventes.
-    Presentación: Bolsa 500 ml — desde $6.800 COP
+  ## Conocimiento general de la marca Biotú
+  Productos de limpieza Biotú: fórmulas de origen vegetal, sin fosfatos, 100% biodegradables.
+  Líneas: Personal, Lavandería, Hogar, Industrial/Automotriz.
+  Puedes hablar de los beneficios generales de la marca, pero SOLO vende lo que esté en el catálogo activo.
 
   ## Tus capacidades
 
