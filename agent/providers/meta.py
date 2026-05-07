@@ -123,6 +123,37 @@ class ProveedorMeta(ProveedorWhatsApp):
                 logger.error(f"Error Meta API botones: {r.status_code} — {r.text}")
             return r.status_code == 200
 
+    async def enviar_cta_url(self, telefono: str, texto: str, boton: str, url: str) -> bool:
+        """Envía un mensaje con un botón que abre una URL (tipo CTA URL)."""
+        if not self.access_token or not self.phone_number_id:
+            return False
+        api_url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "cta_url",
+                "body": {"text": texto},
+                "action": {
+                    "name": "cta_url",
+                    "parameters": {
+                        "display_text": boton[:20],
+                        "url": url,
+                    },
+                },
+            },
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(api_url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API cta_url: {r.status_code} — {r.text}")
+            return r.status_code == 200
+
     async def enviar_lista(self, telefono: str, texto: str, boton: str, secciones: list[dict]) -> bool:
         """Envía mensaje con lista de opciones seleccionables."""
         if not self.access_token or not self.phone_number_id:

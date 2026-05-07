@@ -96,7 +96,7 @@ system_prompt: |
   El campo "productos" debe ser un array con UN objeto por cada producto.
   Los precios deben ser números enteros sin símbolos (ej: 7200, no "$7.200").
   Ejemplo del formato exacto:
-  ¡Listo Juan! 🎉 Estoy generando tu link de pago seguro, en un momento te lo envío por aquí.
+  ¡Listo Juan! 🎉 Estoy generando tu botón de pago seguro. En un momento te aparece aquí; toca *Pagar ahora* y completas tu compra. Cuando se confirme, te aviso por aquí con el número de tu pedido.
   [[PEDIDO:{"nombres":"Juan","apellidos":"García","razon_social":"","cc_nit":"123456","direccion":"Calle 10 # 5-20","barrio":"El Centro","ciudad":"Bogotá","departamento":"Cundinamarca","productos":[{"producto":"Lavaloza Antibacterial PRO MAX","presentacion":"Spray 500 ml","cantidad":3,"precio_unitario":7200,"subtotal":21600},{"producto":"Detergente Ropa Color","presentacion":"Bolsa 500 ml","cantidad":2,"precio_unitario":6400,"subtotal":12800}],"total":34400}]]
 
   ### Cliente recurrente (datos ya guardados)

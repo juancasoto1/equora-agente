@@ -1,6 +1,9 @@
 import os
 import re
 import json
+import hmac
+import hashlib
+import base64
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
@@ -145,15 +148,23 @@ async def webhook_handler(request: Request):
 
             # Enviar link de checkout de Shopify si se generó
             if checkout_url:
-                msg_checkout = (
-                    "🧾 *Tu pedido está listo para finalizar*\n\n"
-                    "Toca el siguiente link para confirmar tu dirección, elegir el método "
-                    "de pago y completar tu compra de forma segura en nuestra tienda:\n\n"
-                    f"👉 {checkout_url}\n\n"
-                    "Una vez completes el pago, recibirás la confirmación con el número "
-                    "de tu pedido por correo. ¡Gracias por confiar en Equora! 🌿"
+                texto_checkout = (
+                    "🧾 *Tu pedido está listo para pagar*\n\n"
+                    "Toca el botón para finalizar tu compra de forma segura en nuestra "
+                    "tienda. Te enviaré el número de pedido por aquí en cuanto se confirme. 🌿"
                 )
-                await proveedor.enviar_mensaje(msg.telefono, msg_checkout)
+                enviado_cta = False
+                if hasattr(proveedor, "enviar_cta_url"):
+                    try:
+                        enviado_cta = await proveedor.enviar_cta_url(
+                            msg.telefono, texto_checkout, "Pagar ahora", checkout_url
+                        )
+                    except Exception as e:
+                        logger.error(f"Error enviando cta_url: {e}")
+                if not enviado_cta:
+                    await proveedor.enviar_mensaje(
+                        msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
+                    )
 
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
 
@@ -162,3 +173,89 @@ async def webhook_handler(request: Request):
     except Exception as e:
         logger.error(f"Error en webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
+
+
+def _verificar_hmac_shopify(body: bytes, hmac_header: str) -> bool:
+    if not SHOPIFY_WEBHOOK_SECRET:
+        # Sin secret configurado, dejamos pasar (útil para pruebas iniciales)
+        logger.warning("SHOPIFY_WEBHOOK_SECRET no configurado — saltando verificación HMAC")
+        return True
+    digest = base64.b64encode(
+        hmac.new(SHOPIFY_WEBHOOK_SECRET.encode("utf-8"), body, hashlib.sha256).digest()
+    ).decode()
+    return hmac.compare_digest(digest, hmac_header or "")
+
+
+def _extraer_telefono(payload: dict) -> str | None:
+    for attr in payload.get("note_attributes", []) or []:
+        if attr.get("name") in ("Telefono WhatsApp", "Telefono", "phone"):
+            valor = (attr.get("value") or "").strip()
+            if valor:
+                return valor.lstrip("+")
+    cliente = payload.get("customer") or {}
+    for valor in (cliente.get("phone"), payload.get("phone"),
+                  (payload.get("shipping_address") or {}).get("phone"),
+                  (payload.get("billing_address") or {}).get("phone")):
+        if valor:
+            return str(valor).strip().lstrip("+")
+    return None
+
+
+@app.post("/shopify-webhook")
+async def shopify_webhook(request: Request):
+    """Recibe eventos de Shopify (orders/paid, orders/create) y notifica al cliente."""
+    body = await request.body()
+    hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
+    topic = request.headers.get("X-Shopify-Topic", "")
+
+    if not _verificar_hmac_shopify(body, hmac_header):
+        logger.error(f"HMAC inválido en shopify-webhook (topic={topic})")
+        raise HTTPException(status_code=401, detail="Invalid HMAC")
+
+    try:
+        payload = json.loads(body)
+    except Exception as e:
+        logger.error(f"Payload Shopify inválido: {e}")
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    numero = payload.get("order_number") or payload.get("name", "").lstrip("#")
+    nombre_orden = payload.get("name") or (f"#{numero}" if numero else "")
+    telefono = _extraer_telefono(payload)
+    total = payload.get("total_price") or payload.get("current_total_price") or "0"
+
+    logger.info(f"Shopify webhook {topic} — orden {nombre_orden}, tel {telefono}")
+
+    if not telefono or not numero:
+        logger.warning(f"Sin teléfono o número de orden — no se notifica (telefono={telefono}, numero={numero})")
+        return {"status": "ok"}
+
+    try:
+        total_int = int(float(total))
+    except Exception:
+        total_int = 0
+
+    if topic == "orders/paid":
+        mensaje = (
+            f"✅ *¡Pago confirmado!*\n\n"
+            f"🧾 Número de pedido: *{nombre_orden}*\n"
+            f"💰 Total pagado: *${total_int:,}*\n\n"
+            f"Tu pedido entró a producción y muy pronto lo despachamos. "
+            f"Te avisamos en cuanto vaya en camino. ¡Gracias por confiar en Equora! 🌿"
+        )
+    else:
+        mensaje = (
+            f"🧾 *Pedido recibido:* {nombre_orden}\n"
+            f"Total: ${total_int:,}\n\n"
+            f"Estamos confirmando tu pago. Te avisamos en cuanto se acredite. 🌿"
+        )
+
+    try:
+        await proveedor.enviar_mensaje(telefono, mensaje)
+        logger.info(f"Confirmación {topic} enviada a {telefono} ({nombre_orden})")
+    except Exception as e:
+        logger.error(f"Error enviando confirmación a {telefono}: {e}")
+
+    return {"status": "ok"}
