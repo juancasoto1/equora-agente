@@ -272,7 +272,29 @@ async def shopify_webhook(request: Request):
         except Exception as e:
             logger.error(f"Error guardando cliente desde webhook: {e}")
 
-    if topic == "orders/paid":
+    if topic == "orders/fulfilled":
+        # Shopify fulfillment puede traer tracking — si está, lo incluimos
+        fulfillments = payload.get("fulfillments") or []
+        tracking_num = ""
+        tracking_url = ""
+        if fulfillments:
+            f0 = fulfillments[0]
+            tracking_num = f0.get("tracking_number") or ""
+            tracking_url = f0.get("tracking_url") or ""
+
+        extra_tracking = ""
+        if tracking_num:
+            extra_tracking = f"\n📦 Guía: *{tracking_num}*"
+        if tracking_url:
+            extra_tracking += f"\n🔗 Seguimiento: {tracking_url}"
+
+        mensaje = (
+            f"🚚 *¡Tu pedido está listo y va en camino!*\n\n"
+            f"Pedido *{nombre_orden}* preparado y despachado.{extra_tracking}\n\n"
+            f"Recuerda tener los *${total_int:,}* listos para el pago contra entrega. "
+            f"¡Gracias por confiar en Equora! 🌿"
+        )
+    elif topic == "orders/paid":
         mensaje = (
             f"💰 *¡Pago registrado!*\n\n"
             f"Pedido: *{nombre_orden}*  ·  Total: *${total_int:,}*\n\n"
