@@ -40,12 +40,15 @@ _variant_map: dict[str, str] = {}
 
 
 def _normalizar(texto: str) -> str:
-    """Normaliza un string para matching tolerante: lowercase, sin acentos, sin espacios extra."""
+    """Normaliza para matching tolerante: minúsculas, sin acentos, separadores
+    (/, -, _, comas) convertidos a espacio, espacios colapsados."""
     if not texto:
         return ""
     texto = unicodedata.normalize("NFKD", texto)
     texto = "".join(c for c in texto if not unicodedata.combining(c))
-    texto = re.sub(r"\s+", " ", texto.lower().strip())
+    texto = texto.lower().strip()
+    texto = re.sub(r"[/\-_.,;:]+", " ", texto)
+    texto = re.sub(r"\s+", " ", texto).strip()
     return texto
 
 
