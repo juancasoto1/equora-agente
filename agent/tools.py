@@ -83,42 +83,51 @@ async def obtener_catalogo_shopify() -> str:
 
 
 async def crear_orden_shopify(telefono: str, datos: dict) -> str | None:
-    """Crea una orden en Shopify Admin API y retorna el número de orden (#1001, etc.)."""
+    """Crea un borrador de orden en Shopify via Admin GraphQL API y lo completa."""
     if not SHOPIFY_ADMIN_TOKEN:
         logger.error("SHOPIFY_ADMIN_TOKEN no configurado")
         return None
     try:
         productos = datos.get("productos", [])
-        line_items = [
+        nota = (
+            f"Pedido via WhatsApp | Tel: {telefono} | "
+            f"CC/NIT: {datos.get('cc_nit', '')} | "
+            f"Razón Social: {datos.get('razon_social', '')} | "
+            f"Barrio: {datos.get('barrio', '')} | "
+            f"Dpto: {datos.get('departamento', '')}"
+        )
+
+        line_items_gql = [
             {
                 "title": f"{p.get('producto', '')} - {p.get('presentacion', '')}",
                 "quantity": int(p.get("cantidad", 1)),
-                "price": str(float(p.get("precio_unitario", 0))),
-                "requires_shipping": True,
+                "originalUnitPrice": str(float(p.get("precio_unitario", 0))),
             }
             for p in productos
         ]
 
-        nota = (
-            f"Pedido via WhatsApp\n"
-            f"Teléfono: {telefono}\n"
-            f"CC/NIT: {datos.get('cc_nit', '')}\n"
-            f"Razón Social: {datos.get('razon_social', '')}\n"
-            f"Barrio: {datos.get('barrio', '')}\n"
-            f"Departamento: {datos.get('departamento', '')}"
-        )
+        mutation = """
+        mutation draftOrderCreate($input: DraftOrderInput!) {
+          draftOrderCreate(input: $input) {
+            draftOrder {
+              id
+              name
+              totalPrice
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+        """
 
-        payload = {
-            "order": {
-                "line_items": line_items,
-                "customer": {
-                    "first_name": datos.get("nombres", ""),
-                    "last_name": datos.get("apellidos", ""),
-                    "phone": telefono,
-                },
-                "shipping_address": {
-                    "first_name": datos.get("nombres", ""),
-                    "last_name": datos.get("apellidos", ""),
+        variables = {
+            "input": {
+                "lineItems": line_items_gql,
+                "shippingAddress": {
+                    "firstName": datos.get("nombres", ""),
+                    "lastName": datos.get("apellidos", ""),
                     "address1": datos.get("direccion", ""),
                     "city": datos.get("ciudad", ""),
                     "province": datos.get("departamento", ""),
@@ -126,29 +135,79 @@ async def crear_orden_shopify(telefono: str, datos: dict) -> str | None:
                     "phone": telefono,
                 },
                 "note": nota,
-                "financial_status": "pending",
-                "fulfillment_status": None,
-                "send_receipt": False,
-                "send_fulfillment_receipt": False,
                 "tags": "whatsapp,andrea-bot",
             }
         }
 
-        url = f"https://{SHOPIFY_STORE}/admin/api/2024-10/orders.json"
+        url = f"https://{SHOPIFY_STORE}/admin/api/2024-10/graphql.json"
         headers = {
             "X-Shopify-Access-Token": SHOPIFY_ADMIN_TOKEN,
             "Content-Type": "application/json",
         }
 
         async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(url, json=payload, headers=headers)
-            if r.status_code == 201:
-                orden = r.json().get("order", {})
-                numero = orden.get("order_number")
-                logger.info(f"Orden Shopify creada: #{numero} para {telefono}")
-                return f"#{numero}"
-            logger.error(f"Error Shopify Admin API: {r.status_code} — {r.text}")
-            return None
+            r = await client.post(url, json={"query": mutation, "variables": variables}, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error GraphQL Shopify: {r.status_code} — {r.text}")
+                return None
+
+            result = r.json()
+            errors = result.get("data", {}).get("draftOrderCreate", {}).get("userErrors", [])
+            if errors:
+                logger.error(f"Errores GraphQL Shopify: {errors}")
+                return None
+
+            draft = result.get("data", {}).get("draftOrderCreate", {}).get("draftOrder")
+            if not draft:
+                logger.error(f"No se obtuvo draftOrder: {result}")
+                return None
+
+            draft_id = draft["id"]
+            draft_name = draft.get("name", "")
+            logger.info(f"Draft order creado: {draft_name} ({draft_id}) para {telefono}")
+
+            # Completar el borrador para convertirlo en orden real
+            complete_mutation = """
+            mutation draftOrderComplete($id: ID!) {
+              draftOrderComplete(id: $id) {
+                draftOrder {
+                  order {
+                    id
+                    name
+                    orderNumber
+                  }
+                }
+                userErrors {
+                  field
+                  message
+                }
+              }
+            }
+            """
+            r2 = await client.post(
+                url,
+                json={"query": complete_mutation, "variables": {"id": draft_id}},
+                headers=headers,
+            )
+            if r2.status_code != 200:
+                logger.error(f"Error completando draft order: {r2.status_code} — {r2.text}")
+                return draft_name  # devuelve el nombre del borrador al menos
+
+            result2 = r2.json()
+            errors2 = result2.get("data", {}).get("draftOrderComplete", {}).get("userErrors", [])
+            if errors2:
+                logger.error(f"Errores al completar draft: {errors2}")
+                return draft_name
+
+            order = (
+                result2.get("data", {})
+                .get("draftOrderComplete", {})
+                .get("draftOrder", {})
+                .get("order", {})
+            )
+            numero = order.get("orderNumber") or order.get("name", draft_name)
+            logger.info(f"Orden Shopify creada: #{numero} para {telefono}")
+            return f"#{numero}"
 
     except Exception as e:
         logger.error(f"Error creando orden en Shopify: {e}")
