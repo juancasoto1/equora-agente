@@ -100,6 +100,7 @@ async def webhook_handler(request: Request):
 
             # Procesar marcador de pedido → crear checkout en Shopify
             checkout_url = None
+            checkout_fallo = False
             match_pedido = re.search(r'\[\[PEDIDO:(.*?)\]\]', respuesta, re.DOTALL)
             if match_pedido:
                 try:
@@ -109,8 +110,10 @@ async def webhook_handler(request: Request):
                         await guardar_cliente(msg.telefono, datos_pedido)
                         logger.info(f"Checkout Shopify creado para {msg.telefono}")
                     else:
+                        checkout_fallo = True
                         logger.error(f"No se pudo crear checkout Shopify para {msg.telefono}")
                 except Exception as e:
+                    checkout_fallo = True
                     logger.error(f"Error procesando pedido: {e}")
                 respuesta = re.sub(r'\s*\[\[PEDIDO:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
@@ -166,6 +169,17 @@ async def webhook_handler(request: Request):
                     await proveedor.enviar_mensaje(
                         msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
                     )
+
+            # Si la creación del checkout falló (stock agotado, producto no
+            # mapeado, etc.) avísale al cliente en vez de quedarnos mudos
+            if checkout_fallo:
+                await proveedor.enviar_mensaje(
+                    msg.telefono,
+                    "😔 Disculpa, no pude generar tu pedido en este momento. "
+                    "Es posible que algún producto del carrito se haya agotado "
+                    "mientras conversábamos. ¿Quieres que revisemos juntos qué "
+                    "hay disponible ahora?"
+                )
 
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
 
