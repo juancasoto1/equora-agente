@@ -1,5 +1,7 @@
 import os
+import re
 import logging
+import unicodedata
 import yaml
 import httpx
 from datetime import datetime
@@ -19,6 +21,7 @@ SHOPIFY_GQL_QUERY = """
         variants(first: 10) {
           edges {
             node {
+              id
               title
               price { amount }
               availableForSale
@@ -30,6 +33,20 @@ SHOPIFY_GQL_QUERY = """
   }
 }
 """
+
+# Mapa de variantes para resolver merchandiseId al crear el checkout
+# Clave: "producto|presentacion" normalizado | Valor: variant GID
+_variant_map: dict[str, str] = {}
+
+
+def _normalizar(texto: str) -> str:
+    """Normaliza un string para matching tolerante: lowercase, sin acentos, sin espacios extra."""
+    if not texto:
+        return ""
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    texto = re.sub(r"\s+", " ", texto.lower().strip())
+    return texto
 
 
 async def obtener_catalogo_shopify() -> str:
@@ -53,6 +70,7 @@ async def obtener_catalogo_shopify() -> str:
 
         lineas = ["## Catálogo de productos actualizado (Shopify)\n"]
         total = 0
+        _variant_map.clear()
 
         for p in products:
             node = p["node"]
@@ -67,6 +85,8 @@ async def obtener_catalogo_shopify() -> str:
             for v in variantes:
                 precio = int(float(v["price"]["amount"]))
                 lineas.append(f"  {v['title']} → ${precio:,}")
+                clave = f"{_normalizar(node['title'])}|{_normalizar(v['title'])}"
+                _variant_map[clave] = v["id"]
             lineas.append("")
             total += len(variantes)
 
@@ -82,135 +102,114 @@ async def obtener_catalogo_shopify() -> str:
         return ""
 
 
-async def crear_orden_shopify(telefono: str, datos: dict) -> str | None:
-    """Crea un borrador de orden en Shopify via Admin GraphQL API y lo completa."""
-    if not SHOPIFY_ADMIN_TOKEN:
-        logger.error("SHOPIFY_ADMIN_TOKEN no configurado")
+async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
+    """Crea un cart en Shopify Storefront API y retorna el checkoutUrl listo para pagar."""
+    productos = datos.get("productos", [])
+    if not productos:
+        logger.error("Pedido sin productos")
         return None
-    try:
-        productos = datos.get("productos", [])
-        nota = (
-            f"Pedido via WhatsApp | Tel: {telefono} | "
-            f"CC/NIT: {datos.get('cc_nit', '')} | "
-            f"Razón Social: {datos.get('razon_social', '')} | "
-            f"Barrio: {datos.get('barrio', '')} | "
-            f"Dpto: {datos.get('departamento', '')}"
-        )
 
-        line_items_gql = [
-            {
-                "title": f"{p.get('producto', '')} - {p.get('presentacion', '')}",
+    # Asegurar que tengamos el mapa de variantes cargado
+    if not _variant_map:
+        await obtener_catalogo_shopify()
+
+    lines = []
+    no_encontrados = []
+    for p in productos:
+        clave = f"{_normalizar(p.get('producto', ''))}|{_normalizar(p.get('presentacion', ''))}"
+        variant_id = _variant_map.get(clave)
+        if not variant_id:
+            # Fallback: busca por presentación dentro de productos cuyo título contenga palabras clave
+            prod_norm = _normalizar(p.get('producto', ''))
+            pres_norm = _normalizar(p.get('presentacion', ''))
+            for k, v in _variant_map.items():
+                k_prod, k_pres = k.split("|", 1)
+                if pres_norm == k_pres and (prod_norm in k_prod or k_prod in prod_norm):
+                    variant_id = v
+                    break
+        if variant_id:
+            lines.append({
+                "merchandiseId": variant_id,
                 "quantity": int(p.get("cantidad", 1)),
-                "originalUnitPrice": str(float(p.get("precio_unitario", 0))),
-            }
-            for p in productos
-        ]
+            })
+        else:
+            no_encontrados.append(f"{p.get('producto', '')} - {p.get('presentacion', '')}")
 
-        mutation = """
-        mutation draftOrderCreate($input: DraftOrderInput!) {
-          draftOrderCreate(input: $input) {
-            draftOrder {
-              id
-              name
-              totalPrice
-            }
-            userErrors {
-              field
-              message
-            }
-          }
+    if no_encontrados:
+        logger.warning(f"Productos no encontrados en variant_map: {no_encontrados}")
+    if not lines:
+        logger.error(f"Ningún producto del pedido pudo mapearse a variantes Shopify")
+        return None
+
+    telefono_e164 = telefono if telefono.startswith("+") else f"+{telefono}"
+
+    mutation = """
+    mutation cartCreate($input: CartInput!) {
+      cartCreate(input: $input) {
+        cart {
+          id
+          checkoutUrl
         }
-        """
-
-        variables = {
-            "input": {
-                "lineItems": line_items_gql,
-                "shippingAddress": {
-                    "firstName": datos.get("nombres", ""),
-                    "lastName": datos.get("apellidos", ""),
-                    "address1": datos.get("direccion", ""),
-                    "city": datos.get("ciudad", ""),
-                    "province": datos.get("departamento", ""),
-                    "country": "CO",
-                    "phone": telefono,
-                },
-                "note": nota,
-                "tags": "whatsapp,andrea-bot",
-            }
+        userErrors {
+          field
+          message
         }
+      }
+    }
+    """
 
-        url = f"https://{SHOPIFY_STORE}/admin/api/2024-10/graphql.json"
-        headers = {
-            "X-Shopify-Access-Token": SHOPIFY_ADMIN_TOKEN,
-            "Content-Type": "application/json",
+    attributes = [
+        {"key": "Origen", "value": "WhatsApp - Andrea Bot"},
+        {"key": "Telefono WhatsApp", "value": telefono_e164},
+    ]
+    for k_data, k_label in [
+        ("nombres", "Nombres"), ("apellidos", "Apellidos"),
+        ("razon_social", "Razon Social"), ("cc_nit", "CC/NIT"),
+        ("direccion", "Direccion"), ("barrio", "Barrio"),
+        ("ciudad", "Ciudad"), ("departamento", "Departamento"),
+    ]:
+        valor = str(datos.get(k_data, "") or "").strip()
+        if valor:
+            attributes.append({"key": k_label, "value": valor})
+
+    variables = {
+        "input": {
+            "lines": lines,
+            "buyerIdentity": {
+                "phone": telefono_e164,
+                "countryCode": "CO",
+            },
+            "attributes": attributes,
+            "note": f"Pedido WhatsApp de {datos.get('nombres', '')} {datos.get('apellidos', '')} ({telefono_e164})",
         }
+    }
 
+    url = f"https://{SHOPIFY_STORE}/api/2024-10/graphql.json"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
+    }
+
+    try:
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(url, json={"query": mutation, "variables": variables}, headers=headers)
             if r.status_code != 200:
-                logger.error(f"Error GraphQL Shopify: {r.status_code} — {r.text}")
+                logger.error(f"Error Storefront cartCreate: {r.status_code} — {r.text}")
                 return None
-
             result = r.json()
-            errors = result.get("data", {}).get("draftOrderCreate", {}).get("userErrors", [])
-            if errors:
-                logger.error(f"Errores GraphQL Shopify: {errors}")
+            errores = result.get("data", {}).get("cartCreate", {}).get("userErrors", [])
+            if errores:
+                logger.error(f"userErrors cartCreate: {errores}")
                 return None
-
-            draft = result.get("data", {}).get("draftOrderCreate", {}).get("draftOrder")
-            if not draft:
-                logger.error(f"No se obtuvo draftOrder: {result}")
+            cart = result.get("data", {}).get("cartCreate", {}).get("cart")
+            if not cart:
+                logger.error(f"cartCreate sin cart: {result}")
                 return None
-
-            draft_id = draft["id"]
-            draft_name = draft.get("name", "")
-            logger.info(f"Draft order creado: {draft_name} ({draft_id}) para {telefono}")
-
-            # Completar el borrador para convertirlo en orden real
-            complete_mutation = """
-            mutation draftOrderComplete($id: ID!) {
-              draftOrderComplete(id: $id) {
-                draftOrder {
-                  order {
-                    id
-                    name
-                    orderNumber
-                  }
-                }
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }
-            """
-            r2 = await client.post(
-                url,
-                json={"query": complete_mutation, "variables": {"id": draft_id}},
-                headers=headers,
-            )
-            if r2.status_code != 200:
-                logger.error(f"Error completando draft order: {r2.status_code} — {r2.text}")
-                return draft_name  # devuelve el nombre del borrador al menos
-
-            result2 = r2.json()
-            errors2 = result2.get("data", {}).get("draftOrderComplete", {}).get("userErrors", [])
-            if errors2:
-                logger.error(f"Errores al completar draft: {errors2}")
-                return draft_name
-
-            order = (
-                result2.get("data", {})
-                .get("draftOrderComplete", {})
-                .get("draftOrder", {})
-                .get("order", {})
-            )
-            numero = order.get("orderNumber") or order.get("name", draft_name)
-            logger.info(f"Orden Shopify creada: #{numero} para {telefono}")
-            return f"#{numero}"
-
+            checkout_url = cart.get("checkoutUrl")
+            logger.info(f"Checkout creado para {telefono}: {checkout_url}")
+            return checkout_url
     except Exception as e:
-        logger.error(f"Error creando orden en Shopify: {e}")
+        logger.error(f"Error creando checkout en Shopify: {e}")
         return None
 
 

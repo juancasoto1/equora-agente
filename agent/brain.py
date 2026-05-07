@@ -4,6 +4,7 @@ import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from agent.tools import obtener_catalogo_shopify
+from agent.memory import obtener_cliente
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -35,7 +36,7 @@ def obtener_mensaje_fallback() -> str:
     return config.get("fallback_message", "Disculpa, no entendí bien tu mensaje. ¿Me puedes contar con más detalle en qué te puedo ayudar? 😊")
 
 
-async def generar_respuesta(mensaje: str, historial: list[dict]) -> str:
+async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str | None = None) -> str:
     if not mensaje or len(mensaje.strip()) < 2:
         return obtener_mensaje_fallback()
 
@@ -45,6 +46,28 @@ async def generar_respuesta(mensaje: str, historial: list[dict]) -> str:
     catalogo = await obtener_catalogo_shopify()
     if catalogo:
         system_prompt = system_prompt + "\n\n" + catalogo
+
+    # Inyectar perfil del cliente si ya nos compró antes
+    if telefono:
+        cliente = await obtener_cliente(telefono)
+        if cliente and cliente.get("nombres"):
+            bloque = ["\n\n## Cliente conocido (ya compró antes)"]
+            bloque.append(f"Pedidos previos: {cliente.get('pedidos_realizados', 0)}")
+            for campo in ("nombres", "apellidos", "razon_social", "cc_nit",
+                          "direccion", "barrio", "ciudad", "departamento", "email"):
+                valor = cliente.get(campo, "")
+                if valor:
+                    bloque.append(f"- {campo}: {valor}")
+            bloque.append(
+                "\nINSTRUCCIONES con cliente conocido:\n"
+                "- Salúdalo por su nombre.\n"
+                "- Si quiere pedir, NO le pidas los datos otra vez. Pregúntale si quiere "
+                "usar los mismos datos de envío de la última vez (resúmelos brevemente).\n"
+                "- Si confirma que sí, salta al PASO 5 del flujo de pedido (resumen + "
+                "botón confirmar) usando estos datos guardados.\n"
+                "- Si quiere cambiar algún dato, pregúntale solo el que va a cambiar."
+            )
+            system_prompt += "\n".join(bloque)
 
     mensajes = []
     for msg in historial:

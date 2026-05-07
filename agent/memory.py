@@ -30,6 +30,30 @@ class Mensaje(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class Cliente(Base):
+    __tablename__ = "clientes"
+
+    telefono: Mapped[str] = mapped_column(String(50), primary_key=True)
+    nombres: Mapped[str] = mapped_column(String(100), default="")
+    apellidos: Mapped[str] = mapped_column(String(100), default="")
+    razon_social: Mapped[str] = mapped_column(String(200), default="")
+    cc_nit: Mapped[str] = mapped_column(String(50), default="")
+    direccion: Mapped[str] = mapped_column(String(200), default="")
+    barrio: Mapped[str] = mapped_column(String(100), default="")
+    ciudad: Mapped[str] = mapped_column(String(100), default="")
+    departamento: Mapped[str] = mapped_column(String(100), default="")
+    email: Mapped[str] = mapped_column(String(100), default="")
+    pedidos_realizados: Mapped[int] = mapped_column(Integer, default=0)
+    creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    actualizado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+CAMPOS_CLIENTE = (
+    "nombres", "apellidos", "razon_social", "cc_nit",
+    "direccion", "barrio", "ciudad", "departamento", "email",
+)
+
+
 async def inicializar_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -72,3 +96,42 @@ async def limpiar_historial(telefono: str):
         for msg in mensajes:
             await session.delete(msg)
         await session.commit()
+
+
+async def guardar_cliente(telefono: str, datos: dict):
+    """Crea o actualiza el perfil del cliente. Solo guarda campos no vacíos."""
+    async with async_session() as session:
+        cliente = await session.get(Cliente, telefono)
+        if cliente:
+            for campo in CAMPOS_CLIENTE:
+                valor = datos.get(campo)
+                if valor:
+                    setattr(cliente, campo, str(valor))
+            cliente.pedidos_realizados = (cliente.pedidos_realizados or 0) + 1
+            cliente.actualizado = datetime.utcnow()
+        else:
+            valores = {c: str(datos.get(c, "")) for c in CAMPOS_CLIENTE}
+            cliente = Cliente(telefono=telefono, pedidos_realizados=1, **valores)
+            session.add(cliente)
+        await session.commit()
+
+
+async def obtener_cliente(telefono: str) -> dict | None:
+    """Devuelve los datos guardados del cliente o None si no existe."""
+    async with async_session() as session:
+        cliente = await session.get(Cliente, telefono)
+        if not cliente:
+            return None
+        return {
+            "telefono": cliente.telefono,
+            "nombres": cliente.nombres,
+            "apellidos": cliente.apellidos,
+            "razon_social": cliente.razon_social,
+            "cc_nit": cliente.cc_nit,
+            "direccion": cliente.direccion,
+            "barrio": cliente.barrio,
+            "ciudad": cliente.ciudad,
+            "departamento": cliente.departamento,
+            "email": cliente.email,
+            "pedidos_realizados": cliente.pedidos_realizados or 0,
+        }
