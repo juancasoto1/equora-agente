@@ -7,63 +7,78 @@ from datetime import datetime
 logger = logging.getLogger("agentkit")
 
 SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "equora-6.myshopify.com")
+SHOPIFY_STOREFRONT_TOKEN = os.getenv("SHOPIFY_STOREFRONT_TOKEN", "d6fe89f265fed1b5f9572f19fc0ba3a7")
 SHOPIFY_ADMIN_TOKEN = os.getenv("SHOPIFY_ADMIN_TOKEN", "")
 
+SHOPIFY_GQL_QUERY = """
+{
+  products(first: 100) {
+    edges {
+      node {
+        title
+        variants(first: 10) {
+          edges {
+            node {
+              title
+              price { amount }
+              availableForSale
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
 async def obtener_catalogo_shopify() -> str:
-    """Obtiene el catálogo con stock real desde Shopify Admin API."""
-    if not SHOPIFY_ADMIN_TOKEN:
-        logger.error("SHOPIFY_ADMIN_TOKEN no configurado — no se puede cargar catálogo")
-        return ""
+    """Obtiene el catálogo de productos disponibles desde Shopify Storefront API.
+    Solo muestra variantes con availableForSale=true (requiere 'Rastrear cantidad' activado en Shopify)."""
     try:
-        url = f"https://{SHOPIFY_STORE}/admin/api/2024-10/products.json?limit=100&status=active"
+        url = f"https://{SHOPIFY_STORE}/api/2024-10/graphql.json"
         headers = {
-            "X-Shopify-Access-Token": SHOPIFY_ADMIN_TOKEN,
             "Content-Type": "application/json",
+            "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
         }
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url, headers=headers)
+            r = await client.post(url, json={"query": SHOPIFY_GQL_QUERY}, headers=headers)
             r.raise_for_status()
-            productos = r.json().get("products", [])
+            data = r.json()
 
-        if not productos:
+        products = data.get("data", {}).get("products", {}).get("edges", [])
+        if not products:
+            logger.warning("Shopify no devolvió productos")
             return "## Catálogo de productos actualizado (Shopify)\n\nNo hay productos disponibles en este momento."
 
         lineas = ["## Catálogo de productos actualizado (Shopify)\n"]
-        total_variantes = 0
+        total = 0
 
-        for producto in productos:
-            variantes_disponibles = []
-            for v in producto.get("variants", []):
-                precio = float(v.get("price", "0") or "0")
-                stock = int(v.get("inventory_quantity", 0) or 0)
-                politica = v.get("inventory_policy", "deny")
-                # Mostrar si tiene stock > 0, o si política es "continue" (venta sin stock)
-                if precio > 0 and (stock > 0 or politica == "continue"):
-                    variantes_disponibles.append({
-                        "titulo": v.get("title", ""),
-                        "precio": precio,
-                        "stock": stock,
-                    })
-
-            if not variantes_disponibles:
+        for p in products:
+            node = p["node"]
+            variantes = [
+                v["node"] for v in node["variants"]["edges"]
+                if v["node"]["availableForSale"]
+                and float(v["node"]["price"]["amount"]) > 0
+            ]
+            if not variantes:
                 continue
-
-            lineas.append(f"*{producto['title']}*")
-            for v in variantes_disponibles:
-                precio_fmt = int(v["precio"])
-                lineas.append(f"  {v['titulo']} → ${precio_fmt:,}")
+            lineas.append(f"*{node['title']}*")
+            for v in variantes:
+                precio = int(float(v["price"]["amount"]))
+                lineas.append(f"  {v['title']} → ${precio:,}")
             lineas.append("")
-            total_variantes += len(variantes_disponibles)
+            total += len(variantes)
 
-        logger.info(f"Catálogo Admin API: {len(productos)} productos, {total_variantes} variantes con stock")
+        logger.info(f"Catálogo Shopify: {len(products)} productos, {total} variantes disponibles")
 
-        if total_variantes == 0:
+        if total == 0:
             return "## Catálogo de productos actualizado (Shopify)\n\nNo hay productos con stock disponible en este momento."
 
         return "\n".join(lineas)
 
     except Exception as e:
-        logger.error(f"Error obteniendo catálogo Shopify Admin API: {e}")
+        logger.error(f"Error obteniendo catálogo Shopify: {e}")
         return ""
 
 
