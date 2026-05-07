@@ -149,15 +149,16 @@ async def webhook_handler(request: Request):
             # Enviar link de checkout de Shopify si se generó
             if checkout_url:
                 texto_checkout = (
-                    "🧾 *Tu pedido está listo para pagar*\n\n"
-                    "Toca el botón para finalizar tu compra de forma segura en nuestra "
-                    "tienda. Te enviaré el número de pedido por aquí en cuanto se confirme. 🌿"
+                    "🧾 *Tu pedido está listo*\n\n"
+                    "Toca el botón para confirmar tu dirección de entrega. "
+                    "El pago se realiza *contra entrega*. En cuanto registres tus datos, "
+                    "te confirmo aquí mismo el número de tu pedido. 🌿"
                 )
                 enviado_cta = False
                 if hasattr(proveedor, "enviar_cta_url"):
                     try:
                         enviado_cta = await proveedor.enviar_cta_url(
-                            msg.telefono, texto_checkout, "Pagar ahora", checkout_url
+                            msg.telefono, texto_checkout, "Confirmar entrega", checkout_url
                         )
                     except Exception as e:
                         logger.error(f"Error enviando cta_url: {e}")
@@ -189,19 +190,44 @@ def _verificar_hmac_shopify(body: bytes, hmac_header: str) -> bool:
     return hmac.compare_digest(digest, hmac_header or "")
 
 
+def _normalizar_telefono(valor: str | None) -> str | None:
+    """Quita +, espacios, guiones — deja solo dígitos."""
+    if not valor:
+        return None
+    digitos = re.sub(r"\D", "", str(valor))
+    return digitos or None
+
+
 def _extraer_telefono(payload: dict) -> str | None:
     for attr in payload.get("note_attributes", []) or []:
         if attr.get("name") in ("Telefono WhatsApp", "Telefono", "phone"):
-            valor = (attr.get("value") or "").strip()
-            if valor:
-                return valor.lstrip("+")
+            tel = _normalizar_telefono(attr.get("value"))
+            if tel:
+                return tel
     cliente = payload.get("customer") or {}
     for valor in (cliente.get("phone"), payload.get("phone"),
                   (payload.get("shipping_address") or {}).get("phone"),
                   (payload.get("billing_address") or {}).get("phone")):
-        if valor:
-            return str(valor).strip().lstrip("+")
+        tel = _normalizar_telefono(valor)
+        if tel:
+            return tel
     return None
+
+
+def _extraer_datos_cliente(payload: dict) -> dict:
+    """Construye el dict de cliente desde la orden Shopify."""
+    cliente = payload.get("customer") or {}
+    envio = payload.get("shipping_address") or payload.get("billing_address") or {}
+    return {
+        "nombres": cliente.get("first_name") or envio.get("first_name") or "",
+        "apellidos": cliente.get("last_name") or envio.get("last_name") or "",
+        "email": cliente.get("email") or payload.get("email") or "",
+        "direccion": envio.get("address1") or "",
+        "barrio": envio.get("address2") or "",
+        "ciudad": envio.get("city") or "",
+        "departamento": envio.get("province") or "",
+        "razon_social": envio.get("company") or "",
+    }
 
 
 @app.post("/shopify-webhook")
@@ -237,19 +263,28 @@ async def shopify_webhook(request: Request):
     except Exception:
         total_int = 0
 
+    # Guardar/actualizar cliente con los datos que llegaron en la orden
+    datos_cliente = _extraer_datos_cliente(payload)
+    if any(datos_cliente.values()):
+        try:
+            await guardar_cliente(telefono, datos_cliente)
+            logger.info(f"Cliente {telefono} guardado/actualizado desde Shopify")
+        except Exception as e:
+            logger.error(f"Error guardando cliente desde webhook: {e}")
+
     if topic == "orders/paid":
         mensaje = (
-            f"✅ *¡Pago confirmado!*\n\n"
-            f"🧾 Número de pedido: *{nombre_orden}*\n"
-            f"💰 Total pagado: *${total_int:,}*\n\n"
-            f"Tu pedido entró a producción y muy pronto lo despachamos. "
-            f"Te avisamos en cuanto vaya en camino. ¡Gracias por confiar en Equora! 🌿"
+            f"💰 *¡Pago registrado!*\n\n"
+            f"Pedido: *{nombre_orden}*  ·  Total: *${total_int:,}*\n\n"
+            f"Pronto sale en camino. ¡Gracias por confiar en Equora! 🌿"
         )
     else:
         mensaje = (
-            f"🧾 *Pedido recibido:* {nombre_orden}\n"
-            f"Total: ${total_int:,}\n\n"
-            f"Estamos confirmando tu pago. Te avisamos en cuanto se acredite. 🌿"
+            f"✅ *¡Pedido confirmado!*\n\n"
+            f"🧾 Número de pedido: *{nombre_orden}*\n"
+            f"💰 Total: *${total_int:,}*  (pago contra entrega)\n\n"
+            f"Ya estamos preparando tu pedido. Te avisamos cuando vaya en camino. "
+            f"¡Gracias por confiar en Equora! 🌿"
         )
 
     try:
