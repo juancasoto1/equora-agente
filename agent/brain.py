@@ -4,7 +4,7 @@ import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from agent.tools import obtener_catalogo_shopify
-from agent.memory import obtener_cliente
+from agent.memory import obtener_cliente, obtener_pedido_pendiente
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -61,13 +61,31 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str |
             bloque.append(
                 "\nINSTRUCCIONES con cliente conocido:\n"
                 "- Salúdalo por su nombre.\n"
-                "- Si quiere pedir, NO le pidas los datos otra vez. Pregúntale si quiere "
-                "usar los mismos datos de envío de la última vez (resúmelos brevemente).\n"
-                "- Si confirma que sí, salta al PASO 5 del flujo de pedido (resumen + "
-                "botón confirmar) usando estos datos guardados.\n"
-                "- Si quiere cambiar algún dato, pregúntale solo el que va a cambiar."
+                "- El flujo de pedido es el mismo: arma el carrito, muestra resumen, "
+                "confirma. Los datos de entrega los maneja Shopify."
             )
             system_prompt += "\n".join(bloque)
+
+        # Inyectar pedido pendiente (carrito armado pero sin completar checkout)
+        pendiente = await obtener_pedido_pendiente(telefono)
+        if pendiente:
+            bloque_p = ["\n\n## Pedido pendiente sin completar"]
+            bloque_p.append("Este cliente confirmó hace poco un pedido pero NO completó el "
+                            "checkout en Shopify. Su carrito quedó así:")
+            for item in pendiente:
+                bloque_p.append(
+                    f"- {item.get('cantidad', 1)}x {item.get('producto', '')} "
+                    f"({item.get('presentacion', '')})"
+                )
+            bloque_p.append(
+                "\nINSTRUCCIONES:\n"
+                "- En tu primer mensaje, pregúntale si quiere retomar este pedido o "
+                "armar uno nuevo.\n"
+                "- Si quiere retomarlo, salta directo al PASO 4 (resumen + botón "
+                "Confirmar pedido) con esos productos.\n"
+                "- Si quiere algo distinto, ignora el pendiente y arranca de cero."
+            )
+            system_prompt += "\n".join(bloque_p)
 
     mensajes = []
     for msg in historial:

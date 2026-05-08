@@ -11,7 +11,10 @@ from fastapi.responses import PlainTextResponse
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
-from agent.memory import inicializar_db, guardar_mensaje, obtener_historial, guardar_cliente
+from agent.memory import (
+    inicializar_db, guardar_mensaje, obtener_historial,
+    guardar_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
+)
 from agent.providers import obtener_proveedor
 from agent.tools import crear_checkout_shopify
 
@@ -108,6 +111,11 @@ async def webhook_handler(request: Request):
                     checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
                     if checkout_url:
                         await guardar_cliente(msg.telefono, datos_pedido)
+                        # Guardamos el carrito como pendiente: lo limpia el webhook
+                        # de Shopify cuando el cliente complete el checkout
+                        await guardar_pedido_pendiente(
+                            msg.telefono, datos_pedido.get("productos", [])
+                        )
                         logger.info(f"Checkout Shopify creado para {msg.telefono}")
                     else:
                         checkout_fallo = True
@@ -116,6 +124,16 @@ async def webhook_handler(request: Request):
                     checkout_fallo = True
                     logger.error(f"Error procesando pedido: {e}")
                 respuesta = re.sub(r'\s*\[\[PEDIDO:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
+
+            # Procesar marcador de escalación → notificar al equipo
+            datos_escalacion = None
+            match_escalar = re.search(r'\[\[ESCALAR:(.*?)\]\]', respuesta, re.DOTALL)
+            if match_escalar:
+                try:
+                    datos_escalacion = json.loads(match_escalar.group(1))
+                except Exception as e:
+                    logger.error(f"Marcador ESCALAR inválido: {e}")
+                respuesta = re.sub(r'\s*\[\[ESCALAR:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
             # Extraer marcadores interactivos ANTES de enviar el texto
             respuesta, datos_botones = extraer_marcador_botones(respuesta)
@@ -181,6 +199,10 @@ async def webhook_handler(request: Request):
                     "hay disponible ahora?"
                 )
 
+            # Notificar al equipo si Andrea decidió escalar
+            if datos_escalacion:
+                await _notificar_escalacion(msg.telefono, datos_escalacion)
+
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
 
         return {"status": "ok"}
@@ -191,6 +213,38 @@ async def webhook_handler(request: Request):
 
 
 SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
+ADMIN_WHATSAPP_NUMBERS = [
+    n.strip() for n in os.getenv("ADMIN_WHATSAPP_NUMBERS", "").split(",") if n.strip()
+]
+
+
+async def _notificar_escalacion(telefono_cliente: str, datos: dict):
+    """Envía un mensaje a los administradores con el contexto de la escalación."""
+    if not ADMIN_WHATSAPP_NUMBERS:
+        logger.warning("ADMIN_WHATSAPP_NUMBERS no configurado — escalación no se notifica")
+        return
+
+    motivo = datos.get("motivo", "sin especificar")
+    contexto = datos.get("contexto", "")
+    urgencia = datos.get("urgencia", "normal")
+    cliente_nombre = datos.get("nombre_cliente", "")
+
+    mensaje = (
+        f"🚨 *Escalación Andrea Bot*\n\n"
+        f"*Motivo:* {motivo}\n"
+        f"*Urgencia:* {urgencia}\n"
+        f"*Cliente:* {cliente_nombre or 'desconocido'}\n"
+        f"*WhatsApp cliente:* +{telefono_cliente}\n\n"
+        f"*Contexto:*\n{contexto}\n\n"
+        f"Responde al cliente desde el WhatsApp Business o llámalo directamente."
+    )
+
+    for admin in ADMIN_WHATSAPP_NUMBERS:
+        try:
+            await proveedor.enviar_mensaje(admin, mensaje)
+            logger.info(f"Escalación notificada a admin {admin}")
+        except Exception as e:
+            logger.error(f"Error notificando escalación a {admin}: {e}")
 
 
 def _verificar_hmac_shopify(body: bytes, hmac_header: str) -> bool:
@@ -285,6 +339,13 @@ async def shopify_webhook(request: Request):
             logger.info(f"Cliente {telefono} guardado/actualizado desde Shopify")
         except Exception as e:
             logger.error(f"Error guardando cliente desde webhook: {e}")
+
+    # Cliente completó el checkout → ya no hay carrito pendiente
+    if topic in ("orders/create", "orders/paid"):
+        try:
+            await limpiar_pedido_pendiente(telefono)
+        except Exception as e:
+            logger.error(f"Error limpiando pedido pendiente: {e}")
 
     if topic == "orders/fulfilled":
         # Shopify fulfillment puede traer tracking — si está, lo incluimos

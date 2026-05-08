@@ -25,6 +25,7 @@ SHOPIFY_GQL_QUERY = """
               title
               price { amount }
               availableForSale
+              quantityAvailable
             }
           }
         }
@@ -35,8 +36,9 @@ SHOPIFY_GQL_QUERY = """
 """
 
 # Mapa de variantes para resolver merchandiseId al crear el checkout
-# Clave: "producto|presentacion" normalizado | Valor: variant GID
-_variant_map: dict[str, str] = {}
+# Clave: "producto|presentacion" normalizado
+# Valor: dict con "id" (variant GID) y "stock" (int o None si Storefront no expone inventario)
+_variant_map: dict[str, dict] = {}
 
 
 def _normalizar(texto: str) -> str:
@@ -87,9 +89,16 @@ async def obtener_catalogo_shopify() -> str:
             lineas.append(f"*{node['title']}*")
             for v in variantes:
                 precio = int(float(v["price"]["amount"]))
-                lineas.append(f"  {v['title']} → ${precio:,}")
+                stock = v.get("quantityAvailable")
+                if isinstance(stock, int) and stock > 0:
+                    lineas.append(f"  {v['title']} → ${precio:,}  ({stock} disponibles)")
+                else:
+                    lineas.append(f"  {v['title']} → ${precio:,}")
                 clave = f"{_normalizar(node['title'])}|{_normalizar(v['title'])}"
-                _variant_map[clave] = v["id"]
+                _variant_map[clave] = {
+                    "id": v["id"],
+                    "stock": stock if isinstance(stock, int) else None,
+                }
             lineas.append("")
             total += len(variantes)
 
@@ -118,28 +127,44 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
 
     lines = []
     no_encontrados = []
+    excede_stock = []  # [(producto, pedido, disponible)]
     for p in productos:
         clave = f"{_normalizar(p.get('producto', ''))}|{_normalizar(p.get('presentacion', ''))}"
-        variant_id = _variant_map.get(clave)
-        if not variant_id:
-            # Fallback: busca por presentación dentro de productos cuyo título contenga palabras clave
+        variante = _variant_map.get(clave)
+        if not variante:
+            # Fallback tolerante: misma presentación + producto contenido
             prod_norm = _normalizar(p.get('producto', ''))
             pres_norm = _normalizar(p.get('presentacion', ''))
             for k, v in _variant_map.items():
                 k_prod, k_pres = k.split("|", 1)
                 if pres_norm == k_pres and (prod_norm in k_prod or k_prod in prod_norm):
-                    variant_id = v
+                    variante = v
                     break
-        if variant_id:
-            lines.append({
-                "merchandiseId": variant_id,
-                "quantity": int(p.get("cantidad", 1)),
-            })
-        else:
+        if not variante:
             no_encontrados.append(f"{p.get('producto', '')} - {p.get('presentacion', '')}")
+            continue
+
+        cantidad = int(p.get("cantidad", 1))
+        stock = variante.get("stock")
+        # Si Shopify expone stock y la cantidad lo excede, recortamos al stock
+        if isinstance(stock, int) and stock >= 0 and cantidad > stock:
+            excede_stock.append((
+                f"{p.get('producto', '')} - {p.get('presentacion', '')}",
+                cantidad, stock,
+            ))
+            cantidad = stock
+        if cantidad <= 0:
+            continue
+
+        lines.append({
+            "merchandiseId": variante["id"],
+            "quantity": cantidad,
+        })
 
     if no_encontrados:
         logger.warning(f"Productos no encontrados en variant_map: {no_encontrados}")
+    if excede_stock:
+        logger.warning(f"Cantidades recortadas por stock: {excede_stock}")
     if not lines:
         logger.error(f"Ningún producto del pedido pudo mapearse a variantes Shopify")
         return None
