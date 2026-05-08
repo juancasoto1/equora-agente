@@ -5,6 +5,7 @@ import hmac
 import hashlib
 import base64
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -14,6 +15,9 @@ from agent.brain import generar_respuesta
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial,
     guardar_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
+    registrar_mensaje_usuario, registrar_mensaje_asistente,
+    marcar_followup_enviado, marcar_cierre_enviado,
+    conversaciones_para_followup, conversaciones_para_cierre,
 )
 from agent.providers import obtener_proveedor
 from agent.tools import crear_checkout_shopify
@@ -28,6 +32,23 @@ logger = logging.getLogger("agentkit")
 proveedor = obtener_proveedor()
 PORT = int(os.getenv("PORT", 8000))
 
+# Configuración de seguimientos automáticos (env vars opcionales)
+FOLLOWUP_MIN = int(os.getenv("FOLLOWUP_MIN", 2))   # min sin respuesta del cliente
+CIERRE_MIN = int(os.getenv("CIERRE_MIN", 5))       # min después del follow-up
+FOLLOWUP_MAX_HORAS = int(os.getenv("FOLLOWUP_MAX_HORAS", 12))
+CHECK_INTERVAL_SEG = int(os.getenv("CHECK_INTERVAL_SEG", 30))
+
+MENSAJE_FOLLOWUP = (
+    "Hola de nuevo 😊 Veo que andas un poco ocupado/a. "
+    "¿Sigues por aquí o prefieres que continuemos en otro momento? "
+    "No hay afán, retomamos cuando puedas."
+)
+
+MENSAJE_CIERRE = (
+    "Te dejo descansar 🤗 Cuando quieras retomar, escríbeme y "
+    "seguimos donde nos quedamos. ¡Que tengas un excelente día! 🌿"
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,7 +56,57 @@ async def lifespan(app: FastAPI):
     logger.info("Base de datos inicializada")
     logger.info(f"Servidor AgentKit corriendo en puerto {PORT}")
     logger.info(f"Proveedor de WhatsApp: {proveedor.__class__.__name__}")
-    yield
+    logger.info(
+        f"Seguimientos: follow-up a los {FOLLOWUP_MIN} min, "
+        f"cierre a los {CIERRE_MIN} min después, ventana max {FOLLOWUP_MAX_HORAS} h"
+    )
+    seguimiento_task = asyncio.create_task(_loop_seguimientos())
+    try:
+        yield
+    finally:
+        seguimiento_task.cancel()
+        try:
+            await seguimiento_task
+        except asyncio.CancelledError:
+            pass
+
+
+async def _loop_seguimientos():
+    """Cada CHECK_INTERVAL_SEG revisa conversaciones inactivas y manda
+    follow-ups o cierres según corresponda."""
+    while True:
+        try:
+            await asyncio.sleep(CHECK_INTERVAL_SEG)
+            await _procesar_followups()
+            await _procesar_cierres()
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.error(f"Error en loop de seguimientos: {e}")
+
+
+async def _procesar_followups():
+    telefonos = await conversaciones_para_followup(FOLLOWUP_MIN, FOLLOWUP_MAX_HORAS)
+    for telefono in telefonos:
+        try:
+            await proveedor.enviar_mensaje(telefono, MENSAJE_FOLLOWUP)
+            await guardar_mensaje(telefono, "assistant", MENSAJE_FOLLOWUP)
+            await marcar_followup_enviado(telefono)
+            logger.info(f"Follow-up enviado a {telefono}")
+        except Exception as e:
+            logger.error(f"Error enviando follow-up a {telefono}: {e}")
+
+
+async def _procesar_cierres():
+    telefonos = await conversaciones_para_cierre(CIERRE_MIN)
+    for telefono in telefonos:
+        try:
+            await proveedor.enviar_mensaje(telefono, MENSAJE_CIERRE)
+            await guardar_mensaje(telefono, "assistant", MENSAJE_CIERRE)
+            await marcar_cierre_enviado(telefono)
+            logger.info(f"Cierre enviado a {telefono}")
+        except Exception as e:
+            logger.error(f"Error enviando cierre a {telefono}: {e}")
 
 
 app = FastAPI(
@@ -95,11 +166,15 @@ async def webhook_handler(request: Request):
 
             logger.info(f"Mensaje de {msg.telefono}: {msg.texto}")
 
+            # Cliente respondió → resetea timers de seguimiento
+            await registrar_mensaje_usuario(msg.telefono)
+
             historial = await obtener_historial(msg.telefono)
             respuesta = await generar_respuesta(msg.texto, historial, msg.telefono)
 
             await guardar_mensaje(msg.telefono, "user", msg.texto)
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
+            await registrar_mensaje_asistente(msg.telefono)
 
             # Procesar marcador de pedido → crear checkout en Shopify
             checkout_url = None

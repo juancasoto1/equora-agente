@@ -57,6 +57,18 @@ CAMPOS_CLIENTE = (
 )
 
 
+class EstadoConversacion(Base):
+    """Timestamps por conversación para gestionar seguimientos automáticos."""
+    __tablename__ = "estado_conversacion"
+
+    telefono: Mapped[str] = mapped_column(String(50), primary_key=True)
+    last_user_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_assistant_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    follow_up_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cierre_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    actualizado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 async def inicializar_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -192,3 +204,97 @@ async def limpiar_pedido_pendiente(telefono: str):
             cliente.pedido_pendiente_at = None
             cliente.actualizado = datetime.utcnow()
             await session.commit()
+
+
+# ── Estado de conversación / seguimientos automáticos ───────────────────────
+
+async def _get_or_create_estado(session: AsyncSession, telefono: str) -> "EstadoConversacion":
+    estado = await session.get(EstadoConversacion, telefono)
+    if not estado:
+        estado = EstadoConversacion(telefono=telefono)
+        session.add(estado)
+    return estado
+
+
+async def registrar_mensaje_usuario(telefono: str):
+    """Cliente acaba de escribir → resetea timers de seguimiento."""
+    async with async_session() as session:
+        estado = await _get_or_create_estado(session, telefono)
+        ahora = datetime.utcnow()
+        estado.last_user_at = ahora
+        estado.follow_up_at = None
+        estado.cierre_at = None
+        estado.actualizado = ahora
+        await session.commit()
+
+
+async def registrar_mensaje_asistente(telefono: str):
+    """Andrea acaba de responder → marca el último mensaje del bot."""
+    async with async_session() as session:
+        estado = await _get_or_create_estado(session, telefono)
+        ahora = datetime.utcnow()
+        estado.last_assistant_at = ahora
+        estado.actualizado = ahora
+        await session.commit()
+
+
+async def marcar_followup_enviado(telefono: str):
+    async with async_session() as session:
+        estado = await _get_or_create_estado(session, telefono)
+        estado.follow_up_at = datetime.utcnow()
+        estado.actualizado = estado.follow_up_at
+        await session.commit()
+
+
+async def marcar_cierre_enviado(telefono: str):
+    async with async_session() as session:
+        estado = await _get_or_create_estado(session, telefono)
+        estado.cierre_at = datetime.utcnow()
+        estado.actualizado = estado.cierre_at
+        await session.commit()
+
+
+async def conversaciones_para_followup(
+    inactividad_minutos: int = 2,
+    max_edad_horas: int = 12,
+) -> list[str]:
+    """Conversaciones donde:
+    - El último mensaje fue del asistente (last_assistant_at > last_user_at o user nulo)
+    - Pasaron al menos `inactividad_minutos` desde la última respuesta del bot
+    - Aún no enviamos follow-up (follow_up_at IS NULL)
+    - El último mensaje del bot no es más viejo que `max_edad_horas`
+    """
+    ahora = datetime.utcnow()
+    cutoff_inactividad = ahora - timedelta(minutes=inactividad_minutos)
+    cutoff_max_edad = ahora - timedelta(hours=max_edad_horas)
+    async with async_session() as session:
+        query = select(EstadoConversacion).where(
+            EstadoConversacion.last_assistant_at.is_not(None),
+            EstadoConversacion.last_assistant_at <= cutoff_inactividad,
+            EstadoConversacion.last_assistant_at >= cutoff_max_edad,
+            EstadoConversacion.follow_up_at.is_(None),
+        )
+        result = await session.execute(query)
+        candidatos = result.scalars().all()
+        # Filtrar: el último mensaje debe ser del asistente
+        return [
+            e.telefono for e in candidatos
+            if e.last_user_at is None or e.last_assistant_at > e.last_user_at
+        ]
+
+
+async def conversaciones_para_cierre(min_despues_followup: int = 5) -> list[str]:
+    """Conversaciones que ya recibieron follow-up y siguen sin respuesta del cliente."""
+    cutoff = datetime.utcnow() - timedelta(minutes=min_despues_followup)
+    async with async_session() as session:
+        query = select(EstadoConversacion).where(
+            EstadoConversacion.follow_up_at.is_not(None),
+            EstadoConversacion.follow_up_at <= cutoff,
+            EstadoConversacion.cierre_at.is_(None),
+        )
+        result = await session.execute(query)
+        candidatos = result.scalars().all()
+        return [
+            e.telefono for e in candidatos
+            if e.last_user_at is None or e.follow_up_at > e.last_user_at
+        ]
