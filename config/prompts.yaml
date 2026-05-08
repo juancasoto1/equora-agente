@@ -179,18 +179,43 @@ system_prompt: |
   - Título de cada sección: máximo 24 caracteres
   - Texto del botón: máximo 20 caracteres
 
-  Si el catálogo tiene más de 10 productos disponibles, NO los pongas todos.
-  Selecciona los 8-10 más relevantes según el tipo de cliente o muestra solo
-  las líneas (Hogar, Lavandería, Industrial) y luego, según lo que pida el
-  cliente, le mandas otra lista con los productos de esa línea.
+  ### Navegación del catálogo por categorías (IMPORTANTE)
 
-  Formato exacto:
-  [[LISTA:{"texto":"Estos son nuestros productos más populares 🌿","boton":"Ver productos","secciones":[{"titulo":"Línea Hogar","items":[{"id":"lavaloza","titulo":"Lavaloza PRO MAX","descripcion":"Antibacterial, desde $7.200"},{"id":"ambientador","titulo":"Ambientador","descripcion":"2 en 1, desde $4.400"}]},{"titulo":"Línea Lavandería","items":[{"id":"det_color","titulo":"Detergente Color","descripcion":"Protege colores, desde $6.400"},{"id":"suavizante","titulo":"Suavizante","descripcion":"Aroma duradero, desde $5.600"}]}]}]]
+  El catálogo se inyecta agrupado por categorías (ej. "Línea Hogar", "Línea
+  Lavandería", "Línea Industrial"). Las categorías exactas las ves al inicio
+  del bloque "## Catálogo de productos actualizado (Shopify)" en la línea
+  "Categorías disponibles: ...".
 
-  Cuándo usarlas:
-  - Cuando el cliente pide ver el catálogo: muestra máx 10 productos destacados
-    (o agrupa por línea si hay más opciones que mostrar después)
-  - Cuando quieres mostrar productos recomendados para su tipo de negocio
+  Para no romper el límite de 10 items y a medida que crece el catálogo, NUNCA
+  muestres todos los productos de una sola vez. Usa esta navegación de 2 pasos:
+
+  **PASO A — Cliente pide "ver catálogo"**
+  Muestra una LISTA con las CATEGORÍAS disponibles (no productos):
+  [[LISTA:{"texto":"Estas son nuestras líneas de productos Biotú 🌿 ¿Cuál te interesa?","boton":"Ver categorías","secciones":[{"titulo":"Categorías","items":[{"id":"cat_hogar","titulo":"Línea Hogar","descripcion":"Lavaloza, ambientador, etc."},{"id":"cat_lavanderia","titulo":"Línea Lavandería","descripcion":"Detergente, suavizante"},{"id":"cat_industrial","titulo":"Línea Industrial","descripcion":"Desengrasantes, jabones"}]}]}]]
+
+  Las descripciones son cortitas (máx 72 chars) e inventas un resumen de qué
+  contiene cada categoría según los productos que viste en el catálogo.
+
+  **PASO B — Cliente toca una categoría (ej. "Línea Hogar")**
+  Muestra una LISTA con los productos de ESA categoría (máx 10). Para cada
+  producto pon el nombre y, en la descripción, el precio "desde" o el rango:
+  [[LISTA:{"texto":"Productos de Línea Hogar 🏠","boton":"Ver productos","secciones":[{"titulo":"Línea Hogar","items":[{"id":"lavaloza","titulo":"Lavaloza PRO MAX","descripcion":"Antibacterial, desde $7.200"},{"id":"ambientador","titulo":"Ambientador","descripcion":"2 en 1, desde $4.400"}]}]}]]
+
+  **PASO C — Cliente toca un producto (ej. "Lavaloza PRO MAX")**
+  Muestra TODAS las presentaciones disponibles de ese producto en texto plano
+  (no usar lista, porque las presentaciones suelen ser pocas) y pregunta cuál
+  presentación quiere y cuántas. Ejemplo:
+  *Lavaloza Antibacterial PRO MAX*
+    Spray 500 ml → $7.200 (5 disponibles)
+    Repuesto 4 L → $32.800
+  ¿Cuál te interesa y cuántas unidades?
+
+  **Si solo hay 1-2 categorías** o el catálogo entero suma menos de 10
+  productos, puedes saltar el PASO A y mostrar directamente productos.
+
+  **Cuándo usar listas en general:**
+  - Catálogo: navegación A → B → C como se describe arriba
+  - Recomendaciones para un tipo de negocio (máx 10 productos curados)
 
   IMPORTANTE:
   - El marcador va SIEMPRE al final del mensaje, después del texto normal

@@ -18,6 +18,14 @@ SHOPIFY_GQL_QUERY = """
     edges {
       node {
         title
+        productType
+        collections(first: 5) {
+          edges {
+            node {
+              title
+            }
+          }
+        }
         variants(first: 10) {
           edges {
             node {
@@ -34,6 +42,9 @@ SHOPIFY_GQL_QUERY = """
   }
 }
 """
+
+# Colecciones que ignoramos como categoría visible (las crea Shopify por defecto)
+COLECCIONES_IGNORADAS = {"home page", "frontpage", "all", "todos"}
 
 # Mapa de variantes para resolver merchandiseId al crear el checkout
 # Clave: "producto|presentacion" normalizado
@@ -73,9 +84,9 @@ async def obtener_catalogo_shopify() -> str:
             logger.warning("Shopify no devolvió productos")
             return "## Catálogo de productos actualizado (Shopify)\n\nNo hay productos disponibles en este momento."
 
-        lineas = ["## Catálogo de productos actualizado (Shopify)\n"]
-        total = 0
         _variant_map.clear()
+        categorias: dict[str, list[tuple[str, list[dict]]]] = {}
+        total = 0
 
         for p in products:
             node = p["node"]
@@ -86,21 +97,48 @@ async def obtener_catalogo_shopify() -> str:
             ]
             if not variantes:
                 continue
-            lineas.append(f"*{node['title']}*")
+
+            # Categoría: primer collection no-default, sino productType, sino "Otros"
+            categoria = None
+            for c in (node.get("collections", {}).get("edges") or []):
+                titulo_col = (c.get("node", {}).get("title") or "").strip()
+                if titulo_col and titulo_col.lower() not in COLECCIONES_IGNORADAS:
+                    categoria = titulo_col
+                    break
+            if not categoria:
+                pt = (node.get("productType") or "").strip()
+                if pt:
+                    categoria = pt
+            if not categoria:
+                categoria = "Otros"
+
+            categorias.setdefault(categoria, []).append((node["title"], variantes))
+
             for v in variantes:
-                precio = int(float(v["price"]["amount"]))
                 stock = v.get("quantityAvailable")
-                if isinstance(stock, int) and stock > 0:
-                    lineas.append(f"  {v['title']} → ${precio:,}  ({stock} disponibles)")
-                else:
-                    lineas.append(f"  {v['title']} → ${precio:,}")
                 clave = f"{_normalizar(node['title'])}|{_normalizar(v['title'])}"
                 _variant_map[clave] = {
                     "id": v["id"],
                     "stock": stock if isinstance(stock, int) else None,
                 }
+                total += 1
+
+        # Construir texto del catálogo agrupado por categoría
+        lineas = ["## Catálogo de productos actualizado (Shopify)\n"]
+        lineas.append("Categorías disponibles: " + ", ".join(categorias.keys()) + "\n")
+        for categoria, productos_cat in categorias.items():
+            lineas.append(f"### {categoria}")
+            for prod_title, variantes in productos_cat:
+                lineas.append(f"*{prod_title}*")
+                for v in variantes:
+                    precio = int(float(v["price"]["amount"]))
+                    stock = v.get("quantityAvailable")
+                    if isinstance(stock, int) and stock > 0:
+                        lineas.append(f"  {v['title']} → ${precio:,}  ({stock} disponibles)")
+                    else:
+                        lineas.append(f"  {v['title']} → ${precio:,}")
+                lineas.append("")
             lineas.append("")
-            total += len(variantes)
 
         logger.info(f"Catálogo Shopify: {len(products)} productos, {total} variantes disponibles")
 
