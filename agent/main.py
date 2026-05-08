@@ -156,16 +156,37 @@ async def webhook_handler(request: Request):
                     logger.error(f"Error enviando botones: {e}")
 
             if datos_lista and hasattr(proveedor, "enviar_lista"):
+                lista_enviada = False
                 try:
-                    await proveedor.enviar_lista(
+                    lista_enviada = await proveedor.enviar_lista(
                         msg.telefono,
                         datos_lista.get("texto", ""),
                         datos_lista.get("boton", "Ver opciones"),
                         datos_lista.get("secciones", [])
                     )
-                    logger.info(f"Lista enviada a {msg.telefono}")
+                    if lista_enviada:
+                        logger.info(f"Lista enviada a {msg.telefono}")
                 except Exception as e:
                     logger.error(f"Error enviando lista: {e}")
+                # Fallback: si la lista interactiva falla (límites de Meta,
+                # demasiados items, etc.) enviamos los productos como texto
+                if not lista_enviada:
+                    lineas = [datos_lista.get("texto", "")]
+                    for sec in datos_lista.get("secciones", []):
+                        titulo = sec.get("titulo", "")
+                        if titulo:
+                            lineas.append(f"\n*{titulo}*")
+                        for item in sec.get("items", []):
+                            t = item.get("titulo", "")
+                            d = item.get("descripcion", "")
+                            if t and d:
+                                lineas.append(f"• *{t}* — {d}")
+                            elif t:
+                                lineas.append(f"• {t}")
+                    fallback_text = "\n".join(l for l in lineas if l)
+                    if fallback_text.strip():
+                        await proveedor.enviar_mensaje(msg.telefono, fallback_text[:4000])
+                        logger.info(f"Fallback texto de lista enviado a {msg.telefono}")
 
             # Enviar link de checkout de Shopify si se generó
             if checkout_url:

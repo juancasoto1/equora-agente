@@ -155,24 +155,37 @@ class ProveedorMeta(ProveedorWhatsApp):
             return r.status_code == 200
 
     async def enviar_lista(self, telefono: str, texto: str, boton: str, secciones: list[dict]) -> bool:
-        """Envía mensaje con lista de opciones seleccionables."""
+        """Envía mensaje con lista de opciones seleccionables.
+        WhatsApp impone: máx 10 filas TOTALES entre todas las secciones,
+        título de fila ≤ 24 chars, descripción ≤ 72 chars, botón ≤ 20 chars."""
         if not self.access_token or not self.phone_number_id:
             return False
 
+        MAX_ROWS = 10
         secciones_payload = []
+        rows_acumuladas = 0
         for seccion in secciones:
-            rows = [
-                {
-                    "id": item.get("id", f"item_{i}"),
-                    "title": item.get("titulo", "")[:24],
-                    "description": item.get("descripcion", "")[:72],
-                }
-                for i, item in enumerate(seccion.get("items", []))
-            ]
-            secciones_payload.append({
-                "title": seccion.get("titulo", "")[:24],
-                "rows": rows,
-            })
+            if rows_acumuladas >= MAX_ROWS:
+                break
+            rows = []
+            for i, item in enumerate(seccion.get("items", [])):
+                if rows_acumuladas >= MAX_ROWS:
+                    break
+                rows.append({
+                    "id": str(item.get("id", f"item_{rows_acumuladas}"))[:200],
+                    "title": str(item.get("titulo", ""))[:24],
+                    "description": str(item.get("descripcion", ""))[:72],
+                })
+                rows_acumuladas += 1
+            if rows:
+                secciones_payload.append({
+                    "title": str(seccion.get("titulo", ""))[:24],
+                    "rows": rows,
+                })
+
+        if not secciones_payload:
+            logger.warning("enviar_lista: sin secciones válidas — abortando")
+            return False
 
         url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
         headers = {
@@ -185,9 +198,9 @@ class ProveedorMeta(ProveedorWhatsApp):
             "type": "interactive",
             "interactive": {
                 "type": "list",
-                "body": {"text": texto},
+                "body": {"text": texto[:1024]},
                 "action": {
-                    "button": boton[:20],
+                    "button": boton[:20] or "Ver opciones",
                     "sections": secciones_payload,
                 },
             },

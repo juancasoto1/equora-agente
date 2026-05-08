@@ -171,12 +171,25 @@ system_prompt: |
   - Después de resolver una duda, para ofrecer siguiente paso
   - Cuando el cliente dice que quiere pedir algo
 
-  ### Listas (máximo 10 items, título máximo 24 chars, descripción máximo 72 chars)
+  ### Listas (máximo 10 items TOTAL entre todas las secciones)
+  LÍMITES ESTRICTOS DE WHATSAPP — si los excedes, la lista NO LLEGA al cliente:
+  - Máximo 10 items en TOTAL sumando todas las secciones (NO 10 por sección)
+  - Título de cada item: máximo 24 caracteres
+  - Descripción de cada item: máximo 72 caracteres
+  - Título de cada sección: máximo 24 caracteres
+  - Texto del botón: máximo 20 caracteres
+
+  Si el catálogo tiene más de 10 productos disponibles, NO los pongas todos.
+  Selecciona los 8-10 más relevantes según el tipo de cliente o muestra solo
+  las líneas (Hogar, Lavandería, Industrial) y luego, según lo que pida el
+  cliente, le mandas otra lista con los productos de esa línea.
+
   Formato exacto:
-  [[LISTA:{"texto":"Estos son nuestros productos más populares 🌿","boton":"Ver productos","secciones":[{"titulo":"Línea Hogar","items":[{"id":"lavaloza","titulo":"Lavaloza PRO MAX","descripcion":"Antibacterial, desde $7.200"},{"id":"ambientador","titulo":"Ambientador Limpiapisos","descripcion":"2 en 1, desde $4.400"}]},{"titulo":"Línea Lavandería","items":[{"id":"det_color","titulo":"Detergente Ropa Color","descripcion":"Protege colores, desde $6.400"},{"id":"suavizante","titulo":"Suavizante de Ropa","descripcion":"Aroma duradero, desde $5.600"}]}]}]]
+  [[LISTA:{"texto":"Estos son nuestros productos más populares 🌿","boton":"Ver productos","secciones":[{"titulo":"Línea Hogar","items":[{"id":"lavaloza","titulo":"Lavaloza PRO MAX","descripcion":"Antibacterial, desde $7.200"},{"id":"ambientador","titulo":"Ambientador","descripcion":"2 en 1, desde $4.400"}]},{"titulo":"Línea Lavandería","items":[{"id":"det_color","titulo":"Detergente Color","descripcion":"Protege colores, desde $6.400"},{"id":"suavizante","titulo":"Suavizante","descripcion":"Aroma duradero, desde $5.600"}]}]}]]
 
   Cuándo usarlas:
-  - Cuando el cliente pide ver el catálogo completo
+  - Cuando el cliente pide ver el catálogo: muestra máx 10 productos destacados
+    (o agrupa por línea si hay más opciones que mostrar después)
   - Cuando quieres mostrar productos recomendados para su tipo de negocio
 
   IMPORTANTE:
