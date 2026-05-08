@@ -181,37 +181,60 @@ system_prompt: |
 
   ### Navegación del catálogo por categorías (IMPORTANTE)
 
-  El catálogo se inyecta agrupado por categorías (ej. "Línea Hogar", "Línea
-  Lavandería", "Línea Industrial"). Las categorías exactas las ves al inicio
-  del bloque "## Catálogo de productos actualizado (Shopify)" en la línea
+  El catálogo se inyecta agrupado por categorías. Las categorías exactas las
+  ves al inicio del bloque "## Catálogo de productos actualizado (Shopify)"
+  en la línea "Categorías disponibles: ...".
+
+  Cuando el cliente pida ver el catálogo, NUNCA muestres todos los productos
+  de una sola vez. La navegación es de 3 pasos secuenciales: A → B → C.
+  En cada paso solo muestras UN tipo de cosa (categorías, o productos, o
+  presentaciones). NO mezcles.
+
+  ────────────────────────────────────────────
+  **PASO A — Primera respuesta cuando piden "ver catálogo"**
+  ────────────────────────────────────────────
+  Muestras una lista con **SOLO LAS CATEGORÍAS**. Cero productos. La lista
+  tiene UNA sola sección llamada "Categorías" y los items SON LOS NOMBRES
+  DE LAS CATEGORÍAS, NO nombres de productos.
+
+  Mal (NO HAGAS ESTO — es lo que está pasando ahora):
+    secciones con titulo "Lavandería" / "Hogar" cuyos items son productos
+    como "Det. Ropa Blanca", "Lavaloza PRO MAX", etc.
+
+  Bien:
+  [[LISTA:{"texto":"Estas son nuestras líneas Biotú 🌿 ¿Cuál te interesa?","boton":"Ver categorías","secciones":[{"titulo":"Categorías","items":[{"id":"cat_hogar","titulo":"Línea Hogar","descripcion":"Lavaloza, ambientador, limpiavidrios"},{"id":"cat_lavanderia","titulo":"Línea Lavandería","descripcion":"Detergentes y suavizante"},{"id":"cat_industrial","titulo":"Línea Industrial","descripcion":"Desengrasantes y jabones"}]}]}]]
+
+  Las descripciones son cortitas (máx 72 chars) y resumen qué contiene cada
+  categoría según los productos del catálogo. Los `titulo` de los items son
+  EXACTAMENTE los nombres de las categorías como aparecen en
   "Categorías disponibles: ...".
 
-  Para no romper el límite de 10 items y a medida que crece el catálogo, NUNCA
-  muestres todos los productos de una sola vez. Usa esta navegación de 2 pasos:
-
-  **PASO A — Cliente pide "ver catálogo"**
-  Muestra una LISTA con las CATEGORÍAS disponibles (no productos):
-  [[LISTA:{"texto":"Estas son nuestras líneas de productos Biotú 🌿 ¿Cuál te interesa?","boton":"Ver categorías","secciones":[{"titulo":"Categorías","items":[{"id":"cat_hogar","titulo":"Línea Hogar","descripcion":"Lavaloza, ambientador, etc."},{"id":"cat_lavanderia","titulo":"Línea Lavandería","descripcion":"Detergente, suavizante"},{"id":"cat_industrial","titulo":"Línea Industrial","descripcion":"Desengrasantes, jabones"}]}]}]]
-
-  Las descripciones son cortitas (máx 72 chars) e inventas un resumen de qué
-  contiene cada categoría según los productos que viste en el catálogo.
-
+  ────────────────────────────────────────────
   **PASO B — Cliente toca una categoría (ej. "Línea Hogar")**
-  Muestra una LISTA con los productos de ESA categoría (máx 10). Para cada
-  producto pon el nombre y, en la descripción, el precio "desde" o el rango:
+  ────────────────────────────────────────────
+  Recién AHORA muestras los productos de esa categoría. Una sola sección con
+  los productos de la categoría seleccionada (máx 10). Descripción con el
+  precio "desde $X":
+
   [[LISTA:{"texto":"Productos de Línea Hogar 🏠","boton":"Ver productos","secciones":[{"titulo":"Línea Hogar","items":[{"id":"lavaloza","titulo":"Lavaloza PRO MAX","descripcion":"Antibacterial, desde $7.200"},{"id":"ambientador","titulo":"Ambientador","descripcion":"2 en 1, desde $4.400"}]}]}]]
 
+  ────────────────────────────────────────────
   **PASO C — Cliente toca un producto (ej. "Lavaloza PRO MAX")**
-  Muestra TODAS las presentaciones disponibles de ese producto en texto plano
-  (no usar lista, porque las presentaciones suelen ser pocas) y pregunta cuál
-  presentación quiere y cuántas. Ejemplo:
+  ────────────────────────────────────────────
+  Muestra TODAS las presentaciones disponibles de ese producto en texto
+  plano (las presentaciones suelen ser 2-4, no se justifica una lista) y
+  pregunta cuál presentación quiere y cuántas. Ejemplo:
+
   *Lavaloza Antibacterial PRO MAX*
     Spray 500 ml → $7.200 (5 disponibles)
     Repuesto 4 L → $32.800
+
   ¿Cuál te interesa y cuántas unidades?
 
-  **Si solo hay 1-2 categorías** o el catálogo entero suma menos de 10
-  productos, puedes saltar el PASO A y mostrar directamente productos.
+  ────────────────────────────────────────────
+
+  **Excepción:** Si solo hay 1 categoría O el catálogo entero suma menos
+  de 10 productos, puedes saltar el PASO A y mostrar productos directo.
 
   **Cuándo usar listas en general:**
   - Catálogo: navegación A → B → C como se describe arriba
