@@ -177,24 +177,35 @@ async def webhook_handler(request: Request):
             await registrar_mensaje_asistente(msg.telefono)
 
             # Procesar marcador de pedido → crear checkout en Shopify
+            PEDIDO_MINIMO = int(os.getenv("PEDIDO_MINIMO", 60000))
             checkout_url = None
             checkout_fallo = False
+            pedido_minimo_fallo = False
             match_pedido = re.search(r'\[\[PEDIDO:(.*?)\]\]', respuesta, re.DOTALL)
             if match_pedido:
                 try:
                     datos_pedido = json.loads(match_pedido.group(1))
-                    checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
-                    if checkout_url:
-                        await guardar_cliente(msg.telefono, datos_pedido)
-                        # Guardamos el carrito como pendiente: lo limpia el webhook
-                        # de Shopify cuando el cliente complete el checkout
-                        await guardar_pedido_pendiente(
-                            msg.telefono, datos_pedido.get("productos", [])
+                    total_pedido = int(datos_pedido.get("total", 0))
+                    if total_pedido < PEDIDO_MINIMO:
+                        # Pedido por debajo del mínimo → no se procesa
+                        pedido_minimo_fallo = True
+                        logger.warning(
+                            f"Pedido de {msg.telefono} rechazado por monto mínimo: "
+                            f"${total_pedido:,} < ${PEDIDO_MINIMO:,}"
                         )
-                        logger.info(f"Checkout Shopify creado para {msg.telefono}")
                     else:
-                        checkout_fallo = True
-                        logger.error(f"No se pudo crear checkout Shopify para {msg.telefono}")
+                        checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
+                        if checkout_url:
+                            await guardar_cliente(msg.telefono, datos_pedido)
+                            # Guardamos el carrito como pendiente: lo limpia el webhook
+                            # de Shopify cuando el cliente complete el checkout
+                            await guardar_pedido_pendiente(
+                                msg.telefono, datos_pedido.get("productos", [])
+                            )
+                            logger.info(f"Checkout Shopify creado para {msg.telefono}")
+                        else:
+                            checkout_fallo = True
+                            logger.error(f"No se pudo crear checkout Shopify para {msg.telefono}")
                 except Exception as e:
                     checkout_fallo = True
                     logger.error(f"Error procesando pedido: {e}")
@@ -283,6 +294,15 @@ async def webhook_handler(request: Request):
                     await proveedor.enviar_mensaje(
                         msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
                     )
+
+            # Si el pedido no alcanzó el mínimo, avísale al cliente
+            if pedido_minimo_fallo:
+                await proveedor.enviar_mensaje(
+                    msg.telefono,
+                    f"😊 El pedido mínimo es de *${PEDIDO_MINIMO:,}*. "
+                    "¿Quieres agregar algo más para alcanzarlo? "
+                    "Podemos revisar el catálogo juntos 🛍️"
+                )
 
             # Si la creación del checkout falló (stock agotado, producto no
             # mapeado, etc.) avísale al cliente en vez de quedarnos mudos
