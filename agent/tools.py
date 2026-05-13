@@ -51,6 +51,56 @@ SHOPIFY_GQL_QUERY = """
 # Colecciones que ignoramos como categoría visible (las crea Shopify por defecto)
 COLECCIONES_IGNORADAS = {"home page", "frontpage", "all", "todos"}
 
+# ── Categorías fijas de Equora ────────────────────────────────────────────────
+# Orden y nombres exactos que debe mostrar Andrea.
+# Clave: fragmento normalizado del título del producto → Valor: nombre de categoría.
+# Si un producto no coincide con ninguna clave cae en "Otros".
+CATEGORIAS_EQUORA: list[tuple[str, str]] = [
+    # (fragmento normalizado del título,  categoría visible)
+    ("detergente ropa blanca",          "Lavandería"),
+    ("detergente ropa color",           "Lavandería"),
+    ("suavizante",                      "Lavandería"),
+    ("lavaloza antibacterial",          "Cocina"),
+    ("lavaloza pro max",                "Cocina"),
+    ("lavaloza pro",                    "Cocina"),
+    ("desengrasante de cocina",         "Cocina"),
+    ("desengrasante cocina",            "Cocina"),
+    ("ambientador",                     "Hogar"),
+    ("limpiapisos",                     "Hogar"),
+    ("desmanchador",                    "Hogar"),
+    ("eliminador de olores",            "Hogar"),
+    ("eliminador olores",               "Hogar"),
+    ("limpiador desinfectante",         "Hogar"),
+    ("limpiavidrios",                   "Hogar"),
+    ("desengrasante de motor",          "Talleres / Industrial"),
+    ("desengrasante motor",             "Talleres / Industrial"),
+    ("desengrasante profesional",       "Talleres / Industrial"),
+    ("shampoo",                         "Talleres / Industrial"),
+    ("jabon liquido",                   "Higiene Personal"),
+    ("jabón líquido",                   "Higiene Personal"),
+    ("jabon de manos",                  "Higiene Personal"),
+]
+
+# Orden de aparición de las categorías en el catálogo
+ORDEN_CATEGORIAS = [
+    "Lavandería",
+    "Cocina",
+    "Hogar",
+    "Talleres / Industrial",
+    "Higiene Personal",
+    "Otros",
+]
+
+
+def _categoria_producto(titulo: str) -> str:
+    """Asigna la categoría fija de Equora a un producto por su título."""
+    titulo_n = _normalizar(titulo)
+    for fragmento, categoria in CATEGORIAS_EQUORA:
+        if fragmento in titulo_n:
+            return categoria
+    return "Otros"
+
+
 # Mapa de variantes para resolver merchandiseId al crear el checkout
 # Clave: "producto|presentacion" normalizado
 # Valor: dict con "id" (variant GID) y "stock" (int o None si Storefront no expone inventario)
@@ -112,19 +162,8 @@ async def obtener_catalogo_shopify() -> str:
             if not variantes:
                 continue
 
-            # Categoría: primer collection no-default, sino productType, sino "Otros"
-            categoria = None
-            for c in (node.get("collections", {}).get("edges") or []):
-                titulo_col = (c.get("node", {}).get("title") or "").strip()
-                if titulo_col and titulo_col.lower() not in COLECCIONES_IGNORADAS:
-                    categoria = titulo_col
-                    break
-            if not categoria:
-                pt = (node.get("productType") or "").strip()
-                if pt:
-                    categoria = pt
-            if not categoria:
-                categoria = "Otros"
+            # Categoría: siempre desde el mapa fijo de Equora (ignora colecciones Shopify)
+            categoria = _categoria_producto(node["title"])
 
             categorias.setdefault(categoria, []).append((node["title"], variantes))
 
@@ -137,10 +176,12 @@ async def obtener_catalogo_shopify() -> str:
                 }
                 total += 1
 
-        # Construir texto del catálogo agrupado por categoría
+        # Construir texto del catálogo respetando el orden fijo de categorías Equora
+        cats_con_productos = [c for c in ORDEN_CATEGORIAS if c in categorias]
         lineas = ["## Catálogo de productos actualizado (Shopify)\n"]
-        lineas.append("Categorías disponibles: " + ", ".join(categorias.keys()) + "\n")
-        for categoria, productos_cat in categorias.items():
+        lineas.append("Categorías disponibles: " + ", ".join(cats_con_productos) + "\n")
+        for categoria in cats_con_productos:
+            productos_cat = categorias.get(categoria, [])
             lineas.append(f"### {categoria}")
             for prod_title, variantes in productos_cat:
                 lineas.append(f"*{prod_title}*")
