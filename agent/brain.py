@@ -4,36 +4,60 @@ import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from agent.tools import obtener_catalogo_shopify
-from agent.memory import obtener_cliente, obtener_pedido_pendiente
+from agent.memory import obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
 
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
+# ── Cache del system prompt (se recarga solo si cambia el archivo) ────────────
+_prompt_cache: str = ""
+_prompt_mtime: float = 0.0
+_prompt_config_cache: dict = {}
+_PROMPTS_FILE = "config/prompts.yaml"
 
-def cargar_config_prompts() -> dict:
+
+def _cargar_config() -> dict:
+    """Lee prompts.yaml con cache basado en mtime del archivo."""
+    global _prompt_cache, _prompt_mtime, _prompt_config_cache
     try:
-        with open("config/prompts.yaml", "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+        mtime = os.path.getmtime(_PROMPTS_FILE)
+        if mtime == _prompt_mtime and _prompt_config_cache:
+            return _prompt_config_cache
+        with open(_PROMPTS_FILE, "r", encoding="utf-8") as f:
+            _prompt_config_cache = yaml.safe_load(f) or {}
+        _prompt_mtime = mtime
+        _prompt_cache = _prompt_config_cache.get(
+            "system_prompt",
+            "Eres Andrea, asistente de Equora Distribuciones. Responde en español."
+        )
+        logger.info("prompts.yaml recargado desde disco")
+        return _prompt_config_cache
     except FileNotFoundError:
         logger.error("config/prompts.yaml no encontrado")
         return {}
 
 
 def cargar_system_prompt() -> str:
-    config = cargar_config_prompts()
-    return config.get("system_prompt", "Eres Andrea, asistente de Equora Distribuciones. Responde en español.")
+    return _cargar_config().get(
+        "system_prompt",
+        "Eres Andrea, asistente de Equora Distribuciones. Responde en español."
+    )
 
 
 def obtener_mensaje_error() -> str:
-    config = cargar_config_prompts()
-    return config.get("error_message", "Lo siento, estoy teniendo un problemita técnico. Por favor intenta de nuevo en unos minuticos.")
+    return _cargar_config().get(
+        "error_message",
+        "Lo siento, estoy teniendo un problemita técnico. Por favor intenta de nuevo en unos minuticos."
+    )
 
 
 def obtener_mensaje_fallback() -> str:
-    config = cargar_config_prompts()
-    return config.get("fallback_message", "Disculpa, no entendí bien tu mensaje. ¿Me puedes contar con más detalle en qué te puedo ayudar? 😊")
+    return _cargar_config().get(
+        "fallback_message",
+        "Disculpa, no entendí bien tu mensaje. ¿Me puedes contar con más detalle en qué te puedo ayudar? 😊"
+    )
 
 
 async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str | None = None) -> str:
@@ -42,13 +66,13 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str |
 
     system_prompt = cargar_system_prompt()
 
-    # Inyectar catálogo actualizado desde Shopify en tiempo real
+    # Inyectar catálogo (desde cache — sin HTTP en cada mensaje)
     catalogo = await obtener_catalogo_shopify()
     if catalogo:
         system_prompt = system_prompt + "\n\n" + catalogo
 
-    # Inyectar perfil del cliente si ya nos compró antes
     if telefono:
+        # Inyectar perfil del cliente si ya compró antes
         cliente = await obtener_cliente(telefono)
         if cliente and cliente.get("nombres"):
             bloque = ["\n\n## Cliente conocido (ya compró antes)"]
@@ -66,7 +90,26 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str |
             )
             system_prompt += "\n".join(bloque)
 
-        # Inyectar pedido pendiente (carrito armado pero sin completar checkout)
+        # Inyectar carrito activo (persistido en BD — nunca se pierde por largo historial)
+        carrito = await obtener_carrito_activo(telefono)
+        if carrito:
+            bloque_c = ["\n\n## Carrito actual del cliente (persistido en sistema)"]
+            bloque_c.append(
+                "IMPORTANTE: este es el carrito REAL y COMPLETO del cliente. "
+                "Úsalo siempre como fuente de verdad — no lo reconstruyas desde el historial."
+            )
+            total_carrito = 0
+            for item in carrito:
+                subtotal = item.get("subtotal", 0)
+                total_carrito += subtotal
+                bloque_c.append(
+                    f"- {item.get('cantidad', 1)}x {item.get('producto', '')} "
+                    f"({item.get('presentacion', '')}) → ${subtotal:,}"
+                )
+            bloque_c.append(f"Total acumulado: ${total_carrito:,}")
+            system_prompt += "\n".join(bloque_c)
+
+        # Inyectar pedido pendiente (checkout generado pero no completado)
         pendiente = await obtener_pedido_pendiente(telefono)
         if pendiente:
             bloque_p = ["\n\n## Pedido pendiente sin completar"]
@@ -87,28 +130,21 @@ async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str |
             )
             system_prompt += "\n".join(bloque_p)
 
-    mensajes = []
-    for msg in historial:
-        mensajes.append({
-            "role": msg["role"],
-            "content": msg["content"]
-        })
-
-    mensajes.append({
-        "role": "user",
-        "content": mensaje
-    })
+    mensajes = [{"role": m["role"], "content": m["content"]} for m in historial]
+    mensajes.append({"role": "user", "content": mensaje})
 
     try:
         response = await client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5",  # Más rápido que sonnet para respuestas conversacionales
             max_tokens=1024,
             system=system_prompt,
             messages=mensajes
         )
-
         respuesta = response.content[0].text
-        logger.info(f"Respuesta generada ({response.usage.input_tokens} in / {response.usage.output_tokens} out)")
+        logger.info(
+            f"Respuesta generada ({response.usage.input_tokens} in / "
+            f"{response.usage.output_tokens} out) modelo={response.model}"
+        )
         return respuesta
 
     except Exception as e:

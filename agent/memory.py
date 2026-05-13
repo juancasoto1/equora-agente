@@ -47,6 +47,8 @@ class Cliente(Base):
     pedidos_realizados: Mapped[int] = mapped_column(Integer, default=0)
     pedido_pendiente: Mapped[str] = mapped_column(Text, default="")
     pedido_pendiente_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    carrito_activo: Mapped[str] = mapped_column(Text, default="")        # JSON del carrito en curso
+    carrito_activo_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     actualizado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -76,6 +78,8 @@ async def inicializar_db():
         for sql in (
             "ALTER TABLE clientes ADD COLUMN pedido_pendiente TEXT DEFAULT ''",
             "ALTER TABLE clientes ADD COLUMN pedido_pendiente_at DATETIME",
+            "ALTER TABLE clientes ADD COLUMN carrito_activo TEXT DEFAULT ''",
+            "ALTER TABLE clientes ADD COLUMN carrito_activo_at DATETIME",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -202,6 +206,51 @@ async def limpiar_pedido_pendiente(telefono: str):
         if cliente:
             cliente.pedido_pendiente = ""
             cliente.pedido_pendiente_at = None
+            cliente.actualizado = datetime.utcnow()
+            await session.commit()
+
+
+# ── Carrito activo (persistencia independiente del historial) ────────────────
+
+CARRITO_TTL_HORAS = 24  # El carrito expira si el cliente no vuelve en 24 h
+
+
+async def guardar_carrito_activo(telefono: str, items: list[dict]):
+    """Guarda el estado actual del carrito en BD.
+    Se llama cada vez que Andrea agrega/quita un producto."""
+    async with async_session() as session:
+        cliente = await session.get(Cliente, telefono)
+        ahora = datetime.utcnow()
+        if not cliente:
+            cliente = Cliente(telefono=telefono)
+            session.add(cliente)
+        cliente.carrito_activo = json.dumps(items, ensure_ascii=False)
+        cliente.carrito_activo_at = ahora
+        cliente.actualizado = ahora
+        await session.commit()
+
+
+async def obtener_carrito_activo(telefono: str) -> list[dict]:
+    """Devuelve el carrito en curso. Lista vacía si no existe o expiró."""
+    async with async_session() as session:
+        cliente = await session.get(Cliente, telefono)
+        if not cliente or not cliente.carrito_activo or not cliente.carrito_activo_at:
+            return []
+        if datetime.utcnow() - cliente.carrito_activo_at > timedelta(hours=CARRITO_TTL_HORAS):
+            return []
+        try:
+            return json.loads(cliente.carrito_activo) or []
+        except Exception:
+            return []
+
+
+async def limpiar_carrito_activo(telefono: str):
+    """Borra el carrito activo — se llama cuando el pedido se confirma o se vacía."""
+    async with async_session() as session:
+        cliente = await session.get(Cliente, telefono)
+        if cliente:
+            cliente.carrito_activo = ""
+            cliente.carrito_activo_at = None
             cliente.actualizado = datetime.utcnow()
             await session.commit()
 

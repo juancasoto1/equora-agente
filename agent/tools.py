@@ -4,9 +4,14 @@ import logging
 import unicodedata
 import yaml
 import httpx
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger("agentkit")
+
+# ── Cache del catálogo ────────────────────────────────────────────────────────
+_catalog_cache: str = ""
+_catalog_cache_at: datetime | None = None
+CATALOG_TTL_SEG: int = int(os.getenv("CATALOG_TTL_SEG", 300))  # 5 min por defecto
 
 SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "equora-6.myshopify.com")
 SHOPIFY_STOREFRONT_TOKEN = os.getenv("SHOPIFY_STOREFRONT_TOKEN", "d6fe89f265fed1b5f9572f19fc0ba3a7")
@@ -66,8 +71,17 @@ def _normalizar(texto: str) -> str:
 
 
 async def obtener_catalogo_shopify() -> str:
-    """Obtiene el catálogo de productos disponibles desde Shopify Storefront API.
-    Solo muestra variantes con availableForSale=true (requiere 'Rastrear cantidad' activado en Shopify)."""
+    """Obtiene el catálogo desde Shopify. Cachea en memoria por CATALOG_TTL_SEG segundos
+    para evitar una llamada HTTP en cada mensaje (mejora velocidad de respuesta ~1-2 s)."""
+    global _catalog_cache, _catalog_cache_at
+    ahora = datetime.utcnow()
+    if (
+        _catalog_cache
+        and _catalog_cache_at
+        and (ahora - _catalog_cache_at).total_seconds() < CATALOG_TTL_SEG
+    ):
+        return _catalog_cache  # Respuesta instantánea desde cache
+
     try:
         url = f"https://{SHOPIFY_STORE}/api/2024-10/graphql.json"
         headers = {
@@ -143,13 +157,18 @@ async def obtener_catalogo_shopify() -> str:
         logger.info(f"Catálogo Shopify: {len(products)} productos, {total} variantes disponibles")
 
         if total == 0:
-            return "## Catálogo de productos actualizado (Shopify)\n\nNo hay productos con stock disponible en este momento."
+            resultado = "## Catálogo de productos actualizado (Shopify)\n\nNo hay productos con stock disponible en este momento."
+        else:
+            resultado = "\n".join(lineas)
 
-        return "\n".join(lineas)
+        # Guardar en cache
+        _catalog_cache = resultado
+        _catalog_cache_at = ahora
+        return resultado
 
     except Exception as e:
         logger.error(f"Error obteniendo catálogo Shopify: {e}")
-        return ""
+        return _catalog_cache  # Si falla, devuelve el último cache disponible
 
 
 async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:

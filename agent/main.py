@@ -15,6 +15,7 @@ from agent.brain import generar_respuesta
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial,
     guardar_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
+    guardar_carrito_activo, limpiar_carrito_activo,
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
@@ -142,6 +143,19 @@ def extraer_marcador_botones(respuesta: str) -> tuple[str, dict | None]:
     return texto_limpio, datos
 
 
+def extraer_marcador_carrito(respuesta: str) -> tuple[str, list | None]:
+    """Extrae [[CARRITO:[...]]] — Andrea lo emite cada vez que el carrito cambia."""
+    match = re.search(r'\[\[CARRITO:(\[.*?\])\]\]', respuesta, re.DOTALL)
+    if not match:
+        return respuesta, None
+    try:
+        items = json.loads(match.group(1))
+    except Exception:
+        items = None
+    texto_limpio = re.sub(r'\s*\[\[CARRITO:\[.*?\]\]\]', '', respuesta, flags=re.DOTALL).strip()
+    return texto_limpio, items
+
+
 def extraer_marcador_lista(respuesta: str) -> tuple[str, dict | None]:
     """Extrae datos del marcador [[LISTA:...]] y lo elimina del texto."""
     match = re.search(r'\[\[LISTA:(.*?)\]\]', respuesta, re.DOTALL)
@@ -176,6 +190,15 @@ async def webhook_handler(request: Request):
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
             await registrar_mensaje_asistente(msg.telefono)
 
+            # Procesar marcador de carrito → persistir estado en BD
+            respuesta, items_carrito = extraer_marcador_carrito(respuesta)
+            if items_carrito is not None:
+                try:
+                    await guardar_carrito_activo(msg.telefono, items_carrito)
+                    logger.info(f"Carrito actualizado para {msg.telefono}: {len(items_carrito)} items")
+                except Exception as e:
+                    logger.error(f"Error guardando carrito: {e}")
+
             # Procesar marcador de pedido → crear checkout en Shopify
             checkout_url = None
             checkout_fallo = False
@@ -186,11 +209,12 @@ async def webhook_handler(request: Request):
                     checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
                     if checkout_url:
                         await guardar_cliente(msg.telefono, datos_pedido)
-                        # Guardamos el carrito como pendiente: lo limpia el webhook
-                        # de Shopify cuando el cliente complete el checkout
+                        # Guardamos el carrito como pendiente: lo limpia el webhook de Shopify
                         await guardar_pedido_pendiente(
                             msg.telefono, datos_pedido.get("productos", [])
                         )
+                        # El carrito activo se vacía: el pedido ya fue generado
+                        await limpiar_carrito_activo(msg.telefono)
                         logger.info(f"Checkout Shopify creado para {msg.telefono}")
                     else:
                         checkout_fallo = True
