@@ -340,6 +340,7 @@ async def webhook_handler(request: Request):
             if datos_catalogo_cat and hasattr(proveedor, "enviar_catalogo_productos"):
                 categoria = datos_catalogo_cat.get("categoria")
                 secciones = obtener_secciones_catalogo(categoria)
+                cat_enviado = False
                 if secciones:
                     header = categoria or "Catálogo Biotú 🌿"
                     cuerpo = "Selecciona los productos que quieres, ajusta las cantidades y confirma tu pedido."
@@ -349,9 +350,24 @@ async def webhook_handler(request: Request):
                     if cat_enviado:
                         logger.info(f"Catálogo nativo '{categoria}' enviado a {msg.telefono}")
                     else:
-                        logger.warning(f"Catálogo nativo falló, sin fallback para {msg.telefono}")
-                else:
-                    logger.warning(f"Sin secciones para categoría '{categoria}'")
+                        logger.warning(f"Catálogo nativo falló para {msg.telefono} — usando fallback texto")
+
+                # Fallback: si el catálogo nativo falla (IDs no mapeados, error Meta, etc.)
+                # mostramos los productos como lista interactiva de texto
+                if not cat_enviado:
+                    from agent.tools import _categorias_cache, ORDEN_CATEGORIAS
+                    cats = {categoria: _categorias_cache[categoria]} if (
+                        categoria and categoria in _categorias_cache
+                    ) else {c: _categorias_cache[c] for c in ORDEN_CATEGORIAS if c in _categorias_cache}
+                    lineas = []
+                    for cat_name, productos_cat in cats.items():
+                        lineas.append(f"*{cat_name}*")
+                        for prod_title, variantes in productos_cat:
+                            precio_min = min(int(float(v["price"]["amount"])) for v in variantes)
+                            lineas.append(f"  • {prod_title} — desde ${precio_min:,}")
+                        lineas.append("")
+                    if lineas:
+                        await proveedor.enviar_mensaje(msg.telefono, "\n".join(lineas).strip())
 
             # Luego enviar mensajes interactivos
             if datos_botones and hasattr(proveedor, "enviar_botones"):

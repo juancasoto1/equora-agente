@@ -273,6 +273,10 @@ class ProveedorMeta(ProveedorWhatsApp):
                 },
             },
         }
+        # Log del payload para diagnóstico (solo IDs, no datos sensibles)
+        ids_por_seccion = {s["title"]: [i["product_retailer_id"] for i in s.get("product_items", [])] for s in secciones}
+        logger.info(f"product_list payload — catalog_id={self.catalog_id} secciones={ids_por_seccion}")
+
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
