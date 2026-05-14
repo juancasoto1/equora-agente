@@ -15,9 +15,9 @@ _HTML = r"""<!DOCTYPE html>
 <style>
 :root{--az:#1a3a6b;--ve:#2d7d3a;--vc:#4caf50;--gr:#f5f5f5;--tx:#1a1a1a;--bd:#e0e0e0}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--gr);color:var(--tx);display:flex;flex-direction:column;overflow:hidden}
-header{background:var(--az);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.25);flex-shrink:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--gr);color:var(--tx)}
+#top{position:sticky;top:0;z-index:100}
+header{background:var(--az);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .lw{width:44px;height:44px;flex-shrink:0;border-radius:50%;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
 .lw img{width:100%;height:100%;object-fit:contain}
 .lf{font-size:1.4rem;line-height:1;color:#1a3a6b;font-weight:800;letter-spacing:-1px}
@@ -25,8 +25,8 @@ h1{font-size:1rem;font-weight:700;flex:1;line-height:1.2}
 h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 #bc{position:relative;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.4);color:#fff;width:46px;height:46px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0}
 #bdg{position:absolute;top:-4px;right:-4px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:none;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;border:2px solid var(--az)}
-#ban{background:linear-gradient(90deg,var(--az),var(--ve));color:#fff;text-align:center;padding:7px 14px;font-size:.78rem;font-weight:600;flex-shrink:0}
-#pb{padding:8px 14px 6px;background:#fff;border-bottom:1px solid var(--bd);flex-shrink:0}
+#ban{background:linear-gradient(90deg,var(--az),var(--ve));color:#fff;text-align:center;padding:7px 14px;font-size:.78rem;font-weight:600}
+#pb{padding:8px 14px 6px;background:#fff;border-bottom:1px solid var(--bd)}
 .pbl{display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:4px;color:#555}
 .pbv{font-weight:700}
 .pbw{background:#eee;border-radius:8px;height:10px;overflow:hidden}
@@ -36,16 +36,16 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 .pbmsg{display:none;text-align:center;font-size:.74rem;font-weight:700;color:var(--vc);margin-top:3px}
 .pbmsg.on{display:block;animation:pbpulse .9s ease-in-out infinite alternate}
 @keyframes pbpulse{from{opacity:1;letter-spacing:0}to{opacity:.7;letter-spacing:.5px}}
-#sb{padding:7px 14px;background:#fff;border-bottom:1px solid var(--bd);flex-shrink:0}
+#sb{padding:7px 14px;background:#fff;border-bottom:1px solid var(--bd)}
 .sw{position:relative;display:flex;align-items:center}
 .sw svg{position:absolute;left:10px;width:16px;height:16px;fill:none;stroke:#aaa;stroke-width:2;stroke-linecap:round;pointer-events:none}
 #si{width:100%;padding:8px 12px 8px 34px;border-radius:20px;border:1.5px solid var(--bd);font-size:.84rem;outline:none;background:#f8f8f8;color:var(--tx)}
 #si:focus{border-color:var(--az);background:#fff}
-#fil{display:flex;gap:8px;padding:10px 14px;overflow-x:auto;background:#fff;border-bottom:1px solid var(--bd);flex-shrink:0}
+#fil{display:flex;gap:8px;padding:10px 14px;overflow-x:auto;background:#fff;border-bottom:1px solid var(--bd)}
 #fil::-webkit-scrollbar{display:none}
 .fb{white-space:nowrap;padding:6px 14px;border-radius:20px;border:1.5px solid var(--az);background:#fff;color:var(--az);font-size:.78rem;font-weight:600;cursor:pointer}
 .fb.on{background:var(--az);color:#fff}
-#grd{flex:1;overflow-y:auto;padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;align-content:start}
+#grd{padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
 .card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .iw{width:100%;height:150px;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;padding:6px}
 .iw img{width:100%;height:100%;object-fit:contain}
@@ -95,6 +95,7 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 </style>
 </head>
 <body>
+<div id="top">
 <header>
   <div class="lw">LOGO_AQUI</div>
   <h1>Equora Distribuciones<small>Productos Biotú 🌿</small></h1>
@@ -113,6 +114,7 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
   </div>
 </div>
 <div id="fil"></div>
+</div>
 <div id="grd"><p style="color:#aaa;text-align:center;padding:40px;grid-column:1/-1" id="grd-msg">Cargando...</p></div>
 
 <div id="ov" onclick="cerrarC()"></div>
