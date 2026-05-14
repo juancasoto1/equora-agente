@@ -88,14 +88,19 @@ COLECCIONES_IGNORADAS = {"home page", "frontpage", "all", "todos"}
 # Si un producto no coincide con ninguna clave cae en "Otros".
 CATEGORIAS_EQUORA: list[tuple[str, str]] = [
     # (fragmento normalizado del título,  categoría visible)
+    # Lavandería
     ("detergente ropa blanca",          "Lavandería"),
     ("detergente ropa color",           "Lavandería"),
+    ("detergente ropa delicada",        "Lavandería"),
+    ("ropa delicada",                   "Lavandería"),
     ("suavizante",                      "Lavandería"),
+    # Cocina
     ("lavaloza antibacterial",          "Cocina"),
     ("lavaloza pro max",                "Cocina"),
     ("lavaloza pro",                    "Cocina"),
     ("desengrasante de cocina",         "Cocina"),
     ("desengrasante cocina",            "Cocina"),
+    # Hogar
     ("ambientador",                     "Hogar"),
     ("limpiapisos",                     "Hogar"),
     ("desmanchador",                    "Hogar"),
@@ -103,10 +108,14 @@ CATEGORIAS_EQUORA: list[tuple[str, str]] = [
     ("eliminador olores",               "Hogar"),
     ("limpiador desinfectante",         "Hogar"),
     ("limpiavidrios",                   "Hogar"),
+    ("detergente multiusos",            "Hogar"),
+    ("multiusos",                       "Hogar"),
+    # Talleres / Industrial
     ("desengrasante de motor",          "Talleres / Industrial"),
     ("desengrasante motor",             "Talleres / Industrial"),
     ("desengrasante profesional",       "Talleres / Industrial"),
     ("shampoo",                         "Talleres / Industrial"),
+    # Higiene Personal
     ("jabon liquido",                   "Higiene Personal"),
     ("jabón líquido",                   "Higiene Personal"),
     ("jabon de manos",                  "Higiene Personal"),
@@ -125,13 +134,28 @@ ORDEN_CATEGORIAS = [
 
 def _categoria_producto(titulo: str) -> str:
     """Asigna la categoría fija de Equora a un producto por su título.
-    Matching por palabras: todas las palabras del fragmento deben aparecer
-    en el título (tolerante a preposiciones como 'de', 'para', 'y')."""
+    - Palabras cortas (≤3 chars como 'de', 'pro'): coincidencia exacta en el set
+    - Palabras largas: prefijo (tolera plurales: 'motor' matchea 'motores')
+    - Tolera preposiciones extras en el título ('de', 'para', 'y')
+    """
     titulo_n = _normalizar(titulo)
-    palabras_titulo = set(titulo_n.split())
+    palabras_titulo = titulo_n.split()
+    set_titulo = set(palabras_titulo)
     for fragmento, categoria in CATEGORIAS_EQUORA:
-        palabras_frag = fragmento.split()
-        if all(p in palabras_titulo for p in palabras_frag):
+        palabras_frag = _normalizar(fragmento).split()
+        match = True
+        for pf in palabras_frag:
+            if len(pf) <= 3:
+                # Palabras cortas: exactas
+                if pf not in set_titulo:
+                    match = False
+                    break
+            else:
+                # Palabras largas: prefijo (maneja plurales y variaciones)
+                if not any(pt.startswith(pf) or pf.startswith(pt) for pt in palabras_titulo):
+                    match = False
+                    break
+        if match:
             return categoria
     return "Otros"
 

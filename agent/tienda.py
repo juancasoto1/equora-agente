@@ -19,7 +19,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 header{background:var(--az);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .lw{width:44px;height:44px;flex-shrink:0;border-radius:50%;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center}
 .lw img{width:100%;height:100%;object-fit:contain}
-.lf{font-size:1.6rem;line-height:1}
+.lf{font-size:1.4rem;line-height:1;color:#1a3a6b;font-weight:800;letter-spacing:-1px}
 h1{font-size:1rem;font-weight:700;flex:1;line-height:1.2}
 h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 #bc{position:relative;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.4);color:#fff;width:46px;height:46px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0}
@@ -358,5 +358,17 @@ fetch('/tienda/productos')
 
 def obtener_tienda_html(logo_url: str = "", productos: list = None) -> str:
     """Genera el HTML con el logo inyectado. El catálogo lo carga el JS via fetch."""
-    logo_tag = ('<img src="' + logo_url + '" alt="Equora">') if logo_url else '<span class="lf">💧</span>'
+    if logo_url:
+        logo_tag = '<img src="' + logo_url + '" alt="Equora">'
+    else:
+        # SVG gota de agua con colores Equora como fallback visual
+        logo_tag = (
+            '<svg viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg"'
+            ' style="width:38px;height:38px">'
+            '<ellipse cx="22" cy="28" rx="12" ry="13" fill="#1a3a6b"/>'
+            '<path d="M22 5 Q34 20 34 28 A12 13 0 0 1 10 28 Q10 20 22 5Z" fill="#2d7d3a"/>'
+            '<path d="M22 10 Q31 22 31 28 A9 10 0 0 1 13 28 Q13 22 22 10Z" fill="#1a3a6b"/>'
+            '<ellipse cx="18" cy="24" rx="3" ry="4" fill="rgba(255,255,255,0.25)"/>'
+            '</svg>'
+        )
     return _HTML.replace('LOGO_AQUI', logo_tag)
