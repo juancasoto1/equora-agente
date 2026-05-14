@@ -25,6 +25,21 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 #bc{position:relative;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.4);color:#fff;width:46px;height:46px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0}
 #bdg{position:absolute;top:-4px;right:-4px;background:#f44336;color:#fff;border-radius:50%;width:18px;height:18px;display:none;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;border:2px solid var(--az)}
 #ban{background:linear-gradient(90deg,var(--az),var(--ve));color:#fff;text-align:center;padding:7px 14px;font-size:.78rem;font-weight:600}
+#pb{padding:8px 14px 6px;background:#fff;border-bottom:1px solid var(--bd)}
+.pbl{display:flex;justify-content:space-between;font-size:.72rem;margin-bottom:4px;color:#555}
+.pbv{font-weight:700}
+.pbw{background:#eee;border-radius:8px;height:10px;overflow:hidden}
+.pbf{height:100%;border-radius:8px;transition:width .5s ease,background .4s;max-width:100%}
+.pbf.red{background:#f44336}
+.pbf.grn{background:var(--vc)}
+.pbmsg{display:none;text-align:center;font-size:.74rem;font-weight:700;color:var(--vc);margin-top:3px}
+.pbmsg.on{display:block;animation:pbpulse .9s ease-in-out infinite alternate}
+@keyframes pbpulse{from{opacity:1;letter-spacing:0}to{opacity:.7;letter-spacing:.5px}}
+#sb{padding:7px 14px;background:#fff;border-bottom:1px solid var(--bd)}
+.sw{position:relative;display:flex;align-items:center}
+.sw svg{position:absolute;left:10px;width:16px;height:16px;fill:none;stroke:#aaa;stroke-width:2;stroke-linecap:round;pointer-events:none}
+#si{width:100%;padding:8px 12px 8px 34px;border-radius:20px;border:1.5px solid var(--bd);font-size:.84rem;outline:none;background:#f8f8f8;color:var(--tx)}
+#si:focus{border-color:var(--az);background:#fff}
 #fil{display:flex;gap:8px;padding:10px 14px;overflow-x:auto;background:#fff;border-bottom:1px solid var(--bd)}
 #fil::-webkit-scrollbar{display:none}
 .fb{white-space:nowrap;padding:6px 14px;border-radius:20px;border:1.5px solid var(--az);background:#fff;color:var(--az);font-size:.78rem;font-weight:600;cursor:pointer}
@@ -85,6 +100,17 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
   <button id="bc" onclick="abrirC()">🛒<span id="bdg"></span></button>
 </header>
 <div id="ban">🎁 Envío GRATIS en pedidos desde $60.000</div>
+<div id="pb">
+  <div class="pbl"><span>Progreso hacia envío gratis</span><span class="pbv" id="pv">$0 / $60.000</span></div>
+  <div class="pbw"><div class="pbf red" id="pf" style="width:0%"></div></div>
+  <div class="pbmsg" id="pmsg">🎉 ¡Envío GRATIS desbloqueado!</div>
+</div>
+<div id="sb">
+  <div class="sw">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input id="si" type="search" placeholder="Buscar producto o categoría..." autocomplete="off">
+  </div>
+</div>
 <div id="fil"></div>
 <div id="grd"><p style="color:#aaa;text-align:center;padding:40px;grid-column:1/-1" id="grd-msg">Cargando...</p></div>
 
@@ -117,6 +143,7 @@ var ENV = 7000, MG = 60000;
 var P = [];
 var C = {};
 var CAT = 'Todos';
+var Q = '';
 var TEL = new URLSearchParams(location.search).get('tel') || '';
 var LISTA = [];
 var CK = [];
@@ -149,12 +176,51 @@ document.addEventListener('click', function(e) {
   if (b) { CAT = b.dataset.c; renderFil(); renderGrd(); }
 });
 
+/* ── BÚSQUEDA ── */
+document.addEventListener('DOMContentLoaded', function() {
+  var si = document.getElementById('si');
+  if (si) {
+    si.addEventListener('input', function() {
+      Q = this.value.trim().toLowerCase();
+      renderGrd();
+    });
+  }
+});
+
+/* ── BARRA DE PROGRESO ── */
+function updatePB(sub) {
+  var pct = Math.min(100, MG > 0 ? Math.round(sub / MG * 100) : 0);
+  var pf = document.getElementById('pf');
+  var pv = document.getElementById('pv');
+  var pm = document.getElementById('pmsg');
+  if (!pf) return;
+  pf.style.width = pct + '%';
+  if (sub >= MG) {
+    pf.className = 'pbf grn';
+    pv.textContent = '¡Envío GRATIS! 🎉';
+    if (pm) pm.classList.add('on');
+  } else {
+    pf.className = 'pbf red';
+    pv.textContent = fmt(sub) + ' / ' + fmt(MG);
+    if (pm) pm.classList.remove('on');
+  }
+}
+
 /* ── GRID ── */
 function renderGrd() {
-  LISTA = CAT === 'Todos' ? P : P.filter(function(p) { return p.categoria === CAT; });
+  var base = Q
+    ? P.filter(function(p) {
+        var t = (p.producto + ' ' + p.presentacion + ' ' + p.categoria).toLowerCase();
+        return t.indexOf(Q) !== -1;
+      })
+    : (CAT === 'Todos' ? P : P.filter(function(p) { return p.categoria === CAT; }));
+  LISTA = base;
   if (!LISTA.length) {
+    var msg = Q
+      ? 'Sin resultados para "' + Q + '"'
+      : 'Sin productos en esta categoría';
     document.getElementById('grd').innerHTML =
-      '<p style="color:#bbb;text-align:center;padding:40px;grid-column:1/-1">Sin productos en esta categoría</p>';
+      '<p style="color:#bbb;text-align:center;padding:40px;grid-column:1/-1">' + he(msg) + '</p>';
     return;
   }
   var h = '';
@@ -227,11 +293,15 @@ function incC(i) {
 }
 
 function ui() {
-  var ks = Object.keys(C), tot = 0;
-  for (var i = 0; i < ks.length; i++) tot += C[ks[i]].qty;
+  var ks = Object.keys(C), tot = 0, sub = 0;
+  for (var i = 0; i < ks.length; i++) {
+    tot += C[ks[i]].qty;
+    sub += C[ks[i]].info.precio * C[ks[i]].qty;
+  }
   var b = document.getElementById('bdg');
   if (tot > 0) { b.style.display = 'flex'; b.textContent = tot; }
   else b.style.display = 'none';
+  updatePB(sub);
   renderGrd();
   renderCar();
 }
