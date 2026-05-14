@@ -1,5 +1,6 @@
 import os
 import re
+import asyncio
 import logging
 import unicodedata
 import yaml
@@ -23,15 +24,6 @@ META_API_VERSION = "v21.0"
 
 SHOPIFY_GQL_QUERY = """
 {
-  shop {
-    brand {
-      logo {
-        image {
-          url
-        }
-      }
-    }
-  }
   products(first: 100) {
     edges {
       node {
@@ -65,6 +57,21 @@ SHOPIFY_GQL_QUERY = """
               }
             }
           }
+        }
+      }
+    }
+  }
+}
+"""
+
+# Query separada para el logo de la tienda (no bloquea la carga del catálogo)
+SHOPIFY_LOGO_QUERY = """
+{
+  shop {
+    brand {
+      logo {
+        image {
+          url
         }
       }
     }
@@ -191,17 +198,6 @@ async def obtener_catalogo_shopify() -> str:
             r.raise_for_status()
             data = r.json()
 
-        # Logo del shop (Shopify brand API — API 2022-04+)
-        global _shop_logo_url
-        try:
-            logo_data = data.get("data", {}).get("shop", {}).get("brand", {}) or {}
-            logo_url = logo_data.get("logo", {}).get("image", {}).get("url", "")
-            if logo_url:
-                _shop_logo_url = logo_url
-                logger.info(f"Logo Shopify: {_shop_logo_url}")
-        except Exception:
-            pass
-
         products = data.get("data", {}).get("products", {}).get("edges", [])
         if not products:
             logger.warning("Shopify no devolvió productos")
@@ -303,18 +299,44 @@ async def obtener_catalogo_shopify() -> str:
         else:
             resultado = "\n".join(lineas)
 
-        # Cargar retailer_ids reales desde el catálogo de Facebook
-        # (necesario para que product_list funcione con IDs válidos)
-        await _cargar_fb_catalog()
-
-        # Guardar en cache
+        # Guardar en cache ANTES de lanzar tareas secundarias
+        # (así la tienda responde de inmediato sin esperar a Facebook o logo)
         _catalog_cache = resultado
         _catalog_cache_at = ahora
+
+        # Cargar logo y catálogo de Facebook en background (no bloquean)
+        asyncio.create_task(_cargar_logo_shopify())
+        asyncio.create_task(_cargar_fb_catalog())
+
         return resultado
 
     except Exception as e:
         logger.error(f"Error obteniendo catálogo Shopify: {e}")
         return _catalog_cache  # Si falla, devuelve el último cache disponible
+
+
+async def _cargar_logo_shopify():
+    """Obtiene el logo de la tienda desde Shopify brand API (background task)."""
+    global _shop_logo_url
+    if _shop_logo_url or os.getenv("LOGO_URL"):
+        return  # Ya tenemos logo
+    try:
+        url = f"https://{SHOPIFY_STORE}/api/2024-10/graphql.json"
+        headers = {
+            "Content-Type": "application/json",
+            "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
+        }
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.post(url, json={"query": SHOPIFY_LOGO_QUERY}, headers=headers)
+            if r.status_code == 200:
+                data = r.json()
+                logo_data = (data.get("data") or {}).get("shop", {}).get("brand", {}) or {}
+                logo_url = logo_data.get("logo", {}).get("image", {}).get("url", "")
+                if logo_url:
+                    _shop_logo_url = logo_url
+                    logger.info(f"Logo Shopify obtenido: {_shop_logo_url}")
+    except Exception as e:
+        logger.debug(f"No se pudo obtener logo Shopify: {e}")
 
 
 async def _cargar_fb_catalog():
