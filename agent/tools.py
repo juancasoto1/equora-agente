@@ -36,6 +36,7 @@ SHOPIFY_GQL_QUERY = """
             node {
               id
               title
+              sku
               price { amount }
               availableForSale
               quantityAvailable
@@ -106,6 +107,15 @@ def _categoria_producto(titulo: str) -> str:
 # Valor: dict con "id" (variant GID) y "stock" (int o None si Storefront no expone inventario)
 _variant_map: dict[str, dict] = {}
 
+# Mapa por retailer_id (SKU o ID numérico) para procesar órdenes del catálogo nativo WhatsApp
+# Clave: retailer_id (SKU del producto en Facebook/Meta Catalog)
+# Valor: dict con producto, presentacion, precio_unitario, variant_id
+_sku_map: dict[str, dict] = {}
+
+# Categorías estructuradas (se llenan al cargar el catálogo) para armar secciones del catálogo nativo
+# Clave: nombre de categoría → Lista de (titulo_producto, lista_variantes)
+_categorias_cache: dict[str, list] = {}
+
 
 def _normalizar(texto: str) -> str:
     """Normaliza para matching tolerante: minúsculas, sin acentos, separadores
@@ -149,6 +159,8 @@ async def obtener_catalogo_shopify() -> str:
             return "## Catálogo de productos actualizado (Shopify)\n\nNo hay productos disponibles en este momento."
 
         _variant_map.clear()
+        _sku_map.clear()
+        _categorias_cache.clear()
         categorias: dict[str, list[tuple[str, list[dict]]]] = {}
         total = 0
 
@@ -164,17 +176,38 @@ async def obtener_catalogo_shopify() -> str:
 
             # Categoría: siempre desde el mapa fijo de Equora (ignora colecciones Shopify)
             categoria = _categoria_producto(node["title"])
-
             categorias.setdefault(categoria, []).append((node["title"], variantes))
 
             for v in variantes:
                 stock = v.get("quantityAvailable")
+                precio = int(float(v["price"]["amount"]))
+
+                # Mapa para checkout Shopify
                 clave = f"{_normalizar(node['title'])}|{_normalizar(v['title'])}"
                 _variant_map[clave] = {
                     "id": v["id"],
                     "stock": stock if isinstance(stock, int) else None,
                 }
+
+                # Mapa por retailer_id para órdenes del catálogo nativo WhatsApp
+                sku = (v.get("sku") or "").strip()
+                gid = v["id"]  # gid://shopify/ProductVariant/12345678
+                numeric_id = gid.split("/")[-1] if "/" in gid else gid
+                # Shopify sincroniza con Facebook usando el SKU como retailer_id.
+                # Si no hay SKU, usa el ID numérico de la variante.
+                for rid in filter(None, [sku, numeric_id]):
+                    if rid not in _sku_map:
+                        _sku_map[rid] = {
+                            "producto": node["title"],
+                            "presentacion": v["title"],
+                            "precio_unitario": precio,
+                            "variant_id": gid,
+                        }
+
                 total += 1
+
+        # Guardar categorías para armar secciones del catálogo nativo
+        _categorias_cache.update(categorias)
 
         # Construir texto del catálogo respetando el orden fijo de categorías Equora
         cats_con_productos = [c for c in ORDEN_CATEGORIAS if c in categorias]
@@ -210,6 +243,38 @@ async def obtener_catalogo_shopify() -> str:
     except Exception as e:
         logger.error(f"Error obteniendo catálogo Shopify: {e}")
         return _catalog_cache  # Si falla, devuelve el último cache disponible
+
+
+def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
+    """Devuelve las secciones para un mensaje product_list de WhatsApp.
+    Si se pasa una categoría, filtra solo esa. Si no, devuelve todas."""
+    cats = {categoria: _categorias_cache[categoria]} if (
+        categoria and categoria in _categorias_cache
+    ) else _categorias_cache
+
+    secciones = []
+    for cat_name in ORDEN_CATEGORIAS:
+        if cat_name not in cats:
+            continue
+        items = []
+        for _prod_title, variantes in cats[cat_name]:
+            for v in variantes:
+                sku = (v.get("sku") or "").strip()
+                gid = v["id"]
+                numeric_id = gid.split("/")[-1] if "/" in gid else gid
+                retailer_id = sku if sku else numeric_id
+                items.append({"product_retailer_id": retailer_id})
+        if items:
+            secciones.append({
+                "title": cat_name[:24],
+                "product_items": items,
+            })
+    return secciones
+
+
+def obtener_producto_por_retailer_id(retailer_id: str) -> dict | None:
+    """Busca un producto en el mapa de SKUs para procesar órdenes del catálogo nativo."""
+    return _sku_map.get(retailer_id)
 
 
 async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:

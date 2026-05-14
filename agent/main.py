@@ -21,7 +21,12 @@ from agent.memory import (
     conversaciones_para_followup, conversaciones_para_cierre,
 )
 from agent.providers import obtener_proveedor
-from agent.tools import crear_checkout_shopify
+from agent.tools import (
+    crear_checkout_shopify,
+    obtener_catalogo_shopify,
+    obtener_secciones_catalogo,
+    obtener_producto_por_retailer_id,
+)
 
 load_dotenv()
 
@@ -143,6 +148,19 @@ def extraer_marcador_botones(respuesta: str) -> tuple[str, dict | None]:
     return texto_limpio, datos
 
 
+def extraer_marcador_catalogo_cat(respuesta: str) -> tuple[str, dict | None]:
+    """Extrae [[CATALOGO_CAT:{"categoria":"X"}]] — abre catálogo nativo de WhatsApp."""
+    match = re.search(r'\[\[CATALOGO_CAT:(.*?)\]\]', respuesta, re.DOTALL)
+    if not match:
+        return respuesta, None
+    try:
+        datos = json.loads(match.group(1))
+    except Exception:
+        datos = None
+    texto_limpio = re.sub(r'\s*\[\[CATALOGO_CAT:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
+    return texto_limpio, datos
+
+
 def extraer_marcador_carrito(respuesta: str) -> tuple[str, list | None]:
     """Extrae [[CARRITO:[...]]] — Andrea lo emite cada vez que el carrito cambia."""
     match = re.search(r'\[\[CARRITO:(\[.*?\])\]\]', respuesta, re.DOTALL)
@@ -178,7 +196,82 @@ async def webhook_handler(request: Request):
             if msg.es_propio or not msg.texto:
                 continue
 
-            logger.info(f"Mensaje de {msg.telefono}: {msg.texto}")
+            logger.info(f"Mensaje de {msg.telefono}: {msg.texto[:80]}")
+
+            # ── Orden directa desde catálogo nativo WhatsApp ──────────────────
+            # El cliente armó su carrito en WhatsApp y confirmó — bypaseamos Claude
+            # y creamos el checkout de Shopify directamente.
+            if msg.texto.startswith("__ORDEN_CATALOGO__:"):
+                await registrar_mensaje_usuario(msg.telefono)
+                try:
+                    items_raw = json.loads(msg.texto[len("__ORDEN_CATALOGO__:"):])
+                    productos = []
+                    no_encontrados = []
+                    for item in items_raw:
+                        rid = item.get("product_retailer_id", "")
+                        qty = int(item.get("quantity", 1))
+                        info = obtener_producto_por_retailer_id(rid)
+                        if not info:
+                            # Catálogo puede no estar cargado aún — recargar y reintentar
+                            await obtener_catalogo_shopify()
+                            info = obtener_producto_por_retailer_id(rid)
+                        if info:
+                            precio = info["precio_unitario"]
+                            productos.append({
+                                "producto": info["producto"],
+                                "presentacion": info["presentacion"],
+                                "cantidad": qty,
+                                "precio_unitario": precio,
+                                "subtotal": precio * qty,
+                            })
+                        else:
+                            no_encontrados.append(rid)
+                            logger.warning(f"retailer_id no encontrado en _sku_map: {rid}")
+
+                    if no_encontrados:
+                        logger.error(f"IDs sin mapear: {no_encontrados}. SKUs en Shopify necesarios.")
+
+                    if productos:
+                        total = sum(p["subtotal"] for p in productos)
+                        datos_pedido = {"productos": productos, "total": total}
+                        checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
+                        if checkout_url:
+                            await guardar_pedido_pendiente(msg.telefono, productos)
+                            await limpiar_carrito_activo(msg.telefono)
+                            texto_checkout = (
+                                "🎉 *¡Pedido recibido!*\n\n"
+                                "Toca el botón para confirmar tu dirección de entrega. "
+                                "El pago es *contra entrega*. 🌿"
+                            )
+                            if hasattr(proveedor, "enviar_cta_url"):
+                                await proveedor.enviar_cta_url(
+                                    msg.telefono, texto_checkout,
+                                    "Confirmar entrega", checkout_url
+                                )
+                            else:
+                                await proveedor.enviar_mensaje(
+                                    msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
+                                )
+                        else:
+                            await proveedor.enviar_mensaje(
+                                msg.telefono,
+                                "😔 No pude procesar tu pedido. Algunos productos "
+                                "pueden haberse agotado. ¿Quieres que lo revisemos juntos?"
+                            )
+                    else:
+                        await proveedor.enviar_mensaje(
+                            msg.telefono,
+                            "😔 No reconocí los productos de tu pedido. "
+                            "¿Puedes escribirme qué quieres y te ayudo?"
+                        )
+                except Exception as e:
+                    logger.error(f"Error procesando orden catálogo: {e}")
+                    await proveedor.enviar_mensaje(
+                        msg.telefono,
+                        "😔 Tuve un problema procesando tu pedido. "
+                        "¿Me puedes decir qué quieres y te ayudo enseguida?"
+                    )
+                continue  # No pasa por Claude
 
             # Cliente respondió → resetea timers de seguimiento
             await registrar_mensaje_usuario(msg.telefono)
@@ -235,12 +328,30 @@ async def webhook_handler(request: Request):
                 respuesta = re.sub(r'\s*\[\[ESCALAR:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
             # Extraer marcadores interactivos ANTES de enviar el texto
+            respuesta, datos_catalogo_cat = extraer_marcador_catalogo_cat(respuesta)
             respuesta, datos_botones = extraer_marcador_botones(respuesta)
             respuesta, datos_lista = extraer_marcador_lista(respuesta)
 
             # Enviar texto primero
             if respuesta:
                 await proveedor.enviar_mensaje(msg.telefono, respuesta)
+
+            # Catálogo nativo WhatsApp (product_list con fotos reales)
+            if datos_catalogo_cat and hasattr(proveedor, "enviar_catalogo_productos"):
+                categoria = datos_catalogo_cat.get("categoria")
+                secciones = obtener_secciones_catalogo(categoria)
+                if secciones:
+                    header = categoria or "Catálogo Biotú 🌿"
+                    cuerpo = "Selecciona los productos que quieres, ajusta las cantidades y confirma tu pedido."
+                    cat_enviado = await proveedor.enviar_catalogo_productos(
+                        msg.telefono, header, cuerpo, secciones
+                    )
+                    if cat_enviado:
+                        logger.info(f"Catálogo nativo '{categoria}' enviado a {msg.telefono}")
+                    else:
+                        logger.warning(f"Catálogo nativo falló, sin fallback para {msg.telefono}")
+                else:
+                    logger.warning(f"Sin secciones para categoría '{categoria}'")
 
             # Luego enviar mensajes interactivos
             if datos_botones and hasattr(proveedor, "enviar_botones"):

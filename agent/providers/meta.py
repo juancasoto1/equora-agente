@@ -16,6 +16,7 @@ class ProveedorMeta(ProveedorWhatsApp):
         self.access_token = os.getenv("META_ACCESS_TOKEN")
         self.phone_number_id = os.getenv("META_PHONE_NUMBER_ID")
         self.verify_token = os.getenv("META_VERIFY_TOKEN", "equora-andrea-2024")
+        self.catalog_id = os.getenv("META_CATALOG_ID", "")
         self.api_version = "v21.0"
 
     async def validar_webhook(self, request: Request):
@@ -67,6 +68,23 @@ class ProveedorMeta(ProveedorWhatsApp):
                                 mensaje_id=msg_id,
                                 es_propio=False,
                             ))
+
+                    elif tipo == "order":
+                        # El cliente confirmó su carrito desde el catálogo nativo de WhatsApp.
+                        # Serializamos los items como texto especial para que main.py los procese
+                        # directamente sin pasar por Claude.
+                        order_data = msg.get("order", {})
+                        items = order_data.get("product_items", [])
+                        if items:
+                            texto = f"__ORDEN_CATALOGO__:{json.dumps(items, ensure_ascii=False)}"
+                            mensajes.append(MensajeEntrante(
+                                telefono=telefono,
+                                texto=texto,
+                                mensaje_id=msg_id,
+                                es_propio=False,
+                            ))
+                            logger.info(f"Orden catálogo WhatsApp de {telefono}: {len(items)} items")
+
         return mensajes
 
     async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
@@ -209,4 +227,56 @@ class ProveedorMeta(ProveedorWhatsApp):
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API lista: {r.status_code} — {r.text}")
+            return r.status_code == 200
+
+    async def enviar_catalogo_productos(
+        self,
+        telefono: str,
+        header: str,
+        cuerpo: str,
+        secciones: list[dict],
+    ) -> bool:
+        """Envía un mensaje product_list con el catálogo nativo de WhatsApp.
+        El cliente ve fotos reales, puede seleccionar cantidades y armar su carrito
+        sin salir de WhatsApp. Requiere META_CATALOG_ID configurado.
+
+        secciones: [{"title": "Lavandería", "product_items": [{"product_retailer_id": "SKU1"}]}]
+        """
+        if not self.access_token or not self.phone_number_id:
+            return False
+        if not self.catalog_id:
+            logger.warning("META_CATALOG_ID no configurado — no se puede enviar catálogo nativo")
+            return False
+        if not secciones:
+            logger.warning("enviar_catalogo_productos: sin secciones")
+            return False
+
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "product_list",
+                "header": {
+                    "type": "text",
+                    "text": header[:60],
+                },
+                "body": {"text": cuerpo[:1024]},
+                "action": {
+                    "catalog_id": self.catalog_id,
+                    "sections": secciones,
+                },
+            },
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API product_list: {r.status_code} — {r.text}")
+            else:
+                logger.info(f"Catálogo nativo enviado a {telefono} ({len(secciones)} secciones)")
             return r.status_code == 200
