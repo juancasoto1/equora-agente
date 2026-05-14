@@ -23,6 +23,15 @@ META_API_VERSION = "v21.0"
 
 SHOPIFY_GQL_QUERY = """
 {
+  shop {
+    brand {
+      logo {
+        image {
+          url
+        }
+      }
+    }
+  }
   products(first: 100) {
     edges {
       node {
@@ -51,6 +60,9 @@ SHOPIFY_GQL_QUERY = """
               price { amount }
               availableForSale
               quantityAvailable
+              image {
+                url
+              }
             }
           }
         }
@@ -134,6 +146,14 @@ _fb_items: list[dict] = []
 # Catálogo en formato JSON para la mini-tienda web
 _catalog_json: list[dict] = []
 
+# Logo de la tienda (obtenido de Shopify brand o configurado manualmente)
+_shop_logo_url: str = ""
+
+
+def obtener_logo_url() -> str:
+    """Retorna la URL del logo de la tienda (desde Shopify o env var)."""
+    return os.getenv("LOGO_URL", "") or _shop_logo_url
+
 
 def _normalizar(texto: str) -> str:
     """Normaliza para matching tolerante: minúsculas, sin acentos, separadores
@@ -171,6 +191,17 @@ async def obtener_catalogo_shopify() -> str:
             r.raise_for_status()
             data = r.json()
 
+        # Logo del shop (Shopify brand API — API 2022-04+)
+        global _shop_logo_url
+        try:
+            logo_data = data.get("data", {}).get("shop", {}).get("brand", {}) or {}
+            logo_url = logo_data.get("logo", {}).get("image", {}).get("url", "")
+            if logo_url:
+                _shop_logo_url = logo_url
+                logger.info(f"Logo Shopify: {_shop_logo_url}")
+        except Exception:
+            pass
+
         products = data.get("data", {}).get("products", {}).get("edges", [])
         if not products:
             logger.warning("Shopify no devolvió productos")
@@ -205,6 +236,10 @@ async def obtener_catalogo_shopify() -> str:
                 stock = v.get("quantityAvailable")
                 precio = int(float(v["price"]["amount"]))
 
+                # Imagen específica de la variante (si no tiene, hereda la del producto)
+                v_img_data = v.get("image") or {}
+                v_imagen = v_img_data.get("url", "") or imagen
+
                 # Mapa para checkout Shopify
                 clave = f"{_normalizar(node['title'])}|{_normalizar(v['title'])}"
                 _variant_map[clave] = {
@@ -227,13 +262,13 @@ async def obtener_catalogo_shopify() -> str:
                             "variant_id": gid,
                         }
 
-                # JSON para mini-tienda web
+                # JSON para mini-tienda web (imagen específica por variante)
                 _catalog_json.append({
                     "producto": node["title"],
                     "presentacion": v["title"],
                     "precio": int(float(v["price"]["amount"])),
                     "stock": stock if isinstance(stock, int) else None,
-                    "imagen": imagen,
+                    "imagen": v_imagen,
                     "categoria": categoria,
                 })
 

@@ -25,10 +25,11 @@ from agent.tools import (
     crear_checkout_shopify,
     obtener_catalogo_shopify,
     obtener_catalogo_json,
+    obtener_logo_url,
     obtener_secciones_catalogo,
     obtener_producto_por_retailer_id,
 )
-from agent.tienda import TIENDA_HTML
+from agent.tienda import obtener_tienda_html
 
 load_dotenv()
 
@@ -504,7 +505,8 @@ async def tienda_html(request: Request):
     """Sirve la mini-tienda web móvil."""
     # Asegurar que el catálogo esté cargado (1ª visita puede traer cache vacío)
     await obtener_catalogo_shopify()
-    return HTMLResponse(content=TIENDA_HTML)
+    logo = obtener_logo_url()
+    return HTMLResponse(content=obtener_tienda_html(logo))
 
 
 @app.get("/tienda/productos")
@@ -537,6 +539,13 @@ async def tienda_confirmar(request: Request):
             if telefono:
                 await guardar_pedido_pendiente(telefono, productos)
                 await limpiar_carrito_activo(telefono)
+                # Silenciar seguimientos automáticos: el cliente acaba de pedir,
+                # no tiene sentido mandarle follow-up de inactividad
+                try:
+                    await marcar_followup_enviado(telefono)
+                    await marcar_cierre_enviado(telefono)
+                except Exception:
+                    pass
                 # Notificar al cliente por WhatsApp
                 texto_notif = (
                     "✅ *¡Tu pedido está listo!*\n\n"
