@@ -87,38 +87,35 @@ COLECCIONES_IGNORADAS = {"home page", "frontpage", "all", "todos"}
 # Clave: fragmento normalizado del título del producto → Valor: nombre de categoría.
 # Si un producto no coincide con ninguna clave cae en "Otros".
 CATEGORIAS_EQUORA: list[tuple[str, str]] = [
-    # (fragmento normalizado del título,  categoría visible)
-    # Lavandería
-    ("detergente ropa blanca",          "Lavandería"),
-    ("detergente ropa color",           "Lavandería"),
-    ("detergente ropa delicada",        "Lavandería"),
+    # IMPORTANTE: orden de más específico a más general.
+    # El primero que coincida gana.
+
+    # ── Lavandería ────────────────────────────────────────────
+    ("ropa blanca",                     "Lavandería"),
+    ("ropa color",                      "Lavandería"),
     ("ropa delicada",                   "Lavandería"),
     ("suavizante",                      "Lavandería"),
-    # Cocina
-    ("lavaloza antibacterial",          "Cocina"),
-    ("lavaloza pro max",                "Cocina"),
-    ("lavaloza pro",                    "Cocina"),
-    ("desengrasante de cocina",         "Cocina"),
-    ("desengrasante cocina",            "Cocina"),
-    # Hogar
+
+    # ── Cocina ────────────────────────────────────────────────
+    ("lavaloza",                        "Cocina"),      # cualquier lavaloza
+    ("desengrasante cocina",            "Cocina"),      # específico cocina ANTES del catch-all
+
+    # ── Hogar ─────────────────────────────────────────────────
     ("ambientador",                     "Hogar"),
     ("limpiapisos",                     "Hogar"),
     ("desmanchador",                    "Hogar"),
-    ("eliminador de olores",            "Hogar"),
     ("eliminador olores",               "Hogar"),
     ("limpiador desinfectante",         "Hogar"),
     ("limpiavidrios",                   "Hogar"),
-    ("detergente multiusos",            "Hogar"),
     ("multiusos",                       "Hogar"),
-    # Talleres / Industrial
-    ("desengrasante de motor",          "Talleres / Industrial"),
-    ("desengrasante motor",             "Talleres / Industrial"),
-    ("desengrasante profesional",       "Talleres / Industrial"),
+
+    # ── Talleres / Industrial ─────────────────────────────────
+    # "desengrasante" solo cubre TODO lo que no sea cocina
+    ("desengrasante",                   "Talleres / Industrial"),
     ("shampoo",                         "Talleres / Industrial"),
-    # Higiene Personal
-    ("jabon liquido",                   "Higiene Personal"),
-    ("jabón líquido",                   "Higiene Personal"),
-    ("jabon de manos",                  "Higiene Personal"),
+
+    # ── Higiene Personal ─────────────────────────────────────
+    ("jabon",                           "Higiene Personal"),  # jabón de manos, líquido, etc.
 ]
 
 # Orden de aparición de las categorías en el catálogo
@@ -133,29 +130,23 @@ ORDEN_CATEGORIAS = [
 
 
 def _categoria_producto(titulo: str) -> str:
-    """Asigna la categoría fija de Equora a un producto por su título.
-    - Palabras cortas (≤3 chars como 'de', 'pro'): coincidencia exacta en el set
-    - Palabras largas: prefijo (tolera plurales: 'motor' matchea 'motores')
-    - Tolera preposiciones extras en el título ('de', 'para', 'y')
+    """Asigna la categoría de Equora a un producto por su título normalizado.
+
+    Regla: TODAS las palabras del fragmento deben aparecer en el título.
+    Para palabras largas (>3 chars): la palabra del TÍTULO debe empezar
+    con la palabra del fragmento (tolera plurales: 'motor' matchea 'motores').
+    El orden en CATEGORIAS_EQUORA es crítico: específicos antes de generales.
     """
     titulo_n = _normalizar(titulo)
     palabras_titulo = titulo_n.split()
-    set_titulo = set(palabras_titulo)
+
     for fragmento, categoria in CATEGORIAS_EQUORA:
         palabras_frag = _normalizar(fragmento).split()
-        match = True
-        for pf in palabras_frag:
-            if len(pf) <= 3:
-                # Palabras cortas: exactas
-                if pf not in set_titulo:
-                    match = False
-                    break
-            else:
-                # Palabras largas: prefijo (maneja plurales y variaciones)
-                if not any(pt.startswith(pf) or pf.startswith(pt) for pt in palabras_titulo):
-                    match = False
-                    break
-        if match:
+        if all(
+            any(pt == pf or (len(pf) > 3 and pt.startswith(pf))
+                for pt in palabras_titulo)
+            for pf in palabras_frag
+        ):
             return categoria
     return "Otros"
 
