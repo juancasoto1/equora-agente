@@ -31,8 +31,8 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 .fb.on{background:var(--az);color:#fff}
 #grd{padding:12px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px}
 .card{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.iw{width:100%;height:130px;overflow:hidden;background:#f9f9f9;display:flex;align-items:center;justify-content:center}
-.iw img{width:100%;height:100%;object-fit:cover}
+.iw{width:100%;height:150px;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;padding:6px}
+.iw img{width:100%;height:100%;object-fit:contain}
 .ni{font-size:2.2rem}
 .cb{padding:10px}
 .cn{font-size:.8rem;font-weight:700;margin-bottom:2px;line-height:1.3}
@@ -336,7 +336,12 @@ fetch('/tienda/productos')
     return r.json();
   })
   .then(function(data) {
-    P = data;
+    /* Actualizar logo si el servidor lo devuelve */
+    if (data && data.logo) {
+      var lw = document.querySelector('.lw');
+      if (lw) lw.innerHTML = '<img src="' + he(data.logo) + '" alt="Equora">';
+    }
+    P = (data && data.productos) ? data.productos : (Array.isArray(data) ? data : []);
     renderFil();
     renderGrd();
   })

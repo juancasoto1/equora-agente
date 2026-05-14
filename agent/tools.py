@@ -124,10 +124,14 @@ ORDEN_CATEGORIAS = [
 
 
 def _categoria_producto(titulo: str) -> str:
-    """Asigna la categoría fija de Equora a un producto por su título."""
+    """Asigna la categoría fija de Equora a un producto por su título.
+    Matching por palabras: todas las palabras del fragmento deben aparecer
+    en el título (tolerante a preposiciones como 'de', 'para', 'y')."""
     titulo_n = _normalizar(titulo)
+    palabras_titulo = set(titulo_n.split())
     for fragmento, categoria in CATEGORIAS_EQUORA:
-        if fragmento in titulo_n:
+        palabras_frag = fragmento.split()
+        if all(p in palabras_titulo for p in palabras_frag):
             return categoria
     return "Otros"
 
@@ -160,6 +164,12 @@ _shop_logo_url: str = ""
 def obtener_logo_url() -> str:
     """Retorna la URL del logo de la tienda (desde Shopify o env var)."""
     return os.getenv("LOGO_URL", "") or _shop_logo_url
+
+
+async def obtener_logo_shopify() -> str:
+    """Carga (si no está cacheado) y retorna el logo URL de Shopify."""
+    await _cargar_logo_shopify()
+    return obtener_logo_url()
 
 
 def _normalizar(texto: str) -> str:

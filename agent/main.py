@@ -26,6 +26,7 @@ from agent.tools import (
     obtener_catalogo_shopify,
     obtener_catalogo_json,
     obtener_logo_url,
+    obtener_logo_shopify,
     obtener_secciones_catalogo,
     obtener_producto_por_retailer_id,
 )
@@ -511,13 +512,13 @@ async def tienda_html(request: Request):
 
 @app.get("/tienda/productos")
 async def tienda_productos():
-    """Retorna el catálogo en JSON para que la tienda lo consuma."""
-    catalogo = obtener_catalogo_json()
-    if not catalogo:
-        # Si el cache aún no tiene datos, cargar ahora
-        await obtener_catalogo_shopify()
-        catalogo = obtener_catalogo_json()
-    return JSONResponse(content=catalogo)
+    """Retorna catálogo + logo en JSON para la mini-tienda web."""
+    await obtener_catalogo_shopify()        # Asegura que el catálogo esté cargado
+    logo = await obtener_logo_shopify()     # Carga logo si aún no está disponible
+    return JSONResponse(content={
+        "logo": logo,
+        "productos": obtener_catalogo_json(),
+    })
 
 
 @app.post("/tienda/confirmar")
