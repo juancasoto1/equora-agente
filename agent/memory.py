@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, Integer
+from sqlalchemy import String, Text, DateTime, select, Integer, func
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -68,6 +68,7 @@ class EstadoConversacion(Base):
     last_assistant_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     follow_up_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cierre_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    modo_humano: Mapped[int] = mapped_column(Integer, default=0)  # 1 = humano responde, 0 = Andrea
     actualizado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -80,6 +81,7 @@ async def inicializar_db():
             "ALTER TABLE clientes ADD COLUMN pedido_pendiente_at DATETIME",
             "ALTER TABLE clientes ADD COLUMN carrito_activo TEXT DEFAULT ''",
             "ALTER TABLE clientes ADD COLUMN carrito_activo_at DATETIME",
+            "ALTER TABLE estado_conversacion ADD COLUMN modo_humano INTEGER DEFAULT 0",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -346,4 +348,81 @@ async def conversaciones_para_cierre(min_despues_followup: int = 5) -> list[str]
         return [
             e.telefono for e in candidatos
             if e.last_user_at is None or e.follow_up_at > e.last_user_at
+        ]
+
+
+# ── Inbox / panel de administración ─────────────────────────────────────────
+
+async def get_modo_humano(telefono: str) -> bool:
+    """Retorna True si el modo humano está activo para esta conversación."""
+    async with async_session() as session:
+        estado = await session.get(EstadoConversacion, telefono)
+        if not estado:
+            return False
+        return bool(estado.modo_humano)
+
+
+async def set_modo_humano(telefono: str, activo: bool):
+    """Activa o desactiva el modo humano para una conversación."""
+    async with async_session() as session:
+        estado = await _get_or_create_estado(session, telefono)
+        estado.modo_humano = 1 if activo else 0
+        estado.actualizado = datetime.utcnow()
+        await session.commit()
+
+
+async def obtener_todas_conversaciones() -> list[dict]:
+    """Lista de conversaciones con el último mensaje de cada una, ordenadas por recientes."""
+    async with async_session() as session:
+        # Subconsulta: id del último mensaje por teléfono
+        sub = (
+            select(Mensaje.telefono, func.max(Mensaje.id).label("max_id"))
+            .group_by(Mensaje.telefono)
+            .subquery()
+        )
+        query = (
+            select(Mensaje, EstadoConversacion, Cliente)
+            .join(sub, Mensaje.id == sub.c.max_id)
+            .outerjoin(EstadoConversacion, Mensaje.telefono == EstadoConversacion.telefono)
+            .outerjoin(Cliente, Mensaje.telefono == Cliente.telefono)
+            .where(~Mensaje.telefono.like("test-%"))
+            .order_by(Mensaje.timestamp.desc())
+            .limit(300)
+        )
+        result = await session.execute(query)
+        rows = result.all()
+        convs = []
+        for msg, estado, cliente in rows:
+            nombre = ""
+            if cliente:
+                nombre = f"{cliente.nombres or ''} {cliente.apellidos or ''}".strip()
+            convs.append({
+                "telefono": msg.telefono,
+                "nombre": nombre or msg.telefono,
+                "ultimo_mensaje": (msg.content or "")[:100],
+                "ultimo_role": msg.role,
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else "",
+                "modo_humano": bool(estado.modo_humano) if estado else False,
+            })
+        return convs
+
+
+async def obtener_historial_con_timestamps(telefono: str, limite: int = 150) -> list[dict]:
+    """Historial completo con timestamps para el inbox."""
+    async with async_session() as session:
+        query = (
+            select(Mensaje)
+            .where(Mensaje.telefono == telefono)
+            .order_by(Mensaje.timestamp.asc())
+            .limit(limite)
+        )
+        result = await session.execute(query)
+        mensajes = result.scalars().all()
+        return [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "timestamp": msg.timestamp.isoformat() if msg.timestamp else "",
+            }
+            for msg in mensajes
         ]

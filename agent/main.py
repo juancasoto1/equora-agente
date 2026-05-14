@@ -19,7 +19,10 @@ from agent.memory import (
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
+    get_modo_humano, set_modo_humano,
+    obtener_todas_conversaciones, obtener_historial_con_timestamps,
 )
+from agent.inbox import obtener_inbox_html
 from agent.providers import obtener_proveedor
 from agent.tools import (
     crear_checkout_shopify,
@@ -35,6 +38,7 @@ from agent.tienda import obtener_tienda_html
 load_dotenv()
 
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 log_level = logging.DEBUG if ENVIRONMENT == "development" else logging.INFO
 logging.basicConfig(level=log_level)
 logger = logging.getLogger("agentkit")
@@ -291,6 +295,12 @@ async def webhook_handler(request: Request):
 
             # Cliente respondió → resetea timers de seguimiento
             await registrar_mensaje_usuario(msg.telefono)
+
+            # Modo humano: guardar mensaje pero no responder con Andrea
+            if await get_modo_humano(msg.telefono):
+                await guardar_mensaje(msg.telefono, "user", msg.texto)
+                logger.info(f"Modo humano activo — {msg.telefono} — Andrea no responde")
+                continue
 
             historial = await obtener_historial(msg.telefono)
             respuesta = await generar_respuesta(msg.texto, historial, msg.telefono)
@@ -567,6 +577,80 @@ async def tienda_confirmar(request: Request):
     except Exception as e:
         logger.error(f"Error en /tienda/confirmar: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# ═══════════════════════════════════════════════════════════════
+#  INBOX — Panel de administración
+# ═══════════════════════════════════════════════════════════════
+
+def _verificar_admin(token: str) -> bool:
+    """Valida el token de administrador."""
+    if not ADMIN_TOKEN:
+        return False
+    return hmac.compare_digest(token or "", ADMIN_TOKEN)
+
+
+@app.get("/inbox", response_class=HTMLResponse)
+async def inbox_panel(token: str = ""):
+    """Panel de administración: inbox de conversaciones."""
+    if not _verificar_admin(token):
+        return HTMLResponse(
+            '<html><body style="font-family:sans-serif;text-align:center;padding:60px">'
+            '<h2>🔒 Acceso denegado</h2>'
+            '<p>Token inválido o ADMIN_TOKEN no configurado.</p>'
+            '</body></html>',
+            status_code=401
+        )
+    return HTMLResponse(content=obtener_inbox_html(token))
+
+
+@app.get("/inbox/api/conversaciones")
+async def inbox_conversaciones(token: str = ""):
+    if not _verificar_admin(token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    convs = await obtener_todas_conversaciones()
+    return JSONResponse(content=convs)
+
+
+@app.get("/inbox/api/mensajes/{telefono}")
+async def inbox_mensajes(telefono: str, token: str = ""):
+    if not _verificar_admin(token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    mensajes = await obtener_historial_con_timestamps(telefono, 150)
+    modo = await get_modo_humano(telefono)
+    return JSONResponse(content={"mensajes": mensajes, "modo_humano": modo})
+
+
+@app.post("/inbox/api/responder")
+async def inbox_responder(request: Request, token: str = ""):
+    if not _verificar_admin(token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    telefono = (body.get("telefono") or "").strip()
+    mensaje = (body.get("mensaje") or "").strip()
+    if not telefono or not mensaje:
+        return JSONResponse(status_code=400, content={"error": "Faltan datos"})
+    try:
+        await proveedor.enviar_mensaje(telefono, mensaje)
+        await guardar_mensaje(telefono, "assistant", mensaje)
+        await registrar_mensaje_asistente(telefono)
+        logger.info(f"Mensaje manual enviado a {telefono} desde inbox")
+        return JSONResponse(content={"ok": True})
+    except Exception as e:
+        logger.error(f"Error enviando desde inbox a {telefono}: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/inbox/api/modo/{telefono}")
+async def inbox_modo(telefono: str, request: Request, token: str = ""):
+    if not _verificar_admin(token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    activo = bool(body.get("activo", False))
+    await set_modo_humano(telefono, activo)
+    estado = "humano" if activo else "Andrea"
+    logger.info(f"Modo cambiado a '{estado}' para {telefono}")
+    return JSONResponse(content={"ok": True, "modo_humano": activo})
 
 
 SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
