@@ -35,6 +35,13 @@ SHOPIFY_GQL_QUERY = """
             }
           }
         }
+        images(first: 1) {
+          edges {
+            node {
+              url
+            }
+          }
+        }
         variants(first: 10) {
           edges {
             node {
@@ -124,6 +131,9 @@ _categorias_cache: dict[str, list] = {}
 # Se carga consultando la Graph API — son los IDs que WhatsApp acepta en product_list
 _fb_items: list[dict] = []
 
+# Catálogo en formato JSON para la mini-tienda web
+_catalog_json: list[dict] = []
+
 
 def _normalizar(texto: str) -> str:
     """Normaliza para matching tolerante: minúsculas, sin acentos, separadores
@@ -169,7 +179,8 @@ async def obtener_catalogo_shopify() -> str:
         _variant_map.clear()
         _sku_map.clear()
         _categorias_cache.clear()
-        categorias: dict[str, list[tuple[str, list[dict]]]] = {}
+        _catalog_json.clear()
+        categorias: dict[str, list[tuple[str, list[dict], str]]] = {}
         total = 0
 
         for p in products:
@@ -182,9 +193,13 @@ async def obtener_catalogo_shopify() -> str:
             if not variantes:
                 continue
 
+            # Imagen principal del producto
+            imgs = node.get("images", {}).get("edges", [])
+            imagen = imgs[0]["node"]["url"] if imgs else ""
+
             # Categoría: siempre desde el mapa fijo de Equora (ignora colecciones Shopify)
             categoria = _categoria_producto(node["title"])
-            categorias.setdefault(categoria, []).append((node["title"], variantes))
+            categorias.setdefault(categoria, []).append((node["title"], variantes, imagen))
 
             for v in variantes:
                 stock = v.get("quantityAvailable")
@@ -212,6 +227,16 @@ async def obtener_catalogo_shopify() -> str:
                             "variant_id": gid,
                         }
 
+                # JSON para mini-tienda web
+                _catalog_json.append({
+                    "producto": node["title"],
+                    "presentacion": v["title"],
+                    "precio": int(float(v["price"]["amount"])),
+                    "stock": stock if isinstance(stock, int) else None,
+                    "imagen": imagen,
+                    "categoria": categoria,
+                })
+
                 total += 1
 
         # Guardar categorías para armar secciones del catálogo nativo
@@ -224,7 +249,7 @@ async def obtener_catalogo_shopify() -> str:
         for categoria in cats_con_productos:
             productos_cat = categorias.get(categoria, [])
             lineas.append(f"### {categoria}")
-            for prod_title, variantes in productos_cat:
+            for prod_title, variantes, _img in productos_cat:
                 lineas.append(f"*{prod_title}*")
                 for v in variantes:
                     precio = int(float(v["price"]["amount"]))
@@ -380,6 +405,13 @@ def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
 def obtener_producto_por_retailer_id(retailer_id: str) -> dict | None:
     """Busca un producto en el mapa de SKUs para procesar órdenes del catálogo nativo."""
     return _sku_map.get(retailer_id)
+
+
+def obtener_catalogo_json() -> list[dict]:
+    """Retorna el catálogo completo como lista de dicts para la mini-tienda web.
+    Formato: [{producto, presentacion, precio, stock, imagen, categoria}, ...]
+    Se llena cuando se carga el catálogo de Shopify."""
+    return list(_catalog_json)
 
 
 async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:

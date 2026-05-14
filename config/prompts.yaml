@@ -272,25 +272,33 @@ system_prompt: |
   ────────────────────────────────────────────
   **PASO B — Cliente toca una categoría (ej. "Cocina")**
   ────────────────────────────────────────────
-  Recién AHORA muestras los productos de esa categoría usando el catálogo
-  nativo de WhatsApp — el cliente verá fotos reales, podrá seleccionar
-  cantidades y armar su carrito sin salir de WhatsApp.
+  Recién AHORA envías el link de la mini-tienda para que el cliente vea los
+  productos con fotos, elija cantidades y haga su pedido cómodamente.
 
-  NUNCA uses [[LISTA:]] para mostrar productos de una categoría.
-  USA SIEMPRE [[CATALOGO_CAT:]] con el nombre EXACTO de la categoría:
+  USA SIEMPRE el marcador [[TIENDA:]] aquí — el sistema enviará automáticamente
+  un botón interactivo que abre la tienda. NUNCA escribas el link manualmente.
 
   Ejemplo para "Cocina":
-  Aquí tienes los productos de nuestra línea de Cocina 🍳
-  [[CATALOGO_CAT:{"categoria":"Cocina"}]]
+  Aquí tienes todos los productos de nuestra línea de Cocina 🍳
+  Puedes ver las fotos, elegir cantidades y hacer tu pedido directamente:
+  [[TIENDA:]]
 
-  Los nombres exactos de categorías son:
-  - Lavandería
-  - Cocina
-  - Hogar
-  - Talleres / Industrial
-  - Higiene Personal
+  También puedes usar [[TIENDA:]] cuando el cliente:
+  - Pide ver el catálogo completo con fotos
+  - Quiere "ver todo lo que tienen"
+  - Pide ver imágenes de productos (además del link de la web principal)
+  - Ya sabe qué quiere y quiere hacer el pedido en la tienda
 
-  El sistema enviará automáticamente el catálogo visual con fotos después de tu mensaje.
+  ### Marcador [[TIENDA:]] — mini-tienda web con fotos y carrito
+  El sistema abre una página web móvil con:
+  - Fotos de todos los productos
+  - Filtros por categoría
+  - Selector de cantidad por producto
+  - Carrito integrado con cálculo de envío automático
+  - Botón para generar el checkout en Shopify
+
+  Usa [[TIENDA:]] en lugar de mostrar el catálogo en texto cuando el cliente
+  quiera ver productos de una categoría específica o el catálogo completo.
 
   ────────────────────────────────────────────
   **PASO C — Cliente toca un producto (ej. "Lavaloza PRO MAX")**
@@ -345,10 +353,9 @@ system_prompt: |
 
   ## Imágenes y fotos de productos
   Cuando el cliente pida fotos, imágenes o quiera ver cómo se ve un producto:
-  - Responde con calidez y comparte el link de la tienda web:
-    *"¡Claro! Puedes ver todas las fotos e información de nuestros productos en nuestra tienda: www.equoradistribuciones.com 🌿"*
-  - Si el cliente pregunta por un producto específico, menciona el nombre antes del link:
-    *"Aquí puedes ver el Lavaloza PRO MAX con todas sus fotos: www.equoradistribuciones.com 😊"*
+  - Primero usa [[TIENDA:]] para abrir la mini-tienda con fotos y carrito integrado
+  - Si el cliente quiere ver más info de la marca, comparte también la web principal:
+    *"También puedes ver más info en nuestra tienda: www.equoradistribuciones.com 🌿"*
   - NUNCA intentes enviar imágenes directamente por WhatsApp
 
   ## Reglas de comportamiento

@@ -8,7 +8,7 @@ import logging
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
@@ -24,9 +24,11 @@ from agent.providers import obtener_proveedor
 from agent.tools import (
     crear_checkout_shopify,
     obtener_catalogo_shopify,
+    obtener_catalogo_json,
     obtener_secciones_catalogo,
     obtener_producto_por_retailer_id,
 )
+from agent.tienda import TIENDA_HTML
 
 load_dotenv()
 
@@ -37,6 +39,10 @@ logger = logging.getLogger("agentkit")
 
 proveedor = obtener_proveedor()
 PORT = int(os.getenv("PORT", 8000))
+
+# URL pública del servidor (se usa para el link de la mini-tienda)
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+APP_URL = os.getenv("APP_URL") or (f"https://{_railway_domain}" if _railway_domain else f"http://localhost:{PORT}")
 
 # Configuración de seguimientos automáticos (env vars opcionales)
 FOLLOWUP_MIN = int(os.getenv("FOLLOWUP_MIN", 2))   # min sin respuesta del cliente
@@ -187,6 +193,14 @@ def extraer_marcador_lista(respuesta: str) -> tuple[str, dict | None]:
     return texto_limpio, datos
 
 
+def extraer_marcador_tienda(respuesta: str) -> tuple[str, bool]:
+    """Extrae [[TIENDA:]] — Andrea lo emite cuando debe enviar el link de la mini-tienda."""
+    if '[[TIENDA:]]' in respuesta:
+        texto_limpio = re.sub(r'\s*\[\[TIENDA:\]\]', '', respuesta).strip()
+        return texto_limpio, True
+    return respuesta, False
+
+
 @app.post("/webhook")
 async def webhook_handler(request: Request):
     try:
@@ -331,6 +345,7 @@ async def webhook_handler(request: Request):
             respuesta, datos_catalogo_cat = extraer_marcador_catalogo_cat(respuesta)
             respuesta, datos_botones = extraer_marcador_botones(respuesta)
             respuesta, datos_lista = extraer_marcador_lista(respuesta)
+            respuesta, abrir_tienda = extraer_marcador_tienda(respuesta)
 
             # Enviar texto primero
             if respuesta:
@@ -362,7 +377,7 @@ async def webhook_handler(request: Request):
                     lineas = []
                     for cat_name, productos_cat in cats.items():
                         lineas.append(f"*{cat_name}*")
-                        for prod_title, variantes in productos_cat:
+                        for prod_title, variantes, _img in productos_cat:
                             precio_min = min(int(float(v["price"]["amount"])) for v in variantes)
                             lineas.append(f"  • {prod_title} — desde ${precio_min:,}")
                         lineas.append("")
@@ -414,6 +429,27 @@ async def webhook_handler(request: Request):
                         await proveedor.enviar_mensaje(msg.telefono, fallback_text[:4000])
                         logger.info(f"Fallback texto de lista enviado a {msg.telefono}")
 
+            # Enviar link de la mini-tienda si Andrea lo solicitó
+            if abrir_tienda:
+                tienda_url = f"{APP_URL}/tienda?tel={msg.telefono}"
+                texto_tienda = (
+                    "🛒 *Aquí puedes ver todos nuestros productos con fotos, "
+                    "elegir cantidades y hacer tu pedido fácilmente:*"
+                )
+                enviado_tienda = False
+                if hasattr(proveedor, "enviar_cta_url"):
+                    try:
+                        enviado_tienda = await proveedor.enviar_cta_url(
+                            msg.telefono, texto_tienda, "Ver catálogo 🌿", tienda_url
+                        )
+                    except Exception as e:
+                        logger.error(f"Error enviando link tienda: {e}")
+                if not enviado_tienda:
+                    await proveedor.enviar_mensaje(
+                        msg.telefono, f"{texto_tienda}\n\n👉 {tienda_url}"
+                    )
+                logger.info(f"Link mini-tienda enviado a {msg.telefono}: {tienda_url}")
+
             # Enviar link de checkout de Shopify si se generó
             if checkout_url:
                 texto_checkout = (
@@ -457,6 +493,70 @@ async def webhook_handler(request: Request):
     except Exception as e:
         logger.error(f"Error en webhook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ═══════════════════════════════════════════════════════════════
+#  MINI-TIENDA WEB
+# ═══════════════════════════════════════════════════════════════
+
+@app.get("/tienda", response_class=HTMLResponse)
+async def tienda_html(request: Request):
+    """Sirve la mini-tienda web móvil."""
+    # Asegurar que el catálogo esté cargado (1ª visita puede traer cache vacío)
+    await obtener_catalogo_shopify()
+    return HTMLResponse(content=TIENDA_HTML)
+
+
+@app.get("/tienda/productos")
+async def tienda_productos():
+    """Retorna el catálogo en JSON para que la tienda lo consuma."""
+    catalogo = obtener_catalogo_json()
+    if not catalogo:
+        # Si el cache aún no tiene datos, cargar ahora
+        await obtener_catalogo_shopify()
+        catalogo = obtener_catalogo_json()
+    return JSONResponse(content=catalogo)
+
+
+@app.post("/tienda/confirmar")
+async def tienda_confirmar(request: Request):
+    """Recibe el carrito del cliente desde la tienda web y crea el checkout en Shopify."""
+    try:
+        body = await request.json()
+        telefono = (body.get("telefono") or "").strip()
+        productos = body.get("productos", [])
+
+        if not productos:
+            return JSONResponse(status_code=400, content={"error": "Carrito vacío"})
+
+        datos_pedido = {"productos": productos}
+        checkout_url = await crear_checkout_shopify(telefono or "web-tienda", datos_pedido)
+
+        if checkout_url:
+            # Persistir como pedido pendiente si hay teléfono
+            if telefono:
+                await guardar_pedido_pendiente(telefono, productos)
+                await limpiar_carrito_activo(telefono)
+                # Notificar al cliente por WhatsApp
+                texto_notif = (
+                    "✅ *¡Tu pedido está listo!*\n\n"
+                    "Toca el enlace que te envié para confirmar tu dirección. "
+                    "El pago es *contra entrega*. 🌿"
+                )
+                try:
+                    await proveedor.enviar_mensaje(telefono, texto_notif)
+                except Exception as e:
+                    logger.error(f"No pude notificar al cliente {telefono}: {e}")
+            logger.info(f"Checkout tienda web creado — tel={telefono or 'anónimo'}")
+            return JSONResponse(content={"checkout_url": checkout_url})
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"error": "No se pudo generar el pedido. ¿Algún producto se agotó?"}
+            )
+    except Exception as e:
+        logger.error(f"Error en /tienda/confirmar: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
