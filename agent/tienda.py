@@ -417,6 +417,24 @@ fetch('/tienda/productos')
     P = (data && data.productos) ? data.productos : (Array.isArray(data) ? data : []);
     renderFil();
     renderGrd();
+    /* ── Auto-agregar producto desde URL param ?producto= ── */
+    var _ap = new URLSearchParams(location.search).get('producto');
+    if (_ap) {
+      var _aq = _ap.toLowerCase().trim();
+      var _ai = -1;
+      for (var _i = 0; _i < LISTA.length; _i++) {
+        var _pn = LISTA[_i].producto.toLowerCase();
+        /* coincidencia: el nombre del producto está contenido en la búsqueda o viceversa */
+        if (_pn.indexOf(_aq) !== -1 || _aq.indexOf(_pn) !== -1) { _ai = _i; break; }
+        /* coincidencia por palabras significativas (>3 chars) */
+        var _ws = _aq.split(' ').filter(function(w){ return w.length > 3; });
+        if (_ws.length && _ws.every(function(w){ return _pn.indexOf(w) !== -1; })) { _ai = _i; break; }
+      }
+      if (_ai !== -1 && LISTA[_ai].stock !== 0) {
+        add(_ai);
+        setTimeout(function(){ abrirC(); }, 350);
+      }
+    }
   })
   .catch(function(err) {
     document.getElementById('grd').innerHTML =
