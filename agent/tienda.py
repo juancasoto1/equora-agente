@@ -86,7 +86,7 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 </header>
 <div id="ban">🎁 Envío GRATIS en pedidos desde $60.000</div>
 <div id="fil"></div>
-<div id="grd"><p style="color:#aaa;text-align:center;padding:40px;grid-column:1/-1">Cargando...</p></div>
+<div id="grd"><p style="color:#aaa;text-align:center;padding:40px;grid-column:1/-1" id="grd-msg">Cargando...</p></div>
 
 <div id="ov" onclick="cerrarC()"></div>
 <div id="pan">
@@ -112,6 +112,14 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 </div>
 <div id="tst"></div>
 
+<script>
+/* Captura errores JS (incluyendo parse errors del script siguiente) */
+window.onerror = function(msg, src, line, col, err) {
+  var g = document.getElementById('grd');
+  if (g) g.innerHTML = '<div style="padding:20px;color:#c00;text-align:center;grid-column:1/-1"><b>Error JS (línea ' + line + '):</b><br>' + msg + '</div>';
+  return false;
+};
+</script>
 <script>
 var ENV = 7000, MG = 60000;
 var P = CATALOGO_AQUI;
@@ -327,8 +335,16 @@ function tst(m, ms) {
 }
 
 /* ── INICIO ── */
-renderFil();
-renderGrd();
+try {
+  renderFil();
+  renderGrd();
+} catch(e) {
+  document.getElementById('grd').innerHTML =
+    '<div style="padding:20px;color:#c00;text-align:center;grid-column:1/-1">'
+    + '<b>Error al renderizar:</b><br>' + String(e)
+    + '<br><small>P.length=' + (Array.isArray(P) ? P.length : typeof P) + '</small>'
+    + '</div>';
+}
 </script>
 </body>
 </html>
@@ -339,6 +355,8 @@ def obtener_tienda_html(logo_url: str = "", productos: list = None) -> str:
     """Genera el HTML con logo y catálogo inyectados directamente."""
     logo_tag = ('<img src="' + logo_url + '" alt="Equora">') if logo_url else '<span class="lf">💧</span>'
     catalogo_js = json.dumps(productos or [], ensure_ascii=False)
+    # Evitar que el HTML parser cierre el <script> prematuramente
+    catalogo_js = catalogo_js.replace('</', '<\\/')
     html = _HTML.replace('LOGO_AQUI', logo_tag)
     html = html.replace('CATALOGO_AQUI', catalogo_js)
     return html
