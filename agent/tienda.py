@@ -417,19 +417,42 @@ fetch('/tienda/productos')
     P = (data && data.productos) ? data.productos : (Array.isArray(data) ? data : []);
     renderFil();
     renderGrd();
-    /* ── Auto-agregar producto desde URL param ?producto= ── */
-    var _ap = new URLSearchParams(location.search).get('producto');
+    /* ── Auto-agregar producto desde URL params ?producto= y ?presentacion= ── */
+    var _ap  = new URLSearchParams(location.search).get('producto');
+    var _apr = new URLSearchParams(location.search).get('presentacion');
     if (_ap) {
-      var _aq = _ap.toLowerCase().trim();
-      var _ai = -1;
-      for (var _i = 0; _i < LISTA.length; _i++) {
-        var _pn = LISTA[_i].producto.toLowerCase();
-        /* coincidencia: el nombre del producto está contenido en la búsqueda o viceversa */
-        if (_pn.indexOf(_aq) !== -1 || _aq.indexOf(_pn) !== -1) { _ai = _i; break; }
-        /* coincidencia por palabras significativas (>3 chars) */
-        var _ws = _aq.split(' ').filter(function(w){ return w.length > 3; });
-        if (_ws.length && _ws.every(function(w){ return _pn.indexOf(w) !== -1; })) { _ai = _i; break; }
+      var _aq  = _ap.toLowerCase().trim();
+      var _aqr = _apr ? _apr.toLowerCase().trim() : null;
+      var _ai  = -1;
+
+      /* Función auxiliar: ¿coincide el nombre del producto con la búsqueda? */
+      function _matchProd(pn) {
+        if (pn.indexOf(_aq) !== -1 || _aq.indexOf(pn) !== -1) return true;
+        /* coincidencia por palabras significativas: al menos la mitad coincide */
+        var _ws = pn.split(' ').filter(function(w){ return w.length > 3; });
+        if (!_ws.length) return false;
+        var _hits = _ws.filter(function(w){ return _aq.indexOf(w) !== -1; });
+        return _hits.length >= Math.ceil(_ws.length / 2);
       }
+
+      /* 1ª pasada: buscar producto + presentacion exacta (si se especificó) */
+      if (_aqr) {
+        for (var _i = 0; _i < LISTA.length; _i++) {
+          var _pr = LISTA[_i].presentacion.toLowerCase();
+          if (_matchProd(LISTA[_i].producto.toLowerCase()) &&
+              (_pr.indexOf(_aqr) !== -1 || _aqr.indexOf(_pr) !== -1)) {
+            _ai = _i; break;
+          }
+        }
+      }
+
+      /* 2ª pasada fallback: solo por nombre de producto */
+      if (_ai === -1) {
+        for (var _j = 0; _j < LISTA.length; _j++) {
+          if (_matchProd(LISTA[_j].producto.toLowerCase())) { _ai = _j; break; }
+        }
+      }
+
       if (_ai !== -1 && LISTA[_ai].stock !== 0) {
         add(_ai);
         setTimeout(function(){ abrirC(); }, 350);
