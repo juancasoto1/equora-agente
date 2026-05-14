@@ -502,11 +502,11 @@ async def webhook_handler(request: Request):
 
 @app.get("/tienda", response_class=HTMLResponse)
 async def tienda_html(request: Request):
-    """Sirve la mini-tienda web móvil con catálogo embebido (sin fetch secundario)."""
-    await obtener_catalogo_shopify()
+    """Sirve la mini-tienda web móvil. El catálogo lo carga el JS via /tienda/productos."""
+    # Pre-carga el catálogo en background para que /tienda/productos responda rápido
+    asyncio.create_task(obtener_catalogo_shopify())
     logo = obtener_logo_url()
-    productos = obtener_catalogo_json()
-    return HTMLResponse(content=obtener_tienda_html(logo, productos))
+    return HTMLResponse(content=obtener_tienda_html(logo))
 
 
 @app.get("/tienda/productos")

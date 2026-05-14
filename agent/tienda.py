@@ -113,16 +113,8 @@ h1 small{display:block;font-size:.7rem;font-weight:400;opacity:.8}
 <div id="tst"></div>
 
 <script>
-/* Captura errores JS (incluyendo parse errors del script siguiente) */
-window.onerror = function(msg, src, line, col, err) {
-  var g = document.getElementById('grd');
-  if (g) g.innerHTML = '<div style="padding:20px;color:#c00;text-align:center;grid-column:1/-1"><b>Error JS (línea ' + line + '):</b><br>' + msg + '</div>';
-  return false;
-};
-</script>
-<script>
 var ENV = 7000, MG = 60000;
-var P = CATALOGO_AQUI;
+var P = [];
 var C = {};
 var CAT = 'Todos';
 var TEL = new URLSearchParams(location.search).get('tel') || '';
@@ -334,17 +326,25 @@ function tst(m, ms) {
   clearTimeout(_tt); _tt = setTimeout(function() { el.classList.remove('on'); }, ms || 2000);
 }
 
-/* ── INICIO ── */
-try {
-  renderFil();
-  renderGrd();
-} catch(e) {
-  document.getElementById('grd').innerHTML =
-    '<div style="padding:20px;color:#c00;text-align:center;grid-column:1/-1">'
-    + '<b>Error al renderizar:</b><br>' + String(e)
-    + '<br><small>P.length=' + (Array.isArray(P) ? P.length : typeof P) + '</small>'
-    + '</div>';
-}
+/* ── INICIO: carga catálogo desde servidor ── */
+document.getElementById('grd').innerHTML =
+  '<p style="color:#aaa;text-align:center;padding:40px;grid-column:1/-1">Cargando catálogo...</p>';
+
+fetch('/tienda/productos')
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
+  .then(function(data) {
+    P = data;
+    renderFil();
+    renderGrd();
+  })
+  .catch(function(err) {
+    document.getElementById('grd').innerHTML =
+      '<p style="color:#c00;text-align:center;padding:40px;grid-column:1/-1">'
+      + 'Error cargando catálogo. Recarga la página.<br><small>' + err + '</small></p>';
+  });
 </script>
 </body>
 </html>
@@ -352,11 +352,6 @@ try {
 
 
 def obtener_tienda_html(logo_url: str = "", productos: list = None) -> str:
-    """Genera el HTML con logo y catálogo inyectados directamente."""
+    """Genera el HTML con el logo inyectado. El catálogo lo carga el JS via fetch."""
     logo_tag = ('<img src="' + logo_url + '" alt="Equora">') if logo_url else '<span class="lf">💧</span>'
-    catalogo_js = json.dumps(productos or [], ensure_ascii=False)
-    # Evitar que el HTML parser cierre el <script> prematuramente
-    catalogo_js = catalogo_js.replace('</', '<\\/')
-    html = _HTML.replace('LOGO_AQUI', logo_tag)
-    html = html.replace('CATALOGO_AQUI', catalogo_js)
-    return html
+    return _HTML.replace('LOGO_AQUI', logo_tag)
