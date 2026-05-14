@@ -17,6 +17,10 @@ SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "equora-6.myshopify.com")
 SHOPIFY_STOREFRONT_TOKEN = os.getenv("SHOPIFY_STOREFRONT_TOKEN", "d6fe89f265fed1b5f9572f19fc0ba3a7")
 SHOPIFY_ADMIN_TOKEN = os.getenv("SHOPIFY_ADMIN_TOKEN", "")
 
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+META_CATALOG_ID = os.getenv("META_CATALOG_ID", "")
+META_API_VERSION = "v21.0"
+
 SHOPIFY_GQL_QUERY = """
 {
   products(first: 100) {
@@ -115,6 +119,10 @@ _sku_map: dict[str, dict] = {}
 # Categorías estructuradas (se llenan al cargar el catálogo) para armar secciones del catálogo nativo
 # Clave: nombre de categoría → Lista de (titulo_producto, lista_variantes)
 _categorias_cache: dict[str, list] = {}
+
+# Items reales del catálogo de Facebook: [{retailer_id, name, precio, categoria}]
+# Se carga consultando la Graph API — son los IDs que WhatsApp acepta en product_list
+_fb_items: list[dict] = []
 
 
 def _normalizar(texto: str) -> str:
@@ -235,6 +243,10 @@ async def obtener_catalogo_shopify() -> str:
         else:
             resultado = "\n".join(lineas)
 
+        # Cargar retailer_ids reales desde el catálogo de Facebook
+        # (necesario para que product_list funcione con IDs válidos)
+        await _cargar_fb_catalog()
+
         # Guardar en cache
         _catalog_cache = resultado
         _catalog_cache_at = ahora
@@ -245,29 +257,122 @@ async def obtener_catalogo_shopify() -> str:
         return _catalog_cache  # Si falla, devuelve el último cache disponible
 
 
+async def _cargar_fb_catalog():
+    """Consulta la Graph API de Meta para obtener los retailer_ids reales del catálogo.
+    Estos IDs son los únicos válidos para mensajes product_list de WhatsApp."""
+    global _fb_items, _sku_map
+    if not META_ACCESS_TOKEN or not META_CATALOG_ID:
+        logger.warning("META_ACCESS_TOKEN o META_CATALOG_ID no configurados — catálogo nativo deshabilitado")
+        return
+
+    todos = []
+    url = f"https://graph.facebook.com/{META_API_VERSION}/{META_CATALOG_ID}/products"
+    params = {
+        "fields": "retailer_id,name,price,availability",
+        "limit": 200,
+        "access_token": META_ACCESS_TOKEN,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            while url:
+                r = await client.get(url, params=params)
+                if r.status_code != 200:
+                    logger.error(f"Error Graph API catálogo: {r.status_code} — {r.text}")
+                    break
+                data = r.json()
+                todos.extend(data.get("data", []))
+                # Paginación cursor-based
+                url = data.get("paging", {}).get("next")
+                params = {}  # next ya incluye todo en la URL
+
+        logger.info(f"Facebook catálogo: {len(todos)} items obtenidos (IDs reales)")
+
+        # Registrar primeros 30 para diagnóstico
+        for item in todos[:30]:
+            logger.info(f"  FB item: retailer_id='{item.get('retailer_id')}' name='{item.get('name')}' price='{item.get('price')}'")
+
+        # Construir lista de items con categoría asignada
+        _fb_items.clear()
+        for item in todos:
+            rid = item.get("retailer_id", "")
+            name = item.get("name", "")
+            if not rid or not name:
+                continue
+            categoria = _categoria_producto(name)
+            precio_str = item.get("price", "0 COP").split()[0].replace(",", "").replace(".", "")
+            try:
+                precio = int(float(precio_str))
+            except Exception:
+                precio = 0
+
+            _fb_items.append({
+                "retailer_id": rid,
+                "name": name,
+                "precio": precio,
+                "categoria": categoria,
+            })
+
+            # Actualizar _sku_map con el retailer_id real de Facebook
+            # Intentamos asociarlo a la variante Shopify por nombre normalizado
+            name_n = _normalizar(name)
+            for clave, v_info in _variant_map.items():
+                prod_n, pres_n = clave.split("|", 1)
+                # Coincidencia: el nombre de FB contiene el nombre del producto
+                if prod_n in name_n or name_n in prod_n:
+                    existing = _sku_map.get(rid)
+                    if not existing:
+                        # Buscar en _sku_map existente por variant_id para obtener la presentación
+                        for existing_rid, existing_info in list(_sku_map.items()):
+                            if existing_info.get("variant_id") == v_info["id"]:
+                                _sku_map[rid] = {**existing_info}
+                                break
+                        else:
+                            # No se encontró — crear entrada básica
+                            _sku_map[rid] = {
+                                "producto": name,
+                                "presentacion": "",
+                                "precio_unitario": precio,
+                                "variant_id": v_info["id"],
+                            }
+                    break
+
+        logger.info(f"_sku_map actualizado con {len(_fb_items)} items de Facebook")
+
+    except Exception as e:
+        logger.error(f"Error cargando catálogo Facebook: {e}")
+
+
 def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
     """Devuelve las secciones para un mensaje product_list de WhatsApp.
-    Si se pasa una categoría, filtra solo esa. Si no, devuelve todas."""
-    cats = {categoria: _categorias_cache[categoria]} if (
-        categoria and categoria in _categorias_cache
-    ) else _categorias_cache
+    Usa los retailer_ids REALES del catálogo de Facebook (no SKUs de Shopify).
+    Si se pasa categoría filtra solo esa; si no, devuelve todas."""
+    if not _fb_items:
+        logger.warning("_fb_items vacío — catálogo Facebook aún no cargado")
+        return []
+
+    # Filtrar por categoría si se especificó
+    items_filtrados = [
+        i for i in _fb_items
+        if (not categoria or i["categoria"] == categoria)
+    ]
+    if not items_filtrados:
+        logger.warning(f"Sin items de Facebook para categoría '{categoria}'")
+        return []
+
+    # Agrupar por categoría respetando el orden fijo
+    por_categoria: dict[str, list[str]] = {}
+    for item in items_filtrados:
+        cat = item["categoria"]
+        por_categoria.setdefault(cat, []).append(item["retailer_id"])
 
     secciones = []
-    for cat_name in ORDEN_CATEGORIAS:
-        if cat_name not in cats:
-            continue
-        items = []
-        for _prod_title, variantes in cats[cat_name]:
-            for v in variantes:
-                sku = (v.get("sku") or "").strip()
-                gid = v["id"]
-                numeric_id = gid.split("/")[-1] if "/" in gid else gid
-                retailer_id = sku if sku else numeric_id
-                items.append({"product_retailer_id": retailer_id})
-        if items:
+    orden = [categoria] if categoria else ORDEN_CATEGORIAS
+    for cat_name in orden:
+        rids = por_categoria.get(cat_name, [])
+        if rids:
             secciones.append({
                 "title": cat_name[:24],
-                "product_items": items,
+                "product_items": [{"product_retailer_id": r} for r in rids],
             })
     return secciones
 
