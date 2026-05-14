@@ -7,8 +7,8 @@ import base64
 import logging
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI, Request, HTTPException, Cookie
+from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
@@ -22,7 +22,7 @@ from agent.memory import (
     get_modo_humano, set_modo_humano,
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
 )
-from agent.inbox import obtener_inbox_html
+from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
 from agent.tools import (
     crear_checkout_shopify,
@@ -583,6 +583,10 @@ async def tienda_confirmar(request: Request):
 #  INBOX — Panel de administración
 # ═══════════════════════════════════════════════════════════════
 
+INBOX_COOKIE = "inbox_session"
+COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 días
+
+
 def _verificar_admin(token: str) -> bool:
     """Valida el token de administrador."""
     if not ADMIN_TOKEN:
@@ -590,31 +594,81 @@ def _verificar_admin(token: str) -> bool:
     return hmac.compare_digest(token or "", ADMIN_TOKEN)
 
 
-@app.get("/inbox", response_class=HTMLResponse)
-async def inbox_panel(token: str = ""):
-    """Panel de administración: inbox de conversaciones."""
-    if not _verificar_admin(token):
-        return HTMLResponse(
-            '<html><body style="font-family:sans-serif;text-align:center;padding:60px">'
-            '<h2>🔒 Acceso denegado</h2>'
-            '<p>Token inválido o ADMIN_TOKEN no configurado.</p>'
-            '</body></html>',
-            status_code=401
-        )
-    return HTMLResponse(content=obtener_inbox_html(token))
+def _token_de_request(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+) -> str:
+    """Extrae el token de la cookie o del query param."""
+    return inbox_session or token
 
+
+# ── Login / Logout ─────────────────────────────────────────────────────────
+
+@app.get("/inbox/login", response_class=HTMLResponse)
+async def inbox_login_page():
+    return HTMLResponse(content=obtener_login_html())
+
+
+@app.post("/inbox/login")
+async def inbox_login(request: Request):
+    form = await request.form()
+    password = str(form.get("password", ""))
+    if _verificar_admin(password):
+        response = RedirectResponse("/inbox", status_code=302)
+        response.set_cookie(
+            INBOX_COOKIE, ADMIN_TOKEN,
+            httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
+        )
+        return response
+    return HTMLResponse(content=obtener_login_html(error=True))
+
+
+@app.get("/inbox/logout")
+async def inbox_logout():
+    response = RedirectResponse("/inbox/login", status_code=302)
+    response.delete_cookie(INBOX_COOKIE)
+    return response
+
+
+# ── Panel principal ────────────────────────────────────────────────────────
+
+@app.get("/inbox", response_class=HTMLResponse)
+async def inbox_panel(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    if not _verificar_admin(inbox_session or token):
+        return RedirectResponse("/inbox/login", status_code=302)
+    response = HTMLResponse(content=obtener_inbox_html())
+    # Si llegó por query param, guardar en cookie
+    if token and _verificar_admin(token):
+        response.set_cookie(
+            INBOX_COOKIE, ADMIN_TOKEN,
+            httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
+        )
+    return response
+
+
+# ── API endpoints ──────────────────────────────────────────────────────────
 
 @app.get("/inbox/api/conversaciones")
-async def inbox_conversaciones(token: str = ""):
-    if not _verificar_admin(token):
+async def inbox_conversaciones(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     convs = await obtener_todas_conversaciones()
     return JSONResponse(content=convs)
 
 
 @app.get("/inbox/api/mensajes/{telefono}")
-async def inbox_mensajes(telefono: str, token: str = ""):
-    if not _verificar_admin(token):
+async def inbox_mensajes(
+    telefono: str,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     mensajes = await obtener_historial_con_timestamps(telefono, 150)
     modo = await get_modo_humano(telefono)
@@ -622,8 +676,12 @@ async def inbox_mensajes(telefono: str, token: str = ""):
 
 
 @app.post("/inbox/api/responder")
-async def inbox_responder(request: Request, token: str = ""):
-    if not _verificar_admin(token):
+async def inbox_responder(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
     telefono = (body.get("telefono") or "").strip()
@@ -642,14 +700,18 @@ async def inbox_responder(request: Request, token: str = ""):
 
 
 @app.post("/inbox/api/modo/{telefono}")
-async def inbox_modo(telefono: str, request: Request, token: str = ""):
-    if not _verificar_admin(token):
+async def inbox_modo(
+    telefono: str,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
     activo = bool(body.get("activo", False))
     await set_modo_humano(telefono, activo)
-    estado = "humano" if activo else "Andrea"
-    logger.info(f"Modo cambiado a '{estado}' para {telefono}")
+    logger.info(f"Modo cambiado a '{'humano' if activo else 'Andrea'}' para {telefono}")
     return JSONResponse(content={"ok": True, "modo_humano": activo})
 
 
@@ -827,6 +889,9 @@ async def shopify_webhook(request: Request):
 
     try:
         await proveedor.enviar_mensaje(telefono, mensaje)
+        # Guardar en BD para que aparezca en el inbox
+        await guardar_mensaje(telefono, "assistant", mensaje)
+        await registrar_mensaje_asistente(telefono)
         logger.info(f"Confirmación {topic} enviada a {telefono} ({nombre_orden})")
     except Exception as e:
         logger.error(f"Error enviando confirmación a {telefono}: {e}")

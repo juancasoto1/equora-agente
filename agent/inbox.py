@@ -1,8 +1,52 @@
 """
 agent/inbox.py — Panel de administración: inbox de conversaciones de Andrea
-Acceso: /inbox?token=TU_ADMIN_TOKEN
+Login: POST /inbox/login  |  Acceso: /inbox  |  Logout: /inbox/logout
 """
 
+# ── Página de login ──────────────────────────────────────────────────────────
+def obtener_login_html(error: bool = False) -> str:
+    err = '<span class="err">Contraseña incorrecta. Intenta de nuevo.</span>' if error else ''
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inbox — Equora</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{min-height:100vh;background:#111b21;display:flex;align-items:center;
+     justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}}
+.box{{background:#202c33;border-radius:16px;padding:40px 36px;width:320px;text-align:center;
+      box-shadow:0 8px 32px rgba(0,0,0,.4)}}
+.ic{{font-size:2.8rem;margin-bottom:10px}}
+h2{{color:#e9edef;font-size:1.15rem;font-weight:700;margin-bottom:4px}}
+.sub{{color:#8696a0;font-size:.82rem;margin-bottom:28px}}
+.err{{color:#ef5350;font-size:.82rem;display:block;margin-bottom:12px}}
+input{{width:100%;padding:12px 16px;border-radius:10px;border:1.5px solid #313d45;
+       background:#2a3942;color:#e9edef;font-size:.92rem;outline:none;margin-bottom:14px}}
+input:focus{{border-color:#00a884}}
+input::placeholder{{color:#8696a0}}
+button{{width:100%;padding:13px;border-radius:10px;border:none;background:#00a884;
+        color:#fff;font-size:.95rem;font-weight:700;cursor:pointer;transition:opacity .2s}}
+button:hover{{opacity:.88}}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="ic">💬</div>
+  <h2>Inbox Andrea</h2>
+  <p class="sub">Equora Distribuciones</p>
+  {err}
+  <form method="POST" action="/inbox/login">
+    <input type="password" name="password" placeholder="Contraseña de acceso" autofocus required>
+    <button type="submit">Entrar →</button>
+  </form>
+</div>
+</body>
+</html>"""
+
+
+# ── Panel principal ──────────────────────────────────────────────────────────
 _HTML = r"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -28,6 +72,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 #sh{background:var(--hd);padding:13px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
 #sh h2{font-size:.95rem;font-weight:600;flex:1}
 #sh .cnt{background:var(--az);color:#fff;border-radius:12px;padding:2px 8px;font-size:.72rem;font-weight:700}
+#logout{background:none;border:1px solid var(--bd);color:var(--ts);border-radius:8px;padding:4px 10px;font-size:.72rem;cursor:pointer}
+#logout:hover{color:var(--tx);border-color:var(--ts)}
 #srch{padding:8px 12px;background:var(--sb);flex-shrink:0}
 #srinput{width:100%;padding:8px 14px;border-radius:8px;border:none;background:var(--hd);color:var(--tx);font-size:.84rem;outline:none}
 #srinput::placeholder{color:var(--ts)}
@@ -51,7 +97,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 
 /* ── CHAT ACTIVO ── */
 #cv{display:none;flex-direction:column;height:100%}
-
 #ch{background:var(--hd);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0}
 #ch .av2{width:40px;height:40px;border-radius:50%;background:#1f6b58;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
 #ch .inf2{flex:1;min-width:0}
@@ -61,7 +106,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 @media(max-width:720px){#back{display:block}}
 
 #mbar{background:#182229;padding:6px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid var(--bd)}
-#mbar label.lbl{font-size:.78rem;color:var(--ts)}
+#mbar .lbl{font-size:.78rem;color:var(--ts)}
 .tog{position:relative;display:inline-block;width:40px;height:22px}
 .tog input{opacity:0;width:0;height:0}
 .sl{position:absolute;inset:0;background:#555;border-radius:22px;transition:.25s;cursor:pointer}
@@ -94,11 +139,11 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 <body>
 <div id="app">
 
-  <!-- ── SIDEBAR ── -->
   <aside id="sidebar">
     <div id="sh">
       <h2>💬 Inbox Andrea</h2>
       <span class="cnt" id="total">0</span>
+      <button id="logout" onclick="location.href='/inbox/logout'">Salir</button>
     </div>
     <div id="srch">
       <input id="srinput" placeholder="Buscar por nombre o número..." oninput="filtrar()">
@@ -106,7 +151,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <div id="cl"></div>
   </aside>
 
-  <!-- ── PANEL CHAT ── -->
   <section id="chat-area">
     <div id="empty">
       <div class="eic">💬</div>
@@ -114,7 +158,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     </div>
 
     <div id="cv">
-      <!-- Header conversación -->
       <div id="ch">
         <button id="back" onclick="volverLista()">‹</button>
         <div class="av2">👤</div>
@@ -124,9 +167,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
         </div>
       </div>
 
-      <!-- Barra modo humano -->
       <div id="mbar">
-        <span class="lbl">Andrea responde automáticamente</span>
+        <span class="lbl">Andrea responde</span>
         <label class="tog">
           <input type="checkbox" id="togInput" onchange="toggleModo()">
           <span class="sl"></span>
@@ -135,10 +177,8 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
         <span id="mlbl">● Tú estás respondiendo</span>
       </div>
 
-      <!-- Mensajes -->
       <div id="msgs"></div>
 
-      <!-- Input -->
       <div id="ib">
         <textarea id="ti" rows="1" placeholder="Escribe un mensaje y presiona Enter..."
           onkeydown="onKey(event)" oninput="autoResize()"></textarea>
@@ -149,7 +189,6 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 
 </div>
 <script>
-var TOKEN = 'TOKEN_AQUI';
 var TEL = '';
 var CONVS = [];
 var Q = '';
@@ -175,10 +214,13 @@ function fmtH(ts) {
 function he(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+/* Las cookies se envían automáticamente — no necesitamos pasar token en la URL */
 function api(path, opts) {
-  var sep = path.includes('?') ? '&' : '?';
-  return fetch(path + sep + 'token=' + encodeURIComponent(TOKEN), opts || {})
-    .then(function(r) { return r.json(); });
+  return fetch(path, Object.assign({credentials: 'same-origin'}, opts || {}))
+    .then(function(r) {
+      if (r.status === 401) { location.href = '/inbox/login'; throw new Error('No autorizado'); }
+      return r.json();
+    });
 }
 
 /* ── LISTA CONVERSACIONES ── */
@@ -239,7 +281,6 @@ document.getElementById('cl').addEventListener('click', function(e) {
 /* ── ABRIR CONVERSACIÓN ── */
 function abrirConv(tel) {
   TEL = tel;
-  // Mobile: ocultar sidebar
   document.getElementById('sidebar').classList.add('oculto');
   document.getElementById('chat-area').classList.remove('oculto');
   document.getElementById('empty').style.display = 'none';
@@ -286,7 +327,6 @@ function renderMsgs(msgs, scroll) {
   var lastDate = '';
   for (var i = 0; i < msgs.length; i++) {
     var m = msgs[i];
-    // Separador de fecha
     var dia = m.timestamp ? m.timestamp.substring(0, 10) : '';
     if (dia && dia !== lastDate) {
       var ds = new Date(dia + 'T12:00:00Z');
@@ -360,6 +400,5 @@ _convTimer = setInterval(loadConvs, 8000);
 </html>"""
 
 
-def obtener_inbox_html(token: str) -> str:
-    """Genera el HTML del inbox con el token inyectado."""
-    return _HTML.replace('TOKEN_AQUI', token)
+def obtener_inbox_html() -> str:
+    return _HTML
