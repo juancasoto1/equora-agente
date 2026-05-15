@@ -6,6 +6,7 @@ import hashlib
 import base64
 import logging
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Cookie
 from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -726,6 +727,11 @@ async def inbox_modo(
 
 
 SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
+# Cache de deduplicación: evita procesar el mismo webhook de Shopify más de una vez
+# Shopify reintenta hasta 19 veces si no recibe 200 — guardamos los procesados por 10 min
+_shopify_dedup: dict[str, float] = {}
+_SHOPIFY_DEDUP_TTL = 600  # segundos
+
 ADMIN_WHATSAPP_NUMBERS = [
     n.strip() for n in os.getenv("ADMIN_WHATSAPP_NUMBERS", "").split(",") if n.strip()
 ]
@@ -835,6 +841,19 @@ async def shopify_webhook(request: Request):
 
     logger.info(f"Shopify webhook {topic} — orden {nombre_orden}, tel {telefono}")
 
+    # ── Deduplicación: ignorar reintentos de Shopify ──────────────────────────
+    ahora_ts = time.time()
+    # Limpiar entradas expiradas
+    expiradas = [k for k, v in _shopify_dedup.items() if ahora_ts - v > _SHOPIFY_DEDUP_TTL]
+    for k in expiradas:
+        del _shopify_dedup[k]
+    dedup_key = f"{numero}_{topic}"
+    if dedup_key in _shopify_dedup:
+        logger.warning(f"Webhook duplicado ignorado: {dedup_key}")
+        return {"status": "ok"}
+    _shopify_dedup[dedup_key] = ahora_ts
+    # ─────────────────────────────────────────────────────────────────────────
+
     if not telefono or not numero:
         logger.warning(f"Sin teléfono o número de orden — no se notifica (telefono={telefono}, numero={numero})")
         return {"status": "ok"}
@@ -901,7 +920,10 @@ async def shopify_webhook(request: Request):
         await proveedor.enviar_mensaje(telefono, mensaje)
         # Guardar en BD para que aparezca en el inbox
         await guardar_mensaje(telefono, "assistant", mensaje)
-        await registrar_mensaje_asistente(telefono)
+        # Suprimir follow-up y cierre: esta es una notificación automática,
+        # no un mensaje conversacional — no debe activar los timers de seguimiento
+        await marcar_followup_enviado(telefono)
+        await marcar_cierre_enviado(telefono)
         logger.info(f"Confirmación {topic} enviada a {telefono} ({nombre_orden})")
     except Exception as e:
         logger.error(f"Error enviando confirmación a {telefono}: {e}")
