@@ -72,6 +72,13 @@ MENSAJE_CIERRE = (
 async def lifespan(app: FastAPI):
     await inicializar_db()
     logger.info("Base de datos inicializada")
+    # Pre-calentar catálogo Shopify al arrancar para que _variant_map esté listo
+    # antes de que llegue cualquier petición a /tienda/confirmar
+    try:
+        await obtener_catalogo_shopify()
+        logger.info("Catálogo Shopify pre-cargado al arrancar ✅")
+    except Exception as e:
+        logger.warning(f"No se pudo pre-cargar catálogo Shopify al arrancar: {e}")
     logger.info(f"Servidor AgentKit corriendo en puerto {PORT}")
     logger.info(f"Proveedor de WhatsApp: {proveedor.__class__.__name__}")
     logger.info(
@@ -543,6 +550,10 @@ async def tienda_confirmar(request: Request):
             return JSONResponse(status_code=400, content={"error": "Carrito vacío"})
 
         datos_pedido = {"productos": productos}
+        logger.info(
+            f"[tienda/confirmar] Pedido recibido — tel={telefono or 'anónimo'} "
+            f"productos={[f\"{p.get('producto')} / {p.get('presentacion')}\" for p in productos]}"
+        )
         checkout_url = await crear_checkout_shopify(telefono or "web-tienda", datos_pedido)
 
         if checkout_url:
@@ -570,9 +581,13 @@ async def tienda_confirmar(request: Request):
             logger.info(f"Checkout tienda web creado — tel={telefono or 'anónimo'}")
             return JSONResponse(content={"checkout_url": checkout_url})
         else:
+            logger.error(
+                f"[tienda/confirmar] Checkout fallido — tel={telefono or 'anónimo'} "
+                f"productos={[f\"{p.get('producto')} / {p.get('presentacion')}\" for p in productos]}"
+            )
             return JSONResponse(
                 status_code=500,
-                content={"error": "No se pudo generar el pedido. ¿Algún producto se agotó?"}
+                content={"error": "No pudimos procesar el pedido. Por favor contáctanos por WhatsApp para completarlo."}
             )
     except Exception as e:
         logger.error(f"Error en /tienda/confirmar: {e}")

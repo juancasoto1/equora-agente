@@ -544,11 +544,17 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
         })
 
     if no_encontrados:
-        logger.warning(f"Productos no encontrados en variant_map: {no_encontrados}")
+        logger.error(
+            f"[checkout] Productos NO encontrados en variant_map: {no_encontrados}. "
+            f"Claves disponibles: {list(_variant_map.keys())[:10]}..."
+        )
     if excede_stock:
-        logger.warning(f"Cantidades recortadas por stock: {excede_stock}")
+        logger.warning(f"[checkout] Cantidades recortadas por stock: {excede_stock}")
     if not lines:
-        logger.error(f"Ningún producto del pedido pudo mapearse a variantes Shopify")
+        logger.error(
+            f"[checkout] Ningún producto mapeado. variant_map tiene {len(_variant_map)} entradas. "
+            f"Pedido: {[(p.get('producto'), p.get('presentacion')) for p in productos]}"
+        )
         return None
 
     telefono_e164 = telefono if telefono.startswith("+") else f"+{telefono}"
