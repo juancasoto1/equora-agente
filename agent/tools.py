@@ -557,7 +557,9 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
         )
         return None
 
-    telefono_e164 = telefono if telefono.startswith("+") else f"+{telefono}"
+    # Validar si es un teléfono real (dígitos) o un placeholder como "web-tienda"
+    es_tel_real = bool(telefono and telefono not in ("web-tienda",) and any(c.isdigit() for c in telefono))
+    telefono_e164 = ("+" + telefono.lstrip("+")) if es_tel_real else ""
 
     mutation = """
     mutation cartCreate($input: CartInput!) {
@@ -574,10 +576,10 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
     }
     """
 
-    attributes = [
-        {"key": "Origen", "value": "WhatsApp - Andrea Bot"},
-        {"key": "Telefono WhatsApp", "value": telefono_e164},
-    ]
+    origen = "WhatsApp - Andrea Bot" if es_tel_real else "Tienda Web Equora"
+    attributes = [{"key": "Origen", "value": origen}]
+    if es_tel_real:
+        attributes.append({"key": "Telefono WhatsApp", "value": telefono_e164})
     for k_data, k_label in [
         ("nombres", "Nombres"), ("apellidos", "Apellidos"),
         ("razon_social", "Razon Social"), ("cc_nit", "CC/NIT"),
@@ -588,15 +590,22 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
         if valor:
             attributes.append({"key": k_label, "value": valor})
 
+    # buyerIdentity: solo incluir phone si el teléfono es válido
+    buyer_identity: dict = {"countryCode": "CO"}
+    if es_tel_real:
+        buyer_identity["phone"] = telefono_e164
+
+    nota = (
+        f"Pedido WhatsApp de {datos.get('nombres', '')} {datos.get('apellidos', '')} ({telefono_e164})"
+        if es_tel_real else "Pedido desde Tienda Web Equora"
+    )
+
     variables = {
         "input": {
             "lines": lines,
-            "buyerIdentity": {
-                "phone": telefono_e164,
-                "countryCode": "CO",
-            },
+            "buyerIdentity": buyer_identity,
             "attributes": attributes,
-            "note": f"Pedido WhatsApp de {datos.get('nombres', '')} {datos.get('apellidos', '')} ({telefono_e164})",
+            "note": nota,
         }
     }
 
