@@ -550,10 +550,8 @@ async def tienda_confirmar(request: Request):
             return JSONResponse(status_code=400, content={"error": "Carrito vacío"})
 
         datos_pedido = {"productos": productos}
-        logger.info(
-            f"[tienda/confirmar] Pedido recibido — tel={telefono or 'anónimo'} "
-            f"productos={[f\"{p.get('producto')} / {p.get('presentacion')}\" for p in productos]}"
-        )
+        items_log = [p.get('producto', '?') + " / " + p.get('presentacion', '?') for p in productos]
+        logger.info(f"[tienda/confirmar] Pedido recibido — tel={telefono or 'anonimo'} productos={items_log}")
         checkout_url = await crear_checkout_shopify(telefono or "web-tienda", datos_pedido)
 
         if checkout_url:
@@ -581,10 +579,7 @@ async def tienda_confirmar(request: Request):
             logger.info(f"Checkout tienda web creado — tel={telefono or 'anónimo'}")
             return JSONResponse(content={"checkout_url": checkout_url})
         else:
-            logger.error(
-                f"[tienda/confirmar] Checkout fallido — tel={telefono or 'anónimo'} "
-                f"productos={[f\"{p.get('producto')} / {p.get('presentacion')}\" for p in productos]}"
-            )
+            logger.error(f"[tienda/confirmar] Checkout fallido — tel={telefono or 'anonimo'} productos={items_log}")
             return JSONResponse(
                 status_code=500,
                 content={"error": "No pudimos procesar el pedido. Por favor contáctanos por WhatsApp para completarlo."}
