@@ -20,7 +20,7 @@ from agent.memory import (
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
-    clientes_con_carrito_abandonado,
+    clientes_con_carrito_abandonado, clientes_para_crosssell,
     get_modo_humano, set_modo_humano,
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
 )
@@ -125,12 +125,13 @@ async def lifespan(app: FastAPI):
 
 async def _loop_seguimientos():
     """Cada CHECK_INTERVAL_SEG revisa conversaciones inactivas y manda
-    follow-ups, cierres o recuperación de carrito según corresponda."""
+    follow-ups, cierres, cross-sell o recuperación de carrito según corresponda."""
     while True:
         try:
             await asyncio.sleep(CHECK_INTERVAL_SEG)
             await _procesar_followups()
             await _procesar_cierres()
+            await _procesar_crosssell_carrito()
             await _procesar_abandono_carrito()
         except asyncio.CancelledError:
             raise
@@ -160,6 +161,59 @@ async def _procesar_cierres():
             logger.info(f"Cierre enviado a {telefono}")
         except Exception as e:
             logger.error(f"Error enviando cierre a {telefono}: {e}")
+
+
+async def _procesar_crosssell_carrito():
+    """
+    Detecta carritos con 2-8 minutos de antigüedad cuyo total está bajo $60.000
+    y envía un mensaje de venta cruzada por WhatsApp (cooldown 20 min por cliente).
+    """
+    ahora = time.time()
+    clientes = await clientes_para_crosssell(min_min=2, max_min=8)
+    for telefono, items in clientes:
+        # Respetar cooldown de 20 minutos
+        ultimo = _crosssell_cooldown.get(telefono, 0)
+        if ahora - ultimo < CROSSSELL_COOLDOWN_SEG:
+            continue
+        # Calcular total del carrito
+        total = sum(p.get("precio_unitario", 0) * p.get("cantidad", 1) for p in items)
+        if total <= 0 or total >= ENVIO_GRATIS:
+            continue
+        # Buscar productos sugeridos que no estén en el carrito
+        nombres_en_carrito = {p.get("producto", "").lower() for p in items}
+        catalogo = obtener_catalogo_json()
+        sugeridos = []
+        vistos: set[str] = set()
+        for estrella in PRODUCTOS_ESTRELLA:
+            if len(sugeridos) >= 3:
+                break
+            for item in catalogo:
+                nombre = item.get("producto", "")
+                nombre_lower = nombre.lower()
+                if (estrella in nombre_lower
+                        and nombre not in vistos
+                        and not any(en in nombre_lower for en in nombres_en_carrito)):
+                    sugeridos.append(nombre)
+                    vistos.add(nombre)
+                    break
+        if not sugeridos:
+            continue
+        falta = ENVIO_GRATIS - total
+        falta_fmt = f"{int(falta):,}".replace(",", ".")
+        lineas_prod = "\n".join(f"✅ {s}" for s in sugeridos)
+        msg = (
+            f"Te faltan solo ${falta_fmt} para envío gratis 🚚\n\n"
+            f"Muchos clientes aprovechan y agregan:\n"
+            f"{lineas_prod}\n\n"
+            f"¿Te envío el enlace para agregarlos al carrito? 😊"
+        )
+        try:
+            await proveedor.enviar_mensaje(telefono, msg)
+            await guardar_mensaje(telefono, "assistant", msg)
+            _crosssell_cooldown[telefono] = ahora
+            logger.info(f"Cross-sell enviado a {telefono} (falta ${falta_fmt})")
+        except Exception as e:
+            logger.error(f"Error enviando cross-sell a {telefono}: {e}")
 
 
 async def _procesar_abandono_carrito():
@@ -612,21 +666,18 @@ async def tienda_productos():
 @app.post("/tienda/carrito")
 async def tienda_carrito(request: Request):
     """
-    La mini-tienda llama este endpoint (debounced) cada vez que el carrito cambia.
-    Guarda el estado en BD para recuperación de abandono y evalúa si hay que
-    enviar un mensaje de cross-selling cuando el total está debajo del umbral.
+    La mini-tienda reporta el estado del carrito cada vez que cambia (debounced 8 s).
+    Solo guarda en BD — el cross-sell y la recuperación de abandono los gestiona
+    el loop de seguimientos del servidor, no el cliente.
     """
     try:
         body = await request.json()
         telefono = (body.get("telefono") or "").strip()
-        productos = body.get("productos", [])   # lista de {producto, presentacion, precio, qty}
-        total = int(body.get("total", 0))
+        productos = body.get("productos", [])
 
-        # Si no hay teléfono no podemos hacer nada en WhatsApp
         if not telefono:
             return JSONResponse(content={"ok": True})
 
-        # Guardar carrito en BD (sirve para abandono)
         if productos:
             items_para_bd = [
                 {
@@ -639,59 +690,9 @@ async def tienda_carrito(request: Request):
                 for p in productos
             ]
             await guardar_carrito_activo(telefono, items_para_bd)
+            logger.debug(f"Carrito guardado para {telefono}: {len(productos)} productos")
         else:
             await limpiar_carrito_activo(telefono)
-            return JSONResponse(content={"ok": True})
-
-        # ── Cross-selling: solo si hay productos y aún no se llega al envío gratis ──
-        if total <= 0 or total >= ENVIO_GRATIS:
-            return JSONResponse(content={"ok": True})
-
-        ahora = time.time()
-        ultimo = _crosssell_cooldown.get(telefono, 0)
-        if ahora - ultimo < CROSSSELL_COOLDOWN_SEG:
-            return JSONResponse(content={"ok": True})
-
-        # Calcular cuánto falta y qué productos sugerir
-        falta = ENVIO_GRATIS - total
-        nombres_en_carrito = {p.get("producto", "").lower() for p in productos}
-
-        # Buscar hasta 3 productos estrella que NO estén ya en el carrito
-        catalogo = obtener_catalogo_json()
-        sugeridos = []
-        vistos: set[str] = set()
-        for estrella in PRODUCTOS_ESTRELLA:
-            if len(sugeridos) >= 3:
-                break
-            for item in catalogo:
-                nombre = item.get("producto", "")
-                nombre_lower = nombre.lower()
-                # Que coincida con la palabra clave estrella y no esté en carrito
-                if (estrella in nombre_lower
-                        and nombre not in vistos
-                        and not any(en in nombre_lower for en in nombres_en_carrito)):
-                    sugeridos.append(nombre)
-                    vistos.add(nombre)
-                    break
-
-        if not sugeridos:
-            return JSONResponse(content={"ok": True})
-
-        # Construir mensaje de cross-sell (formato colombiano de números)
-        falta_fmt = f"{int(falta):,}".replace(",", ".")
-        lineas_prod = "\n".join(f"✅ {s}" for s in sugeridos)
-        msg_crosssell = (
-            f"Te faltan solo ${falta_fmt} para envío gratis 🚚\n\n"
-            f"Muchos clientes aprovechan y agregan:\n"
-            f"{lineas_prod}\n\n"
-            f"¿Te envío el enlace para agregarlos al carrito? 😊"
-        )
-
-        # Enviar por WhatsApp
-        await proveedor.enviar_mensaje(telefono, msg_crosssell)
-        await guardar_mensaje(telefono, "assistant", msg_crosssell)
-        _crosssell_cooldown[telefono] = ahora
-        logger.info(f"Cross-sell enviado a {telefono} (falta ${falta:,.0f})")
 
         return JSONResponse(content={"ok": True})
     except Exception as e:

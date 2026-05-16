@@ -309,10 +309,12 @@ function ui() {
   updatePB(sub);
   renderGrd();
   renderCar();
-  /* ── Reportar carrito al servidor (debounced 4 s) para cross-sell y abandono ── */
+  /* ── Guardar carrito en servidor (debounced 8 s) para abandono y cross-sell ──
+     Se guarda rápido para capturar el carrito antes de que el cliente cierre
+     el browser. El cross-sell y el mensaje de abandono los gestiona el servidor. */
   if (TEL) {
     clearTimeout(_cartDebTimer);
-    _cartDebTimer = setTimeout(function() {  /* espera 60 s sin cambios antes de reportar */
+    _cartDebTimer = setTimeout(function() {
       var prods = ks.map(function(k) {
         return {
           producto: C[k].info.producto,
@@ -326,7 +328,7 @@ function ui() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ telefono: TEL, productos: prods, total: sub })
       }).catch(function() {});  /* silencioso si falla */
-    }, 60000);
+    }, 8000);  /* 8 s: suficiente para debounce, suficientemente rápido antes de cerrar */
   }
 }
 

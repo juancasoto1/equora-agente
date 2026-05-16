@@ -257,23 +257,22 @@ async def limpiar_carrito_activo(telefono: str):
             await session.commit()
 
 
-async def clientes_con_carrito_abandonado(
-    min_inactivo: int = 10,
-    max_inactivo: int = 30,
+async def _clientes_carrito_en_ventana(
+    min_min: int,
+    max_min: int,
 ) -> list[tuple[str, list[dict]]]:
-    """
-    Devuelve teléfonos con carrito activo que llevan entre min y max minutos sin finalizar.
-    Retorna lista de (telefono, items_carrito).
-    """
+    """Helper interno: clientes con carrito activo guardado hace entre min_min y max_min minutos."""
     ahora = datetime.utcnow()
-    cutoff_min = ahora - timedelta(minutes=max_inactivo)
-    cutoff_max = ahora - timedelta(minutes=min_inactivo)
+    # carrito guardado hace MÁS de min_min minutos
+    cutoff_reciente = ahora - timedelta(minutes=min_min)
+    # carrito guardado hace MENOS de max_min minutos (no tan viejo)
+    cutoff_viejo = ahora - timedelta(minutes=max_min)
     async with async_session() as session:
         q = select(Cliente).where(
             Cliente.carrito_activo != "",
-            Cliente.carrito_activo != None,
-            Cliente.carrito_activo_at >= cutoff_min,
-            Cliente.carrito_activo_at <= cutoff_max,
+            Cliente.carrito_activo_at.is_not(None),
+            Cliente.carrito_activo_at <= cutoff_reciente,   # al menos min_min minutos de antigüedad
+            Cliente.carrito_activo_at >= cutoff_viejo,      # no más de max_min minutos
         )
         result = await session.execute(q)
         clientes = result.scalars().all()
@@ -286,6 +285,22 @@ async def clientes_con_carrito_abandonado(
             except Exception:
                 pass
         return out
+
+
+async def clientes_con_carrito_abandonado(
+    min_inactivo: int = 10,
+    max_inactivo: int = 30,
+) -> list[tuple[str, list[dict]]]:
+    """Carritos sin finalizar entre min_inactivo y max_inactivo minutos de antigüedad."""
+    return await _clientes_carrito_en_ventana(min_inactivo, max_inactivo)
+
+
+async def clientes_para_crosssell(
+    min_min: int = 2,
+    max_min: int = 8,
+) -> list[tuple[str, list[dict]]]:
+    """Carritos recientes (2-8 min de antigüedad) para enviar cross-sell si total < $60k."""
+    return await _clientes_carrito_en_ventana(min_min, max_min)
 
 
 # ── Estado de conversación / seguimientos automáticos ───────────────────────
