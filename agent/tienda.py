@@ -312,7 +312,7 @@ function ui() {
   /* ── Reportar carrito al servidor (debounced 4 s) para cross-sell y abandono ── */
   if (TEL) {
     clearTimeout(_cartDebTimer);
-    _cartDebTimer = setTimeout(function() {
+    _cartDebTimer = setTimeout(function() {  /* espera 60 s sin cambios antes de reportar */
       var prods = ks.map(function(k) {
         return {
           producto: C[k].info.producto,
@@ -326,7 +326,7 @@ function ui() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ telefono: TEL, productos: prods, total: sub })
       }).catch(function() {});  /* silencioso si falla */
-    }, 4000);
+    }, 60000);
   }
 }
 
