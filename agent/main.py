@@ -16,7 +16,7 @@ from agent.brain import generar_respuesta
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial,
     guardar_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
-    guardar_carrito_activo, limpiar_carrito_activo,
+    guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
@@ -661,6 +661,46 @@ async def tienda_productos():
         "logo": logo,
         "productos": obtener_catalogo_json(),
     })
+
+
+@app.get("/tienda/carrito")
+async def tienda_carrito_get(tel: str = ""):
+    """
+    La mini-tienda consulta este endpoint al cargar para restaurar el carrito guardado.
+    Devuelve los ítems cruzados con el catálogo actual (precio, imagen, stock vigentes).
+    """
+    if not tel:
+        return JSONResponse(content={"items": []})
+    try:
+        items_bd = await obtener_carrito_activo(tel)
+        if not items_bd:
+            return JSONResponse(content={"items": []})
+        # Cruzar con catálogo actual para traer imagen y stock vigentes
+        catalogo = obtener_catalogo_json()
+        # Índice rápido: (producto_lower, presentacion_lower) → item de catálogo
+        idx: dict[tuple[str, str], dict] = {}
+        for c in catalogo:
+            k = (c.get("producto", "").lower(), c.get("presentacion", "").lower())
+            idx[k] = c
+        restaurados = []
+        for item in items_bd:
+            k = (item.get("producto", "").lower(), item.get("presentacion", "").lower())
+            cat = idx.get(k)
+            if not cat:
+                continue  # producto ya no está en catálogo → omitir
+            restaurados.append({
+                "producto":     cat["producto"],
+                "presentacion": cat["presentacion"],
+                "precio":       cat["precio"],
+                "stock":        cat.get("stock"),
+                "imagen":       cat.get("imagen", ""),
+                "categoria":    cat.get("categoria", ""),
+                "qty":          item.get("cantidad", 1),
+            })
+        return JSONResponse(content={"items": restaurados})
+    except Exception as e:
+        logger.error(f"Error en GET /tienda/carrito: {e}")
+        return JSONResponse(content={"items": []})
 
 
 @app.post("/tienda/carrito")

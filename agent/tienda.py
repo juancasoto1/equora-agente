@@ -447,6 +447,32 @@ fetch('/tienda/productos')
     }
     renderFil();
     renderGrd();
+    /* ── Restaurar carrito guardado (si el cliente ya había agregado productos antes) ── */
+    if (TEL) {
+      fetch('/tienda/carrito?tel=' + encodeURIComponent(TEL))
+        .then(function(r) { return r.json(); })
+        .then(function(saved) {
+          if (!saved || !saved.items || !saved.items.length) return;
+          var restaurados = 0;
+          saved.items.forEach(function(item) {
+            var k = item.producto + '||' + item.presentacion;
+            /* Solo restaurar si el producto sigue en el catálogo */
+            if (!C[k]) {
+              var qty = Math.max(1, item.qty || 1);
+              /* Respetar stock disponible */
+              if (item.stock !== null && qty > item.stock) qty = item.stock;
+              if (qty <= 0) return;
+              C[k] = { qty: qty, info: item, stock: item.stock };
+              restaurados++;
+            }
+          });
+          if (restaurados > 0) {
+            ui();
+            tst('🛒 Recuperamos tu carrito anterior', 3000);
+          }
+        })
+        .catch(function() {});  /* silencioso si falla */
+    }
     /* ── Auto-agregar producto desde URL params ?producto= y ?presentacion= ── */
     var _ap  = new URLSearchParams(location.search).get('producto');
     var _apr = new URLSearchParams(location.search).get('presentacion');
