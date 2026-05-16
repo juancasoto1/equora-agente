@@ -149,6 +149,7 @@ var CAT = 'Todos';
 var _QP = new URLSearchParams(location.search);
 var TEL = _QP.get('tel') || '';
 var Q = (_QP.get('q') || '').toLowerCase().trim();
+var _cartDebTimer = null;  /* timer para debounce del reporte de carrito */
 var LISTA = [];
 var CK = [];
 var ORDEN = ['Todos','Lavandería','Cocina','Hogar','Talleres / Industrial','Higiene Personal','Otros'];
@@ -308,6 +309,25 @@ function ui() {
   updatePB(sub);
   renderGrd();
   renderCar();
+  /* ── Reportar carrito al servidor (debounced 4 s) para cross-sell y abandono ── */
+  if (TEL) {
+    clearTimeout(_cartDebTimer);
+    _cartDebTimer = setTimeout(function() {
+      var prods = ks.map(function(k) {
+        return {
+          producto: C[k].info.producto,
+          presentacion: C[k].info.presentacion,
+          precio: C[k].info.precio,
+          qty: C[k].qty
+        };
+      });
+      fetch('/tienda/carrito', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefono: TEL, productos: prods, total: sub })
+      }).catch(function() {});  /* silencioso si falla */
+    }, 4000);
+  }
 }
 
 /* ── PANEL CARRITO ── */
@@ -364,6 +384,8 @@ function cerrarC() { document.getElementById('ov').classList.remove('on'); docum
 function confirmar() {
   var ok = document.getElementById('ok');
   ok.disabled = true; ok.textContent = 'Procesando...';
+  /* Cancelar el timer de reporte de carrito para no enviar cross-sell en este momento */
+  clearTimeout(_cartDebTimer);
   var items = CK.map(function(k) {
     var v = C[k];
     return { producto: v.info.producto, presentacion: v.info.presentacion,

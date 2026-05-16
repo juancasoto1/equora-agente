@@ -20,6 +20,7 @@ from agent.memory import (
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
+    clientes_con_carrito_abandonado,
     get_modo_humano, set_modo_humano,
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
 )
@@ -68,6 +69,31 @@ MENSAJE_CIERRE = (
     "seguimos donde nos quedamos. ¡Que tengas un excelente día! 🌿"
 )
 
+# ── Recuperación de carrito abandonado ──────────────────────────────────────
+ABANDONO_MIN_INACTIVO = int(os.getenv("ABANDONO_MIN", 10))   # min sin finalizar
+ABANDONO_MAX_INACTIVO = int(os.getenv("ABANDONO_MAX", 25))   # max para no insistir
+# In-memory: phone → timestamp de la notificación enviada (evita spam)
+_abandono_notif: dict[str, float] = {}
+ABANDONO_COOLDOWN_SEG = 3600  # No re-notificar el mismo carrito por 1 hora
+
+MENSAJE_ABANDONO = (
+    "Vi que dejaste tu pedido casi listo 😊\n"
+    "¿Quieres que te ayude a finalizarlo?\n\n"
+    "Recuerda: pago contraentrega y envío gratis desde $60.000 🚚"
+)
+
+# ── Cross-selling desde mini-tienda ─────────────────────────────────────────
+ENVIO_GRATIS = 60000
+COSTO_ENVIO = 7000
+# In-memory: phone → timestamp del último cross-sell enviado (cooldown 20 min)
+_crosssell_cooldown: dict[str, float] = {}
+CROSSSELL_COOLDOWN_SEG = 1200  # 20 minutos entre mensajes de cross-sell
+# Productos estrella para sugerir (se filtran los que ya están en carrito)
+PRODUCTOS_ESTRELLA = [
+    "lavaloza", "limpiavidrios", "limpiador", "desengrasante",
+    "desmanchador", "ambientador", "multiusos", "detergente",
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -99,12 +125,13 @@ async def lifespan(app: FastAPI):
 
 async def _loop_seguimientos():
     """Cada CHECK_INTERVAL_SEG revisa conversaciones inactivas y manda
-    follow-ups o cierres según corresponda."""
+    follow-ups, cierres o recuperación de carrito según corresponda."""
     while True:
         try:
             await asyncio.sleep(CHECK_INTERVAL_SEG)
             await _procesar_followups()
             await _procesar_cierres()
+            await _procesar_abandono_carrito()
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -133,6 +160,28 @@ async def _procesar_cierres():
             logger.info(f"Cierre enviado a {telefono}")
         except Exception as e:
             logger.error(f"Error enviando cierre a {telefono}: {e}")
+
+
+async def _procesar_abandono_carrito():
+    """Detecta carritos activos que llevan entre ABANDONO_MIN y ABANDONO_MAX min
+    sin finalizar y envía un mensaje de recuperación."""
+    ahora = time.time()
+    clientes = await clientes_con_carrito_abandonado(
+        min_inactivo=ABANDONO_MIN_INACTIVO,
+        max_inactivo=ABANDONO_MAX_INACTIVO,
+    )
+    for telefono, _ in clientes:
+        # Respetar cooldown: no re-notificar si ya lo hicimos hace menos de 1 hora
+        ultimo = _abandono_notif.get(telefono, 0)
+        if ahora - ultimo < ABANDONO_COOLDOWN_SEG:
+            continue
+        try:
+            await proveedor.enviar_mensaje(telefono, MENSAJE_ABANDONO)
+            await guardar_mensaje(telefono, "assistant", MENSAJE_ABANDONO)
+            _abandono_notif[telefono] = ahora
+            logger.info(f"Recuperación de carrito enviada a {telefono}")
+        except Exception as e:
+            logger.error(f"Error enviando recuperación de carrito a {telefono}: {e}")
 
 
 app = FastAPI(
@@ -560,6 +609,96 @@ async def tienda_productos():
     })
 
 
+@app.post("/tienda/carrito")
+async def tienda_carrito(request: Request):
+    """
+    La mini-tienda llama este endpoint (debounced) cada vez que el carrito cambia.
+    Guarda el estado en BD para recuperación de abandono y evalúa si hay que
+    enviar un mensaje de cross-selling cuando el total está debajo del umbral.
+    """
+    try:
+        body = await request.json()
+        telefono = (body.get("telefono") or "").strip()
+        productos = body.get("productos", [])   # lista de {producto, presentacion, precio, qty}
+        total = int(body.get("total", 0))
+
+        # Si no hay teléfono no podemos hacer nada en WhatsApp
+        if not telefono:
+            return JSONResponse(content={"ok": True})
+
+        # Guardar carrito en BD (sirve para abandono)
+        if productos:
+            items_para_bd = [
+                {
+                    "producto": p.get("producto", ""),
+                    "presentacion": p.get("presentacion", ""),
+                    "cantidad": p.get("qty", 1),
+                    "precio_unitario": p.get("precio", 0),
+                    "subtotal": p.get("precio", 0) * p.get("qty", 1),
+                }
+                for p in productos
+            ]
+            await guardar_carrito_activo(telefono, items_para_bd)
+        else:
+            await limpiar_carrito_activo(telefono)
+            return JSONResponse(content={"ok": True})
+
+        # ── Cross-selling: solo si hay productos y aún no se llega al envío gratis ──
+        if total <= 0 or total >= ENVIO_GRATIS:
+            return JSONResponse(content={"ok": True})
+
+        ahora = time.time()
+        ultimo = _crosssell_cooldown.get(telefono, 0)
+        if ahora - ultimo < CROSSSELL_COOLDOWN_SEG:
+            return JSONResponse(content={"ok": True})
+
+        # Calcular cuánto falta y qué productos sugerir
+        falta = ENVIO_GRATIS - total
+        nombres_en_carrito = {p.get("producto", "").lower() for p in productos}
+
+        # Buscar hasta 3 productos estrella que NO estén ya en el carrito
+        catalogo = obtener_catalogo_json()
+        sugeridos = []
+        vistos: set[str] = set()
+        for estrella in PRODUCTOS_ESTRELLA:
+            if len(sugeridos) >= 3:
+                break
+            for item in catalogo:
+                nombre = item.get("producto", "")
+                nombre_lower = nombre.lower()
+                # Que coincida con la palabra clave estrella y no esté en carrito
+                if (estrella in nombre_lower
+                        and nombre not in vistos
+                        and not any(en in nombre_lower for en in nombres_en_carrito)):
+                    sugeridos.append(nombre)
+                    vistos.add(nombre)
+                    break
+
+        if not sugeridos:
+            return JSONResponse(content={"ok": True})
+
+        # Construir mensaje de cross-sell (formato colombiano de números)
+        falta_fmt = f"{int(falta):,}".replace(",", ".")
+        lineas_prod = "\n".join(f"✅ {s}" for s in sugeridos)
+        msg_crosssell = (
+            f"Te faltan solo ${falta_fmt} para envío gratis 🚚\n\n"
+            f"Muchos clientes aprovechan y agregan:\n"
+            f"{lineas_prod}\n\n"
+            f"¿Te envío el enlace para agregarlos al carrito? 😊"
+        )
+
+        # Enviar por WhatsApp
+        await proveedor.enviar_mensaje(telefono, msg_crosssell)
+        await guardar_mensaje(telefono, "assistant", msg_crosssell)
+        _crosssell_cooldown[telefono] = ahora
+        logger.info(f"Cross-sell enviado a {telefono} (falta ${falta:,.0f})")
+
+        return JSONResponse(content={"ok": True})
+    except Exception as e:
+        logger.error(f"Error en /tienda/carrito: {e}")
+        return JSONResponse(content={"ok": True})
+
+
 @app.post("/tienda/confirmar")
 async def tienda_confirmar(request: Request):
     """Recibe el carrito del cliente desde la tienda web y crea el checkout en Shopify."""
@@ -590,9 +729,8 @@ async def tienda_confirmar(request: Request):
                     pass
                 # Notificar al cliente por WhatsApp
                 texto_notif = (
-                    "✅ *¡Tu pedido está listo!*\n\n"
-                    "Toca el enlace que te envié para confirmar tu dirección. "
-                    "El pago es *contra entrega*. 🌿"
+                    "Perfecto ✅ Ahora confirma tus datos de envío en el enlace.\n"
+                    "El pago es contraentrega, no pagas online."
                 )
                 try:
                     await proveedor.enviar_mensaje(telefono, texto_notif)

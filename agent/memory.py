@@ -257,6 +257,37 @@ async def limpiar_carrito_activo(telefono: str):
             await session.commit()
 
 
+async def clientes_con_carrito_abandonado(
+    min_inactivo: int = 10,
+    max_inactivo: int = 30,
+) -> list[tuple[str, list[dict]]]:
+    """
+    Devuelve teléfonos con carrito activo que llevan entre min y max minutos sin finalizar.
+    Retorna lista de (telefono, items_carrito).
+    """
+    ahora = datetime.utcnow()
+    cutoff_min = ahora - timedelta(minutes=max_inactivo)
+    cutoff_max = ahora - timedelta(minutes=min_inactivo)
+    async with async_session() as session:
+        q = select(Cliente).where(
+            Cliente.carrito_activo != "",
+            Cliente.carrito_activo != None,
+            Cliente.carrito_activo_at >= cutoff_min,
+            Cliente.carrito_activo_at <= cutoff_max,
+        )
+        result = await session.execute(q)
+        clientes = result.scalars().all()
+        out = []
+        for c in clientes:
+            try:
+                items = json.loads(c.carrito_activo) if c.carrito_activo else []
+                if items:
+                    out.append((c.telefono, items))
+            except Exception:
+                pass
+        return out
+
+
 # ── Estado de conversación / seguimientos automáticos ───────────────────────
 
 async def _get_or_create_estado(session: AsyncSession, telefono: str) -> "EstadoConversacion":
