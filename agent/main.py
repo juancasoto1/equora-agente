@@ -207,12 +207,23 @@ def extraer_marcador_lista(respuesta: str) -> tuple[str, dict | None]:
     return texto_limpio, datos
 
 
-def extraer_marcador_tienda(respuesta: str) -> tuple[str, bool]:
-    """Extrae [[TIENDA:]] — Andrea lo emite cuando debe enviar el link de la mini-tienda."""
+def extraer_marcador_tienda(respuesta: str) -> tuple[str, bool, str]:
+    """
+    Extrae [[TIENDA:]] o [[TIENDA:término]] del texto de Andrea.
+    Retorna (texto_limpio, abrir_tienda, query_busqueda).
+    Si Andrea escribe [[TIENDA:lavaloza]], la tienda abre con "lavaloza" pre-buscado.
+    """
+    # Forma con término de búsqueda: [[TIENDA:nombre producto]]
+    m = re.search(r'\[\[TIENDA:([^\]]+)\]\]', respuesta)
+    if m:
+        query = m.group(1).strip()
+        texto_limpio = re.sub(r'\s*\[\[TIENDA:[^\]]*\]\]', '', respuesta).strip()
+        return texto_limpio, True, query
+    # Forma sin término: [[TIENDA:]]
     if '[[TIENDA:]]' in respuesta:
         texto_limpio = re.sub(r'\s*\[\[TIENDA:\]\]', '', respuesta).strip()
-        return texto_limpio, True
-    return respuesta, False
+        return texto_limpio, True, ''
+    return respuesta, False, ''
 
 
 @app.post("/webhook")
@@ -365,7 +376,7 @@ async def webhook_handler(request: Request):
             respuesta, datos_catalogo_cat = extraer_marcador_catalogo_cat(respuesta)
             respuesta, datos_botones = extraer_marcador_botones(respuesta)
             respuesta, datos_lista = extraer_marcador_lista(respuesta)
-            respuesta, abrir_tienda = extraer_marcador_tienda(respuesta)
+            respuesta, abrir_tienda, tienda_query = extraer_marcador_tienda(respuesta)
 
             # Enviar texto primero
             if respuesta:
@@ -451,16 +462,26 @@ async def webhook_handler(request: Request):
 
             # Enviar link de la mini-tienda si Andrea lo solicitó
             if abrir_tienda:
-                tienda_url = f"{APP_URL}/tienda?tel={msg.telefono}"
-                texto_tienda = (
-                    "🛒 *Aquí puedes ver todos nuestros productos con fotos, "
-                    "elegir cantidades y hacer tu pedido fácilmente:*"
-                )
+                # Si Andrea especificó un producto, lo pasamos como ?q= para pre-filtrar
+                import urllib.parse
+                q_param = f"&q={urllib.parse.quote(tienda_query)}" if tienda_query else ""
+                tienda_url = f"{APP_URL}/tienda?tel={msg.telefono}{q_param}"
+                if tienda_query:
+                    texto_tienda = (
+                        f"🛒 *Aquí puedes ver el producto, elegir tu presentación y hacer tu pedido fácilmente:*"
+                    )
+                    boton_label = "Ver producto 🌿"
+                else:
+                    texto_tienda = (
+                        "🛒 *Aquí puedes ver todos nuestros productos con fotos, "
+                        "elegir cantidades y hacer tu pedido fácilmente:*"
+                    )
+                    boton_label = "Ver catálogo 🌿"
                 enviado_tienda = False
                 if hasattr(proveedor, "enviar_cta_url"):
                     try:
                         enviado_tienda = await proveedor.enviar_cta_url(
-                            msg.telefono, texto_tienda, "Ver catálogo 🌿", tienda_url
+                            msg.telefono, texto_tienda, boton_label, tienda_url
                         )
                     except Exception as e:
                         logger.error(f"Error enviando link tienda: {e}")

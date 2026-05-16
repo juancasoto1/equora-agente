@@ -146,8 +146,9 @@ var ENV = 7000, MG = 60000;
 var P = [];
 var C = {};
 var CAT = 'Todos';
-var Q = '';
-var TEL = new URLSearchParams(location.search).get('tel') || '';
+var _QP = new URLSearchParams(location.search);
+var TEL = _QP.get('tel') || '';
+var Q = (_QP.get('q') || '').toLowerCase().trim();
 var LISTA = [];
 var CK = [];
 var ORDEN = ['Todos','Lavandería','Cocina','Hogar','Talleres / Industrial','Higiene Personal','Otros'];
@@ -415,6 +416,11 @@ fetch('/tienda/productos')
       if (lw) lw.innerHTML = '<img src="' + he(data.logo) + '" alt="Equora">';
     }
     P = (data && data.productos) ? data.productos : (Array.isArray(data) ? data : []);
+    /* ── Pre-filtrar buscador si ?q= viene en la URL (Andrea envió producto específico) ── */
+    if (Q) {
+      var si = document.getElementById('si');
+      if (si) { si.value = Q; si.focus(); }
+    }
     renderFil();
     renderGrd();
     /* ── Auto-agregar producto desde URL params ?producto= y ?presentacion= ── */
