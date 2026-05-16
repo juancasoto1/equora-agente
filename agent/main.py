@@ -21,6 +21,7 @@ from agent.memory import (
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
     clientes_con_carrito_abandonado, clientes_para_crosssell,
+    guardar_checkout_url, clientes_con_checkout_abandonado,
     get_modo_humano, set_modo_humano,
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
 )
@@ -69,10 +70,9 @@ MENSAJE_CIERRE = (
     "seguimos donde nos quedamos. ¡Que tengas un excelente día! 🌿"
 )
 
-# ── Recuperación de carrito abandonado ──────────────────────────────────────
+# ── Recuperación de carrito abandonado (mini-tienda, no llegó al checkout) ──
 ABANDONO_MIN_INACTIVO = int(os.getenv("ABANDONO_MIN", 10))   # min sin finalizar
 ABANDONO_MAX_INACTIVO = int(os.getenv("ABANDONO_MAX", 25))   # max para no insistir
-# In-memory: phone → timestamp de la notificación enviada (evita spam)
 _abandono_notif: dict[str, float] = {}
 ABANDONO_COOLDOWN_SEG = 3600  # No re-notificar el mismo carrito por 1 hora
 
@@ -80,6 +80,18 @@ MENSAJE_ABANDONO = (
     "Vi que dejaste tu pedido casi listo 😊\n"
     "¿Quieres que te ayude a finalizarlo?\n\n"
     "Recuerda: pago contraentrega y envío gratis desde $60.000 🚚"
+)
+
+# ── Recuperación de checkout abandonado (llegó al formulario Shopify pero no pagó) ──
+CHECKOUT_ABANDONO_MIN = int(os.getenv("CHECKOUT_ABANDONO_MIN", 20))   # min desde que creó checkout
+CHECKOUT_ABANDONO_MAX = int(os.getenv("CHECKOUT_ABANDONO_MAX", 120))  # máximo 2 horas
+_checkout_abandono_notif: dict[str, float] = {}
+CHECKOUT_ABANDONO_COOLDOWN_SEG = 7200  # No re-notificar por 2 horas
+
+MENSAJE_CHECKOUT_ABANDONO = (
+    "Hola 👋 Vimos que iniciaste tu pedido pero no terminaste el proceso.\n\n"
+    "Tu carrito está guardado — solo falta confirmar y listo 🎉\n"
+    "Recuerda: *pago contraentrega*, no pagas nada online."
 )
 
 # ── Cross-selling desde mini-tienda ─────────────────────────────────────────
@@ -133,6 +145,7 @@ async def _loop_seguimientos():
             await _procesar_cierres()
             await _procesar_crosssell_carrito()
             await _procesar_abandono_carrito()
+            await _procesar_abandono_checkout()
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -249,6 +262,46 @@ async def _procesar_abandono_carrito():
             logger.info(f"Recuperación de carrito enviada a {telefono}")
         except Exception as e:
             logger.error(f"Error enviando recuperación de carrito a {telefono}: {e}")
+
+
+async def _procesar_abandono_checkout():
+    """
+    Detecta clientes que iniciaron el checkout de Shopify (formulario de pago)
+    pero no completaron el pedido. Reenvía el link de checkout para que terminen.
+    Shopify limpia pedido_pendiente cuando dispara orders/create o orders/paid.
+    """
+    import urllib.parse
+    ahora = time.time()
+    clientes = await clientes_con_checkout_abandonado(
+        min_min=CHECKOUT_ABANDONO_MIN,
+        max_min=CHECKOUT_ABANDONO_MAX,
+    )
+    for telefono, checkout_url in clientes:
+        ultimo = _checkout_abandono_notif.get(telefono, 0)
+        if ahora - ultimo < CHECKOUT_ABANDONO_COOLDOWN_SEG:
+            continue
+        try:
+            enviado = False
+            if hasattr(proveedor, "enviar_cta_url"):
+                try:
+                    enviado = await proveedor.enviar_cta_url(
+                        telefono,
+                        MENSAJE_CHECKOUT_ABANDONO,
+                        "Terminar pedido ✅",
+                        checkout_url,
+                    )
+                except Exception:
+                    pass
+            if not enviado:
+                await proveedor.enviar_mensaje(
+                    telefono,
+                    f"{MENSAJE_CHECKOUT_ABANDONO}\n\n👉 {checkout_url}"
+                )
+            await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKOUT_ABANDONO)
+            _checkout_abandono_notif[telefono] = ahora
+            logger.info(f"Recuperación de checkout enviada a {telefono}")
+        except Exception as e:
+            logger.error(f"Error enviando recuperación de checkout a {telefono}: {e}")
 
 
 app = FastAPI(
@@ -773,6 +826,7 @@ async def tienda_confirmar(request: Request):
             # Persistir como pedido pendiente si hay teléfono
             if telefono:
                 await guardar_pedido_pendiente(telefono, productos)
+                await guardar_checkout_url(telefono, checkout_url)  # para recuperación si no completa
                 await limpiar_carrito_activo(telefono)
                 # Silenciar seguimientos automáticos: el cliente acaba de pedir,
                 # no tiene sentido mandarle follow-up de inactividad

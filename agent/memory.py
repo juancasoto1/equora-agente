@@ -47,6 +47,7 @@ class Cliente(Base):
     pedidos_realizados: Mapped[int] = mapped_column(Integer, default=0)
     pedido_pendiente: Mapped[str] = mapped_column(Text, default="")
     pedido_pendiente_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    pedido_checkout_url: Mapped[str] = mapped_column(Text, default="")  # URL Shopify checkout
     carrito_activo: Mapped[str] = mapped_column(Text, default="")        # JSON del carrito en curso
     carrito_activo_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -81,6 +82,7 @@ async def inicializar_db():
             "ALTER TABLE clientes ADD COLUMN pedido_pendiente_at DATETIME",
             "ALTER TABLE clientes ADD COLUMN carrito_activo TEXT DEFAULT ''",
             "ALTER TABLE clientes ADD COLUMN carrito_activo_at DATETIME",
+            "ALTER TABLE clientes ADD COLUMN pedido_checkout_url TEXT DEFAULT ''",
             "ALTER TABLE estado_conversacion ADD COLUMN modo_humano INTEGER DEFAULT 0",
         ):
             try:
@@ -202,14 +204,58 @@ async def obtener_pedido_pendiente(telefono: str) -> list[dict] | None:
 
 
 async def limpiar_pedido_pendiente(telefono: str):
-    """Borra el carrito pendiente — cliente completó el pedido en Shopify."""
+    """Borra el carrito pendiente y el checkout URL — cliente completó el pedido en Shopify."""
     async with async_session() as session:
         cliente = await session.get(Cliente, telefono)
         if cliente:
             cliente.pedido_pendiente = ""
             cliente.pedido_pendiente_at = None
+            cliente.pedido_checkout_url = ""
             cliente.actualizado = datetime.utcnow()
             await session.commit()
+
+
+async def guardar_checkout_url(telefono: str, checkout_url: str):
+    """Guarda la URL del checkout de Shopify para poder reenviarla si el cliente no termina."""
+    if not telefono or not checkout_url:
+        return
+    async with async_session() as session:
+        cliente = await session.get(Cliente, telefono)
+        if not cliente:
+            cliente = Cliente(telefono=telefono)
+            session.add(cliente)
+        cliente.pedido_checkout_url = checkout_url
+        cliente.actualizado = datetime.utcnow()
+        await session.commit()
+
+
+async def clientes_con_checkout_abandonado(
+    min_min: int = 20,
+    max_min: int = 120,
+) -> list[tuple[str, str]]:
+    """
+    Devuelve (telefono, checkout_url) de clientes que iniciaron checkout
+    pero no lo completaron (pedido_pendiente_at entre min_min y max_min minutos atrás
+    y Shopify aún no disparó orders/create para limpiar el pedido_pendiente).
+    """
+    ahora = datetime.utcnow()
+    cutoff_reciente = ahora - timedelta(minutes=min_min)   # al menos min_min min de antigüedad
+    cutoff_viejo = ahora - timedelta(minutes=max_min)      # no más de max_min min
+    async with async_session() as session:
+        q = select(Cliente).where(
+            Cliente.pedido_pendiente != "",
+            Cliente.pedido_pendiente_at.is_not(None),
+            Cliente.pedido_pendiente_at <= cutoff_reciente,
+            Cliente.pedido_pendiente_at >= cutoff_viejo,
+            Cliente.pedido_checkout_url != "",
+        )
+        result = await session.execute(q)
+        clientes = result.scalars().all()
+        return [
+            (c.telefono, c.pedido_checkout_url)
+            for c in clientes
+            if c.pedido_checkout_url
+        ]
 
 
 # ── Carrito activo (persistencia independiente del historial) ────────────────
