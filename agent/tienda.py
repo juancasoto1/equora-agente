@@ -309,9 +309,20 @@ function ui() {
   updatePB(sub);
   renderGrd();
   renderCar();
-  /* ── Guardar carrito en servidor (debounced 8 s) para abandono y cross-sell ──
-     Se guarda rápido para capturar el carrito antes de que el cliente cierre
-     el browser. El cross-sell y el mensaje de abandono los gestiona el servidor. */
+  /* ── Persistir carrito en localStorage (funciona con o sin teléfono) ── */
+  try {
+    var _lsKey = 'equora_cart' + (TEL ? '_' + TEL : '');
+    if (ks.length > 0) {
+      var _lsData = ks.map(function(k) {
+        return { k: k, qty: C[k].qty, info: C[k].info, stock: C[k].stock };
+      });
+      localStorage.setItem(_lsKey, JSON.stringify(_lsData));
+    } else {
+      localStorage.removeItem(_lsKey);
+    }
+  } catch(e) {}
+  /* ── Reportar carrito al servidor (debounced 8 s) para abandono y cross-sell ──
+     Solo si hay teléfono. El cross-sell y abandono los gestiona el servidor. */
   if (TEL) {
     clearTimeout(_cartDebTimer);
     _cartDebTimer = setTimeout(function() {
@@ -327,8 +338,8 @@ function ui() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ telefono: TEL, productos: prods, total: sub })
-      }).catch(function() {});  /* silencioso si falla */
-    }, 8000);  /* 8 s: suficiente para debounce, suficientemente rápido antes de cerrar */
+      }).catch(function() {});
+    }, 8000);
   }
 }
 
@@ -404,6 +415,8 @@ function confirmar() {
       cerrarC();
       document.getElementById('lnk').href = d.checkout_url;
       document.getElementById('ex').classList.add('on');
+      /* Limpiar carrito persistido al confirmar exitosamente */
+      try { localStorage.removeItem('equora_cart' + (TEL ? '_' + TEL : '')); } catch(e) {}
       window.open(d.checkout_url, '_blank');
     } else {
       tst('Error: ' + (d.error || 'intenta de nuevo'), 3500);
@@ -447,31 +460,69 @@ fetch('/tienda/productos')
     }
     renderFil();
     renderGrd();
-    /* ── Restaurar carrito guardado (si el cliente ya había agregado productos antes) ── */
+    /* ── Restaurar carrito guardado ───────────────────────────────────────────
+       Prioridad:
+       1. Si hay TEL → consultar servidor (datos frescos con stock vigente)
+       2. Si no hay TEL o el servidor devuelve vacío → intentar localStorage
+       ─────────────────────────────────────────────────────────────────────── */
+    var _lsKey = 'equora_cart' + (TEL ? '_' + TEL : '');
+
+    function _restaurarDesdeLS() {
+      try {
+        var raw = localStorage.getItem(_lsKey);
+        if (!raw) return;
+        var guardado = JSON.parse(raw);
+        if (!guardado || !guardado.length) return;
+        var restaurados = 0;
+        guardado.forEach(function(entry) {
+          /* Cruzar con catálogo actual para validar que el producto sigue disponible */
+          var encontrado = null;
+          for (var i = 0; i < P.length; i++) {
+            if (P[i].producto === entry.info.producto
+                && P[i].presentacion === entry.info.presentacion) {
+              encontrado = P[i]; break;
+            }
+          }
+          if (!encontrado) return;  /* producto retirado del catálogo */
+          if (!C[entry.k]) {
+            var qty = Math.max(1, entry.qty || 1);
+            if (encontrado.stock !== null && qty > encontrado.stock) qty = encontrado.stock;
+            if (qty <= 0) return;
+            C[entry.k] = { qty: qty, info: encontrado, stock: encontrado.stock };
+            restaurados++;
+          }
+        });
+        if (restaurados > 0) { ui(); tst('🛒 Recuperamos tu carrito anterior', 3000); }
+      } catch(e) {}
+    }
+
     if (TEL) {
       fetch('/tienda/carrito?tel=' + encodeURIComponent(TEL))
         .then(function(r) { return r.json(); })
         .then(function(saved) {
-          if (!saved || !saved.items || !saved.items.length) return;
-          var restaurados = 0;
-          saved.items.forEach(function(item) {
-            var k = item.producto + '||' + item.presentacion;
-            /* Solo restaurar si el producto sigue en el catálogo */
-            if (!C[k]) {
-              var qty = Math.max(1, item.qty || 1);
-              /* Respetar stock disponible */
-              if (item.stock !== null && qty > item.stock) qty = item.stock;
-              if (qty <= 0) return;
-              C[k] = { qty: qty, info: item, stock: item.stock };
-              restaurados++;
-            }
-          });
-          if (restaurados > 0) {
-            ui();
-            tst('🛒 Recuperamos tu carrito anterior', 3000);
+          if (saved && saved.items && saved.items.length) {
+            /* Restaurar desde servidor */
+            var restaurados = 0;
+            saved.items.forEach(function(item) {
+              var k = item.producto + '||' + item.presentacion;
+              if (!C[k]) {
+                var qty = Math.max(1, item.qty || 1);
+                if (item.stock !== null && qty > item.stock) qty = item.stock;
+                if (qty <= 0) return;
+                C[k] = { qty: qty, info: item, stock: item.stock };
+                restaurados++;
+              }
+            });
+            if (restaurados > 0) { ui(); tst('🛒 Recuperamos tu carrito anterior', 3000); }
+          } else {
+            /* Servidor no tiene carrito → intentar localStorage */
+            _restaurarDesdeLS();
           }
         })
-        .catch(function() {});  /* silencioso si falla */
+        .catch(function() { _restaurarDesdeLS(); });
+    } else {
+      /* Sin teléfono → solo localStorage */
+      _restaurarDesdeLS();
     }
     /* ── Auto-agregar producto desde URL params ?producto= y ?presentacion= ── */
     var _ap  = new URLSearchParams(location.search).get('producto');

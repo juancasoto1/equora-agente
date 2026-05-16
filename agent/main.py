@@ -218,7 +218,8 @@ async def _procesar_crosssell_carrito():
 
 async def _procesar_abandono_carrito():
     """Detecta carritos activos que llevan entre ABANDONO_MIN y ABANDONO_MAX min
-    sin finalizar y envía un mensaje de recuperación."""
+    sin finalizar y envía un mensaje de recuperación con botón CTA a la tienda."""
+    import urllib.parse
     ahora = time.time()
     clientes = await clientes_con_carrito_abandonado(
         min_inactivo=ABANDONO_MIN_INACTIVO,
@@ -230,7 +231,19 @@ async def _procesar_abandono_carrito():
         if ahora - ultimo < ABANDONO_COOLDOWN_SEG:
             continue
         try:
-            await proveedor.enviar_mensaje(telefono, MENSAJE_ABANDONO)
+            # URL de la tienda con el teléfono para que el carrito se restaure automáticamente
+            tienda_url = f"{APP_URL}/tienda?tel={urllib.parse.quote(telefono)}"
+            enviado = False
+            if hasattr(proveedor, "enviar_cta_url"):
+                try:
+                    enviado = await proveedor.enviar_cta_url(
+                        telefono, MENSAJE_ABANDONO, "Ver mi carrito 🛒", tienda_url
+                    )
+                except Exception:
+                    pass
+            if not enviado:
+                texto_con_url = f"{MENSAJE_ABANDONO}\n\n👉 {tienda_url}"
+                await proveedor.enviar_mensaje(telefono, texto_con_url)
             await guardar_mensaje(telefono, "assistant", MENSAJE_ABANDONO)
             _abandono_notif[telefono] = ahora
             logger.info(f"Recuperación de carrito enviada a {telefono}")
@@ -770,7 +783,7 @@ async def tienda_confirmar(request: Request):
                     pass
                 # Notificar al cliente por WhatsApp
                 texto_notif = (
-                    "Perfecto ✅ Ahora confirma tus datos de envío en el enlace.\n"
+                    "Perfecto ✅ Ahora confirma tus datos de envío en el formulario.\n"
                     "El pago es contraentrega, no pagas online."
                 )
                 try:
