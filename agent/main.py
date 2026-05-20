@@ -1224,10 +1224,22 @@ async def shopify_webhook(request: Request):
             or ""
         )
         if not checkout_url:
-            # Fallback: construir desde el token si viene
+            # Fallback: construir desde el token con formato correcto de Shopify
             token = payload.get("token") or ""
             if token:
-                checkout_url = f"https://equoradistribuciones.com/checkouts/{token}"
+                checkout_url = f"https://equoradistribuciones.com/checkouts/cn/{token}/es"
+        # Normalizar dominio: reemplazar myshopify.com por el dominio del cliente
+        # y limpiar parámetros de preview/tracking innecesarios
+        if checkout_url:
+            import re as _re
+            checkout_url = _re.sub(
+                r"https://[^/]*\.myshopify\.com/",
+                "https://equoradistribuciones.com/",
+                checkout_url,
+            )
+            # Quitar preview_theme_id (solo aparece en modo preview, confunde al cliente)
+            checkout_url = _re.sub(r"[&?]preview_theme_id=[^&]*", "", checkout_url)
+            checkout_url = checkout_url.rstrip("?&")
         if telefono and checkout_url:
             try:
                 # Guardar carrito activo como pedido pendiente para abandono detection
