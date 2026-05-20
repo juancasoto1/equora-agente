@@ -681,7 +681,10 @@ async def webhook_handler(request: Request):
 
             # Enviar link de la tienda web si Andrea lo solicitó
             if abrir_tienda:
+                import urllib.parse
                 tienda_url = _construir_url_tienda(tienda_query)
+                # Añadir teléfono para que Lovable pueda reportar el carrito de vuelta
+                tienda_url += f"?tel={urllib.parse.quote(msg.telefono)}"
                 if tienda_query:
                     texto_tienda = (
                         "🛒 *Aquí puedes ver el producto, elegir tu presentación y hacer tu pedido fácilmente:*"
