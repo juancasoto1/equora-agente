@@ -20,8 +20,9 @@ from agent.memory import (
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
-    clientes_con_carrito_abandonado, clientes_para_crosssell,
+    clientes_con_carrito_abandonado,
     guardar_checkout_url, clientes_con_checkout_abandonado,
+    verificar_cierre_enviado,
     get_modo_humano, set_modo_humano,
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
 )
@@ -74,11 +75,14 @@ MENSAJE_CIERRE = (
     "seguimos donde nos quedamos. ¡Que tengas un excelente día! 🌿"
 )
 
-# ── Recuperación de carrito abandonado (mini-tienda, no llegó al checkout) ──
-ABANDONO_MIN_INACTIVO = int(os.getenv("ABANDONO_MIN", 10))   # min sin finalizar
-ABANDONO_MAX_INACTIVO = int(os.getenv("ABANDONO_MAX", 25))   # max para no insistir
+# ── Seguimiento unificado de carrito (estados 3, 4, 5) ──────────────────────
+# Ventana: carrito con 15-120 min de antigüedad → ver _procesar_carrito_unificado
+ABANDONO_MIN_INACTIVO = int(os.getenv("ABANDONO_MIN", 10))   # legacy (solo UNUSED)
+ABANDONO_MAX_INACTIVO = int(os.getenv("ABANDONO_MAX", 25))   # legacy (solo UNUSED)
 _abandono_notif: dict[str, float] = {}
-ABANDONO_COOLDOWN_SEG = 3600  # No re-notificar el mismo carrito por 1 hora
+ABANDONO_COOLDOWN_SEG = 3600
+_carrito_unif_cooldown: dict[str, float] = {}
+CARRITO_UNIF_COOLDOWN_SEG = 7200  # 2 horas entre mensajes de seguimiento de carrito
 
 def _mensaje_abandono() -> str:
     gratis = obtener_umbral_envio_gratis()
@@ -106,8 +110,7 @@ MENSAJE_CHECKOUT_ABANDONO = (
 # Acceder siempre via obtener_umbral_envio_gratis() y obtener_costo_envio()
 # para que reflejen el valor actual (puede venir de Shopify o de env vars).
 # In-memory: phone → timestamp del último cross-sell enviado (cooldown 20 min)
-_crosssell_cooldown: dict[str, float] = {}
-CROSSSELL_COOLDOWN_SEG = 1200  # 20 minutos entre mensajes de cross-sell
+# _crosssell_cooldown reemplazado por _carrito_unif_cooldown (ver más abajo)
 # Productos estrella para sugerir (se filtran los que ya están en carrito)
 PRODUCTOS_ESTRELLA = [
     "lavaloza", "limpiavidrios", "limpiador", "desengrasante",
@@ -149,23 +152,152 @@ async def lifespan(app: FastAPI):
 
 
 async def _loop_seguimientos():
-    """Cada CHECK_INTERVAL_SEG revisa conversaciones inactivas y manda
-    follow-ups, cierres, cross-sell o recuperación de carrito según corresponda."""
+    """Cada CHECK_INTERVAL_SEG revisa conversaciones inactivas.
+    Prioridad: cierre > checkout abandonado > carrito (estados 3-5) > follow-up genérico."""
     while True:
         try:
             await asyncio.sleep(CHECK_INTERVAL_SEG)
-            await _procesar_followups()
-            await _procesar_cierres()
-            await _procesar_crosssell_carrito()
-            await _procesar_abandono_carrito()
-            await _procesar_abandono_checkout()
+            await _procesar_abandono_checkout()     # prioridad 2: checkout sin completar
+            await _procesar_carrito_unificado()     # prioridad 3-5: carrito activo
+            await _procesar_followups()             # prioridad 6: sin carrito, sin checkout
+            await _procesar_cierres()               # cierre tras follow-up genérico
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.error(f"Error en loop de seguimientos: {e}")
 
 
+def _calcular_total_carrito(items: list[dict]) -> int:
+    """Calcula el total del carrito usando subtotal o precio_unitario × cantidad."""
+    total = 0
+    for p in items:
+        subtotal = p.get("subtotal", 0)
+        if subtotal:
+            total += int(subtotal)
+        else:
+            total += int(p.get("precio_unitario", 0)) * int(p.get("cantidad", 1))
+    return total
+
+
+def _sugerir_productos(nombres_en_carrito: set[str], max_items: int = 3) -> list[str]:
+    """Devuelve hasta max_items productos estrella que no estén en el carrito."""
+    catalogo = obtener_catalogo_json()
+    sugeridos: list[str] = []
+    vistos: set[str] = set()
+    for estrella in PRODUCTOS_ESTRELLA:
+        if len(sugeridos) >= max_items:
+            break
+        for item in catalogo:
+            nombre = item.get("producto", "")
+            nombre_lower = nombre.lower()
+            if (estrella in nombre_lower
+                    and nombre not in vistos
+                    and not any(en in nombre_lower for en in nombres_en_carrito)):
+                sugeridos.append(nombre)
+                vistos.add(nombre)
+                break
+    return sugeridos
+
+
+async def _procesar_carrito_unificado():
+    """
+    Maneja estados 3, 4 y 5 con UN solo mensaje por cliente según su total de carrito:
+      Estado 3: total < PEDIDO_MINIMO  → empuja a llegar al mínimo
+      Estado 4: PEDIDO_MINIMO ≤ total < ENVIO_GRATIS → puede confirmar + cross-sell gratis
+      Estado 5: total ≥ ENVIO_GRATIS  → recuerda confirmar, ya tiene envío gratis
+    Ventana: carrito con 15-120 min de antigüedad sin finalizar.
+    Cooldown: 2 horas por cliente para no spamear.
+    """
+    ahora = time.time()
+    umbral_gratis = obtener_umbral_envio_gratis()
+    minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
+    gratis_fmt = f"{umbral_gratis:,}".replace(",", ".")
+
+    clientes = await clientes_con_carrito_abandonado(min_inactivo=15, max_inactivo=120)
+    for telefono, items in clientes:
+        # Cooldown: no re-notificar el mismo carrito en 2 horas
+        if ahora - _carrito_unif_cooldown.get(telefono, 0) < CARRITO_UNIF_COOLDOWN_SEG:
+            continue
+        # No molestar si el cliente cerró la conversación explícitamente
+        if await verificar_cierre_enviado(telefono):
+            continue
+
+        total = _calcular_total_carrito(items)
+        if total <= 0:
+            continue
+
+        nombres_en_carrito = {p.get("producto", "").lower() for p in items}
+        total_fmt = f"{total:,}".replace(",", ".")
+        tienda_url = f"{EQUORA_BASE}/catalogo"
+
+        try:
+            if total < PEDIDO_MINIMO:
+                # ── Estado 3: bajo el mínimo ──────────────────────────────
+                falta = PEDIDO_MINIMO - total
+                falta_fmt = f"{falta:,}".replace(",", ".")
+                sugeridos = _sugerir_productos(nombres_en_carrito)
+                lineas = "\n".join(f"✅ {s}" for s in sugeridos)
+                msg = (
+                    f"Hola 😊 Tienes ${total_fmt} en tu carrito, ¡casi llegas!\n\n"
+                    f"Te faltan *${falta_fmt}* para el pedido mínimo de *${minimo_fmt}*."
+                )
+                if lineas:
+                    msg += f"\n\nMuchos clientes agregan:\n{lineas}"
+                enviado = False
+                if hasattr(proveedor, "enviar_cta_url"):
+                    try:
+                        enviado = await proveedor.enviar_cta_url(
+                            telefono, msg, "Ver más productos 🌿", tienda_url
+                        )
+                    except Exception:
+                        pass
+                if not enviado:
+                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
+
+            elif total < umbral_gratis:
+                # ── Estado 4: sobre el mínimo, bajo envío gratis ──────────
+                falta = umbral_gratis - total
+                falta_fmt = f"{falta:,}".replace(",", ".")
+                sugeridos = _sugerir_productos(nombres_en_carrito)
+                lineas = "\n".join(f"✅ {s}" for s in sugeridos)
+                msg = (
+                    f"Tienes ${total_fmt} en tu carrito 🛒\n\n"
+                    f"Si agregas *${falta_fmt}* más el envío es *gratis* 🚚🎉\n"
+                    f"O si prefieres, puedes confirmar tu pedido ahora "
+                    f"(envío ${f'{obtener_costo_envio():,}'.replace(',', '.')})."
+                )
+                if lineas:
+                    msg += f"\n\nProductos que complementan tu pedido:\n{lineas}"
+                enviado = False
+                if hasattr(proveedor, "enviar_cta_url"):
+                    try:
+                        enviado = await proveedor.enviar_cta_url(
+                            telefono, msg, "Ver más productos 🌿", tienda_url
+                        )
+                    except Exception:
+                        pass
+                if not enviado:
+                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
+
+            else:
+                # ── Estado 5: envío gratis garantizado ────────────────────
+                msg = (
+                    f"¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido! 🎉\n\n"
+                    f"Solo falta confirmar tus datos de entrega para recibir tu pedido 📦\n"
+                    f"Escríbeme *\"confirmar\"* y te ayudo a terminar."
+                )
+                await proveedor.enviar_mensaje(telefono, msg)
+
+            await guardar_mensaje(telefono, "assistant", msg)
+            _carrito_unif_cooldown[telefono] = ahora
+            logger.info(f"Seguimiento carrito estado {'3' if total < PEDIDO_MINIMO else '4' if total < umbral_gratis else '5'} → {telefono} (${total_fmt})")
+
+        except Exception as e:
+            logger.error(f"Error en seguimiento carrito {telefono}: {e}")
+
+
 async def _procesar_followups():
+    """Estado 6: sin carrito, sin checkout. Follow-up genérico una sola vez."""
     telefonos = await conversaciones_para_followup(FOLLOWUP_MIN, FOLLOWUP_MAX_HORAS)
     for telefono in telefonos:
         try:
@@ -178,6 +310,7 @@ async def _procesar_followups():
 
 
 async def _procesar_cierres():
+    """Estado 6: cierre tras follow-up genérico sin respuesta."""
     telefonos = await conversaciones_para_cierre(CIERRE_MIN)
     for telefono in telefonos:
         try:
@@ -189,78 +322,14 @@ async def _procesar_cierres():
             logger.error(f"Error enviando cierre a {telefono}: {e}")
 
 
-async def _procesar_crosssell_carrito():
-    """
-    Detecta carritos con 2-8 minutos de antigüedad cuyo total está bajo $60.000
-    y envía un mensaje de venta cruzada por WhatsApp (cooldown 20 min por cliente).
-    """
-    ahora = time.time()
-    clientes = await clientes_para_crosssell(min_min=2, max_min=8)
-    for telefono, items in clientes:
-        # Respetar cooldown de 20 minutos
-        ultimo = _crosssell_cooldown.get(telefono, 0)
-        if ahora - ultimo < CROSSSELL_COOLDOWN_SEG:
-            continue
-        # Calcular total del carrito
-        total = sum(p.get("precio_unitario", 0) * p.get("cantidad", 1) for p in items)
-        if total <= 0 or total >= obtener_umbral_envio_gratis():
-            continue
-        # Buscar productos sugeridos que no estén en el carrito
-        nombres_en_carrito = {p.get("producto", "").lower() for p in items}
-        catalogo = obtener_catalogo_json()
-        sugeridos = []
-        vistos: set[str] = set()
-        for estrella in PRODUCTOS_ESTRELLA:
-            if len(sugeridos) >= 3:
-                break
-            for item in catalogo:
-                nombre = item.get("producto", "")
-                nombre_lower = nombre.lower()
-                if (estrella in nombre_lower
-                        and nombre not in vistos
-                        and not any(en in nombre_lower for en in nombres_en_carrito)):
-                    sugeridos.append(nombre)
-                    vistos.add(nombre)
-                    break
-        if not sugeridos:
-            continue
-        falta = obtener_umbral_envio_gratis() - total
-        falta_fmt = f"{int(falta):,}".replace(",", ".")
-        lineas_prod = "\n".join(f"✅ {s}" for s in sugeridos)
-        msg = (
-            f"Te faltan solo ${falta_fmt} para envío gratis 🚚\n\n"
-            f"Muchos clientes aprovechan y agregan:\n"
-            f"{lineas_prod}"
-        )
-        tienda_url = f"{EQUORA_BASE}/catalogo"
-        try:
-            enviado = False
-            if hasattr(proveedor, "enviar_cta_url"):
-                try:
-                    enviado = await proveedor.enviar_cta_url(
-                        telefono, msg, "Ver más productos 🌿", tienda_url
-                    )
-                except Exception:
-                    pass
-            if not enviado:
-                await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
-            await guardar_mensaje(telefono, "assistant", msg)
-            _crosssell_cooldown[telefono] = ahora
-            logger.info(f"Cross-sell enviado a {telefono} (falta ${falta_fmt})")
-        except Exception as e:
-            logger.error(f"Error enviando cross-sell a {telefono}: {e}")
-
-
-async def _procesar_abandono_carrito():
-    """Detecta carritos activos que llevan entre ABANDONO_MIN y ABANDONO_MAX min
-    sin finalizar y envía un mensaje de recuperación con botón CTA a la tienda."""
+async def _procesar_abandono_carrito_UNUSED():
+    """REEMPLAZADO por _procesar_carrito_unificado — se deja comentado como referencia."""
     ahora = time.time()
     clientes = await clientes_con_carrito_abandonado(
         min_inactivo=ABANDONO_MIN_INACTIVO,
         max_inactivo=ABANDONO_MAX_INACTIVO,
     )
     for telefono, _ in clientes:
-        # Respetar cooldown: no re-notificar si ya lo hicimos hace menos de 1 hora
         ultimo = _abandono_notif.get(telefono, 0)
         if ahora - ultimo < ABANDONO_COOLDOWN_SEG:
             continue
@@ -572,34 +641,6 @@ async def webhook_handler(request: Request):
                 logger.info(f"Modo humano activo — {msg.telefono} — Andrea no responde")
                 continue
 
-            # Shortcut: "Ver catálogo 🌿" → CTA directo sin pasar por Claude
-            _BOTONES_CATALOGO = {"ver catálogo 🌿", "hacer pedido 🛒", "ver catalogo"}
-            if msg.texto.strip().lower() in _BOTONES_CATALOGO:
-                import urllib.parse as _up
-                _turl = _construir_url_tienda("")
-                _turl += f"?tel={_up.quote(msg.telefono)}"
-                _min_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
-                _gra_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
-                _pie = f"📦 Pedido mínimo ${_min_fmt} | 🚚 Envío gratis > ${_gra_fmt}"
-                _txt_cta = (
-                    "🛒 *Aquí puedes ver todos nuestros productos con fotos y hacer tu pedido:*\n"
-                    + _pie
-                )
-                _enviado = False
-                if hasattr(proveedor, "enviar_cta_url"):
-                    try:
-                        _enviado = await proveedor.enviar_cta_url(
-                            msg.telefono, _txt_cta, "Ver catálogo 🌿", _turl
-                        )
-                    except Exception as _e:
-                        logger.error(f"Error CTA catálogo shortcut: {_e}")
-                if not _enviado:
-                    await proveedor.enviar_mensaje(msg.telefono, f"{_txt_cta}\n{_turl}")
-                await guardar_mensaje(msg.telefono, "user", msg.texto)
-                await guardar_mensaje(msg.telefono, "assistant", _txt_cta)
-                await registrar_mensaje_asistente(msg.telefono)
-                continue
-
             historial = await obtener_historial(msg.telefono)
             respuesta = await generar_respuesta(msg.texto, historial, msg.telefono)
 
@@ -667,7 +708,10 @@ async def webhook_handler(request: Request):
             respuesta, abrir_tienda, tienda_query = extraer_marcador_tienda(respuesta)
 
             # Enviar texto primero
-            if respuesta:
+            # Excepción: si hay CTA de catálogo general (sin query), el texto de Andrea
+            # se fusiona como cuerpo del CTA para que quede un único mensaje de bienvenida.
+            _texto_absorbido_por_cta = abrir_tienda and not tienda_query and respuesta.strip()
+            if respuesta and not _texto_absorbido_por_cta:
                 await proveedor.enviar_mensaje(msg.telefono, respuesta)
 
             # Catálogo nativo WhatsApp (product_list con fotos reales)
@@ -764,10 +808,15 @@ async def webhook_handler(request: Request):
                     )
                     boton_label = "Ver producto 🌿"
                 else:
-                    texto_tienda = (
-                        "🛒 *Aquí puedes ver todos nuestros productos con fotos y hacer tu pedido:*\n"
-                        + pie_tienda
-                    )
+                    # Catálogo general: fusionar el saludo de Andrea con el CTA
+                    # → 1 solo mensaje en lugar de texto + CTA separados
+                    if _texto_absorbido_por_cta:
+                        texto_tienda = respuesta.strip() + "\n\n" + pie_tienda
+                    else:
+                        texto_tienda = (
+                            "🛒 *Aquí puedes ver todos nuestros productos con fotos y hacer tu pedido:*\n"
+                            + pie_tienda
+                        )
                     boton_label = "Ver catálogo 🌿"
                 enviado_tienda = False
                 if hasattr(proveedor, "enviar_cta_url"):

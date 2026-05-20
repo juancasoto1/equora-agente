@@ -406,7 +406,9 @@ async def conversaciones_para_followup(
     - Pasaron al menos `inactividad_minutos` desde la última respuesta del bot
     - Aún no enviamos follow-up (follow_up_at IS NULL)
     - El último mensaje del bot no es más viejo que `max_edad_horas`
-    - El cliente NO está en proceso de checkout (pedido_checkout_url vacío)
+    - El cliente NO cerró la conversación (cierre_at IS NULL)
+    - El cliente NO tiene carrito activo (esos se manejan en _procesar_carrito_unificado)
+    - El cliente NO está en proceso de checkout
     """
     ahora = datetime.utcnow()
     cutoff_inactividad = ahora - timedelta(minutes=inactividad_minutos)
@@ -417,6 +419,7 @@ async def conversaciones_para_followup(
             EstadoConversacion.last_assistant_at <= cutoff_inactividad,
             EstadoConversacion.last_assistant_at >= cutoff_max_edad,
             EstadoConversacion.follow_up_at.is_(None),
+            EstadoConversacion.cierre_at.is_(None),  # no molestar si cerró la conv
         )
         result = await session.execute(query)
         candidatos = result.scalars().all()
@@ -426,16 +429,18 @@ async def conversaciones_para_followup(
             # El último mensaje debe ser del asistente (no del cliente)
             if e.last_user_at is not None and e.last_assistant_at <= e.last_user_at:
                 continue
-            # No molestar si el cliente está en proceso de checkout
+            # No molestar si tiene carrito activo o está en checkout
+            # (esos estados tienen su propio seguimiento más específico)
             cliente = await session.get(Cliente, e.telefono)
-            if cliente and cliente.pedido_checkout_url:
+            if cliente and (cliente.pedido_checkout_url or cliente.carrito_activo):
                 continue
             telefonos.append(e.telefono)
         return telefonos
 
 
 async def conversaciones_para_cierre(min_despues_followup: int = 5) -> list[str]:
-    """Conversaciones que ya recibieron follow-up y siguen sin respuesta del cliente."""
+    """Conversaciones que ya recibieron follow-up genérico y siguen sin respuesta.
+    Solo aplica a estado 6 (sin carrito, sin checkout)."""
     cutoff = datetime.utcnow() - timedelta(minutes=min_despues_followup)
     async with async_session() as session:
         query = select(EstadoConversacion).where(
@@ -445,10 +450,24 @@ async def conversaciones_para_cierre(min_despues_followup: int = 5) -> list[str]
         )
         result = await session.execute(query)
         candidatos = result.scalars().all()
-        return [
-            e.telefono for e in candidatos
-            if e.last_user_at is None or e.follow_up_at > e.last_user_at
-        ]
+        telefonos = []
+        for e in candidatos:
+            if e.last_user_at is not None and e.follow_up_at <= e.last_user_at:
+                continue
+            # Solo cierre si no tiene carrito ni checkout activo
+            async with async_session() as s2:
+                cliente = await s2.get(Cliente, e.telefono)
+            if cliente and (cliente.pedido_checkout_url or cliente.carrito_activo):
+                continue
+            telefonos.append(e.telefono)
+        return telefonos
+
+
+async def verificar_cierre_enviado(telefono: str) -> bool:
+    """Retorna True si la conversación fue cerrada explícitamente (cierre_at set)."""
+    async with async_session() as session:
+        estado = await session.get(EstadoConversacion, telefono)
+        return bool(estado and estado.cierre_at)
 
 
 # ── Inbox / panel de administración ─────────────────────────────────────────
