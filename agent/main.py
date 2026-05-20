@@ -65,8 +65,11 @@ FOLLOWUP_MIN         = int(os.getenv("FOLLOWUP_MIN", 10))         # min inactivo
 CIERRE_MIN           = int(os.getenv("CIERRE_MIN", 5))            # min tras follow-up → cierre
 FOLLOWUP_MAX_HORAS   = int(os.getenv("FOLLOWUP_MAX_HORAS", 12))   # ventana máxima
 
-# Estados 3-5: carrito activo (pedido mínimo / cross-sell / listo para confirmar)
-CARRITO_MIN_MIN      = int(os.getenv("CARRITO_MIN_MIN", 15))      # min de espera antes del primer aviso
+# Estado 3: carrito bajo el pedido mínimo ($50K)
+CARRITO_MIN_MIN      = int(os.getenv("CARRITO_MIN_MIN", 15))      # min antes del aviso de pedido mínimo
+# Estados 4-5: cross-sell (entre $50K y $80K) y carrito listo (≥$80K)
+CROSSSELL_MIN_MIN    = int(os.getenv("CROSSSELL_MIN_MIN", 15))    # min antes del aviso de cross-sell/listo
+# Compartidos por estados 3-5
 CARRITO_MAX_MIN      = int(os.getenv("CARRITO_MAX_MIN", 120))     # min máximo de ventana
 CARRITO_COOLDOWN_MIN = int(os.getenv("CARRITO_COOLDOWN_MIN", 120))# min entre avisos al mismo cliente
 CARRITO_UNIF_COOLDOWN_SEG = CARRITO_COOLDOWN_MIN * 60
@@ -139,7 +142,7 @@ async def lifespan(app: FastAPI):
     logger.info(
         f"Tiempos de seguimiento — "
         f"follow-up: {FOLLOWUP_MIN} min | cierre: {CIERRE_MIN} min | "
-        f"carrito: {CARRITO_MIN_MIN}-{CARRITO_MAX_MIN} min (cooldown {CARRITO_COOLDOWN_MIN} min) | "
+        f"carrito mínimo: {CARRITO_MIN_MIN} min | cross-sell/listo: {CROSSSELL_MIN_MIN} min | ventana max: {CARRITO_MAX_MIN} min (cooldown {CARRITO_COOLDOWN_MIN} min) | "
         f"checkout: {CHECKOUT_ABANDONO_MIN}-{CHECKOUT_ABANDONO_MAX} min (cooldown {CHECKOUT_COOLDOWN_MIN} min) | "
         f"loop cada: {CHECK_INTERVAL_SEG} seg"
     )
@@ -205,19 +208,30 @@ def _sugerir_productos(nombres_en_carrito: set[str], max_items: int = 3) -> list
 async def _procesar_carrito_unificado():
     """
     Maneja estados 3, 4 y 5 con UN solo mensaje por cliente según su total de carrito:
-      Estado 3: total < PEDIDO_MINIMO  → empuja a llegar al mínimo
-      Estado 4: PEDIDO_MINIMO ≤ total < ENVIO_GRATIS → puede confirmar + cross-sell gratis
-      Estado 5: total ≥ ENVIO_GRATIS  → recuerda confirmar, ya tiene envío gratis
-    Ventana: carrito con 15-120 min de antigüedad sin finalizar.
-    Cooldown: 2 horas por cliente para no spamear.
+      Estado 3: total < PEDIDO_MINIMO  → empuja a llegar al mínimo       (CARRITO_MIN_MIN)
+      Estado 4: PEDIDO_MINIMO ≤ total < ENVIO_GRATIS → cross-sell gratis  (CROSSSELL_MIN_MIN)
+      Estado 5: total ≥ ENVIO_GRATIS  → recuerda confirmar                (CROSSSELL_MIN_MIN)
+    Cada estado tiene su propia ventana de tiempo configurable.
+    Cooldown compartido: CARRITO_COOLDOWN_MIN por cliente.
     """
     ahora = time.time()
     umbral_gratis = obtener_umbral_envio_gratis()
     minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
     gratis_fmt = f"{umbral_gratis:,}".replace(",", ".")
 
-    clientes = await clientes_con_carrito_abandonado(min_inactivo=CARRITO_MIN_MIN, max_inactivo=CARRITO_MAX_MIN)
-    for telefono, items in clientes:
+    # Dos queries con tiempos distintos: estado 3 vs estados 4-5
+    clientes_min   = await clientes_con_carrito_abandonado(min_inactivo=CARRITO_MIN_MIN,   max_inactivo=CARRITO_MAX_MIN)
+    clientes_cross = await clientes_con_carrito_abandonado(min_inactivo=CROSSSELL_MIN_MIN, max_inactivo=CARRITO_MAX_MIN)
+
+    # Unificar: estado 3 usa clientes_min, estados 4-5 usan clientes_cross
+    # Construir dict telefono→items para cada grupo
+    map_min   = {t: i for t, i in clientes_min}
+    map_cross = {t: i for t, i in clientes_cross}
+
+    # Todos los teléfonos candidatos (sin duplicados)
+    todos = set(map_min) | set(map_cross)
+
+    for telefono in todos:
         # Cooldown: no re-notificar el mismo carrito en 2 horas
         if ahora - _carrito_unif_cooldown.get(telefono, 0) < CARRITO_UNIF_COOLDOWN_SEG:
             continue
@@ -225,9 +239,25 @@ async def _procesar_carrito_unificado():
         if await verificar_cierre_enviado(telefono):
             continue
 
+        # Determinar items y estado según qué ventana aplica
+        # Estado 3 requiere estar en map_min; estados 4-5 requieren estar en map_cross
+        en_min   = telefono in map_min
+        en_cross = telefono in map_cross
+        items = map_min.get(telefono) or map_cross.get(telefono)
+        if not items:
+            continue
+
         total = _calcular_total_carrito(items)
         if total <= 0:
             continue
+
+        # Verificar que el estado corresponde a la ventana de tiempo correcta
+        # Estado 3 (< mínimo): solo si pasó CARRITO_MIN_MIN
+        # Estados 4-5 (≥ mínimo): solo si pasó CROSSSELL_MIN_MIN
+        if total < PEDIDO_MINIMO and not en_min:
+            continue  # Aún no es tiempo para el aviso de pedido mínimo
+        if total >= PEDIDO_MINIMO and not en_cross:
+            continue  # Aún no es tiempo para el cross-sell
 
         nombres_en_carrito = {p.get("producto", "").lower() for p in items}
         total_fmt = f"{total:,}".replace(",", ".")
