@@ -6,6 +6,7 @@ import hashlib
 import base64
 import logging
 import asyncio
+import random
 import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Cookie
@@ -187,14 +188,20 @@ def _calcular_total_carrito(items: list[dict]) -> int:
 
 
 def _sugerir_productos(nombres_en_carrito: set[str], max_items: int = 3) -> list[str]:
-    """Devuelve hasta max_items productos estrella que no estén en el carrito."""
+    """Devuelve hasta max_items productos aleatorios que no estén en el carrito.
+    Las categorías y los productos dentro de cada categoría se mezclan en cada llamada
+    para evitar sugerir siempre los mismos artículos."""
     catalogo = obtener_catalogo_json()
     sugeridos: list[str] = []
     vistos: set[str] = set()
-    for estrella in PRODUCTOS_ESTRELLA:
+    # Mezclar categorías para variar el orden en cada mensaje
+    categorias = random.sample(PRODUCTOS_ESTRELLA, len(PRODUCTOS_ESTRELLA))
+    for estrella in categorias:
         if len(sugeridos) >= max_items:
             break
-        for item in catalogo:
+        # Mezclar el catálogo para no elegir siempre la misma variante
+        items_mezclados = random.sample(catalogo, len(catalogo))
+        for item in items_mezclados:
             nombre = item.get("producto", "")
             nombre_lower = nombre.lower()
             if (estrella in nombre_lower
