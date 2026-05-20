@@ -54,6 +54,9 @@ PORT = int(os.getenv("PORT", 8000))
 _railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
 APP_URL = os.getenv("APP_URL") or (f"https://{_railway_domain}" if _railway_domain else f"http://localhost:{PORT}")
 
+# Monto mínimo de pedido configurado en la tienda Lovable
+PEDIDO_MINIMO = int(os.getenv("PEDIDO_MINIMO", 50000))
+
 # Configuración de seguimientos automáticos (env vars opcionales)
 FOLLOWUP_MIN = int(os.getenv("FOLLOWUP_MIN", 2))   # min sin respuesta del cliente
 CIERRE_MIN = int(os.getenv("CIERRE_MIN", 5))       # min después del follow-up
@@ -723,15 +726,19 @@ async def webhook_handler(request: Request):
                 tienda_url = _construir_url_tienda(tienda_query)
                 # Añadir teléfono para que Lovable pueda reportar el carrito de vuelta
                 tienda_url += f"?tel={urllib.parse.quote(msg.telefono)}"
+                minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
+                gratis_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
+                pie_tienda = f"📦 Pedido mínimo ${minimo_fmt} | 🚚 Envío gratis > ${gratis_fmt}"
                 if tienda_query:
                     texto_tienda = (
-                        "🛒 *Aquí puedes ver el producto, elegir tu presentación y hacer tu pedido fácilmente:*"
+                        "🛒 *Aquí puedes ver el producto, elegir tu presentación y hacer tu pedido:*\n"
+                        + pie_tienda
                     )
                     boton_label = "Ver producto 🌿"
                 else:
                     texto_tienda = (
-                        "🛒 *Aquí puedes ver todos nuestros productos con fotos, "
-                        "elegir cantidades y hacer tu pedido fácilmente:*"
+                        "🛒 *Aquí puedes ver todos nuestros productos con fotos y hacer tu pedido:*\n"
+                        + pie_tienda
                     )
                     boton_label = "Ver catálogo 🌿"
                 enviado_tienda = False
