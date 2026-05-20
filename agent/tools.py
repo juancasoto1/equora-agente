@@ -610,16 +610,23 @@ def obtener_url_producto(nombre: str) -> str | None:
     if handle:
         return f"{EQUORA_PRODUCT_BASE}/{handle}"
 
-    # 2. Coincidencia parcial: el nombre buscado está contenido en el título
-    #    o el título está contenido en el nombre buscado
-    mejores: list[tuple[int, str]] = []  # (longitud del match, handle)
+    # 2. Coincidencia parcial con scoring por palabras en común (Jaccard)
+    #    Evita que "desengrasante profesional" gane sobre "desengrasante de cocina"
+    #    solo por ser más largo cuando el cliente buscó "desengrasante de cocina"
+    palabras_busqueda = set(nombre_n.split())
+    mejores: list[tuple[float, str]] = []  # (score, handle)
     for titulo_n, h in _handle_map.items():
         if not h:
             continue
-        if nombre_n in titulo_n or titulo_n in nombre_n:
-            mejores.append((len(titulo_n), h))
+        if nombre_n not in titulo_n and titulo_n not in nombre_n:
+            continue
+        palabras_titulo = set(titulo_n.split())
+        interseccion = palabras_busqueda & palabras_titulo
+        union = palabras_busqueda | palabras_titulo
+        score = len(interseccion) / len(union) if union else 0
+        mejores.append((score, h))
     if mejores:
-        # Preferir el título más largo (más específico)
+        # Mayor score = más palabras en común proporcionalmente
         mejores.sort(reverse=True)
         return f"{EQUORA_PRODUCT_BASE}/{mejores[0][1]}"
 
