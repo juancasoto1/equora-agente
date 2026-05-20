@@ -180,7 +180,7 @@ _handle_map: dict[str, str] = {}
 # URL base de los productos en equoradistribuciones.com
 # Configurable por env var en caso de que Lovable use una ruta diferente
 EQUORA_PRODUCT_BASE = os.getenv(
-    "EQUORA_PRODUCT_BASE", "https://equoradistribuciones.com/productos"
+    "EQUORA_PRODUCT_BASE", "https://equoradistribuciones.com/product"
 )
 
 # Logo de la tienda (obtenido de Shopify brand o configurado manualmente)
