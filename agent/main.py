@@ -304,30 +304,28 @@ async def _procesar_carrito_unificado():
 
             elif total < umbral_gratis:
                 # ── Estado 4: sobre el mínimo, bajo envío gratis ──────────
-                # Mensaje principal: ya puedes confirmar (paga envío)
-                # Incentivo secundario: agrega un poco más y el envío es gratis
+                # Incentivo principal: agrega un poco más y el envío es gratis
+                # Secundario: o ya puedes confirmar ahora (paga envío)
                 falta = umbral_gratis - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
                 costo_envio_fmt = f"{obtener_costo_envio():,}".replace(",", ".")
                 sugeridos = _sugerir_productos(nombres_en_carrito)
                 lineas = "\n".join(f"✅ {s}" for s in sugeridos)
                 msg = (
-                    f"🛒 Tienes *${total_fmt}* en tu carrito — ¡ya puedes confirmar tu pedido!\n\n"
-                    f"Pago contraentrega, envío de *${costo_envio_fmt}* 🚚\n"
-                    f"Escríbeme *\"confirmar\"* y te ayudo con los datos de entrega."
+                    f"🛒 Tienes *${total_fmt}* en tu carrito!\n\n"
+                    f"Agrega *${falta_fmt}* más y el envío es *gratis* 🚚🎉"
                 )
                 if lineas:
-                    msg += (
-                        f"\n\n💡 Tip: agrega solo *${falta_fmt}* más y el envío es *gratis* 🎉\n"
-                        + lineas
-                    )
-                else:
-                    msg += f"\n\n💡 Tip: agrega *${falta_fmt}* más y el envío es *gratis* 🎉"
+                    msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
+                msg += (
+                    f"\n\nO si prefieres, ya puedes confirmar tu pedido ahora "
+                    f"(envío *${costo_envio_fmt}*) 👇"
+                )
                 enviado = False
                 if hasattr(proveedor, "enviar_cta_url"):
                     try:
                         enviado = await proveedor.enviar_cta_url(
-                            telefono, msg, "Ver más productos 🌿", tienda_url
+                            telefono, msg, "Ir al carrito 🛒", tienda_url
                         )
                     except Exception:
                         pass
@@ -337,11 +335,19 @@ async def _procesar_carrito_unificado():
             else:
                 # ── Estado 5: envío gratis garantizado ────────────────────
                 msg = (
-                    f"¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido! 🎉\n\n"
-                    f"Solo falta confirmar tus datos de entrega para recibir tu pedido 📦\n"
-                    f"Escríbeme *\"confirmar\"* y te ayudo a terminar."
+                    f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido!\n\n"
+                    f"Solo entra a la tienda, revisa tu carrito y confirma tu pedido 👇"
                 )
-                await proveedor.enviar_mensaje(telefono, msg)
+                enviado = False
+                if hasattr(proveedor, "enviar_cta_url"):
+                    try:
+                        enviado = await proveedor.enviar_cta_url(
+                            telefono, msg, "Confirmar pedido ✅", tienda_url
+                        )
+                    except Exception:
+                        pass
+                if not enviado:
+                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
 
             await guardar_mensaje(telefono, "assistant", msg)
             _carrito_unif_cooldown[telefono] = ahora
