@@ -572,6 +572,34 @@ async def webhook_handler(request: Request):
                 logger.info(f"Modo humano activo — {msg.telefono} — Andrea no responde")
                 continue
 
+            # Shortcut: "Ver catálogo 🌿" → CTA directo sin pasar por Claude
+            _BOTONES_CATALOGO = {"ver catálogo 🌿", "hacer pedido 🛒", "ver catalogo"}
+            if msg.texto.strip().lower() in _BOTONES_CATALOGO:
+                import urllib.parse as _up
+                _turl = _construir_url_tienda("")
+                _turl += f"?tel={_up.quote(msg.telefono)}"
+                _min_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
+                _gra_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
+                _pie = f"📦 Pedido mínimo ${_min_fmt} | 🚚 Envío gratis > ${_gra_fmt}"
+                _txt_cta = (
+                    "🛒 *Aquí puedes ver todos nuestros productos con fotos y hacer tu pedido:*\n"
+                    + _pie
+                )
+                _enviado = False
+                if hasattr(proveedor, "enviar_cta_url"):
+                    try:
+                        _enviado = await proveedor.enviar_cta_url(
+                            msg.telefono, _txt_cta, "Ver catálogo 🌿", _turl
+                        )
+                    except Exception as _e:
+                        logger.error(f"Error CTA catálogo shortcut: {_e}")
+                if not _enviado:
+                    await proveedor.enviar_mensaje(msg.telefono, f"{_txt_cta}\n{_turl}")
+                await guardar_mensaje(msg.telefono, "user", msg.texto)
+                await guardar_mensaje(msg.telefono, "assistant", _txt_cta)
+                await registrar_mensaje_asistente(msg.telefono)
+                continue
+
             historial = await obtener_historial(msg.telefono)
             respuesta = await generar_respuesta(msg.texto, historial, msg.telefono)
 
