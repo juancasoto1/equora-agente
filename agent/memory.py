@@ -406,6 +406,7 @@ async def conversaciones_para_followup(
     - Pasaron al menos `inactividad_minutos` desde la última respuesta del bot
     - Aún no enviamos follow-up (follow_up_at IS NULL)
     - El último mensaje del bot no es más viejo que `max_edad_horas`
+    - El cliente NO está en proceso de checkout (pedido_checkout_url vacío)
     """
     ahora = datetime.utcnow()
     cutoff_inactividad = ahora - timedelta(minutes=inactividad_minutos)
@@ -419,11 +420,18 @@ async def conversaciones_para_followup(
         )
         result = await session.execute(query)
         candidatos = result.scalars().all()
-        # Filtrar: el último mensaje debe ser del asistente
-        return [
-            e.telefono for e in candidatos
-            if e.last_user_at is None or e.last_assistant_at > e.last_user_at
-        ]
+
+        telefonos = []
+        for e in candidatos:
+            # El último mensaje debe ser del asistente (no del cliente)
+            if e.last_user_at is not None and e.last_assistant_at <= e.last_user_at:
+                continue
+            # No molestar si el cliente está en proceso de checkout
+            cliente = await session.get(Cliente, e.telefono)
+            if cliente and cliente.pedido_checkout_url:
+                continue
+            telefonos.append(e.telefono)
+        return telefonos
 
 
 async def conversaciones_para_cierre(min_despues_followup: int = 5) -> list[str]:

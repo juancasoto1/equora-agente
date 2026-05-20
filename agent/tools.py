@@ -28,6 +28,7 @@ SHOPIFY_GQL_QUERY = """
     edges {
       node {
         title
+        handle
         productType
         collections(first: 5) {
           edges {
@@ -172,6 +173,16 @@ _fb_items: list[dict] = []
 # Catálogo en formato JSON para la mini-tienda web
 _catalog_json: list[dict] = []
 
+# Mapa de handle Shopify por nombre de producto normalizado
+# Clave: título normalizado → Valor: handle (ej. "lavaloza-antibacterial-biotu")
+_handle_map: dict[str, str] = {}
+
+# URL base de los productos en equoradistribuciones.com
+# Configurable por env var en caso de que Lovable use una ruta diferente
+EQUORA_PRODUCT_BASE = os.getenv(
+    "EQUORA_PRODUCT_BASE", "https://equoradistribuciones.com/productos"
+)
+
 # Logo de la tienda (obtenido de Shopify brand o configurado manualmente)
 _shop_logo_url: str = ""
 
@@ -232,6 +243,7 @@ async def obtener_catalogo_shopify() -> str:
         _sku_map.clear()
         _categorias_cache.clear()
         _catalog_json.clear()
+        _handle_map.clear()
         categorias: dict[str, list[tuple[str, list[dict], str]]] = {}
         total = 0
 
@@ -248,6 +260,9 @@ async def obtener_catalogo_shopify() -> str:
             # Imagen principal del producto
             imgs = node.get("images", {}).get("edges", [])
             imagen = imgs[0]["node"]["url"] if imgs else ""
+
+            # Guardar handle para construir URLs de producto específico
+            _handle_map[_normalizar(node["title"])] = node.get("handle", "")
 
             # Categoría: siempre desde el mapa fijo de Equora (ignora colecciones Shopify)
             categoria = _categoria_producto(node["title"])
@@ -494,6 +509,47 @@ def obtener_catalogo_json() -> list[dict]:
     Formato: [{producto, presentacion, precio, stock, imagen, categoria}, ...]
     Se llena cuando se carga el catálogo de Shopify."""
     return list(_catalog_json)
+
+
+def obtener_url_producto(nombre: str) -> str | None:
+    """
+    Busca el handle de Shopify para el producto que coincide con `nombre`
+    y retorna la URL completa en equoradistribuciones.com.
+
+    Proceso:
+    1. Normaliza el nombre de búsqueda
+    2. Busca coincidencia exacta en _handle_map (título normalizado → handle)
+    3. Si no hay exacta, busca coincidencia parcial
+    4. Retorna None si no hay catálogo cargado aún
+
+    Uso: llamar solo si el catálogo ya está en cache (_handle_map no vacío).
+    """
+    if not _handle_map:
+        return None  # Catálogo aún no cargado — usar fallback de colección
+
+    nombre_n = _normalizar(nombre)
+    if not nombre_n:
+        return None
+
+    # 1. Coincidencia exacta
+    handle = _handle_map.get(nombre_n)
+    if handle:
+        return f"{EQUORA_PRODUCT_BASE}/{handle}"
+
+    # 2. Coincidencia parcial: el nombre buscado está contenido en el título
+    #    o el título está contenido en el nombre buscado
+    mejores: list[tuple[int, str]] = []  # (longitud del match, handle)
+    for titulo_n, h in _handle_map.items():
+        if not h:
+            continue
+        if nombre_n in titulo_n or titulo_n in nombre_n:
+            mejores.append((len(titulo_n), h))
+    if mejores:
+        # Preferir el título más largo (más específico)
+        mejores.sort(reverse=True)
+        return f"{EQUORA_PRODUCT_BASE}/{mejores[0][1]}"
+
+    return None
 
 
 async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:

@@ -40,10 +40,18 @@ def _cargar_config() -> dict:
 
 
 def cargar_system_prompt() -> str:
-    return _cargar_config().get(
+    prompt = _cargar_config().get(
         "system_prompt",
         "Eres Andrea, asistente de Equora Distribuciones. Responde en español."
     )
+    # Inyectar valores de envío dinámicos (configurables en Railway sin tocar el código)
+    costo_envio = int(os.getenv("COSTO_ENVIO", 9000))
+    envio_gratis = int(os.getenv("ENVIO_GRATIS", 80000))
+    costo_fmt = f"{costo_envio:,}".replace(",", ".")
+    gratis_fmt = f"{envio_gratis:,}".replace(",", ".")
+    prompt = prompt.replace("{COSTO_ENVIO}", costo_fmt)
+    prompt = prompt.replace("{ENVIO_GRATIS}", gratis_fmt)
+    return prompt
 
 
 def obtener_mensaje_error() -> str:

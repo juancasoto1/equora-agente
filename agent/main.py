@@ -33,6 +33,7 @@ from agent.tools import (
     obtener_catalogo_json,
     obtener_secciones_catalogo,
     obtener_producto_por_retailer_id,
+    obtener_url_producto,
 )
 
 load_dotenv()
@@ -92,8 +93,8 @@ MENSAJE_CHECKOUT_ABANDONO = (
 )
 
 # ── Cross-selling desde mini-tienda ─────────────────────────────────────────
-ENVIO_GRATIS = 80000
-COSTO_ENVIO = 7000
+ENVIO_GRATIS = int(os.getenv("ENVIO_GRATIS", 80000))
+COSTO_ENVIO = int(os.getenv("COSTO_ENVIO", 9000))
 # In-memory: phone → timestamp del último cross-sell enviado (cooldown 20 min)
 _crosssell_cooldown: dict[str, float] = {}
 CROSSSELL_COOLDOWN_SEG = 1200  # 20 minutos entre mensajes de cross-sell
@@ -214,11 +215,20 @@ async def _procesar_crosssell_carrito():
         msg = (
             f"Te faltan solo ${falta_fmt} para envío gratis 🚚\n\n"
             f"Muchos clientes aprovechan y agregan:\n"
-            f"{lineas_prod}\n\n"
-            f"¿Te envío el enlace para agregarlos al carrito? 😊"
+            f"{lineas_prod}"
         )
+        tienda_url = f"{EQUORA_BASE}/catalogo"
         try:
-            await proveedor.enviar_mensaje(telefono, msg)
+            enviado = False
+            if hasattr(proveedor, "enviar_cta_url"):
+                try:
+                    enviado = await proveedor.enviar_cta_url(
+                        telefono, msg, "Ver más productos 🌿", tienda_url
+                    )
+                except Exception:
+                    pass
+            if not enviado:
+                await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
             await guardar_mensaje(telefono, "assistant", msg)
             _crosssell_cooldown[telefono] = ahora
             logger.info(f"Cross-sell enviado a {telefono} (falta ${falta_fmt})")
@@ -410,14 +420,20 @@ _COLECCION_MAP: dict[str, str] = {
 
 def _construir_url_tienda(query: str) -> str:
     """
-    Convierte el término del marcador [[TIENDA:término]] en la URL
-    de la colección correspondiente en equoradistribuciones.com.
-    Si no hay mapeo exacto, usa /catalogo como fallback.
+    Convierte el término del marcador [[TIENDA:término]] en la URL más
+    específica posible en equoradistribuciones.com:
+    1. Intenta URL de producto concreto (usando handle de Shopify)
+    2. Si no hay handle, usa la colección de la categoría
+    3. Fallback: /catalogo
     """
     if not query:
         return f"{EQUORA_BASE}/catalogo"
+    # 1. Producto específico (handle desde catálogo Shopify)
+    url_producto = obtener_url_producto(query)
+    if url_producto:
+        return url_producto
+    # 2. Colección por categoría
     q = query.lower().strip()
-    # Buscar coincidencia exacta primero, luego coincidencia parcial
     if q in _COLECCION_MAP:
         return _COLECCION_MAP[q]
     for clave, url in _COLECCION_MAP.items():
@@ -590,6 +606,15 @@ async def webhook_handler(request: Request):
                 except Exception as e:
                     logger.error(f"Marcador ESCALAR inválido: {e}")
                 respuesta = re.sub(r'\s*\[\[ESCALAR:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
+
+            # Marcador de cierre de conversación → suprime futuros seguimientos
+            if '[[CIERRE_CONV:]]' in respuesta:
+                respuesta = respuesta.replace('[[CIERRE_CONV:]]', '').strip()
+                try:
+                    await marcar_cierre_enviado(msg.telefono)
+                    logger.info(f"Conversación cerrada para {msg.telefono} — seguimientos suprimidos")
+                except Exception as e:
+                    logger.error(f"Error marcando cierre: {e}")
 
             # Extraer marcadores interactivos ANTES de enviar el texto
             respuesta, datos_catalogo_cat = extraer_marcador_catalogo_cat(respuesta)
