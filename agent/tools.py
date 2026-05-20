@@ -178,10 +178,84 @@ _catalog_json: list[dict] = []
 _handle_map: dict[str, str] = {}
 
 # URL base de los productos en equoradistribuciones.com
-# Configurable por env var en caso de que Lovable use una ruta diferente
 EQUORA_PRODUCT_BASE = os.getenv(
     "EQUORA_PRODUCT_BASE", "https://equoradistribuciones.com/product"
 )
+
+# ── Tarifas de envío (cargadas desde Shopify Admin API o env vars) ────────────
+# Se actualizan al arrancar el servidor. Sin Admin Token usan los valores de env.
+_costo_envio: int = int(os.getenv("COSTO_ENVIO", 9000))
+_envio_gratis: int = int(os.getenv("ENVIO_GRATIS", 80000))
+
+
+def obtener_costo_envio() -> int:
+    return _costo_envio
+
+
+def obtener_umbral_envio_gratis() -> int:
+    return _envio_gratis
+
+
+async def cargar_tarifas_envio() -> tuple[int, int]:
+    """
+    Lee las tarifas de envío directamente de Shopify Admin API.
+    Busca automáticamente:
+      - La tarifa plana (precio > 0, sin mínimo) → COSTO_ENVIO
+      - El umbral de envío gratis (precio = 0, con mínimo) → ENVIO_GRATIS
+
+    Si SHOPIFY_ADMIN_TOKEN no está configurado, usa las env vars como fallback.
+    Retorna (costo_envio, umbral_gratis).
+    """
+    global _costo_envio, _envio_gratis
+
+    if not SHOPIFY_ADMIN_TOKEN:
+        logger.info(
+            f"SHOPIFY_ADMIN_TOKEN no configurado — tarifas de envío desde env vars: "
+            f"costo=${_costo_envio}, gratis desde=${_envio_gratis}"
+        )
+        return _costo_envio, _envio_gratis
+
+    try:
+        url = f"https://{SHOPIFY_STORE}/admin/api/2024-10/shipping_zones.json"
+        headers = {"X-Shopify-Access-Token": SHOPIFY_ADMIN_TOKEN}
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(url, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+
+        costo_nuevo: int | None = None
+        gratis_nuevo: int | None = None
+
+        for zone in data.get("shipping_zones", []):
+            for rate in zone.get("price_based_shipping_rates", []):
+                price = int(float(rate.get("price") or 0))
+                min_sub = rate.get("min_order_subtotal")
+                max_sub = rate.get("max_order_subtotal")
+
+                if price == 0 and min_sub and not max_sub:
+                    # Envío gratis desde min_sub (ej. "80000.00")
+                    gratis_nuevo = int(float(min_sub))
+                elif price > 0 and not min_sub:
+                    # Tarifa plana sin condición de monto mínimo
+                    costo_nuevo = price
+
+        if costo_nuevo is not None:
+            _costo_envio = costo_nuevo
+        if gratis_nuevo is not None:
+            _envio_gratis = gratis_nuevo
+
+        logger.info(
+            f"Tarifas de envío cargadas desde Shopify: "
+            f"costo=${_costo_envio:,}, gratis desde=${_envio_gratis:,}"
+        )
+
+    except Exception as e:
+        logger.warning(
+            f"No se pudieron cargar tarifas desde Shopify Admin API: {e} "
+            f"— usando valores de env vars (costo=${_costo_envio}, gratis=${_envio_gratis})"
+        )
+
+    return _costo_envio, _envio_gratis
 
 # Logo de la tienda (obtenido de Shopify brand o configurado manualmente)
 _shop_logo_url: str = ""

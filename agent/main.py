@@ -34,6 +34,9 @@ from agent.tools import (
     obtener_secciones_catalogo,
     obtener_producto_por_retailer_id,
     obtener_url_producto,
+    cargar_tarifas_envio,
+    obtener_costo_envio,
+    obtener_umbral_envio_gratis,
 )
 
 load_dotenv()
@@ -74,11 +77,14 @@ ABANDONO_MAX_INACTIVO = int(os.getenv("ABANDONO_MAX", 25))   # max para no insis
 _abandono_notif: dict[str, float] = {}
 ABANDONO_COOLDOWN_SEG = 3600  # No re-notificar el mismo carrito por 1 hora
 
-MENSAJE_ABANDONO = (
-    "Vi que dejaste tu pedido casi listo 😊\n"
-    "¿Quieres que te ayude a finalizarlo?\n\n"
-    "Recuerda: pago contraentrega y envío gratis desde $80.000 🚚"
-)
+def _mensaje_abandono() -> str:
+    gratis = obtener_umbral_envio_gratis()
+    gratis_fmt = f"{gratis:,}".replace(",", ".")
+    return (
+        "Vi que dejaste tu pedido casi listo 😊\n"
+        "¿Quieres que te ayude a finalizarlo?\n\n"
+        f"Recuerda: pago contraentrega y envío gratis desde ${gratis_fmt} 🚚"
+    )
 
 # ── Recuperación de checkout abandonado (llegó al formulario Shopify pero no pagó) ──
 CHECKOUT_ABANDONO_MIN = int(os.getenv("CHECKOUT_ABANDONO_MIN", 20))   # min desde que creó checkout
@@ -93,8 +99,9 @@ MENSAJE_CHECKOUT_ABANDONO = (
 )
 
 # ── Cross-selling desde mini-tienda ─────────────────────────────────────────
-ENVIO_GRATIS = int(os.getenv("ENVIO_GRATIS", 80000))
-COSTO_ENVIO = int(os.getenv("COSTO_ENVIO", 9000))
+# Las tarifas se cargan desde Shopify Admin API al arrancar (lifespan).
+# Acceder siempre via obtener_umbral_envio_gratis() y obtener_costo_envio()
+# para que reflejen el valor actual (puede venir de Shopify o de env vars).
 # In-memory: phone → timestamp del último cross-sell enviado (cooldown 20 min)
 _crosssell_cooldown: dict[str, float] = {}
 CROSSSELL_COOLDOWN_SEG = 1200  # 20 minutos entre mensajes de cross-sell
@@ -116,6 +123,11 @@ async def lifespan(app: FastAPI):
         logger.info("Catálogo Shopify pre-cargado al arrancar ✅")
     except Exception as e:
         logger.warning(f"No se pudo pre-cargar catálogo Shopify al arrancar: {e}")
+    try:
+        costo, gratis = await cargar_tarifas_envio()
+        logger.info(f"Tarifas de envío: costo=${costo:,} / gratis desde=${gratis:,} ✅")
+    except Exception as e:
+        logger.warning(f"No se pudieron cargar tarifas de envío: {e}")
     logger.info(f"Servidor AgentKit corriendo en puerto {PORT}")
     logger.info(f"Proveedor de WhatsApp: {proveedor.__class__.__name__}")
     logger.info(
@@ -188,7 +200,7 @@ async def _procesar_crosssell_carrito():
             continue
         # Calcular total del carrito
         total = sum(p.get("precio_unitario", 0) * p.get("cantidad", 1) for p in items)
-        if total <= 0 or total >= ENVIO_GRATIS:
+        if total <= 0 or total >= obtener_umbral_envio_gratis():
             continue
         # Buscar productos sugeridos que no estén en el carrito
         nombres_en_carrito = {p.get("producto", "").lower() for p in items}
@@ -209,7 +221,7 @@ async def _procesar_crosssell_carrito():
                     break
         if not sugeridos:
             continue
-        falta = ENVIO_GRATIS - total
+        falta = obtener_umbral_envio_gratis() - total
         falta_fmt = f"{int(falta):,}".replace(",", ".")
         lineas_prod = "\n".join(f"✅ {s}" for s in sugeridos)
         msg = (
@@ -252,17 +264,18 @@ async def _procesar_abandono_carrito():
         try:
             tienda_url = f"{EQUORA_BASE}/catalogo"
             enviado = False
+            msg_abandono = _mensaje_abandono()
             if hasattr(proveedor, "enviar_cta_url"):
                 try:
                     enviado = await proveedor.enviar_cta_url(
-                        telefono, MENSAJE_ABANDONO, "Ver productos 🛒", tienda_url
+                        telefono, msg_abandono, "Ver productos 🛒", tienda_url
                     )
                 except Exception:
                     pass
             if not enviado:
-                texto_con_url = f"{MENSAJE_ABANDONO}\n\n👉 {tienda_url}"
+                texto_con_url = f"{msg_abandono}\n\n👉 {tienda_url}"
                 await proveedor.enviar_mensaje(telefono, texto_con_url)
-            await guardar_mensaje(telefono, "assistant", MENSAJE_ABANDONO)
+            await guardar_mensaje(telefono, "assistant", msg_abandono)
             _abandono_notif[telefono] = ahora
             logger.info(f"Recuperación de carrito enviada a {telefono}")
         except Exception as e:

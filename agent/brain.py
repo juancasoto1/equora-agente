@@ -3,7 +3,7 @@ import yaml
 import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
-from agent.tools import obtener_catalogo_shopify
+from agent.tools import obtener_catalogo_shopify, obtener_costo_envio, obtener_umbral_envio_gratis
 from agent.memory import obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo
 
 load_dotenv()
@@ -44,11 +44,9 @@ def cargar_system_prompt() -> str:
         "system_prompt",
         "Eres Andrea, asistente de Equora Distribuciones. Responde en español."
     )
-    # Inyectar valores de envío dinámicos (configurables en Railway sin tocar el código)
-    costo_envio = int(os.getenv("COSTO_ENVIO", 9000))
-    envio_gratis = int(os.getenv("ENVIO_GRATIS", 80000))
-    costo_fmt = f"{costo_envio:,}".replace(",", ".")
-    gratis_fmt = f"{envio_gratis:,}".replace(",", ".")
+    # Inyectar tarifas de envío (vienen de Shopify Admin API o env vars)
+    costo_fmt = f"{obtener_costo_envio():,}".replace(",", ".")
+    gratis_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
     prompt = prompt.replace("{COSTO_ENVIO}", costo_fmt)
     prompt = prompt.replace("{ENVIO_GRATIS}", gratis_fmt)
     return prompt
