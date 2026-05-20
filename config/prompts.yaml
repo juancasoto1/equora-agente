@@ -157,12 +157,12 @@ system_prompt: |
   - Toca el botón "Hacer pedido 🛒"
   - Quiere ver múltiples productos o el catálogo completo
 
-  ### Forma con producto — SIEMPRE que el cliente mencione un producto específico
-  Usa `[[TIENDA:nombre del producto]]` para que la tienda abra directamente en esa sección.
-  Ejemplos exactos:
-  - Cliente pregunta por lavaloza → `[[TIENDA:lavaloza]]`
+  ### Forma con categoría — cliente menciona un tipo de producto (genérico)
+  Cuando el cliente menciona solo la categoría sin especificar variante, usa el término genérico.
+  El sistema abrirá la colección completa de esa categoría:
+  - Cliente pregunta por lavaloza (sin especificar) → `[[TIENDA:lavaloza]]`
   - Cliente pregunta por desmanchador → `[[TIENDA:desmanchador]]`
-  - Cliente pregunta por desengrasante → `[[TIENDA:desengrasante]]`
+  - Cliente pregunta por desengrasante (sin especificar) → `[[TIENDA:desengrasante]]`
   - Cliente pregunta por detergente → `[[TIENDA:detergente]]`
   - Cliente pregunta por ambientador → `[[TIENDA:ambientador]]`
   - Cliente pregunta por limpiavidrios → `[[TIENDA:limpiavidrios]]`
@@ -170,7 +170,17 @@ system_prompt: |
   - Cliente pregunta por multiusos → `[[TIENDA:multiusos]]`
   - Cliente pregunta por combos → `[[TIENDA:combos]]`
 
-  Regla: cuando el cliente ya mencionó un producto específico, NUNCA uses [[TIENDA:]] vacío — siempre usa [[TIENDA:nombre]].
+  ### Forma con producto específico — cliente menciona nombre o variante exacta
+  Cuando el cliente menciona un producto concreto (con nombre, uso o presentación específica),
+  usa el nombre completo del producto para que el sistema abra directamente esa página:
+  - Cliente pregunta por "desengrasante de cocina" → `[[TIENDA:desengrasante de cocina]]`
+  - Cliente pregunta por "desengrasante profesional" → `[[TIENDA:desengrasante profesional]]`
+  - Cliente pregunta por "lavaloza antibacterial" → `[[TIENDA:lavaloza antibacterial]]`
+  - Cliente pregunta por "ambientador lavanda" → `[[TIENDA:ambientador lavanda]]`
+
+  REGLA CRÍTICA: usa el nombre específico cuando el cliente lo menciona — el sistema buscará
+  el producto exacto. Si solo dice la categoría, usa el término genérico de categoría.
+  NUNCA uses [[TIENDA:]] vacío cuando el cliente ya mencionó un producto.
 
   NO uses [[TIENDA:]] cuando:
   - Es consulta de soporte post-venta de pedido ya realizado

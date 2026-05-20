@@ -589,23 +589,35 @@ def _construir_url_tienda(query: str) -> str:
     """
     Convierte el término del marcador [[TIENDA:término]] en la URL más
     específica posible en equoradistribuciones.com:
-    1. Intenta URL de producto concreto (usando handle de Shopify)
-    2. Si no hay handle, usa la colección de la categoría
-    3. Fallback: /catalogo
+
+    1. Si el término coincide exactamente con una clave de _COLECCION_MAP
+       (ej. "desengrasante", "lavaloza", "combos") → abre la colección.
+       Esto evita que el buscador de productos escoja mal entre variantes
+       cuando Andrea usa un término genérico de categoría.
+    2. Si el término es específico (ej. "desengrasante profesional" o
+       "lavaloza antibacterial 500ml") → intenta URL de producto concreto.
+    3. Si no hay handle, busca coincidencia parcial en _COLECCION_MAP.
+    4. Fallback: /catalogo
     """
     if not query:
         return f"{EQUORA_BASE}/catalogo"
-    # 1. Producto específico (handle desde catálogo Shopify)
+
+    q = query.lower().strip()
+
+    # 1. Término genérico de categoría → colección directa (sin pasar por Jaccard)
+    if q in _COLECCION_MAP:
+        return _COLECCION_MAP[q]
+
+    # 2. Término específico → buscar producto por handle (Jaccard)
     url_producto = obtener_url_producto(query)
     if url_producto:
         return url_producto
-    # 2. Colección por categoría
-    q = query.lower().strip()
-    if q in _COLECCION_MAP:
-        return _COLECCION_MAP[q]
+
+    # 3. Coincidencia parcial de categoría
     for clave, url in _COLECCION_MAP.items():
         if clave in q or q in clave:
             return url
+
     return f"{EQUORA_BASE}/catalogo"
 
 
