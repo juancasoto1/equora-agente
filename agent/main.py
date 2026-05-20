@@ -31,12 +31,9 @@ from agent.tools import (
     crear_checkout_shopify,
     obtener_catalogo_shopify,
     obtener_catalogo_json,
-    obtener_logo_url,
-    obtener_logo_shopify,
     obtener_secciones_catalogo,
     obtener_producto_por_retailer_id,
 )
-from agent.tienda import obtener_tienda_html
 
 load_dotenv()
 
@@ -79,7 +76,7 @@ ABANDONO_COOLDOWN_SEG = 3600  # No re-notificar el mismo carrito por 1 hora
 MENSAJE_ABANDONO = (
     "Vi que dejaste tu pedido casi listo 😊\n"
     "¿Quieres que te ayude a finalizarlo?\n\n"
-    "Recuerda: pago contraentrega y envío gratis desde $60.000 🚚"
+    "Recuerda: pago contraentrega y envío gratis desde $80.000 🚚"
 )
 
 # ── Recuperación de checkout abandonado (llegó al formulario Shopify pero no pagó) ──
@@ -95,7 +92,7 @@ MENSAJE_CHECKOUT_ABANDONO = (
 )
 
 # ── Cross-selling desde mini-tienda ─────────────────────────────────────────
-ENVIO_GRATIS = 60000
+ENVIO_GRATIS = 80000
 COSTO_ENVIO = 7000
 # In-memory: phone → timestamp del último cross-sell enviado (cooldown 20 min)
 _crosssell_cooldown: dict[str, float] = {}
@@ -232,7 +229,6 @@ async def _procesar_crosssell_carrito():
 async def _procesar_abandono_carrito():
     """Detecta carritos activos que llevan entre ABANDONO_MIN y ABANDONO_MAX min
     sin finalizar y envía un mensaje de recuperación con botón CTA a la tienda."""
-    import urllib.parse
     ahora = time.time()
     clientes = await clientes_con_carrito_abandonado(
         min_inactivo=ABANDONO_MIN_INACTIVO,
@@ -244,13 +240,12 @@ async def _procesar_abandono_carrito():
         if ahora - ultimo < ABANDONO_COOLDOWN_SEG:
             continue
         try:
-            # URL de la tienda con el teléfono para que el carrito se restaure automáticamente
-            tienda_url = f"{APP_URL}/tienda?tel={urllib.parse.quote(telefono)}"
+            tienda_url = f"{EQUORA_BASE}/catalogo"
             enviado = False
             if hasattr(proveedor, "enviar_cta_url"):
                 try:
                     enviado = await proveedor.enviar_cta_url(
-                        telefono, MENSAJE_ABANDONO, "Ver mi carrito 🛒", tienda_url
+                        telefono, MENSAJE_ABANDONO, "Ver productos 🛒", tienda_url
                     )
                 except Exception:
                     pass
@@ -374,6 +369,61 @@ def extraer_marcador_lista(respuesta: str) -> tuple[str, dict | None]:
         datos = None
     texto_limpio = re.sub(r'\s*\[\[LISTA:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
     return texto_limpio, datos
+
+
+EQUORA_BASE = "https://equoradistribuciones.com"
+
+# Mapeo de términos que Andrea escribe en [[TIENDA:término]] → URL de la colección
+_COLECCION_MAP: dict[str, str] = {
+    # Cocina
+    "lavaloza": f"{EQUORA_BASE}/coleccion/cocina",
+    "cocina": f"{EQUORA_BASE}/coleccion/cocina",
+    # Lavandería
+    "detergente": f"{EQUORA_BASE}/coleccion/lavanderia",
+    "desmanchador": f"{EQUORA_BASE}/coleccion/lavanderia",
+    "lavanderia": f"{EQUORA_BASE}/coleccion/lavanderia",
+    "suavizante": f"{EQUORA_BASE}/coleccion/lavanderia",
+    # Baños
+    "bano": f"{EQUORA_BASE}/coleccion/banos",
+    "banos": f"{EQUORA_BASE}/coleccion/banos",
+    "desinfectante": f"{EQUORA_BASE}/coleccion/banos",
+    # Hogar
+    "multiusos": f"{EQUORA_BASE}/coleccion/hogar",
+    "limpiavidrios": f"{EQUORA_BASE}/coleccion/hogar",
+    "ambientador": f"{EQUORA_BASE}/coleccion/hogar",
+    "hogar": f"{EQUORA_BASE}/coleccion/hogar",
+    # Talleres / industrial
+    "desengrasante": f"{EQUORA_BASE}/coleccion/talleres-e-industrial",
+    "taller": f"{EQUORA_BASE}/coleccion/talleres-e-industrial",
+    "industrial": f"{EQUORA_BASE}/coleccion/talleres-e-industrial",
+    # Higiene personal
+    "shampoo": f"{EQUORA_BASE}/coleccion/higiene-personal",
+    "higiene": f"{EQUORA_BASE}/coleccion/higiene-personal",
+    # Combos
+    "combo": f"{EQUORA_BASE}/coleccion/combos",
+    "combos": f"{EQUORA_BASE}/coleccion/combos",
+    # Más vendidos
+    "mas-vendidos": f"{EQUORA_BASE}/coleccion/mas-vendidos",
+    "populares": f"{EQUORA_BASE}/coleccion/mas-vendidos",
+}
+
+
+def _construir_url_tienda(query: str) -> str:
+    """
+    Convierte el término del marcador [[TIENDA:término]] en la URL
+    de la colección correspondiente en equoradistribuciones.com.
+    Si no hay mapeo exacto, usa /catalogo como fallback.
+    """
+    if not query:
+        return f"{EQUORA_BASE}/catalogo"
+    q = query.lower().strip()
+    # Buscar coincidencia exacta primero, luego coincidencia parcial
+    if q in _COLECCION_MAP:
+        return _COLECCION_MAP[q]
+    for clave, url in _COLECCION_MAP.items():
+        if clave in q or q in clave:
+            return url
+    return f"{EQUORA_BASE}/catalogo"
 
 
 def extraer_marcador_tienda(respuesta: str) -> tuple[str, bool, str]:
@@ -629,15 +679,12 @@ async def webhook_handler(request: Request):
                         await proveedor.enviar_mensaje(msg.telefono, fallback_text[:4000])
                         logger.info(f"Fallback texto de lista enviado a {msg.telefono}")
 
-            # Enviar link de la mini-tienda si Andrea lo solicitó
+            # Enviar link de la tienda web si Andrea lo solicitó
             if abrir_tienda:
-                # Si Andrea especificó un producto, lo pasamos como ?q= para pre-filtrar
-                import urllib.parse
-                q_param = f"&q={urllib.parse.quote(tienda_query)}" if tienda_query else ""
-                tienda_url = f"{APP_URL}/tienda?tel={msg.telefono}{q_param}"
+                tienda_url = _construir_url_tienda(tienda_query)
                 if tienda_query:
                     texto_tienda = (
-                        f"🛒 *Aquí puedes ver el producto, elegir tu presentación y hacer tu pedido fácilmente:*"
+                        "🛒 *Aquí puedes ver el producto, elegir tu presentación y hacer tu pedido fácilmente:*"
                     )
                     boton_label = "Ver producto 🌿"
                 else:
@@ -658,7 +705,7 @@ async def webhook_handler(request: Request):
                     await proveedor.enviar_mensaje(
                         msg.telefono, f"{texto_tienda}\n\n👉 {tienda_url}"
                     )
-                logger.info(f"Link mini-tienda enviado a {msg.telefono}: {tienda_url}")
+                logger.info(f"Link tienda enviado a {msg.telefono}: {tienda_url}")
 
             # Enviar link de checkout de Shopify si se generó
             if checkout_url:
@@ -706,155 +753,58 @@ async def webhook_handler(request: Request):
 
 
 # ═══════════════════════════════════════════════════════════════
-#  MINI-TIENDA WEB
+#  INTEGRACIÓN LOVABLE — recibe estado del carrito desde equoradistribuciones.com
 # ═══════════════════════════════════════════════════════════════
 
-@app.get("/tienda", response_class=HTMLResponse)
-async def tienda_html(request: Request):
-    """Sirve la mini-tienda web móvil. El catálogo lo carga el JS via /tienda/productos."""
-    # Pre-carga el catálogo en background para que /tienda/productos responda rápido
-    asyncio.create_task(obtener_catalogo_shopify())
-    logo = obtener_logo_url()
-    return HTMLResponse(content=obtener_tienda_html(logo))
-
-
-@app.get("/tienda/productos")
-async def tienda_productos():
-    """Retorna catálogo + logo en JSON para la mini-tienda web."""
-    await obtener_catalogo_shopify()        # Asegura que el catálogo esté cargado
-    logo = await obtener_logo_shopify()     # Carga logo si aún no está disponible
-    return JSONResponse(content={
-        "logo": logo,
-        "productos": obtener_catalogo_json(),
-    })
-
-
-@app.get("/tienda/carrito")
-async def tienda_carrito_get(tel: str = ""):
+@app.post("/shopify/cart-update")
+async def shopify_cart_update(request: Request):
     """
-    La mini-tienda consulta este endpoint al cargar para restaurar el carrito guardado.
-    Devuelve los ítems cruzados con el catálogo actual (precio, imagen, stock vigentes).
-    """
-    if not tel:
-        return JSONResponse(content={"items": []})
-    try:
-        items_bd = await obtener_carrito_activo(tel)
-        if not items_bd:
-            return JSONResponse(content={"items": []})
-        # Cruzar con catálogo actual para traer imagen y stock vigentes
-        catalogo = obtener_catalogo_json()
-        # Índice rápido: (producto_lower, presentacion_lower) → item de catálogo
-        idx: dict[tuple[str, str], dict] = {}
-        for c in catalogo:
-            k = (c.get("producto", "").lower(), c.get("presentacion", "").lower())
-            idx[k] = c
-        restaurados = []
-        for item in items_bd:
-            k = (item.get("producto", "").lower(), item.get("presentacion", "").lower())
-            cat = idx.get(k)
-            if not cat:
-                continue  # producto ya no está en catálogo → omitir
-            restaurados.append({
-                "producto":     cat["producto"],
-                "presentacion": cat["presentacion"],
-                "precio":       cat["precio"],
-                "stock":        cat.get("stock"),
-                "imagen":       cat.get("imagen", ""),
-                "categoria":    cat.get("categoria", ""),
-                "qty":          item.get("cantidad", 1),
-            })
-        return JSONResponse(content={"items": restaurados})
-    except Exception as e:
-        logger.error(f"Error en GET /tienda/carrito: {e}")
-        return JSONResponse(content={"items": []})
-
-
-@app.post("/tienda/carrito")
-async def tienda_carrito(request: Request):
-    """
-    La mini-tienda reporta el estado del carrito cada vez que cambia (debounced 8 s).
-    Solo guarda en BD — el cross-sell y la recuperación de abandono los gestiona
-    el loop de seguimientos del servidor, no el cliente.
+    La página de Lovable (equoradistribuciones.com) llama este endpoint
+    cada vez que el carrito cambia (debounced 8 s en el cliente).
+    Guarda el estado en BD para que el loop de seguimientos pueda:
+      - Detectar carritos abandonados y enviar recuperación por WhatsApp
+      - Disparar cross-sell si el total está bajo $80.000
+    Payload esperado:
+      { "telefono": "573001234567", "productos": [ { "producto": "...",
+        "presentacion": "...", "cantidad": N, "precio_unitario": X } ] }
     """
     try:
         body = await request.json()
         telefono = (body.get("telefono") or "").strip()
-        productos = body.get("productos", [])
+        productos = body.get("productos") or []
 
         if not telefono:
+            # Sin teléfono no podemos asociar a una conversación — ignoramos silenciosamente
             return JSONResponse(content={"ok": True})
 
         if productos:
-            items_para_bd = [
-                {
-                    "producto": p.get("producto", ""),
-                    "presentacion": p.get("presentacion", ""),
-                    "cantidad": p.get("qty", 1),
-                    "precio_unitario": p.get("precio", 0),
-                    "subtotal": p.get("precio", 0) * p.get("qty", 1),
-                }
-                for p in productos
-            ]
+            items_para_bd = []
+            for p in productos:
+                precio = int(float(p.get("precio_unitario") or p.get("precio") or 0))
+                qty = int(p.get("cantidad") or p.get("qty") or 1)
+                items_para_bd.append({
+                    "producto":      p.get("producto", ""),
+                    "presentacion":  p.get("presentacion", ""),
+                    "cantidad":      qty,
+                    "precio_unitario": precio,
+                    "subtotal":      precio * qty,
+                })
             await guardar_carrito_activo(telefono, items_para_bd)
-            logger.debug(f"Carrito guardado para {telefono}: {len(productos)} productos")
-        else:
-            await limpiar_carrito_activo(telefono)
-
-        return JSONResponse(content={"ok": True})
-    except Exception as e:
-        logger.error(f"Error en /tienda/carrito: {e}")
-        return JSONResponse(content={"ok": True})
-
-
-@app.post("/tienda/confirmar")
-async def tienda_confirmar(request: Request):
-    """Recibe el carrito del cliente desde la tienda web y crea el checkout en Shopify."""
-    try:
-        body = await request.json()
-        telefono = (body.get("telefono") or "").strip()
-        productos = body.get("productos", [])
-
-        if not productos:
-            return JSONResponse(status_code=400, content={"error": "Carrito vacío"})
-
-        datos_pedido = {"productos": productos}
-        items_log = [p.get('producto', '?') + " / " + p.get('presentacion', '?') for p in productos]
-        logger.info(f"[tienda/confirmar] Pedido recibido — tel={telefono or 'anonimo'} productos={items_log}")
-        checkout_url = await crear_checkout_shopify(telefono or "web-tienda", datos_pedido)
-
-        if checkout_url:
-            # Persistir como pedido pendiente si hay teléfono
-            if telefono:
-                await guardar_pedido_pendiente(telefono, productos)
-                await guardar_checkout_url(telefono, checkout_url)  # para recuperación si no completa
-                await limpiar_carrito_activo(telefono)
-                # Silenciar seguimientos automáticos: el cliente acaba de pedir,
-                # no tiene sentido mandarle follow-up de inactividad
-                try:
-                    await marcar_followup_enviado(telefono)
-                    await marcar_cierre_enviado(telefono)
-                except Exception:
-                    pass
-                # Notificar al cliente por WhatsApp
-                texto_notif = (
-                    "Perfecto ✅ Ahora confirma tus datos de envío en el formulario.\n"
-                    "El pago es contraentrega, no pagas online."
-                )
-                try:
-                    await proveedor.enviar_mensaje(telefono, texto_notif)
-                except Exception as e:
-                    logger.error(f"No pude notificar al cliente {telefono}: {e}")
-            logger.info(f"Checkout tienda web creado — tel={telefono or 'anónimo'}")
-            return JSONResponse(content={"checkout_url": checkout_url})
-        else:
-            logger.error(f"[tienda/confirmar] Checkout fallido — tel={telefono or 'anonimo'} productos={items_log}")
-            return JSONResponse(
-                status_code=500,
-                content={"error": "No pudimos procesar el pedido. Por favor contáctanos por WhatsApp para completarlo."}
+            logger.debug(
+                f"[cart-update] Carrito guardado para {telefono}: "
+                f"{len(productos)} productos"
             )
+        else:
+            # Carrito vacío → limpiar
+            await limpiar_carrito_activo(telefono)
+            logger.debug(f"[cart-update] Carrito limpiado para {telefono}")
+
+        return JSONResponse(content={"ok": True})
     except Exception as e:
-        logger.error(f"Error en /tienda/confirmar: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        logger.error(f"Error en /shopify/cart-update: {e}")
+        return JSONResponse(content={"ok": True})  # siempre 200 para no bloquear al cliente
+
+
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1138,6 +1088,43 @@ async def shopify_webhook(request: Request):
             logger.info(f"Cliente {telefono} guardado/actualizado desde Shopify")
         except Exception as e:
             logger.error(f"Error guardando cliente desde webhook: {e}")
+
+    # ── checkouts/create: cliente abrió el formulario de Shopify ──────────────
+    # Guardamos la checkout_url para poder reenviarla si no termina el proceso.
+    # La URL del checkout viene en el campo "checkout_url" o se construye desde el token.
+    if topic == "checkouts/create":
+        checkout_url = (
+            payload.get("checkout_url")
+            or payload.get("web_url")
+            or ""
+        )
+        if not checkout_url:
+            # Fallback: construir desde el token si viene
+            token = payload.get("token") or ""
+            if token:
+                checkout_url = f"https://equoradistribuciones.com/checkouts/{token}"
+        if telefono and checkout_url:
+            try:
+                # Guardar carrito activo como pedido pendiente para abandono detection
+                line_items = payload.get("line_items") or []
+                if line_items:
+                    productos = [
+                        {
+                            "producto": item.get("title", ""),
+                            "presentacion": item.get("variant_title") or item.get("title", ""),
+                            "cantidad": int(item.get("quantity", 1)),
+                            "precio_unitario": int(float(item.get("price", 0))),
+                            "subtotal": int(float(item.get("price", 0))) * int(item.get("quantity", 1)),
+                        }
+                        for item in line_items
+                    ]
+                    await guardar_pedido_pendiente(telefono, productos)
+                await guardar_checkout_url(telefono, checkout_url)
+                await limpiar_carrito_activo(telefono)
+                logger.info(f"Checkout creado para {telefono}: {checkout_url}")
+            except Exception as e:
+                logger.error(f"Error guardando checkout create para {telefono}: {e}")
+        return {"status": "ok"}
 
     # Cliente completó el checkout → ya no hay carrito pendiente
     if topic in ("orders/create", "orders/paid"):
