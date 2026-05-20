@@ -304,18 +304,25 @@ async def _procesar_carrito_unificado():
 
             elif total < umbral_gratis:
                 # ── Estado 4: sobre el mínimo, bajo envío gratis ──────────
+                # Mensaje principal: ya puedes confirmar (paga envío)
+                # Incentivo secundario: agrega un poco más y el envío es gratis
                 falta = umbral_gratis - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
+                costo_envio_fmt = f"{obtener_costo_envio():,}".replace(",", ".")
                 sugeridos = _sugerir_productos(nombres_en_carrito)
                 lineas = "\n".join(f"✅ {s}" for s in sugeridos)
                 msg = (
-                    f"Tienes ${total_fmt} en tu carrito 🛒\n\n"
-                    f"Si agregas *${falta_fmt}* más el envío es *gratis* 🚚🎉\n"
-                    f"O si prefieres, puedes confirmar tu pedido ahora "
-                    f"(envío ${f'{obtener_costo_envio():,}'.replace(',', '.')})."
+                    f"🛒 Tienes *${total_fmt}* en tu carrito — ¡ya puedes confirmar tu pedido!\n\n"
+                    f"Pago contraentrega, envío de *${costo_envio_fmt}* 🚚\n"
+                    f"Escríbeme *\"confirmar\"* y te ayudo con los datos de entrega."
                 )
                 if lineas:
-                    msg += f"\n\nProductos que complementan tu pedido:\n{lineas}"
+                    msg += (
+                        f"\n\n💡 Tip: agrega solo *${falta_fmt}* más y el envío es *gratis* 🎉\n"
+                        + lineas
+                    )
+                else:
+                    msg += f"\n\n💡 Tip: agrega *${falta_fmt}* más y el envío es *gratis* 🎉"
                 enviado = False
                 if hasattr(proveedor, "enviar_cta_url"):
                     try:
