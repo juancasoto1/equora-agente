@@ -59,11 +59,34 @@ APP_URL = os.getenv("APP_URL") or (f"https://{_railway_domain}" if _railway_doma
 # Monto mínimo de pedido configurado en la tienda Lovable
 PEDIDO_MINIMO = int(os.getenv("PEDIDO_MINIMO", 50000))
 
-# Configuración de seguimientos automáticos (env vars opcionales)
-FOLLOWUP_MIN = int(os.getenv("FOLLOWUP_MIN", 2))   # min sin respuesta del cliente
-CIERRE_MIN = int(os.getenv("CIERRE_MIN", 5))       # min después del follow-up
-FOLLOWUP_MAX_HORAS = int(os.getenv("FOLLOWUP_MAX_HORAS", 12))
-CHECK_INTERVAL_SEG = int(os.getenv("CHECK_INTERVAL_SEG", 30))
+# ── Tiempos de seguimiento — todos configurables desde Railway ───────────────
+# Estado 6: follow-up genérico (sin carrito, sin checkout)
+FOLLOWUP_MIN         = int(os.getenv("FOLLOWUP_MIN", 10))         # min inactivo → primer mensaje
+CIERRE_MIN           = int(os.getenv("CIERRE_MIN", 5))            # min tras follow-up → cierre
+FOLLOWUP_MAX_HORAS   = int(os.getenv("FOLLOWUP_MAX_HORAS", 12))   # ventana máxima
+
+# Estados 3-5: carrito activo (pedido mínimo / cross-sell / listo para confirmar)
+CARRITO_MIN_MIN      = int(os.getenv("CARRITO_MIN_MIN", 15))      # min de espera antes del primer aviso
+CARRITO_MAX_MIN      = int(os.getenv("CARRITO_MAX_MIN", 120))     # min máximo de ventana
+CARRITO_COOLDOWN_MIN = int(os.getenv("CARRITO_COOLDOWN_MIN", 120))# min entre avisos al mismo cliente
+CARRITO_UNIF_COOLDOWN_SEG = CARRITO_COOLDOWN_MIN * 60
+
+# Estado 2: checkout abandonado (cliente llegó a Shopify pero no terminó)
+CHECKOUT_ABANDONO_MIN      = int(os.getenv("CHECKOUT_ABANDONO_MIN", 20))   # min antes del aviso
+CHECKOUT_ABANDONO_MAX      = int(os.getenv("CHECKOUT_ABANDONO_MAX", 120))  # ventana máxima
+CHECKOUT_COOLDOWN_MIN      = int(os.getenv("CHECKOUT_COOLDOWN_MIN", 120))  # min entre avisos
+CHECKOUT_ABANDONO_COOLDOWN_SEG = CHECKOUT_COOLDOWN_MIN * 60
+
+# Loop general
+CHECK_INTERVAL_SEG   = int(os.getenv("CHECK_INTERVAL_SEG", 30))   # segundos entre cada ciclo del loop
+
+# Legacy (no usados activamente, se conservan por compatibilidad)
+ABANDONO_MIN_INACTIVO = CARRITO_MIN_MIN
+ABANDONO_MAX_INACTIVO = CARRITO_MAX_MIN
+_abandono_notif: dict[str, float] = {}
+ABANDONO_COOLDOWN_SEG = CARRITO_UNIF_COOLDOWN_SEG
+_carrito_unif_cooldown: dict[str, float] = {}
+_checkout_abandono_notif: dict[str, float] = {}
 
 MENSAJE_FOLLOWUP = (
     "Hola de nuevo 😊 Veo que andas un poco ocupado/a. "
@@ -75,30 +98,6 @@ MENSAJE_CIERRE = (
     "Te dejo descansar 🤗 Cuando quieras retomar, escríbeme y "
     "seguimos donde nos quedamos. ¡Que tengas un excelente día! 🌿"
 )
-
-# ── Seguimiento unificado de carrito (estados 3, 4, 5) ──────────────────────
-# Ventana: carrito con 15-120 min de antigüedad → ver _procesar_carrito_unificado
-ABANDONO_MIN_INACTIVO = int(os.getenv("ABANDONO_MIN", 10))   # legacy (solo UNUSED)
-ABANDONO_MAX_INACTIVO = int(os.getenv("ABANDONO_MAX", 25))   # legacy (solo UNUSED)
-_abandono_notif: dict[str, float] = {}
-ABANDONO_COOLDOWN_SEG = 3600
-_carrito_unif_cooldown: dict[str, float] = {}
-CARRITO_UNIF_COOLDOWN_SEG = 7200  # 2 horas entre mensajes de seguimiento de carrito
-
-def _mensaje_abandono() -> str:
-    gratis = obtener_umbral_envio_gratis()
-    gratis_fmt = f"{gratis:,}".replace(",", ".")
-    return (
-        "Vi que dejaste tu pedido casi listo 😊\n"
-        "¿Quieres que te ayude a finalizarlo?\n\n"
-        f"Recuerda: pago contraentrega y envío gratis desde ${gratis_fmt} 🚚"
-    )
-
-# ── Recuperación de checkout abandonado (llegó al formulario Shopify pero no pagó) ──
-CHECKOUT_ABANDONO_MIN = int(os.getenv("CHECKOUT_ABANDONO_MIN", 20))   # min desde que creó checkout
-CHECKOUT_ABANDONO_MAX = int(os.getenv("CHECKOUT_ABANDONO_MAX", 120))  # máximo 2 horas
-_checkout_abandono_notif: dict[str, float] = {}
-CHECKOUT_ABANDONO_COOLDOWN_SEG = 7200  # No re-notificar por 2 horas
 
 MENSAJE_CHECKOUT_ABANDONO = (
     "Hola 👋 Vimos que iniciaste tu pedido pero no terminaste el proceso.\n\n"
@@ -138,8 +137,11 @@ async def lifespan(app: FastAPI):
     logger.info(f"Servidor AgentKit corriendo en puerto {PORT}")
     logger.info(f"Proveedor de WhatsApp: {proveedor.__class__.__name__}")
     logger.info(
-        f"Seguimientos: follow-up a los {FOLLOWUP_MIN} min, "
-        f"cierre a los {CIERRE_MIN} min después, ventana max {FOLLOWUP_MAX_HORAS} h"
+        f"Tiempos de seguimiento — "
+        f"follow-up: {FOLLOWUP_MIN} min | cierre: {CIERRE_MIN} min | "
+        f"carrito: {CARRITO_MIN_MIN}-{CARRITO_MAX_MIN} min (cooldown {CARRITO_COOLDOWN_MIN} min) | "
+        f"checkout: {CHECKOUT_ABANDONO_MIN}-{CHECKOUT_ABANDONO_MAX} min (cooldown {CHECKOUT_COOLDOWN_MIN} min) | "
+        f"loop cada: {CHECK_INTERVAL_SEG} seg"
     )
     seguimiento_task = asyncio.create_task(_loop_seguimientos())
     try:
@@ -214,7 +216,7 @@ async def _procesar_carrito_unificado():
     minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
     gratis_fmt = f"{umbral_gratis:,}".replace(",", ".")
 
-    clientes = await clientes_con_carrito_abandonado(min_inactivo=15, max_inactivo=120)
+    clientes = await clientes_con_carrito_abandonado(min_inactivo=CARRITO_MIN_MIN, max_inactivo=CARRITO_MAX_MIN)
     for telefono, items in clientes:
         # Cooldown: no re-notificar el mismo carrito en 2 horas
         if ahora - _carrito_unif_cooldown.get(telefono, 0) < CARRITO_UNIF_COOLDOWN_SEG:
