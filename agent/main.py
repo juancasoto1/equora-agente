@@ -89,6 +89,7 @@ ABANDONO_MAX_INACTIVO = CARRITO_MAX_MIN
 _abandono_notif: dict[str, float] = {}
 ABANDONO_COOLDOWN_SEG = CARRITO_UNIF_COOLDOWN_SEG
 _carrito_unif_cooldown: dict[str, float] = {}
+_carrito_ultimo_estado: dict[str, int] = {}   # phone → último estado enviado (3, 4 ó 5)
 _checkout_abandono_notif: dict[str, float] = {}
 
 MENSAJE_FOLLOWUP = (
@@ -232,9 +233,6 @@ async def _procesar_carrito_unificado():
     todos = set(map_min) | set(map_cross)
 
     for telefono in todos:
-        # Cooldown: no re-notificar el mismo carrito en 2 horas
-        if ahora - _carrito_unif_cooldown.get(telefono, 0) < CARRITO_UNIF_COOLDOWN_SEG:
-            continue
         # No molestar si el cliente cerró la conversación explícitamente
         if await verificar_cierre_enviado(telefono):
             continue
@@ -258,6 +256,23 @@ async def _procesar_carrito_unificado():
             continue  # Aún no es tiempo para el aviso de pedido mínimo
         if total >= PEDIDO_MINIMO and not en_cross:
             continue  # Aún no es tiempo para el cross-sell
+
+        # Calcular estado actual para detectar cambios
+        estado_actual = 3 if total < PEDIDO_MINIMO else (4 if total < umbral_gratis else 5)
+
+        # Si el estado cambió (ej. cliente agregó productos: 3→4), resetear cooldown
+        # para notificar de inmediato el nuevo estado
+        if _carrito_ultimo_estado.get(telefono) != estado_actual:
+            _carrito_unif_cooldown[telefono] = 0
+            logger.info(
+                f"Carrito {telefono}: estado cambió "
+                f"{_carrito_ultimo_estado.get(telefono, '—')} → {estado_actual} "
+                f"(${total:,}) — cooldown reseteado"
+            )
+
+        # Cooldown: no re-notificar el mismo estado en CARRITO_COOLDOWN_MIN minutos
+        if ahora - _carrito_unif_cooldown.get(telefono, 0) < CARRITO_UNIF_COOLDOWN_SEG:
+            continue
 
         nombres_en_carrito = {p.get("producto", "").lower() for p in items}
         total_fmt = f"{total:,}".replace(",", ".")
@@ -323,7 +338,8 @@ async def _procesar_carrito_unificado():
 
             await guardar_mensaje(telefono, "assistant", msg)
             _carrito_unif_cooldown[telefono] = ahora
-            logger.info(f"Seguimiento carrito estado {'3' if total < PEDIDO_MINIMO else '4' if total < umbral_gratis else '5'} → {telefono} (${total_fmt})")
+            _carrito_ultimo_estado[telefono] = estado_actual
+            logger.info(f"Seguimiento carrito estado {estado_actual} → {telefono} (${total_fmt})")
 
         except Exception as e:
             logger.error(f"Error en seguimiento carrito {telefono}: {e}")
