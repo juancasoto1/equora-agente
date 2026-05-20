@@ -10,6 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Cookie
 from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
@@ -398,6 +399,19 @@ app = FastAPI(
     title="AgentKit — Andrea (Equora Distribuciones)",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# CORS para que Lovable (equoradistribuciones.com) pueda llamar a /shopify/cart-update
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://equoradistribuciones.com",
+        "https://www.equoradistribuciones.com",
+        "https://equora-6.myshopify.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
