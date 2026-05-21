@@ -612,18 +612,23 @@ def obtener_url_producto(nombre: str) -> str | None:
         return f"{EQUORA_PRODUCT_BASE}/{handle}"
 
     # 2. Coincidencia parcial con scoring por palabras en común (Jaccard)
-    #    Evita que "desengrasante profesional" gane sobre "desengrasante de cocina"
-    #    solo por ser más largo cuando el cliente buscó "desengrasante de cocina"
+    #    Pre-filtro: al menos 1 palabra en común (tolera typos en títulos de Shopify,
+    #    ej: "pofesional" vs "profesional" — ambos comparten "desengrasante").
+    #    Luego el score de Jaccard elige al mejor candidato.
     palabras_busqueda = set(nombre_n.split())
     mejores: list[tuple[float, str]] = []       # (score, handle)
     mejores_sin_h: list[tuple[float, str]] = [] # (score, titulo_n) cuando handle vacío
     for titulo_n, h in _handle_map.items():
-        if nombre_n not in titulo_n and titulo_n not in nombre_n:
-            continue
         palabras_titulo = set(titulo_n.split())
+        # Pre-filtro tolerante: al menos 1 palabra en común
+        if not (palabras_busqueda & palabras_titulo):
+            continue
         interseccion = palabras_busqueda & palabras_titulo
         union = palabras_busqueda | palabras_titulo
         score = len(interseccion) / len(union) if union else 0
+        # Umbral mínimo: descartar coincidencias muy débiles (< 15%)
+        if score < 0.15:
+            continue
         if h:
             mejores.append((score, h))
         else:
@@ -632,17 +637,21 @@ def obtener_url_producto(nombre: str) -> str | None:
 
     if mejores:
         mejores.sort(reverse=True)
-        return f"{EQUORA_PRODUCT_BASE}/{mejores[0][1]}"
+        score_ganador, handle_ganador = mejores[0]
+        logger.info(
+            f"[handle-map] '{nombre}' → handle='{handle_ganador}' (score={score_ganador:.2f})"
+        )
+        return f"{EQUORA_PRODUCT_BASE}/{handle_ganador}"
 
     if mejores_sin_h:
         # Fallback: handle generado desde el título usando underscores (convención de Shopify)
         # ej. "desengrasante profesional biotu" → "desengrasante_profesional_biotu"
         mejores_sin_h.sort(reverse=True)
-        titulo_ganador = mejores_sin_h[0][1]
+        score_ganador, titulo_ganador = mejores_sin_h[0]
         handle_generado = titulo_ganador.replace(" ", "_")
         logger.warning(
-            f"[handle-map] '{nombre}' → handle null en API para '{titulo_ganador}'. "
-            f"Usando handle generado: '{handle_generado}'."
+            f"[handle-map] '{nombre}' → handle null en API para '{titulo_ganador}' "
+            f"(score={score_ganador:.2f}). Usando handle generado: '{handle_generado}'."
         )
         return f"{EQUORA_PRODUCT_BASE}/{handle_generado}"
 
