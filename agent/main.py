@@ -625,12 +625,18 @@ def _construir_url_tienda(query: str) -> str:
     # 2. Término específico → buscar producto por handle (Jaccard)
     url_producto = obtener_url_producto(query)
     if url_producto:
+        logger.info(f"[tienda-url] '{query}' → producto: {url_producto}")
         return url_producto
+    else:
+        logger.warning(f"[tienda-url] '{query}' → Jaccard no encontró handle, usando colección")
 
-    # 3. Coincidencia parcial de categoría
-    for clave, url in _COLECCION_MAP.items():
-        if clave in q or q in clave:
-            return url
+    # 3. Coincidencia parcial de categoría — solo si el query es una sola palabra
+    #    (evita que "desengrasante profesional" caiga a la colección por "desengrasante")
+    palabras_query = q.split()
+    if len(palabras_query) == 1:
+        for clave, url in _COLECCION_MAP.items():
+            if clave in q or q in clave:
+                return url
 
     return f"{EQUORA_BASE}/catalogo"
 
@@ -1007,7 +1013,13 @@ async def shopify_cart_update(request: Request):
         productos = body.get("productos") or []
 
         if not telefono:
-            # Sin teléfono no podemos asociar a una conversación — ignoramos silenciosamente
+            # Sin teléfono no podemos asociar a una conversación
+            # ADVERTENCIA: la página Lovable debe incluir siempre el teléfono en el payload
+            logger.warning(
+                f"[cart-update] SIN teléfono — payload ignorado. "
+                f"productos={len(body.get('productos') or [])}. "
+                f"Revisa que Lovable incluya 'telefono' en cada cart-update."
+            )
             return JSONResponse(content={"ok": True})
 
         if productos:
