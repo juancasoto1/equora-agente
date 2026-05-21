@@ -615,10 +615,12 @@ def obtener_url_producto(nombre: str) -> str | None:
     #    solo por ser más largo cuando el cliente buscó "desengrasante de cocina"
     palabras_busqueda = set(nombre_n.split())
     mejores: list[tuple[float, str]] = []  # (score, handle)
+    sin_handle: list[str] = []             # productos que coinciden pero no tienen handle
     for titulo_n, h in _handle_map.items():
-        if not h:
-            continue
         if nombre_n not in titulo_n and titulo_n not in nombre_n:
+            continue
+        if not h:
+            sin_handle.append(titulo_n)
             continue
         palabras_titulo = set(titulo_n.split())
         interseccion = palabras_busqueda & palabras_titulo
@@ -630,6 +632,18 @@ def obtener_url_producto(nombre: str) -> str | None:
         mejores.sort(reverse=True)
         return f"{EQUORA_PRODUCT_BASE}/{mejores[0][1]}"
 
+    if sin_handle:
+        logger.warning(
+            f"[handle-map] '{nombre}' coincide con {sin_handle} pero esos productos "
+            f"no tienen handle en Shopify — configura el handle en el admin de Shopify."
+        )
+    else:
+        # Ningún candidato — mostrar productos disponibles con esa palabra para debug
+        candidatos = [k for k in _handle_map if any(p in k for p in nombre_n.split())]
+        logger.warning(
+            f"[handle-map] '{nombre}' (norm: '{nombre_n}') sin coincidencia. "
+            f"Candidatos parciales en mapa: {candidatos[:5]}"
+        )
     return None
 
 
