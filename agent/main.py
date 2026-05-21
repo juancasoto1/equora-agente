@@ -260,8 +260,10 @@ async def _procesar_carrito_unificado():
         # Estado 3 (< mínimo): solo si pasó CARRITO_MIN_MIN
         # Estados 4-5 (≥ mínimo): solo si pasó CROSSSELL_MIN_MIN
         if total < PEDIDO_MINIMO and not en_min:
+            logger.info(f"Carrito {telefono}: ${total:,} < mínimo, aún no han pasado {CARRITO_MIN_MIN} min — esperando")
             continue  # Aún no es tiempo para el aviso de pedido mínimo
         if total >= PEDIDO_MINIMO and not en_cross:
+            logger.info(f"Carrito {telefono}: ${total:,} ≥ mínimo, aún no han pasado {CROSSSELL_MIN_MIN} min — esperando")
             continue  # Aún no es tiempo para el cross-sell
 
         # Calcular estado actual para detectar cambios
@@ -278,7 +280,12 @@ async def _procesar_carrito_unificado():
             )
 
         # Cooldown: no re-notificar el mismo estado en CARRITO_COOLDOWN_MIN minutos
+        elapsed_min = (ahora - _carrito_unif_cooldown.get(telefono, 0)) / 60
         if ahora - _carrito_unif_cooldown.get(telefono, 0) < CARRITO_UNIF_COOLDOWN_SEG:
+            logger.info(
+                f"Carrito {telefono}: estado {estado_actual} (${total:,}) — "
+                f"cooldown activo ({elapsed_min:.1f}/{CARRITO_COOLDOWN_MIN} min) — saltando"
+            )
             continue
 
         nombres_en_carrito = {p.get("producto", "").lower() for p in items}
@@ -998,25 +1005,28 @@ async def shopify_cart_update(request: Request):
 
         if productos:
             items_para_bd = []
+            total_recibido = 0
             for p in productos:
                 precio = int(float(p.get("precio_unitario") or p.get("precio") or 0))
                 qty = int(p.get("cantidad") or p.get("qty") or 1)
+                subtotal = precio * qty
+                total_recibido += subtotal
                 items_para_bd.append({
                     "producto":      p.get("producto", ""),
                     "presentacion":  p.get("presentacion", ""),
                     "cantidad":      qty,
                     "precio_unitario": precio,
-                    "subtotal":      precio * qty,
+                    "subtotal":      subtotal,
                 })
             await guardar_carrito_activo(telefono, items_para_bd)
-            logger.debug(
-                f"[cart-update] Carrito guardado para {telefono}: "
-                f"{len(productos)} productos"
+            logger.info(
+                f"[cart-update] {telefono}: {len(productos)} productos, "
+                f"total=${total_recibido:,}"
             )
         else:
             # Carrito vacío → limpiar
             await limpiar_carrito_activo(telefono)
-            logger.debug(f"[cart-update] Carrito limpiado para {telefono}")
+            logger.info(f"[cart-update] {telefono}: carrito vaciado")
 
         return JSONResponse(content={"ok": True})
     except Exception as e:
