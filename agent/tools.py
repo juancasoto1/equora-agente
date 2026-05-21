@@ -336,7 +336,8 @@ async def obtener_catalogo_shopify() -> str:
             imagen = imgs[0]["node"]["url"] if imgs else ""
 
             # Guardar handle para construir URLs de producto específico
-            _handle_map[_normalizar(node["title"])] = node.get("handle", "")
+            # node.get("handle", "") no es suficiente: si Shopify devuelve null, .get() retorna None
+            _handle_map[_normalizar(node["title"])] = node.get("handle") or ""
 
             # Categoría: siempre desde el mapa fijo de Equora (ignora colecciones Shopify)
             categoria = _categoria_producto(node["title"])
@@ -634,14 +635,14 @@ def obtener_url_producto(nombre: str) -> str | None:
         return f"{EQUORA_PRODUCT_BASE}/{mejores[0][1]}"
 
     if mejores_sin_h:
-        # Fallback: handle generado desde el título (ej. "lavaloza antibacterial biotu" → "lavaloza-antibacterial-biotu")
+        # Fallback: handle generado desde el título usando underscores (convención de Shopify)
+        # ej. "desengrasante profesional biotu" → "desengrasante_profesional_biotu"
         mejores_sin_h.sort(reverse=True)
         titulo_ganador = mejores_sin_h[0][1]
-        handle_generado = titulo_ganador.replace(" ", "-")
+        handle_generado = titulo_ganador.replace(" ", "_")
         logger.warning(
-            f"[handle-map] '{nombre}' → handle vacío en Shopify para '{titulo_ganador}'. "
-            f"Usando handle generado: '{handle_generado}'. "
-            f"Para URL exacta, configura el handle en el admin de Shopify."
+            f"[handle-map] '{nombre}' → handle null en API para '{titulo_ganador}'. "
+            f"Usando handle generado: '{handle_generado}'."
         )
         return f"{EQUORA_PRODUCT_BASE}/{handle_generado}"
 
