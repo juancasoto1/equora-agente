@@ -239,6 +239,13 @@ async def _procesar_carrito_unificado():
     # Todos los teléfonos candidatos (sin duplicados)
     todos = set(map_min) | set(map_cross)
 
+    if todos:
+        logger.info(
+            f"[carrito-loop] {len(todos)} candidatos — "
+            f"map_min={len(map_min)} ({CARRITO_MIN_MIN}-{CARRITO_MAX_MIN} min) | "
+            f"map_cross={len(map_cross)} ({CROSSSELL_MIN_MIN}-{CARRITO_MAX_MIN} min)"
+        )
+
     for telefono in todos:
         # No molestar si el cliente cerró la conversación explícitamente
         if await verificar_cierre_enviado(telefono):
