@@ -614,36 +614,43 @@ def obtener_url_producto(nombre: str) -> str | None:
     #    Evita que "desengrasante profesional" gane sobre "desengrasante de cocina"
     #    solo por ser más largo cuando el cliente buscó "desengrasante de cocina"
     palabras_busqueda = set(nombre_n.split())
-    mejores: list[tuple[float, str]] = []  # (score, handle)
-    sin_handle: list[str] = []             # productos que coinciden pero no tienen handle
+    mejores: list[tuple[float, str]] = []       # (score, handle)
+    mejores_sin_h: list[tuple[float, str]] = [] # (score, titulo_n) cuando handle vacío
     for titulo_n, h in _handle_map.items():
         if nombre_n not in titulo_n and titulo_n not in nombre_n:
-            continue
-        if not h:
-            sin_handle.append(titulo_n)
             continue
         palabras_titulo = set(titulo_n.split())
         interseccion = palabras_busqueda & palabras_titulo
         union = palabras_busqueda | palabras_titulo
         score = len(interseccion) / len(union) if union else 0
-        mejores.append((score, h))
+        if h:
+            mejores.append((score, h))
+        else:
+            # Handle vacío en Shopify — generamos uno desde el título normalizado
+            mejores_sin_h.append((score, titulo_n))
+
     if mejores:
-        # Mayor score = más palabras en común proporcionalmente
         mejores.sort(reverse=True)
         return f"{EQUORA_PRODUCT_BASE}/{mejores[0][1]}"
 
-    if sin_handle:
+    if mejores_sin_h:
+        # Fallback: handle generado desde el título (ej. "lavaloza antibacterial biotu" → "lavaloza-antibacterial-biotu")
+        mejores_sin_h.sort(reverse=True)
+        titulo_ganador = mejores_sin_h[0][1]
+        handle_generado = titulo_ganador.replace(" ", "-")
         logger.warning(
-            f"[handle-map] '{nombre}' coincide con {sin_handle} pero esos productos "
-            f"no tienen handle en Shopify — configura el handle en el admin de Shopify."
+            f"[handle-map] '{nombre}' → handle vacío en Shopify para '{titulo_ganador}'. "
+            f"Usando handle generado: '{handle_generado}'. "
+            f"Para URL exacta, configura el handle en el admin de Shopify."
         )
-    else:
-        # Ningún candidato — mostrar productos disponibles con esa palabra para debug
-        candidatos = [k for k in _handle_map if any(p in k for p in nombre_n.split())]
-        logger.warning(
-            f"[handle-map] '{nombre}' (norm: '{nombre_n}') sin coincidencia. "
-            f"Candidatos parciales en mapa: {candidatos[:5]}"
-        )
+        return f"{EQUORA_PRODUCT_BASE}/{handle_generado}"
+
+    # Ningún candidato — log de debug
+    candidatos = [k for k in _handle_map if any(p in k for p in nombre_n.split())]
+    logger.warning(
+        f"[handle-map] '{nombre}' (norm: '{nombre_n}') sin coincidencia. "
+        f"Candidatos parciales: {candidatos[:5]}"
+    )
     return None
 
 
