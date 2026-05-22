@@ -1869,13 +1869,16 @@ async function cargarTablaPlantillas() {
       var vars = t.variables ? t.variables.join(', ') : '—';
       var hdrFmt = t.header_type || '—';
       var editBtn = '<button class="btn-secondary" style="padding:3px 10px;font-size:.75rem" onclick="cargarPlantillaParaEditar(' + JSON.stringify(JSON.stringify(t)) + ')" title="Editar componentes">✏️ Editar</button>';
+      var difBtn  = status === 'APPROVED'
+        ? ' <button class="btn-primary" style="padding:3px 10px;font-size:.75rem" onclick="irADifusionConPlantilla(' + JSON.stringify(t.name) + ')" title="Enviar difusión con esta plantilla">📤 Difusión</button>'
+        : '';
       h += '<tr>'
         + '<td><b>' + he(t.name) + '</b></td>'
         + '<td>' + he(t.language || '') + '</td>'
         + '<td><span class="' + cls + '">' + lbl + '</span></td>'
         + '<td style="font-size:.78rem">' + he(vars || '—') + '</td>'
         + '<td style="font-size:.78rem">' + he(hdrFmt || '—') + '</td>'
-        + '<td>' + editBtn + '</td>'
+        + '<td style="white-space:nowrap">' + editBtn + difBtn + '</td>'
         + '</tr>';
     });
     tbody.innerHTML = h || '<tr><td colspan="6" class="loading-txt">Sin plantillas</td></tr>';
@@ -1884,6 +1887,46 @@ async function cargarTablaPlantillas() {
   }
   // También cargar borradores
   cargarBorradores();
+}
+
+/* ── Ir a Difusiones con plantilla precargada ── */
+function irADifusionConPlantilla(tName) {
+  // 1. Navegar a la sección difusiones (carga cargarTemplates() si es la 1ª vez)
+  cambiarSec('difusiones');
+
+  // 2. Intentar seleccionar la plantilla en el <select> con reintentos
+  //    (el fetch es async; esperamos hasta que aparezca en las opciones)
+  var intentos = 0;
+  function _intentar() {
+    var sel = document.getElementById('dif-tpl');
+    if (sel && _dif_templates.length) {
+      // Buscar la opción por nombre
+      var found = false;
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === tName) {
+          sel.value = tName;
+          seleccionarTemplate();
+          // Hacer scroll suave hasta el selector para que el usuario lo vea
+          sel.scrollIntoView({behavior: 'smooth', block: 'center'});
+          // Efecto visual breve para destacar el selector
+          sel.style.transition = 'box-shadow .3s';
+          sel.style.boxShadow  = '0 0 0 3px rgba(18,140,126,.45)';
+          setTimeout(function() { sel.style.boxShadow = ''; }, 1400);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        // La plantilla no está en la lista (no está aprobada) — ya no reintentar
+        console.warn('[irADifusion] Plantilla "' + tName + '" no encontrada en lista de aprobadas');
+      }
+      return;
+    }
+    // Aún cargando: reintentar cada 200 ms durante máx 4 segundos
+    if (intentos++ < 20) setTimeout(_intentar, 200);
+  }
+  // Pequeño delay inicial para que cambiarSec() y cargarTemplates() arranquen
+  setTimeout(_intentar, 120);
 }
 
 /* ── Borradores locales ── */
