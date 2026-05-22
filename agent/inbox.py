@@ -207,9 +207,9 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
           <div id="dif-preview">Selecciona una plantilla para ver la vista previa.</div>
         </div>
         <div>
-          <div class="dif-lbl">Números de destino <span style="font-weight:400;text-transform:none">(uno por línea, con código de país)</span></div>
-          <textarea id="dif-phones" class="dif-ta" placeholder="573001234567&#10;573009876543&#10;573001112233" oninput="actualizarConteo()"></textarea>
-          <div id="dif-conteo" style="font-size:.75rem;color:#8696a0;margin-top:4px">0 números</div>
+          <div class="dif-lbl">Destinatarios <span id="dif-formato-hint" style="font-weight:400;text-transform:none">(uno por línea: número,nombre)</span></div>
+          <textarea id="dif-phones" class="dif-ta" placeholder="573001234567,Juan&#10;573009876543,María&#10;573001112233,Carlos" oninput="actualizarConteo()"></textarea>
+          <div id="dif-conteo" style="font-size:.75rem;color:#8696a0;margin-top:4px">0 destinatarios</div>
         </div>
       </div>
       <div id="dif-foot">
@@ -558,12 +558,43 @@ function actualizarPreview() {
   document.getElementById('dif-preview').textContent = text;
 }
 
+function _parsearDestinatarios() {
+  /* Parsea el textarea y retorna [{phone, variables:[]}]
+     Formato soportado:
+       573001234567,Juan        → phone + nombre
+       573001234567             → phone solo (sin variables)
+       573001234567,Juan,Extra  → múltiples variables
+  */
+  var tpl  = _dif_templates.find(t => t.name === document.getElementById('dif-tpl').value);
+  var nVars = tpl ? (tpl.variables || []).length : 0;
+  return document.getElementById('dif-phones').value
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 5)
+    .map(function(l) {
+      var partes = l.split(',').map(p => p.trim());
+      var phone  = partes[0];
+      // Variables: las columnas 1..N de la línea; si faltan, usar campo fijo
+      var vars = [];
+      for (var i = 0; i < nVars; i++) {
+        if (partes[i + 1] !== undefined && partes[i + 1] !== '') {
+          vars.push(partes[i + 1]);
+        } else {
+          // Fallback: valor del campo fijo (si existe)
+          var inp = document.getElementById('dif-var-' + (tpl.variables[i] || (i+1)));
+          vars.push(inp ? inp.value.trim() : '');
+        }
+      }
+      return {phone: phone, variables: vars};
+    });
+}
+
 function actualizarConteo() {
-  var lines = document.getElementById('dif-phones').value
-    .split('\n').map(l=>l.trim()).filter(l=>l.length>5);
-  document.getElementById('dif-conteo').textContent = lines.length + ' número' + (lines.length===1?'':'s');
+  var dests = _parsearDestinatarios();
+  document.getElementById('dif-conteo').textContent =
+    dests.length + ' destinatario' + (dests.length === 1 ? '' : 's');
   var name = document.getElementById('dif-tpl').value;
-  document.getElementById('dif-sendbtn').disabled = !name || !lines.length;
+  document.getElementById('dif-sendbtn').disabled = !name || !dests.length;
 }
 
 async function enviarDifusion() {
@@ -571,14 +602,8 @@ async function enviarDifusion() {
   var tpl   = _dif_templates.find(t => t.name === name);
   if (!tpl) return;
 
-  var phones = document.getElementById('dif-phones').value
-    .split('\n').map(l=>l.trim()).filter(l=>l.length>5);
-  if (!phones.length) return;
-
-  var variables = (tpl.variables||[]).map(function(n) {
-    var inp = document.getElementById('dif-var-' + n);
-    return inp ? inp.value.trim() : '';
-  });
+  var recipients = _parsearDestinatarios();
+  if (!recipients.length) return;
 
   // UI: mostrar progreso
   var btn  = document.getElementById('dif-sendbtn');
@@ -589,15 +614,15 @@ async function enviarDifusion() {
   btn.disabled = true;
   prog.style.display = 'flex';
   bar.style.width = '0%';
-  ptxt.textContent = 'Enviando 0 / ' + phones.length + '...';
+  ptxt.textContent = 'Enviando 0 / ' + recipients.length + '...';
   res.style.display = 'none';
 
   try {
     // Enviamos en lotes de 50 para poder mostrar progreso
     var LOTE = 50;
     var enviados = 0; var fallidos = 0; var todosErrores = [];
-    for (var i = 0; i < phones.length; i += LOTE) {
-      var lote = phones.slice(i, i + LOTE);
+    for (var i = 0; i < recipients.length; i += LOTE) {
+      var lote = recipients.slice(i, i + LOTE);
       var r = await fetch('/inbox/broadcast/send', {
         method: 'POST',
         credentials: 'include',
@@ -605,17 +630,16 @@ async function enviarDifusion() {
         body: JSON.stringify({
           template: name,
           language: tpl.language,
-          variables: variables,
-          phones: lote,
+          recipients: lote,
         }),
       });
       var d = await r.json();
       enviados += d.enviados || 0;
       fallidos += d.fallidos || 0;
       todosErrores = todosErrores.concat(d.errores || []);
-      var pct = Math.round(((i + lote.length) / phones.length) * 100);
+      var pct = Math.round(((i + lote.length) / recipients.length) * 100);
       bar.style.width = Math.min(pct, 100) + '%';
-      ptxt.textContent = 'Enviando ' + Math.min(i+LOTE, phones.length) + ' / ' + phones.length + '...';
+      ptxt.textContent = 'Enviando ' + Math.min(i+LOTE, recipients.length) + ' / ' + recipients.length + '...';
     }
     bar.style.width = '100%';
     ptxt.textContent = 'Listo';

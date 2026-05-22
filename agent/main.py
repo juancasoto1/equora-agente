@@ -1313,24 +1313,26 @@ async def inbox_broadcast_send(
     inbox_session: str = Cookie(default=""),
 ):
     """
-    Envía una plantilla aprobada a una lista de números.
+    Envía una plantilla aprobada a una lista de destinatarios personalizados.
     Body JSON:
       { "template": "nombre_plantilla",
         "language": "es_CO",
-        "variables": ["valor1", "valor2"],
-        "phones": ["573001234567", ...] }
+        "recipients": [
+          {"phone": "573001234567", "variables": ["Juan"]},
+          {"phone": "573009876543", "variables": ["María"]}
+        ]
+      }
     """
     if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
-    body = await request.json()
+    body          = await request.json()
     template_name = body.get("template", "")
     language      = body.get("language", "es_CO")
-    variables     = body.get("variables", [])    # valores para {{1}}, {{2}}, ...
-    phones_raw    = body.get("phones", [])
+    recipients    = body.get("recipients", [])   # [{phone, variables:[]}]
 
-    if not template_name or not phones_raw:
-        return JSONResponse(content={"error": "Faltan template o phones"}, status_code=400)
+    if not template_name or not recipients:
+        return JSONResponse(content={"error": "Faltan template o recipients"}, status_code=400)
 
     access_token    = os.getenv("META_ACCESS_TOKEN", "")
     phone_number_id = os.getenv("META_PHONE_NUMBER_ID", "")
@@ -1341,26 +1343,26 @@ async def inbox_broadcast_send(
     api_url = f"https://graph.facebook.com/{api_ver}/{phone_number_id}/messages"
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
-    # Construir componentes con variables
-    components = []
-    if variables:
-        components.append({
-            "type": "body",
-            "parameters": [{"type": "text", "text": str(v)} for v in variables],
-        })
-
     enviados = 0
     fallidos = 0
     errores  = []
 
     async with httpx.AsyncClient(timeout=15) as client:
-        for raw in phones_raw:
-            # Limpiar número: solo dígitos
-            tel = "".join(filter(str.isdigit, str(raw)))
+        for dest in recipients:
+            tel = "".join(filter(str.isdigit, str(dest.get("phone", ""))))
             if not tel or len(tel) < 10:
                 fallidos += 1
-                errores.append(f"Número inválido: {raw}")
+                errores.append(f"Número inválido: {dest.get('phone')}")
                 continue
+
+            # Variables específicas de este destinatario
+            vars_dest = dest.get("variables", [])
+            components = []
+            if vars_dest:
+                components.append({
+                    "type": "body",
+                    "parameters": [{"type": "text", "text": str(v)} for v in vars_dest],
+                })
 
             payload = {
                 "messaging_product": "whatsapp",
@@ -1386,14 +1388,14 @@ async def inbox_broadcast_send(
                 fallidos += 1
                 errores.append(f"{tel}: {e}")
 
-            # Cadencia: 10 mensajes/segundo para no saturar la API de Meta
+            # Cadencia: 10 mensajes/segundo
             await asyncio.sleep(0.1)
 
     logger.info(f"[broadcast] Difusión '{template_name}': {enviados} enviados, {fallidos} fallidos")
     return JSONResponse(content={
         "enviados": enviados,
         "fallidos": fallidos,
-        "errores":  errores[:20],   # máximo 20 errores en la respuesta
+        "errores":  errores[:20],
     })
 
 
