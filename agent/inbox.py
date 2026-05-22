@@ -297,11 +297,54 @@ tr:hover td{background:#f8f9fa}
 /* vars */
 #dif-vars{display:flex;flex-direction:column;gap:8px}
 
-/* ── PLANTILLAS ── */
+/* ── PLANTILLAS — form enhancements ── */
 .tpl-status-approved{color:#155724;font-weight:600}
 .tpl-status-pending{color:#856404}
 .tpl-status-rejected{color:#721c24}
 .tpl-status-paused{color:#495057}
+.req{color:var(--red)}
+.opt-badge{background:#e2e8f0;color:#4a5568;border-radius:4px;padding:1px 7px;
+  font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;vertical-align:middle}
+.sep-label{font-size:.82rem;font-weight:700;color:#2d3748;margin:18px 0 10px;padding-bottom:7px;
+  border-bottom:1.5px solid #e0e4e8;display:flex;align-items:center;gap:8px}
+.info-box{background:#f0f9ff;border:1px solid #bee3f8;border-radius:8px;padding:10px 14px;
+  font-size:.79rem;color:#2c5282;line-height:1.65;margin-bottom:10px}
+.info-box code{background:#dbeafe;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:.78rem}
+.info-box b{color:#1a365d}
+.char-counter{font-size:.71rem;color:#6b7a8d;text-align:right;margin-top:3px}
+.char-counter.warn{color:#c05621;font-weight:600}
+/* Radio styled buttons */
+.radio-group{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.radio-opt{display:flex;align-items:center;gap:6px;font-size:.83rem;color:#4a5568;cursor:pointer;
+  background:#f8f9fa;border:1.5px solid #e0e4e8;border-radius:8px;padding:7px 13px;
+  transition:all .12s;user-select:none}
+.radio-opt input[type="radio"]{accent-color:var(--az);flex-shrink:0}
+.radio-opt.chk{border-color:var(--az);background:#f0f9f6;color:#1a7a5e;font-weight:600}
+/* Upload zones */
+.upload-zone{border:2px dashed #cbd5e0;border-radius:10px;padding:26px 20px;text-align:center;
+  cursor:pointer;transition:all .15s;background:#fafbfc;margin-bottom:6px}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--az);background:#f0f9f6}
+.upload-zone .uz-ic{font-size:1.8rem;margin-bottom:6px}
+.upload-zone .uz-title{font-size:.88rem;font-weight:600;color:#4a5568;margin-bottom:3px}
+.upload-zone .uz-hint{font-size:.74rem;color:#6b7a8d}
+.file-preview{display:flex;align-items:center;gap:10px;background:#f0f9f6;
+  border:1px solid #9ae6b4;border-radius:8px;padding:10px 14px;margin-top:6px;font-size:.84rem}
+.fp-ic{font-size:1.2rem;flex-shrink:0}
+.fp-name{font-weight:600;color:#155724;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp-size{color:#6b7a8d;font-size:.74rem;flex-shrink:0}
+.fp-remove{cursor:pointer;color:var(--red);font-size:1rem;flex-shrink:0;
+  background:none;border:none;padding:0 4px;line-height:1}
+/* Botones form */
+.btn-remove{background:none;border:1px solid #e0e4e8;border-radius:6px;color:#6b7a8d;
+  cursor:pointer;padding:5px 9px;font-size:.82rem;flex-shrink:0;transition:all .12s}
+.btn-remove:hover{border-color:var(--red);color:var(--red)}
+.qr-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.cta-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap}
+.cta-row .f-inp,.cta-row .f-sel{margin:0}
+.progress-upload{display:none;align-items:center;gap:8px;font-size:.8rem;color:var(--az);
+  background:#f0f9f6;border-radius:8px;padding:8px 14px;margin-top:8px}
+.progress-upload .pu-spinner{animation:spin 1s linear infinite;font-size:1rem}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
 /* ── CONFIGURACIÓN ── */
 .config-item{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid #f0f2f5}
@@ -547,56 +590,236 @@ tr:hover td{background:#f8f9fa}
             </div>
 
             <!-- Formulario crear plantilla -->
-            <div style="width:360px;flex-shrink:0">
-              <div class="form-card">
-                <div style="font-weight:700;color:#1a2332;font-size:.95rem;margin-bottom:4px">✨ Nueva plantilla</div>
-                <div style="font-size:.78rem;color:#6b7a8d;margin-bottom:18px">Se enviará a Meta para aprobación (24-48h)</div>
-
-                <div class="form-grid" style="margin-bottom:14px">
-                  <div class="f-group">
-                    <span class="f-label">Nombre</span>
-                    <input id="tpl-nombre" class="f-inp" placeholder="mi_plantilla" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'_')">
-                    <span class="f-hint">Solo letras, números y _</span>
-                  </div>
-                  <div class="f-group">
-                    <span class="f-label">Categoría</span>
-                    <select id="tpl-cat" class="f-sel">
-                      <option value="MARKETING">Marketing</option>
-                      <option value="UTILITY">Utilidad</option>
-                      <option value="AUTHENTICATION">Autenticación</option>
-                    </select>
+            <div style="width:440px;flex-shrink:0">
+              <div class="form-card" style="max-height:calc(100vh - 200px);overflow-y:auto">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+                  <div style="font-size:1.3rem">✨</div>
+                  <div>
+                    <div style="font-weight:700;color:#1a2332;font-size:.95rem">Nueva plantilla</div>
+                    <div style="font-size:.76rem;color:#6b7a8d">Se envía a Meta · Aprobación en 24-48 h</div>
                   </div>
                 </div>
 
+                <!-- Nombre + Categoría -->
+                <div class="form-grid" style="margin-bottom:14px">
+                  <div class="f-group">
+                    <span class="f-label">Nombre <span class="req">*</span></span>
+                    <input id="tpl-nombre" class="f-inp" placeholder="oferta_especial"
+                      oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'_')">
+                    <span class="f-hint">Letras minúsculas, números y _ · Sin espacios · Máx 512 chars</span>
+                  </div>
+                  <div class="f-group">
+                    <span class="f-label">Categoría <span class="req">*</span></span>
+                    <select id="tpl-cat" class="f-sel">
+                      <option value="MARKETING">📣 Marketing</option>
+                      <option value="UTILITY">🔔 Utilidad</option>
+                      <option value="AUTHENTICATION">🔐 Autenticación</option>
+                    </select>
+                    <span class="f-hint">Marketing: promos · Utilidad: confirmaciones · Auth: OTP</span>
+                  </div>
+                </div>
+
+                <!-- Idioma -->
                 <div class="f-group" style="margin-bottom:14px">
                   <span class="f-label">Idioma</span>
                   <select id="tpl-lang" class="f-sel">
-                    <option value="es_CO">Español (Colombia)</option>
-                    <option value="es">Español</option>
-                    <option value="es_AR">Español (Argentina)</option>
-                    <option value="es_MX">Español (México)</option>
-                    <option value="en_US">English (US)</option>
+                    <option value="es_CO">🇨🇴 Español (Colombia)</option>
+                    <option value="es">🌎 Español (genérico)</option>
+                    <option value="es_AR">🇦🇷 Español (Argentina)</option>
+                    <option value="es_MX">🇲🇽 Español (México)</option>
+                    <option value="en_US">🇺🇸 English (US)</option>
+                    <option value="pt_BR">🇧🇷 Português (Brasil)</option>
                   </select>
                 </div>
 
-                <div class="f-group" style="margin-bottom:14px">
-                  <span class="f-label">Encabezado <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></span>
-                  <input id="tpl-header" class="f-inp" placeholder="Título del mensaje (max 60 chars)" maxlength="60">
+                <!-- ── ENCABEZADO ── -->
+                <div class="sep-label">📌 Encabezado <span class="opt-badge">Opcional</span></div>
+
+                <div class="f-group" style="margin-bottom:10px">
+                  <span class="f-label">Tipo de encabezado</span>
+                  <div class="radio-group" id="hdr-radio-group">
+                    <label class="radio-opt chk"><input type="radio" name="hdr-type" value="NONE" checked onchange="toggleHdrType('NONE')"> Ninguno</label>
+                    <label class="radio-opt"><input type="radio" name="hdr-type" value="TEXT" onchange="toggleHdrType('TEXT')"> 📝 Texto</label>
+                    <label class="radio-opt"><input type="radio" name="hdr-type" value="IMAGE" onchange="toggleHdrType('IMAGE')"> 🖼️ Imagen</label>
+                    <label class="radio-opt"><input type="radio" name="hdr-type" value="VIDEO" onchange="toggleHdrType('VIDEO')"> 🎥 Video</label>
+                    <label class="radio-opt"><input type="radio" name="hdr-type" value="DOCUMENT" onchange="toggleHdrType('DOCUMENT')"> 📄 Documento</label>
+                  </div>
                 </div>
 
-                <div class="f-group" style="margin-bottom:14px">
-                  <span class="f-label">Cuerpo del mensaje *</span>
-                  <textarea id="tpl-body" class="f-ta" placeholder="Hola {{nombre}}, tenemos una oferta especial para ti..."></textarea>
-                  <span class="f-hint">Usa {{variable}} para personalizar. Ej: {{nombre}}</span>
+                <!-- Header: TEXTO -->
+                <div id="hdr-text-wrap" style="display:none;margin-bottom:10px">
+                  <div class="f-group">
+                    <input id="tpl-hdr-text" class="f-inp" maxlength="60"
+                      placeholder="Ej: ¡Oferta especial para ti! 🌿"
+                      oninput="updateCounter('tpl-hdr-text','hdr-txt-cnt',60)">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+                      <span class="f-hint">Permite 1 variable — escribe <code>{{1}}</code> donde quieras</span>
+                      <span class="char-counter"><span id="hdr-txt-cnt">0</span>/60</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="f-group" style="margin-bottom:14px">
-                  <span class="f-label">Pie de página <span style="font-weight:400;text-transform:none;letter-spacing:0">(opcional)</span></span>
-                  <input id="tpl-footer" class="f-inp" placeholder="Responde STOP para salir" maxlength="60">
+                <!-- Header: IMAGEN -->
+                <div id="hdr-img-wrap" style="display:none;margin-bottom:10px">
+                  <div class="info-box">
+                    <b>📐 Especificaciones de imagen:</b><br>
+                    • <b>Formato:</b> JPG o PNG<br>
+                    • <b>Tamaño máximo:</b> 5 MB<br>
+                    • <b>Resolución recomendada:</b> 800 × 418 px (ratio 1.91:1)<br>
+                    • <b>Mínimo aceptado:</b> 250 × 250 px<br>
+                    • La imagen se usa como ejemplo para que Meta revise tu plantilla
+                  </div>
+                  <div class="upload-zone" id="img-zone" onclick="document.getElementById('tpl-img-file').click()"
+                    ondragover="e=event;e.preventDefault();this.classList.add('drag')"
+                    ondragleave="this.classList.remove('drag')"
+                    ondrop="e=event;e.preventDefault();this.classList.remove('drag');handleDrop(e,'img')">
+                    <div class="uz-ic">🖼️</div>
+                    <div class="uz-title">Haz clic o arrastra tu imagen aquí</div>
+                    <div class="uz-hint">JPG o PNG · Máx 5 MB · Recomendado 800×418 px</div>
+                  </div>
+                  <input type="file" id="tpl-img-file" accept="image/jpeg,image/png" style="display:none"
+                    onchange="seleccionarArchivo(this,'img',5)">
+                  <div id="img-preview" style="display:none" class="file-preview">
+                    <span class="fp-ic">🖼️</span>
+                    <span class="fp-name" id="img-fname"></span>
+                    <span class="fp-size" id="img-fsize"></span>
+                    <button class="fp-remove" onclick="limpiarArchivo('img')" title="Quitar">✕</button>
+                  </div>
+                  <div id="img-upload-prog" class="progress-upload">
+                    <span class="pu-spinner">⟳</span> Subiendo imagen a Meta...
+                  </div>
                 </div>
 
+                <!-- Header: VIDEO -->
+                <div id="hdr-vid-wrap" style="display:none;margin-bottom:10px">
+                  <div class="info-box">
+                    <b>🎬 Especificaciones de video:</b><br>
+                    • <b>Formato:</b> MP4 (códec H.264 · audio AAC)<br>
+                    • <b>Tamaño máximo:</b> 16 MB<br>
+                    • <b>Duración máxima:</b> 60 segundos<br>
+                    • <b>Resolución recomendada:</b> 1280 × 720 px (16:9)<br>
+                    • Evita videos con subtítulos codificados (se ven mal en móvil)
+                  </div>
+                  <div class="upload-zone" id="vid-zone" onclick="document.getElementById('tpl-vid-file').click()"
+                    ondragover="e=event;e.preventDefault();this.classList.add('drag')"
+                    ondragleave="this.classList.remove('drag')"
+                    ondrop="e=event;e.preventDefault();this.classList.remove('drag');handleDrop(e,'vid')">
+                    <div class="uz-ic">🎥</div>
+                    <div class="uz-title">Haz clic o arrastra tu video aquí</div>
+                    <div class="uz-hint">MP4 (H.264) · Máx 16 MB · Máx 60 segundos</div>
+                  </div>
+                  <input type="file" id="tpl-vid-file" accept="video/mp4,video/3gpp" style="display:none"
+                    onchange="seleccionarArchivo(this,'vid',16)">
+                  <div id="vid-preview" style="display:none" class="file-preview">
+                    <span class="fp-ic">🎥</span>
+                    <span class="fp-name" id="vid-fname"></span>
+                    <span class="fp-size" id="vid-fsize"></span>
+                    <button class="fp-remove" onclick="limpiarArchivo('vid')" title="Quitar">✕</button>
+                  </div>
+                  <div id="vid-upload-prog" class="progress-upload">
+                    <span class="pu-spinner">⟳</span> Subiendo video a Meta...
+                  </div>
+                </div>
+
+                <!-- Header: DOCUMENTO -->
+                <div id="hdr-doc-wrap" style="display:none;margin-bottom:10px">
+                  <div class="info-box">
+                    <b>📑 Especificaciones de documento:</b><br>
+                    • <b>Formato:</b> PDF únicamente<br>
+                    • <b>Tamaño máximo:</b> 100 MB<br>
+                    • El nombre del archivo se mostrará al destinatario<br>
+                    • Recomendado para catálogos, fichas técnicas, facturas
+                  </div>
+                  <div class="upload-zone" id="doc-zone" onclick="document.getElementById('tpl-doc-file').click()"
+                    ondragover="e=event;e.preventDefault();this.classList.add('drag')"
+                    ondragleave="this.classList.remove('drag')"
+                    ondrop="e=event;e.preventDefault();this.classList.remove('drag');handleDrop(e,'doc')">
+                    <div class="uz-ic">📄</div>
+                    <div class="uz-title">Haz clic o arrastra tu PDF aquí</div>
+                    <div class="uz-hint">Solo PDF · Máx 100 MB</div>
+                  </div>
+                  <input type="file" id="tpl-doc-file" accept="application/pdf" style="display:none"
+                    onchange="seleccionarArchivo(this,'doc',100)">
+                  <div id="doc-preview" style="display:none" class="file-preview">
+                    <span class="fp-ic">📄</span>
+                    <span class="fp-name" id="doc-fname"></span>
+                    <span class="fp-size" id="doc-fsize"></span>
+                    <button class="fp-remove" onclick="limpiarArchivo('doc')" title="Quitar">✕</button>
+                  </div>
+                  <div id="doc-upload-prog" class="progress-upload">
+                    <span class="pu-spinner">⟳</span> Subiendo documento a Meta...
+                  </div>
+                </div>
+
+                <!-- ── CUERPO ── -->
+                <div class="sep-label">📝 Cuerpo del mensaje <span class="req">*</span></div>
+                <div class="f-group" style="margin-bottom:4px">
+                  <textarea id="tpl-body" class="f-ta" maxlength="1024"
+                    placeholder="Hola {{nombre}}, tenemos una oferta especial para ti en Equora Distribuciones 🌿"
+                    oninput="updateCounter('tpl-body','body-cnt',1024)"></textarea>
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+                    <span class="f-hint">Campo requerido</span>
+                    <span class="char-counter"><span id="body-cnt">0</span>/1024</span>
+                  </div>
+                </div>
+                <div class="info-box" style="margin-bottom:14px">
+                  <b>💡 Variables de personalización:</b> usa <code>{{nombre}}</code> o <code>{{1}}</code> — hasta 10 variables<br>
+                  <b>✏️ Formato de texto:</b> <code>*negrita*</code> &nbsp; <code>_cursiva_</code> &nbsp; <code>~tachado~</code> &nbsp; <code>```monoespaciado```</code><br>
+                  <b>⚠️ No usar:</b> saltos de línea excesivos, emojis en exceso, mayúsculas totales, URLs acortadas
+                </div>
+
+                <!-- ── PIE DE PÁGINA ── -->
+                <div class="sep-label">📎 Pie de página <span class="opt-badge">Opcional</span></div>
+                <div class="f-group" style="margin-bottom:14px">
+                  <input id="tpl-footer" class="f-inp" maxlength="60"
+                    placeholder="Responde STOP para dejar de recibir mensajes"
+                    oninput="updateCounter('tpl-footer','footer-cnt',60)">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+                    <span class="f-hint">Texto gris pequeño debajo del cuerpo · No admite variables ni formato</span>
+                    <span class="char-counter"><span id="footer-cnt">0</span>/60</span>
+                  </div>
+                </div>
+
+                <!-- ── BOTONES ── -->
+                <div class="sep-label">🔘 Botones <span class="opt-badge">Opcional</span></div>
+                <div class="f-group" style="margin-bottom:10px">
+                  <span class="f-label">Tipo de botones</span>
+                  <div class="radio-group" id="btn-radio-group">
+                    <label class="radio-opt chk"><input type="radio" name="btn-type" value="NONE" checked onchange="toggleBtnType('NONE')"> Ninguno</label>
+                    <label class="radio-opt"><input type="radio" name="btn-type" value="QUICK_REPLY" onchange="toggleBtnType('QUICK_REPLY')"> ↩️ Respuesta rápida</label>
+                    <label class="radio-opt"><input type="radio" name="btn-type" value="CTA" onchange="toggleBtnType('CTA')"> 🔗 Llamada a la acción</label>
+                  </div>
+                </div>
+
+                <!-- Quick reply -->
+                <div id="btns-qr-wrap" style="display:none;margin-bottom:14px">
+                  <div class="info-box">
+                    <b>↩️ Respuesta rápida:</b> el cliente toca el botón y envía ese texto como mensaje<br>
+                    • Hasta <b>3 botones</b> · Máx <b>25 caracteres</b> por botón · Sin URLs<br>
+                    • Ideales para: Sí/No, opciones de menú, confirmaciones
+                  </div>
+                  <div id="qr-list"></div>
+                  <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="agregarBotonQR()" type="button">
+                    + Agregar botón
+                  </button>
+                </div>
+
+                <!-- CTA -->
+                <div id="btns-cta-wrap" style="display:none;margin-bottom:14px">
+                  <div class="info-box">
+                    <b>🔗 Llamada a la acción:</b> hasta <b>2 botones</b> (1 URL + 1 teléfono)<br>
+                    • <b>URL:</b> texto máx 20 chars · La URL puede tener <code>{{1}}</code> al final<br>
+                    • <b>Teléfono:</b> texto máx 20 chars · Número con código de país (ej: +573001234567)<br>
+                    • El botón abre el navegador o el marcador del teléfono del cliente
+                  </div>
+                  <div id="cta-list"></div>
+                  <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="agregarBotonCTA()" type="button">
+                    + Agregar botón
+                  </button>
+                </div>
+
+                <!-- Resultado + botón enviar -->
                 <div id="tpl-result" style="display:none;margin-bottom:14px;font-size:.83rem;padding:10px 14px;border-radius:8px;line-height:1.5"></div>
-
                 <button class="btn-primary" id="tpl-crear-btn" onclick="crearPlantilla()" style="width:100%">
                   📤 Enviar a Meta para aprobación
                 </button>
@@ -1254,56 +1477,284 @@ async function cargarTablaPlantillas() {
   }
 }
 
-async function crearPlantilla() {
-  var nombre  = document.getElementById('tpl-nombre').value.trim();
-  var cat     = document.getElementById('tpl-cat').value;
-  var lang    = document.getElementById('tpl-lang').value;
-  var header  = document.getElementById('tpl-header').value.trim();
-  var body    = document.getElementById('tpl-body').value.trim();
-  var footer  = document.getElementById('tpl-footer').value.trim();
-  var res     = document.getElementById('tpl-result');
-  var btn     = document.getElementById('tpl-crear-btn');
+/* ══════════════════════════════════════════════════════
+   PLANTILLAS — form interactivo
+   ══════════════════════════════════════════════════════ */
+// Archivos seleccionados (guardados en memoria hasta el envío)
+var _tplFiles = { img: null, vid: null, doc: null };
+// Handle de media obtenido al subir a Meta
+var _tplHandles = { img: null, vid: null, doc: null };
 
-  if (!nombre || !body) {
-    res.style.display = 'block';
-    res.style.cssText += ';background:#f8d7da;color:#721c24;border:1px solid #f5c6cb';
-    res.textContent = '⚠️ El nombre y el cuerpo son obligatorios.';
+function updateCounter(inputId, counterId, max) {
+  var val = document.getElementById(inputId).value.length;
+  var el  = document.getElementById(counterId);
+  if (!el) return;
+  el.textContent = val;
+  el.parentElement.className = 'char-counter' + (val > max * .85 ? ' warn' : '');
+}
+
+/* ── Tipo de encabezado ── */
+function toggleHdrType(tipo) {
+  var wraps = ['NONE','TEXT','IMAGE','VIDEO','DOCUMENT'];
+  wraps.forEach(function(t) {
+    var w = document.getElementById('hdr-' + t.toLowerCase() + '-wrap');
+    if (w) w.style.display = (t === tipo && tipo !== 'NONE') ? 'block' : 'none';
+  });
+  // Actualizar estilo radio buttons
+  document.querySelectorAll('#hdr-radio-group .radio-opt').forEach(function(lbl) {
+    var inp = lbl.querySelector('input');
+    lbl.classList.toggle('chk', inp && inp.value === tipo);
+  });
+}
+
+/* ── Tipo de botones ── */
+function toggleBtnType(tipo) {
+  document.getElementById('btns-qr-wrap').style.display  = tipo === 'QUICK_REPLY' ? 'block' : 'none';
+  document.getElementById('btns-cta-wrap').style.display = tipo === 'CTA'         ? 'block' : 'none';
+  document.querySelectorAll('#btn-radio-group .radio-opt').forEach(function(lbl) {
+    var inp = lbl.querySelector('input');
+    lbl.classList.toggle('chk', inp && inp.value === tipo);
+  });
+  // Inicializar lista si está vacía
+  if (tipo === 'QUICK_REPLY' && !document.getElementById('qr-list').children.length) agregarBotonQR();
+  if (tipo === 'CTA'         && !document.getElementById('cta-list').children.length) agregarBotonCTA();
+}
+
+/* ── Upload zona ── */
+function seleccionarArchivo(input, tipo, maxMB) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  if (file.size > maxMB * 1024 * 1024) {
+    alert('El archivo supera el límite de ' + maxMB + ' MB. Por favor elige uno más pequeño.');
+    input.value = '';
     return;
   }
+  _tplFiles[tipo]  = file;
+  _tplHandles[tipo] = null;  // resetear handle anterior
+  // Mostrar preview
+  document.getElementById(tipo + '-fname').textContent = file.name;
+  document.getElementById(tipo + '-fsize').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+  document.getElementById(tipo + '-preview').style.display = 'flex';
+  document.getElementById(tipo + '-zone').classList.add('has-file');
+  input.value = '';
+}
 
-  btn.disabled = true;
-  btn.textContent = 'Enviando...';
-  res.style.display = 'none';
+function handleDrop(e, tipo) {
+  var file = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!file) return;
+  // Simular selección
+  var dt = new DataTransfer();
+  dt.items.add(file);
+  var inputId = 'tpl-' + tipo + '-file';
+  document.getElementById(inputId).files = dt.files;
+  document.getElementById(inputId).dispatchEvent(new Event('change'));
+}
+
+function limpiarArchivo(tipo) {
+  _tplFiles[tipo]  = null;
+  _tplHandles[tipo] = null;
+  document.getElementById(tipo + '-preview').style.display = 'none';
+  document.getElementById(tipo + '-zone').classList.remove('has-file');
+  document.getElementById('tpl-' + tipo + '-file').value = '';
+}
+
+/* ── Botones Quick Reply ── */
+function agregarBotonQR() {
+  var list = document.getElementById('qr-list');
+  if (list.children.length >= 3) { alert('Máximo 3 botones de respuesta rápida'); return; }
+  var row = document.createElement('div');
+  row.className = 'qr-row';
+  row.innerHTML = '<input class="f-inp qr-text" maxlength="25" placeholder="Ej: Sí, me interesa" style="flex:1">' +
+    '<span style="font-size:.7rem;color:#6b7a8d;white-space:nowrap;flex-shrink:0" id="qr-cnt-' + list.children.length + '">0/25</span>' +
+    '<button class="btn-remove" onclick="this.parentElement.remove()" type="button">✕</button>';
+  var inp = row.querySelector('.qr-text');
+  var cntId = 'qr-cnt-' + list.children.length;
+  inp.addEventListener('input', function() {
+    var c = document.getElementById(cntId);
+    if (c) c.textContent = this.value.length + '/25';
+  });
+  list.appendChild(row);
+}
+
+/* ── Botones CTA ── */
+function agregarBotonCTA() {
+  var list = document.getElementById('cta-list');
+  if (list.children.length >= 2) { alert('Máximo 2 botones de llamada a la acción'); return; }
+  var idx = list.children.length;
+  var row = document.createElement('div');
+  row.className = 'cta-row';
+  row.innerHTML =
+    '<div style="display:flex;flex-direction:column;gap:6px;width:100%">' +
+      '<div style="display:flex;gap:8px;align-items:center">' +
+        '<select class="f-sel cta-tipo" style="width:160px" onchange="toggleCtaTipo(this)">' +
+          '<option value="URL">🔗 URL</option>' +
+          '<option value="PHONE_NUMBER">📞 Teléfono</option>' +
+        '</select>' +
+        '<input class="f-inp cta-texto" maxlength="20" placeholder="Texto del botón" style="flex:1">' +
+        '<button class="btn-remove" onclick="this.closest(\'.cta-row\').remove()" type="button">✕</button>' +
+      '</div>' +
+      '<input class="f-inp cta-valor-url" placeholder="https://equoradistribuciones.com/{{1}}" style="width:100%">' +
+      '<span class="f-hint cta-hint-url">La URL puede incluir <code>{{1}}</code> para personalizar por destinatario</span>' +
+      '<input class="f-inp cta-valor-tel" placeholder="+573001234567" style="width:100%;display:none">' +
+      '<span class="f-hint cta-hint-tel" style="display:none">Número con código de país. El cliente iniciará la llamada al tocarlo</span>' +
+    '</div>';
+  list.appendChild(row);
+}
+
+function toggleCtaTipo(sel) {
+  var row = sel.closest('.cta-row');
+  var esURL = sel.value === 'URL';
+  row.querySelector('.cta-valor-url').style.display = esURL ? '' : 'none';
+  row.querySelector('.cta-hint-url').style.display  = esURL ? '' : 'none';
+  row.querySelector('.cta-valor-tel').style.display = esURL ? 'none' : '';
+  row.querySelector('.cta-hint-tel').style.display  = esURL ? 'none' : '';
+}
+
+/* ── Subir media a Meta antes de crear la plantilla ── */
+async function subirHeaderMedia(tipo) {
+  var file = _tplFiles[tipo];
+  if (!file) return null;
+  if (_tplHandles[tipo]) return _tplHandles[tipo]; // ya subido
+
+  var progEl = document.getElementById(tipo + '-upload-prog');
+  if (progEl) progEl.style.display = 'flex';
 
   try {
+    var fd = new FormData();
+    fd.append('file', file, file.name);
+    fd.append('file_type', file.type);
+    var r = await fetch('/inbox/plantillas/subir-header', {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
+    });
+    var d = await r.json();
+    if (d.handle) {
+      _tplHandles[tipo] = d.handle;
+      return d.handle;
+    } else {
+      console.warn('[tpl] subir-header error:', d.error);
+      return null;
+    }
+  } catch(e) {
+    console.warn('[tpl] subir-header excepción:', e);
+    return null;
+  } finally {
+    if (progEl) progEl.style.display = 'none';
+  }
+}
+
+/* ── Crear plantilla ── */
+async function crearPlantilla() {
+  var nombre = document.getElementById('tpl-nombre').value.trim();
+  var cat    = document.getElementById('tpl-cat').value;
+  var lang   = document.getElementById('tpl-lang').value;
+  var body   = document.getElementById('tpl-body').value.trim();
+  var footer = document.getElementById('tpl-footer').value.trim();
+  var res    = document.getElementById('tpl-result');
+  var btn    = document.getElementById('tpl-crear-btn');
+
+  // Tipo header activo
+  var hdrTipo = document.querySelector('input[name="hdr-type"]:checked').value;
+  var hdrTexto = hdrTipo === 'TEXT' ? document.getElementById('tpl-hdr-text').value.trim() : '';
+
+  // Tipo botones activo
+  var btnTipo = document.querySelector('input[name="btn-type"]:checked').value;
+
+  // Validaciones
+  if (!nombre) { showTplResult('err','⚠️ El nombre es obligatorio.'); return; }
+  if (!body)   { showTplResult('err','⚠️ El cuerpo del mensaje es obligatorio.'); return; }
+  if (hdrTipo === 'TEXT' && !hdrTexto) { showTplResult('err','⚠️ Escribe el texto del encabezado o cambia el tipo a "Ninguno".'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Enviando...';
+  res.style.display = 'none';
+
+  // Subir media si aplica
+  var headerHandle = null;
+  if (['IMAGE','VIDEO','DOCUMENT'].includes(hdrTipo)) {
+    var tipoKey = hdrTipo === 'IMAGE' ? 'img' : (hdrTipo === 'VIDEO' ? 'vid' : 'doc');
+    if (_tplFiles[tipoKey]) {
+      btn.textContent = '⏳ Subiendo archivo...';
+      headerHandle = await subirHeaderMedia(tipoKey);
+      if (!headerHandle) {
+        showTplResult('warn','⚠️ No se pudo subir el archivo a Meta. La plantilla se creará sin imagen de ejemplo (Meta igualmente la revisará). ¿Continuar?');
+        // Continuar igualmente - header sin handle
+      }
+    }
+  }
+
+  // Recolectar botones
+  var buttons = [];
+  if (btnTipo === 'QUICK_REPLY') {
+    document.querySelectorAll('#qr-list .qr-text').forEach(function(inp) {
+      var txt = inp.value.trim();
+      if (txt) buttons.push({type:'QUICK_REPLY', text: txt});
+    });
+  } else if (btnTipo === 'CTA') {
+    document.querySelectorAll('#cta-list .cta-row').forEach(function(row) {
+      var tipo2  = row.querySelector('.cta-tipo').value;
+      var texto2 = row.querySelector('.cta-texto').value.trim();
+      if (!texto2) return;
+      if (tipo2 === 'URL') {
+        var url = row.querySelector('.cta-valor-url').value.trim();
+        if (url) buttons.push({type:'URL', text: texto2, url: url});
+      } else {
+        var tel = row.querySelector('.cta-valor-tel').value.trim();
+        if (tel) buttons.push({type:'PHONE_NUMBER', text: texto2, phone_number: tel});
+      }
+    });
+  }
+
+  btn.textContent = '⏳ Creando plantilla...';
+
+  try {
+    var payload = {
+      name: nombre, category: cat, language: lang,
+      header_type: hdrTipo !== 'NONE' ? hdrTipo : null,
+      header_text: hdrTexto || null,
+      header_handle: headerHandle,
+      body: body,
+      footer: footer || null,
+      buttons: buttons,
+    };
     var r = await fetch('/inbox/plantillas/crear', {
       method: 'POST',
       credentials: 'include',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name: nombre, category: cat, language: lang, header_text: header, body: body, footer: footer}),
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
     });
     var d = await r.json();
-    res.style.display = 'block';
     if (d.ok) {
-      res.style.cssText += ';background:#d4edda;color:#155724;border:1px solid #c3e6cb';
-      res.textContent = '✅ Plantilla enviada a Meta — Estado: ' + (d.status || 'PENDING') + '. La aprobación puede tardar 24-48h.';
+      showTplResult('ok','✅ Plantilla <b>' + he(nombre) + '</b> enviada a Meta — Estado: <b>' + (d.status || 'PENDING') + '</b>.<br>La aprobación tarda entre 24 y 48 horas.');
       // Limpiar form
       document.getElementById('tpl-nombre').value = '';
-      document.getElementById('tpl-header').value = '';
+      document.getElementById('tpl-hdr-text').value = '';
       document.getElementById('tpl-body').value = '';
       document.getElementById('tpl-footer').value = '';
+      ['img','vid','doc'].forEach(limpiarArchivo);
+      document.querySelectorAll('#qr-list, #cta-list').forEach(function(l) { l.innerHTML=''; });
+      updateCounter('tpl-body','body-cnt',1024);
+      updateCounter('tpl-footer','footer-cnt',60);
       cargarTablaPlantillas();
     } else {
-      res.style.cssText += ';background:#f8d7da;color:#721c24;border:1px solid #f5c6cb';
-      res.textContent = '❌ Error: ' + (d.error || 'Error desconocido');
+      showTplResult('err','❌ Error de Meta: ' + he(d.error || 'Error desconocido') + (d.code ? ' (código ' + d.code + ')' : ''));
     }
   } catch(e) {
-    res.style.display = 'block';
-    res.style.cssText += ';background:#f8d7da;color:#721c24;border:1px solid #f5c6cb';
-    res.textContent = 'Error de conexión: ' + e.message;
+    showTplResult('err','Error de conexión: ' + e.message);
   }
   btn.disabled = false;
   btn.textContent = '📤 Enviar a Meta para aprobación';
+}
+
+function showTplResult(tipo, html) {
+  var el = document.getElementById('tpl-result');
+  el.style.display = 'block';
+  el.innerHTML = html;
+  el.style.cssText = 'display:block;margin-bottom:14px;font-size:.83rem;padding:10px 14px;border-radius:8px;line-height:1.6;' +
+    (tipo === 'ok'   ? 'background:#d4edda;color:#155724;border:1px solid #c3e6cb' :
+     tipo === 'warn' ? 'background:#fff3cd;color:#856404;border:1px solid #ffeaa7' :
+                       'background:#f8d7da;color:#721c24;border:1px solid #f5c6cb');
 }
 
 /* ══════════════════════════════════════════════════════

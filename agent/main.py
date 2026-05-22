@@ -10,7 +10,7 @@ import random
 import time
 import httpx
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException, Cookie
+from fastapi import FastAPI, Request, HTTPException, Cookie, UploadFile, File, Form
 from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -1671,6 +1671,88 @@ async def inbox_metricas_plantillas(
         return JSONResponse(content={"error": str(e)})
 
 
+@app.post("/inbox/plantillas/subir-header")
+async def inbox_subir_header_media(
+    file: UploadFile = File(...),
+    file_type: str = Form(...),
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """
+    Sube un archivo (imagen/video/doc) a Meta vía Resumable Upload API
+    y retorna el handle para usar en example.header_handle al crear una plantilla.
+
+    Flujo Meta Resumable Upload:
+      1. POST /{app_id}/uploads?file_name=...&file_length=...&file_type=...
+         → {"id": "upload:{session_id}"}
+      2. POST /upload:{session_id}  (body = bytes del archivo, header file_offset: 0)
+         → {"h": "handle_string"}
+    """
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    access_token = os.getenv("META_ACCESS_TOKEN", "")
+    app_id       = os.getenv("META_APP_ID", "")
+
+    if not access_token:
+        return JSONResponse(content={"error": "META_ACCESS_TOKEN no configurado"}, status_code=500)
+    if not app_id:
+        # Sin APP_ID no podemos usar Resumable Upload — informar al frontend
+        # (la plantilla se crea sin example header, Meta igual la aprueba)
+        return JSONResponse(content={"error": "META_APP_ID no configurado en Railway — la plantilla se creará sin imagen de ejemplo", "handle": None}, status_code=200)
+
+    try:
+        file_bytes = await file.read()
+        file_name  = file.filename or "header_file"
+        file_size  = len(file_bytes)
+        mime_type  = file_type or file.content_type or "image/jpeg"
+
+        api_ver = "v21.0"
+
+        async with httpx.AsyncClient(timeout=60) as client:
+            # 1. Iniciar sesión de upload
+            init_url = (
+                f"https://graph.facebook.com/{api_ver}/{app_id}/uploads"
+                f"?file_name={file_name}&file_length={file_size}"
+                f"&file_type={mime_type}&access_token={access_token}"
+            )
+            r1 = await client.post(init_url)
+            data1 = r1.json()
+            if "error" in data1:
+                err = data1["error"]
+                logger.error(f"[subir-header] Error iniciando upload: {err}")
+                return JSONResponse(content={"error": err.get("message", str(err)), "handle": None})
+
+            session_id = data1.get("id", "")
+            if not session_id:
+                return JSONResponse(content={"error": "No se obtuvo upload session_id de Meta", "handle": None})
+
+            # 2. Subir el archivo
+            upload_url = f"https://graph.facebook.com/{api_ver}/{session_id}"
+            upload_headers = {
+                "Authorization": f"OAuth {access_token}",
+                "file_offset": "0",
+                "Content-Type": mime_type,
+            }
+            r2 = await client.post(upload_url, content=file_bytes, headers=upload_headers)
+            data2 = r2.json()
+            if "error" in data2:
+                err = data2["error"]
+                logger.error(f"[subir-header] Error subiendo archivo: {err}")
+                return JSONResponse(content={"error": err.get("message", str(err)), "handle": None})
+
+            handle = data2.get("h")
+            if not handle:
+                return JSONResponse(content={"error": "Meta no devolvió un handle válido", "handle": None})
+
+            logger.info(f"[subir-header] Archivo '{file_name}' subido → handle={handle[:30]}...")
+            return JSONResponse(content={"ok": True, "handle": handle})
+
+    except Exception as e:
+        logger.error(f"[subir-header] Excepción: {e}", exc_info=True)
+        return JSONResponse(content={"error": str(e), "handle": None}, status_code=500)
+
+
 @app.post("/inbox/plantillas/crear")
 async def inbox_plantillas_crear(
     request: Request,
@@ -1689,32 +1771,75 @@ async def inbox_plantillas_crear(
         return JSONResponse(content={"error": "META_ACCESS_TOKEN o META_WABA_ID no configurados"}, status_code=500)
 
     body = await request.json()
-    nombre    = (body.get("name") or "").lower().replace(" ", "_")
-    categoria = body.get("category", "MARKETING")
-    idioma    = body.get("language", "es_CO")
-    cuerpo    = body.get("body", "")
-    header_t  = body.get("header_text", "")
-    footer    = body.get("footer", "")
-    buttons   = body.get("buttons", [])
+    nombre       = (body.get("name") or "").lower().replace(" ", "_")
+    categoria    = body.get("category", "MARKETING")
+    idioma       = body.get("language", "es_CO")
+    cuerpo       = body.get("body", "")
+    header_tipo  = (body.get("header_type") or "").upper()   # NONE|TEXT|IMAGE|VIDEO|DOCUMENT
+    header_texto = body.get("header_text", "")
+    header_handle= body.get("header_handle")                 # handle de Resumable Upload
+    footer       = body.get("footer", "")
+    buttons      = body.get("buttons", [])
 
     if not nombre or not cuerpo:
         return JSONResponse(content={"error": "Nombre y cuerpo son requeridos"}, status_code=400)
 
     componentes = []
-    if header_t:
-        componentes.append({"type": "HEADER", "format": "TEXT", "text": header_t[:60]})
-    componentes.append({"type": "BODY", "text": cuerpo})
+
+    # ── HEADER ──
+    if header_tipo == "TEXT" and header_texto:
+        componentes.append({"type": "HEADER", "format": "TEXT", "text": header_texto[:60]})
+    elif header_tipo in ("IMAGE", "VIDEO", "DOCUMENT"):
+        comp_hdr: dict = {"type": "HEADER", "format": header_tipo}
+        if header_handle:
+            # Adjuntar ejemplo con el handle subido vía Resumable Upload
+            comp_hdr["example"] = {"header_handle": [header_handle]}
+        componentes.append(comp_hdr)
+
+    # ── BODY ──
+    # Detectar si hay variables nombradas o posicionales para el campo example
+    import re as _re
+    vars_encontradas = _re.findall(r'\{\{([^}]+)\}\}', cuerpo)
+    body_comp: dict = {"type": "BODY", "text": cuerpo}
+    if vars_encontradas:
+        # Ejemplo de valores para que Meta pueda previsualizar
+        example_vals = ["ejemplo"] * len(vars_encontradas)
+        named_vars = [v for v in vars_encontradas if not v.isdigit()]
+        if named_vars:
+            body_comp["example"] = {
+                "body_text_named_params": [
+                    {"param_name": v, "example": ["ejemplo"]} for v in vars_encontradas
+                ]
+            }
+        else:
+            body_comp["example"] = {"body_text": [example_vals]}
+    componentes.append(body_comp)
+
+    # ── FOOTER ──
     if footer:
         componentes.append({"type": "FOOTER", "text": footer[:60]})
+
+    # ── BUTTONS ──
     if buttons:
         btn_list = []
-        for b in buttons[:3]:
-            if b.get("type") == "URL":
-                btn_list.append({"type": "URL", "text": b.get("text", "Ver más")[:20], "url": b.get("url", "")})
-            elif b.get("type") == "PHONE_NUMBER":
-                btn_list.append({"type": "PHONE_NUMBER", "text": b.get("text", "Llamar")[:20], "phone_number": b.get("phone_number", "")})
-            else:
-                btn_list.append({"type": "QUICK_REPLY", "text": b.get("text", "Sí")[:25]})
+        for b in buttons[:10]:
+            btype = b.get("type", "").upper()
+            texto_btn = b.get("text", "")[:25]
+            if btype == "URL":
+                url_val = b.get("url", "")
+                if url_val and texto_btn:
+                    btn_obj = {"type": "URL", "text": texto_btn[:20], "url": url_val}
+                    # Si la URL tiene {{1}}, agregar example
+                    if "{{1}}" in url_val:
+                        btn_obj["example"] = [url_val.replace("{{1}}", "ejemplo")]
+                    btn_list.append(btn_obj)
+            elif btype == "PHONE_NUMBER":
+                phone = b.get("phone_number", "")
+                if phone and texto_btn:
+                    btn_list.append({"type": "PHONE_NUMBER", "text": texto_btn[:20], "phone_number": phone})
+            elif btype == "QUICK_REPLY":
+                if texto_btn:
+                    btn_list.append({"type": "QUICK_REPLY", "text": texto_btn})
         if btn_list:
             componentes.append({"type": "BUTTONS", "buttons": btn_list})
 
