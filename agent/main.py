@@ -1235,6 +1235,56 @@ async def inbox_modo(
 
 # ── Difusión / Broadcast ───────────────────────────────────────────────────
 
+# Cache en memoria: {scontent_url → whatsapp_media_id}
+# Se llena la primera vez que se usa cada plantilla; se pierde al reiniciar (Railway redeploy).
+_header_media_cache: dict[str, str] = {}
+
+
+async def _subir_imagen_whatsapp(image_url: str, access_token: str, phone_number_id: str) -> str | None:
+    """
+    Descarga la imagen del CDN de Meta y la sube a la WhatsApp Media API
+    para obtener un media_id reutilizable en el componente header de templates.
+
+    Returns:
+        media_id  si fue exitoso, None si falló (el envío continuará sin header).
+    """
+    global _header_media_cache
+    if image_url in _header_media_cache:
+        return _header_media_cache[image_url]
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            # 1. Descargar la imagen (las URLs de scontent.whatsapp.net son públicas con firma)
+            r_img = await client.get(image_url)
+            if r_img.status_code != 200:
+                logger.warning(f"[broadcast] No se pudo descargar imagen header: {r_img.status_code}")
+                return None
+            image_bytes = r_img.content
+            content_type = r_img.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+            ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(content_type, "jpg")
+
+            # 2. Subir a la WhatsApp Media API
+            upload_url = f"https://graph.facebook.com/v21.0/{phone_number_id}/media"
+            auth_headers = {"Authorization": f"Bearer {access_token}"}
+            files = {
+                "file": (f"header.{ext}", image_bytes, content_type),
+            }
+            data = {
+                "messaging_product": "whatsapp",
+                "type": content_type,
+            }
+            r_up = await client.post(upload_url, headers=auth_headers, files=files, data=data)
+            if r_up.status_code == 200:
+                media_id = r_up.json().get("id")
+                if media_id:
+                    _header_media_cache[image_url] = media_id
+                    logger.info(f"[broadcast] Imagen header subida → media_id={media_id}")
+                    return media_id
+            logger.warning(f"[broadcast] Error subiendo imagen: {r_up.status_code} {r_up.text[:200]}")
+    except Exception as e:
+        logger.warning(f"[broadcast] Excepción subiendo imagen header: {e}")
+    return None
+
 @app.get("/inbox/broadcast/templates/raw")
 async def inbox_broadcast_templates_raw(
     token: str = "",
@@ -1405,6 +1455,13 @@ async def inbox_broadcast_send(
     fallidos = 0
     errores  = []
 
+    # Si el template tiene IMAGE header, subir la imagen una sola vez y cachear el media_id
+    header_media_id: str | None = None
+    if header_type == "IMAGE" and header_url:
+        header_media_id = await _subir_imagen_whatsapp(header_url, access_token, phone_number_id)
+        if not header_media_id:
+            logger.warning("[broadcast] No se pudo obtener media_id para el header — se enviará sin imagen")
+
     async with httpx.AsyncClient(timeout=15) as client:
         for dest in recipients:
             tel = "".join(filter(str.isdigit, str(dest.get("phone", ""))))
@@ -1417,11 +1474,12 @@ async def inbox_broadcast_send(
             vars_dest = dest.get("variables", [])
             components = []
 
-            # HEADER: NO se incluye para imágenes fijas (static).
-            # scontent.whatsapp.net son URLs internas de WhatsApp que Meta no puede
-            # resolver como link externo → causa entrega silenciosa fallida.
-            # Meta sirve la imagen del template automáticamente sin necesidad
-            # de incluir el componente header en el payload de envío.
+            # HEADER con media_id: usamos el ID subido vía Media API (no la URL de scontent)
+            if header_media_id:
+                components.append({
+                    "type": "header",
+                    "parameters": [{"type": "image", "image": {"id": header_media_id}}],
+                })
 
             # BODY con variables personalizadas
             if vars_dest:
