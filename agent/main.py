@@ -1401,12 +1401,11 @@ async def inbox_broadcast_send(
             components = []
             if vars_dest:
                 parameters = []
-                for i, v in enumerate(vars_dest):
-                    param = {"type": "text", "text": str(v)}
-                    # parameter_name solo para plantillas nombradas ({{nombre}})
-                    if is_named and i < len(var_names) and not var_names[i].isdigit():
-                        param["parameter_name"] = var_names[i]
-                    parameters.append(param)
+                for v in vars_dest:
+                    # Meta siempre recibe parámetros posicionales en el envío,
+                    # aunque la plantilla use variables nombradas ({{nombre}}).
+                    # parameter_name NO es válido en el request de mensajes.
+                    parameters.append({"type": "text", "text": str(v)})
                 components.append({
                     "type": "body",
                     "parameters": parameters,
