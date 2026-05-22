@@ -1417,13 +1417,11 @@ async def inbox_broadcast_send(
             vars_dest = dest.get("variables", [])
             components = []
 
-            # HEADER con imagen: Meta exige incluirlo cuando el template tiene
-            # header_handle en el ejemplo (imagen variable por mensaje)
-            if header_type == "IMAGE" and header_url:
-                components.append({
-                    "type": "header",
-                    "parameters": [{"type": "image", "image": {"link": header_url}}],
-                })
+            # HEADER: NO se incluye para imágenes fijas (static).
+            # scontent.whatsapp.net son URLs internas de WhatsApp que Meta no puede
+            # resolver como link externo → causa entrega silenciosa fallida.
+            # Meta sirve la imagen del template automáticamente sin necesidad
+            # de incluir el componente header en el payload de envío.
 
             # BODY con variables personalizadas
             if vars_dest:
