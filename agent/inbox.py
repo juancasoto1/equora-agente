@@ -346,6 +346,32 @@ tr:hover td{background:#f8f9fa}
 .progress-upload .pu-spinner{animation:spin 1s linear infinite;font-size:1rem}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
+/* ── PREVIEW WHATSAPP ── */
+.wa-phone{width:240px;flex-shrink:0;position:sticky;top:20px}
+.wa-phone-shell{background:#e5ddd5;border-radius:18px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.18);border:6px solid #111;position:relative}
+.wa-phone-bar{background:#075e54;padding:10px 14px;display:flex;align-items:center;gap:8px}
+.wa-phone-bar .wa-av{width:30px;height:30px;border-radius:50%;background:#25d366;display:flex;align-items:center;justify-content:center;font-size:1rem}
+.wa-phone-bar .wa-name{color:#fff;font-size:.82rem;font-weight:600}
+.wa-phone-bar .wa-sub{color:#b2dfdb;font-size:.68rem}
+.wa-chat{padding:10px 8px 16px;min-height:200px;background:#e5ddd5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' opacity='.06'%3E%3Ctext y='50' font-size='50'%3E💬%3C/text%3E%3C/svg%3E")}
+.wa-bubble{background:#fff;border-radius:0 10px 10px 10px;margin:0 4px;box-shadow:0 1px 2px rgba(0,0,0,.15);overflow:hidden;max-width:220px;position:relative}
+.wa-hdr-img{width:100%;background:#25d366 linear-gradient(135deg,#1a8a5a 0%,#25d366 100%);min-height:110px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:#fff;position:relative;overflow:hidden}
+.wa-hdr-img img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
+.wa-hdr-img .wa-hdr-emoji{position:relative;z-index:1}
+.wa-hdr-txt{background:#128c7e;color:#fff;font-size:.78rem;font-weight:700;padding:8px 12px;text-align:center}
+.wa-hdr-doc{background:#f0f0f0;padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #e0e0e0}
+.wa-hdr-vid-wrap{position:relative}
+.wa-hdr-vid-wrap .wa-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3);font-size:2rem}
+.wa-body-text{padding:10px 12px 2px;font-size:.8rem;line-height:1.5;color:#111;white-space:pre-wrap;word-break:break-word}
+.wa-footer-text{padding:2px 12px 8px;font-size:.72rem;color:#667781;line-height:1.4}
+.wa-ts{text-align:right;font-size:.65rem;color:#667781;padding:0 8px 6px;display:flex;align-items:center;justify-content:flex-end;gap:3px}
+.wa-ts .wa-tick{color:#34b7f1}
+.wa-btns{border-top:1px solid #e9ecef}
+.wa-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 12px;color:#128c7e;font-size:.78rem;font-weight:600;border-bottom:1px solid #e9ecef;cursor:default;text-align:center}
+.wa-btn:last-child{border-bottom:none}
+.wa-btn .wa-btn-ic{font-size:.9rem}
+.wa-preview-label{font-size:.72rem;color:#6b7a8d;text-align:center;margin-top:8px;font-style:italic}
+
 /* ── CONFIGURACIÓN ── */
 .config-item{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid #f0f2f5}
 .config-item:last-child{border-bottom:none}
@@ -872,6 +898,54 @@ tr:hover td{background:#f8f9fa}
               </div>
             </div>
 
+            <!-- Vista previa WhatsApp -->
+            <div class="wa-phone" id="wa-preview-col">
+              <div class="wa-phone-shell">
+                <!-- Barra de contacto estilo WhatsApp -->
+                <div class="wa-phone-bar">
+                  <div class="wa-av">🤖</div>
+                  <div>
+                    <div class="wa-name" id="prev-contact-name">Equora Distribuciones</div>
+                    <div class="wa-sub">en línea</div>
+                  </div>
+                </div>
+                <!-- Chat area -->
+                <div class="wa-chat">
+                  <div class="wa-bubble" id="wa-bubble">
+                    <!-- Header imagen (placeholder) -->
+                    <div class="wa-hdr-img" id="prev-hdr-img" style="display:none">
+                      <div class="wa-hdr-emoji" id="prev-hdr-img-emoji">🖼️</div>
+                      <img id="prev-hdr-img-tag" src="" style="display:none" alt="">
+                    </div>
+                    <!-- Header video -->
+                    <div class="wa-hdr-img wa-hdr-vid-wrap" id="prev-hdr-vid" style="display:none;background:#111">
+                      <div class="wa-hdr-emoji">🎥</div>
+                      <div class="wa-play">▶</div>
+                    </div>
+                    <!-- Header documento -->
+                    <div class="wa-hdr-doc" id="prev-hdr-doc" style="display:none">
+                      <span style="font-size:1.4rem">📄</span>
+                      <div>
+                        <div style="font-size:.75rem;font-weight:600;color:#111" id="prev-doc-name">documento.pdf</div>
+                        <div style="font-size:.68rem;color:#667781">PDF</div>
+                      </div>
+                    </div>
+                    <!-- Header texto -->
+                    <div class="wa-hdr-txt" id="prev-hdr-txt" style="display:none"></div>
+                    <!-- Cuerpo -->
+                    <div class="wa-body-text" id="prev-body">Escribe el mensaje aquí para ver la vista previa...</div>
+                    <!-- Footer -->
+                    <div class="wa-footer-text" id="prev-footer" style="display:none"></div>
+                    <!-- Timestamp -->
+                    <div class="wa-ts">10:50 pm <span class="wa-tick">✓✓</span></div>
+                    <!-- Botones -->
+                    <div class="wa-btns" id="prev-btns" style="display:none"></div>
+                  </div>
+                </div>
+              </div>
+              <div class="wa-preview-label">Vista previa · Solo referencia</div>
+            </div>
+
           </div>
         </div>
       </div><!-- /sec-plantillas -->
@@ -984,7 +1058,7 @@ function showSec(id) {
   if (!_secCargadas[id]) {
     _secCargadas[id] = true;
     if (id === 'difusiones')    { cargarTemplates(); cargarHistorialDif(); }
-    if (id === 'plantillas')    { cargarTablaPlantillas(); }
+    if (id === 'plantillas')    { cargarTablaPlantillas(); setTimeout(_hookPreview, 200); }
     if (id === 'metricas')      { cargarMetricas(); }
     if (id === 'configuracion') { cargarConfiguracion(); }
   }
@@ -1831,6 +1905,7 @@ function seleccionarArchivo(input, tipo, maxMB) {
   document.getElementById(tipo + '-preview').style.display = 'flex';
   document.getElementById(tipo + '-zone').classList.add('has-file');
   input.value = '';
+  actualizarPreview();
 }
 
 function handleDrop(e, tipo) {
@@ -1850,6 +1925,7 @@ function limpiarArchivo(tipo) {
   document.getElementById(tipo + '-preview').style.display = 'none';
   document.getElementById(tipo + '-zone').classList.remove('has-file');
   document.getElementById('tpl-' + tipo + '-file').value = '';
+  actualizarPreview();
 }
 
 /* ── Botones Quick Reply ── */
@@ -2085,6 +2161,144 @@ function showTplResult(tipo, html) {
     (tipo === 'ok'   ? 'background:#d4edda;color:#155724;border:1px solid #c3e6cb' :
      tipo === 'warn' ? 'background:#fff3cd;color:#856404;border:1px solid #ffeaa7' :
                        'background:#f8d7da;color:#721c24;border:1px solid #f5c6cb');
+}
+
+/* ══════════════════════════════════════════════════════
+   VISTA PREVIA WHATSAPP EN TIEMPO REAL
+   ══════════════════════════════════════════════════════ */
+
+function actualizarPreview() {
+  // ── Header ──
+  var hdrTipo = document.querySelector('input[name="hdr-type"]:checked');
+  hdrTipo = hdrTipo ? hdrTipo.value : 'NONE';
+
+  var elHdrImg = document.getElementById('prev-hdr-img');
+  var elHdrVid = document.getElementById('prev-hdr-vid');
+  var elHdrDoc = document.getElementById('prev-hdr-doc');
+  var elHdrTxt = document.getElementById('prev-hdr-txt');
+  [elHdrImg, elHdrVid, elHdrDoc, elHdrTxt].forEach(function(e) { if(e) e.style.display = 'none'; });
+
+  if (hdrTipo === 'IMAGE') {
+    elHdrImg.style.display = '';
+    var file = _tplFiles.img;
+    var imgTag = document.getElementById('prev-hdr-img-tag');
+    var emoji  = document.getElementById('prev-hdr-img-emoji');
+    if (file) {
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        imgTag.src = ev.target.result;
+        imgTag.style.display = '';
+        emoji.style.display  = 'none';
+      };
+      reader.readAsDataURL(file);
+    } else {
+      imgTag.style.display  = 'none';
+      emoji.style.display   = '';
+      emoji.textContent     = '🖼️';
+    }
+  } else if (hdrTipo === 'VIDEO') {
+    elHdrVid.style.display = '';
+    var fileV = _tplFiles.vid;
+    // Video: si hay archivo local mostrar thumbnail aproximado
+    document.getElementById('prev-hdr-vid').querySelector('.wa-hdr-emoji').textContent = fileV ? '🎥' : '🎥';
+  } else if (hdrTipo === 'DOCUMENT') {
+    elHdrDoc.style.display = '';
+    var fileD = _tplFiles.doc;
+    document.getElementById('prev-doc-name').textContent = fileD ? fileD.name : 'documento.pdf';
+  } else if (hdrTipo === 'TEXT') {
+    var hdrTexto = (document.getElementById('tpl-hdr-text').value || '').trim();
+    if (hdrTexto) {
+      elHdrTxt.style.display = '';
+      elHdrTxt.textContent   = hdrTexto;
+    }
+  }
+
+  // ── Cuerpo ──
+  var bodyRaw = (document.getElementById('tpl-body').value || '').trim();
+  var bodyEl  = document.getElementById('prev-body');
+  if (bodyRaw) {
+    // Resaltar variables {{...}} con color verde
+    var bodyHtml = he(bodyRaw)
+      .replace(/\*([^*]+)\*/g, '<b>$1</b>')
+      .replace(/_([^_]+)_/g, '<i>$1</i>')
+      .replace(/~([^~]+)~/g, '<s>$1</s>')
+      .replace(/\{\{([^}]+)\}\}/g, '<span style="background:#e8f5e9;color:#2e7d32;border-radius:3px;padding:0 2px;font-weight:600">{{$1}}</span>');
+    bodyEl.innerHTML = bodyHtml;
+  } else {
+    bodyEl.textContent = 'Escribe el cuerpo del mensaje...';
+  }
+
+  // ── Footer ──
+  var footer    = (document.getElementById('tpl-footer').value || '').trim();
+  var footerEl  = document.getElementById('prev-footer');
+  footerEl.style.display = footer ? '' : 'none';
+  footerEl.textContent   = footer;
+
+  // ── Botones ──
+  var btnTipo = document.querySelector('input[name="btn-type"]:checked');
+  btnTipo = btnTipo ? btnTipo.value : 'NONE';
+  var btnsEl  = document.getElementById('prev-btns');
+  var btnsHtml = '';
+
+  if (btnTipo === 'QUICK_REPLY') {
+    document.querySelectorAll('#qr-list .qr-text').forEach(function(inp) {
+      var txt = inp.value.trim();
+      if (txt) btnsHtml += '<div class="wa-btn"><span class="wa-btn-ic">↩️</span>' + he(txt) + '</div>';
+    });
+  } else if (btnTipo === 'CTA') {
+    document.querySelectorAll('#cta-list .cta-row').forEach(function(row) {
+      var tipo2  = row.querySelector('.cta-tipo') ? row.querySelector('.cta-tipo').value : 'URL';
+      var texto2 = row.querySelector('.cta-texto') ? row.querySelector('.cta-texto').value.trim() : '';
+      if (!texto2) return;
+      var ic = tipo2 === 'URL' ? '🔗' : '📞';
+      btnsHtml += '<div class="wa-btn"><span class="wa-btn-ic">' + ic + '</span>' + he(texto2) + '</div>';
+    });
+  }
+
+  btnsEl.style.display = btnsHtml ? '' : 'none';
+  btnsEl.innerHTML     = btnsHtml;
+}
+
+/* Delegación de eventos para botones de remoción */
+document.addEventListener('click', function(e) {
+  if (e.target && (e.target.classList.contains('btn-remove') || e.target.closest('.btn-remove'))) {
+    setTimeout(actualizarPreview, 50);
+  }
+});
+
+/* Hook: conectar preview a todos los campos del form */
+function _hookPreview() {
+  var ids = ['tpl-hdr-text','tpl-body','tpl-footer'];
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('input', actualizarPreview);
+  });
+  // Radios header y botones
+  document.querySelectorAll('input[name="hdr-type"], input[name="btn-type"]').forEach(function(r) {
+    r.addEventListener('change', actualizarPreview);
+  });
+  // Botones QR y CTA: usar MutationObserver para detectar cuando se agregan
+  var observer = new MutationObserver(function() {
+    // Re-hookear los inputs nuevos dentro de qr-list y cta-list
+    ['#qr-list','#cta-list'].forEach(function(sel) {
+      var el = document.querySelector(sel);
+      if (!el) return;
+      el.querySelectorAll('input').forEach(function(inp) {
+        if (!inp._previewHooked) {
+          inp._previewHooked = true;
+          inp.addEventListener('input', actualizarPreview);
+          inp.addEventListener('change', actualizarPreview);
+        }
+      });
+    });
+    actualizarPreview();
+  });
+  var qrEl  = document.getElementById('qr-list');
+  var ctaEl = document.getElementById('cta-list');
+  if (qrEl)  observer.observe(qrEl,  {childList:true, subtree:true});
+  if (ctaEl) observer.observe(ctaEl, {childList:true, subtree:true});
+  // Disparo inicial
+  actualizarPreview();
 }
 
 /* ══════════════════════════════════════════════════════
