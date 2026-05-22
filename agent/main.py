@@ -1235,6 +1235,26 @@ async def inbox_modo(
 
 # ── Difusión / Broadcast ───────────────────────────────────────────────────
 
+@app.get("/inbox/broadcast/templates/raw")
+async def inbox_broadcast_templates_raw(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Debug: devuelve el JSON crudo de Meta para ver cómo están registradas las variables."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    access_token = os.getenv("META_ACCESS_TOKEN", "")
+    waba_id      = os.getenv("META_WABA_ID", "")
+    api_ver = "v21.0"
+    url = (
+        f"https://graph.facebook.com/{api_ver}/{waba_id}"
+        f"/message_templates?fields=name,status,components,language&limit=20"
+        f"&access_token={access_token}"
+    )
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(url)
+        return JSONResponse(content=r.json())
+
 @app.get("/inbox/broadcast/templates")
 async def inbox_broadcast_templates(
     token: str = "",
