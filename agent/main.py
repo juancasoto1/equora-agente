@@ -1325,12 +1325,27 @@ async def inbox_broadcast_templates(
                         variables = found
                         named = any(not v.isdigit() for v in found)
                     break
+                # Extraer header: tipo y URL de imagen si existe
+                header_type = None
+                header_url  = None
+                for comp in t.get("components", []):
+                    if comp.get("type", "").upper() != "HEADER":
+                        continue
+                    fmt = comp.get("format", "").upper()
+                    header_type = fmt
+                    if fmt == "IMAGE":
+                        handles = comp.get("example", {}).get("header_handle", [])
+                        header_url = handles[0] if handles else None
+                    break
+
                 templates.append({
-                    "name":      t.get("name", ""),
-                    "language":  t.get("language", "es_CO"),
-                    "variables": variables,
-                    "named":     named,   # True si usa {{nombre}}, False si usa {{1}}
-                    "preview":   next(
+                    "name":        t.get("name", ""),
+                    "language":    t.get("language", "es_CO"),
+                    "variables":   variables,
+                    "named":       named,       # True si usa {{nombre}}, False si usa {{1}}
+                    "header_type": header_type, # "IMAGE", "TEXT", "VIDEO", None
+                    "header_url":  header_url,  # URL de la imagen del header (si aplica)
+                    "preview":     next(
                         (c.get("text", "") for c in t.get("components", [])
                          if c.get("type", "").upper() == "BODY"),
                         ""
@@ -1371,6 +1386,8 @@ async def inbox_broadcast_send(
     recipients    = body.get("recipients", [])   # [{phone, variables:[]}]
     var_names     = body.get("var_names", [])    # nombres de variables, ej: ["nombre"]
     is_named      = body.get("named", False)     # True si plantilla usa {{nombre}}, False si {{1}}
+    header_type   = body.get("header_type")      # "IMAGE", "TEXT", etc.
+    header_url    = body.get("header_url")       # URL de imagen del header (si aplica)
 
     if not template_name or not recipients:
         return JSONResponse(content={"error": "Faltan template o recipients"}, status_code=400)
@@ -1399,13 +1416,24 @@ async def inbox_broadcast_send(
             # Variables específicas de este destinatario
             vars_dest = dest.get("variables", [])
             components = []
+
+            # HEADER con imagen: Meta exige incluirlo cuando el template tiene
+            # header_handle en el ejemplo (imagen variable por mensaje)
+            if header_type == "IMAGE" and header_url:
+                components.append({
+                    "type": "header",
+                    "parameters": [{"type": "image", "image": {"link": header_url}}],
+                })
+
+            # BODY con variables personalizadas
             if vars_dest:
                 parameters = []
-                for v in vars_dest:
-                    # Meta siempre recibe parámetros posicionales en el envío,
-                    # aunque la plantilla use variables nombradas ({{nombre}}).
-                    # parameter_name NO es válido en el request de mensajes.
-                    parameters.append({"type": "text", "text": str(v)})
+                for i, v in enumerate(vars_dest):
+                    param = {"type": "text", "text": str(v)}
+                    # parameter_name para plantillas con variables nombradas ({{nombre}})
+                    if is_named and i < len(var_names) and not var_names[i].isdigit():
+                        param["parameter_name"] = var_names[i]
+                    parameters.append(param)
                 components.append({
                     "type": "body",
                     "parameters": parameters,

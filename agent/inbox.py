@@ -739,6 +739,8 @@ async function enviarDifusion() {
           language: tpl.language,
           var_names: tpl.variables,
           named: tpl.named === true,
+          header_type: tpl.header_type || null,
+          header_url:  tpl.header_url  || null,
           recipients: lote,
         }),
       });
