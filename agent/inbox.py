@@ -605,6 +605,21 @@ async function enviarDifusion() {
   var recipients = _parsearDestinatarios();
   if (!recipients.length) return;
 
+  // Validar: si la plantilla tiene variables, ningún destinatario puede tenerlas vacías
+  if (tpl.variables && tpl.variables.length) {
+    var sinNombre = recipients.filter(function(r) {
+      return r.variables.some(function(v) { return !v || v.trim() === ''; });
+    });
+    if (sinNombre.length) {
+      var res = document.getElementById('dif-result');
+      res.style.display = 'block';
+      res.className = 'dif-result err';
+      res.textContent = '⚠️ ' + sinNombre.length + ' destinatario(s) tienen variables vacías. ' +
+        'Usa el formato "número,nombre" o rellena el campo fijo arriba.';
+      return;
+    }
+  }
+
   // UI: mostrar progreso
   var btn  = document.getElementById('dif-sendbtn');
   var prog = document.getElementById('dif-prog');
