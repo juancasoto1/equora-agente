@@ -17,10 +17,11 @@ import httpx
 
 logger = logging.getLogger("agentkit")
 
-PIXEL_ID   = os.getenv("META_PIXEL_ID", "")
-CAPI_TOKEN = os.getenv("META_CAPI_TOKEN", "")
-API_VER    = "v21.0"
-CAPI_URL   = f"https://graph.facebook.com/{API_VER}/{PIXEL_ID}/events"
+PIXEL_ID        = os.getenv("META_PIXEL_ID", "")
+CAPI_TOKEN      = os.getenv("META_CAPI_TOKEN", "")
+CAPI_TEST_CODE  = os.getenv("META_CAPI_TEST_CODE", "")  # solo para pruebas — vaciar en producción
+API_VER         = "v21.0"
+CAPI_URL        = f"https://graph.facebook.com/{API_VER}/{PIXEL_ID}/events"
 
 # Source estándar para todos los eventos de Andrea
 EVENT_SOURCE_URL = "https://wa.me/message/andrea-equora"
@@ -76,6 +77,11 @@ async def enviar_evento(
         ],
         "access_token": CAPI_TOKEN,
     }
+    # test_event_code: solo cuando META_CAPI_TEST_CODE está configurado
+    # Hace que los eventos aparezcan en "Probar eventos" de Meta Events Manager
+    # Vaciar esta variable en producción para no contaminar datos reales
+    if CAPI_TEST_CODE:
+        payload["test_event_code"] = CAPI_TEST_CODE
 
     try:
         async with httpx.AsyncClient(timeout=5) as client:
