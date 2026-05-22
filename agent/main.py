@@ -30,6 +30,7 @@ from agent.memory import (
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
+from agent.capi import capi_lead, capi_view_content, capi_add_to_cart, capi_initiate_checkout
 from agent.tools import (
     crear_checkout_shopify,
     obtener_catalogo_shopify,
@@ -278,13 +279,17 @@ async def _procesar_carrito_unificado():
 
         # Si el estado cambió (ej. cliente agregó productos: 3→4), resetear cooldown
         # para notificar de inmediato el nuevo estado
-        if _carrito_ultimo_estado.get(telefono) != estado_actual:
+        estado_anterior = _carrito_ultimo_estado.get(telefono)
+        if estado_anterior != estado_actual:
             _carrito_unif_cooldown[telefono] = 0
             logger.info(
                 f"Carrito {telefono}: estado cambió "
-                f"{_carrito_ultimo_estado.get(telefono, '—')} → {estado_actual} "
+                f"{estado_anterior or '—'} → {estado_actual} "
                 f"(${total:,}) — cooldown reseteado"
             )
+            # CAPI: InitiateCheckout — cliente alcanzó el mínimo de pedido (3→4 ó 3→5)
+            if estado_anterior == 3 and estado_actual in (4, 5):
+                asyncio.create_task(capi_initiate_checkout(telefono, total))
 
         # Cooldown: no re-notificar el mismo estado en CARRITO_COOLDOWN_MIN minutos
         elapsed_min = (ahora - _carrito_unif_cooldown.get(telefono, 0)) / 60
@@ -599,6 +604,27 @@ _COLECCION_MAP: dict[str, str] = {
 }
 
 
+def _utm_andrea(url: str, content: str = "") -> str:
+    """
+    Agrega parámetros UTM a cualquier URL de la tienda enviada por Andrea.
+    El Pixel web de Meta los captura automáticamente en PageView / ViewContent.
+      utm_source   = whatsapp
+      utm_medium   = chatbot
+      utm_campaign = andrea
+      utm_content  = término del producto / categoría (si lo hay)
+    """
+    import urllib.parse
+    params = {
+        "utm_source": "whatsapp",
+        "utm_medium": "chatbot",
+        "utm_campaign": "andrea",
+    }
+    if content:
+        params["utm_content"] = content[:100]  # truncar por seguridad
+    sep = "&" if "?" in url else "?"
+    return url + sep + urllib.parse.urlencode(params)
+
+
 def _construir_url_tienda(query: str) -> str:
     """
     Convierte el término del marcador [[TIENDA:término]] en la URL más
@@ -756,6 +782,11 @@ async def webhook_handler(request: Request):
                 continue
 
             historial = await obtener_historial(msg.telefono)
+
+            # CAPI: Lead — primera vez que este número escribe a Andrea
+            if not historial:
+                asyncio.create_task(capi_lead(msg.telefono))
+
             respuesta = await generar_respuesta(msg.texto, historial, msg.telefono)
 
             await guardar_mensaje(msg.telefono, "user", msg.texto)
@@ -910,8 +941,10 @@ async def webhook_handler(request: Request):
             if abrir_tienda:
                 import urllib.parse
                 tienda_url = _construir_url_tienda(tienda_query)
+                # UTMs para atribución en el Pixel web de Meta
+                tienda_url = _utm_andrea(tienda_url, content=tienda_query)
                 # Añadir teléfono para que Lovable pueda reportar el carrito de vuelta
-                tienda_url += f"?tel={urllib.parse.quote(msg.telefono)}"
+                tienda_url += f"&tel={urllib.parse.quote(msg.telefono)}"
                 minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
                 gratis_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
                 pie_tienda = f"📦 Pedido mínimo ${minimo_fmt} | 🚚 Envío gratis > ${gratis_fmt}"
@@ -945,6 +978,12 @@ async def webhook_handler(request: Request):
                         msg.telefono, f"{texto_tienda}\n\n👉 {tienda_url}"
                     )
                 logger.info(f"Link tienda enviado a {msg.telefono}: {tienda_url}")
+                # CAPI: ViewContent — Andrea envió link de producto/catálogo
+                asyncio.create_task(capi_view_content(
+                    msg.telefono,
+                    tienda_query or "catalogo",
+                    tienda_url,
+                ))
 
             # Enviar link de checkout de Shopify si se generó
             if checkout_url:
@@ -1042,6 +1081,8 @@ async def shopify_cart_update(request: Request):
                 f"[cart-update] {telefono}: {len(productos)} productos, "
                 f"total=${total_recibido:,}"
             )
+            # CAPI: AddToCart — cliente agregó productos en la tienda web
+            asyncio.create_task(capi_add_to_cart(telefono, total_recibido, items_para_bd))
         else:
             # Carrito vacío → limpiar
             await limpiar_carrito_activo(telefono)
