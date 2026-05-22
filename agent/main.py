@@ -8,6 +8,7 @@ import logging
 import asyncio
 import random
 import time
+import httpx
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Cookie
 from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
