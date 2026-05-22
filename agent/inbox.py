@@ -738,6 +738,7 @@ async function enviarDifusion() {
           template: name,
           language: tpl.language,
           var_names: tpl.variables,
+          named: tpl.named === true,
           recipients: lote,
         }),
       });

@@ -1299,18 +1299,37 @@ async def inbox_broadcast_templates(
             for t in templates_raw:
                 if t.get("status", "").upper() != "APPROVED":
                     continue
-                # Extraer placeholders {{N}} del body
+                # Extraer variables del body — usamos la fuente oficial de Meta:
+                # 1. body_text_named_params → variables con nombre ({{nombre}})
+                # 2. body_text              → variables posicionales ({{1}})
+                # 3. Fallback regex
                 variables = []
+                named = False
                 for comp in t.get("components", []):
-                    if comp.get("type", "").upper() == "BODY":
+                    if comp.get("type", "").upper() != "BODY":
+                        continue
+                    example = comp.get("example", {})
+                    if example.get("body_text_named_params"):
+                        # Plantilla con variables nombradas
+                        variables = [p["param_name"] for p in example["body_text_named_params"] if p.get("param_name")]
+                        named = True
+                    elif example.get("body_text"):
+                        # Plantilla con variables posicionales: body_text es [[val1, val2, ...]]
+                        bt = example["body_text"]
+                        count = len(bt[0]) if bt and bt[0] else 0
+                        variables = [str(i + 1) for i in range(count)]
+                    else:
+                        # Fallback: regex sobre el texto de la plantilla
                         text = comp.get("text", "")
-                        nums = sorted(set(re.findall(r'\{\{([^}]+)\}\}', text)))
-                        variables = nums
-                        break
+                        found = sorted(set(re.findall(r'\{\{([^}]+)\}\}', text)))
+                        variables = found
+                        named = any(not v.isdigit() for v in found)
+                    break
                 templates.append({
                     "name":      t.get("name", ""),
                     "language":  t.get("language", "es_CO"),
                     "variables": variables,
+                    "named":     named,   # True si usa {{nombre}}, False si usa {{1}}
                     "preview":   next(
                         (c.get("text", "") for c in t.get("components", [])
                          if c.get("type", "").upper() == "BODY"),
@@ -1351,6 +1370,7 @@ async def inbox_broadcast_send(
     language      = body.get("language", "es_CO")
     recipients    = body.get("recipients", [])   # [{phone, variables:[]}]
     var_names     = body.get("var_names", [])    # nombres de variables, ej: ["nombre"]
+    is_named      = body.get("named", False)     # True si plantilla usa {{nombre}}, False si {{1}}
 
     if not template_name or not recipients:
         return JSONResponse(content={"error": "Faltan template o recipients"}, status_code=400)
@@ -1380,16 +1400,12 @@ async def inbox_broadcast_send(
             vars_dest = dest.get("variables", [])
             components = []
             if vars_dest:
-                # Si tenemos nombres de variables (ej. ["nombre"]) usamos parameter_name
-                # para plantillas con {{nombre}}; si son posicionales ({{1}}) solo text
                 parameters = []
                 for i, v in enumerate(vars_dest):
                     param = {"type": "text", "text": str(v)}
-                    if i < len(var_names):
-                        # Solo incluir parameter_name si la variable NO es numérica
-                        vname = var_names[i]
-                        if not vname.isdigit():
-                            param["parameter_name"] = vname
+                    # parameter_name solo para plantillas nombradas ({{nombre}})
+                    if is_named and i < len(var_names) and not var_names[i].isdigit():
+                        param["parameter_name"] = var_names[i]
                     parameters.append(param)
                 components.append({
                     "type": "body",
@@ -1407,16 +1423,22 @@ async def inbox_broadcast_send(
                 },
             }
             try:
-                logger.info(f"[broadcast] Payload → {payload}")
+                logger.info(f"[broadcast] named={is_named} var_names={var_names} Payload → {payload}")
                 r = await client.post(api_url, json=payload, headers=headers)
                 if r.status_code == 200:
                     enviados += 1
                     logger.info(f"[broadcast] Enviado a {tel[-4:]}****")
                 else:
                     fallidos += 1
-                    err_msg = r.json().get("error", {}).get("message", r.text[:200])
-                    errores.append(f"{tel}: {err_msg}")
-                    logger.warning(f"[broadcast] Falló {tel}: {r.status_code} — {r.text[:300]}")
+                    try:
+                        err_data = r.json().get("error", {})
+                        err_code = err_data.get("code", "")
+                        err_msg  = err_data.get("message", r.text[:200])
+                        err_detail = f"#{err_code} {err_msg} | payload_components={payload.get('template',{}).get('components','none')}"
+                    except Exception:
+                        err_detail = r.text[:300]
+                    errores.append(f"{tel}: {err_detail}")
+                    logger.warning(f"[broadcast] Falló {tel}: {r.status_code} — {r.text[:400]}")
             except Exception as e:
                 fallidos += 1
                 errores.append(f"{tel}: {e}")
