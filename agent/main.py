@@ -1783,6 +1783,7 @@ async def inbox_plantillas_crear(
     footer        = body.get("footer", "")
     buttons       = body.get("buttons", [])
     sub_category  = body.get("sub_category", "DEFAULT")      # DEFAULT|CATALOG_MESSAGE|CALL_PERMISSION_REQUEST
+    catalog_format = body.get("catalog_format", "FULL")      # FULL | MULTI (solo para CATALOG_MESSAGE)
     var_type      = (body.get("var_type") or "").upper()     # NOMBRE | NUMERO (controla ejemplo de variables)
     ttl_activo    = body.get("ttl_activo", False)
     ttl_secs      = int(body.get("ttl", 43200))              # período de validez en segundos
@@ -1797,24 +1798,26 @@ async def inbox_plantillas_crear(
     componentes = []
 
     # ── HEADER ──
-    if header_tipo == "TEXT" and header_texto:
-        componentes.append({"type": "HEADER", "format": "TEXT", "text": header_texto[:60]})
-    elif header_tipo in ("IMAGE", "VIDEO", "DOCUMENT"):
-        comp_hdr: dict = {"type": "HEADER", "format": header_tipo}
-        if header_handle:
-            comp_hdr["example"] = {"header_handle": [header_handle]}
-        componentes.append(comp_hdr)
-    elif header_tipo == "LOCATION":
-        comp_hdr = {"type": "HEADER", "format": "LOCATION"}
-        if loc_lat and loc_lng:
-            comp_hdr["example"] = {
-                "header_location": {
-                    "latitude": str(loc_lat),
-                    "longitude": str(loc_lng),
-                    "name": loc_name or "Ubicación de ejemplo",
+    # CATALOG_MESSAGE y CALL_PERMISSION_REQUEST no admiten encabezado multimedia
+    if sub_category not in ("CATALOG_MESSAGE", "CALL_PERMISSION_REQUEST"):
+        if header_tipo == "TEXT" and header_texto:
+            componentes.append({"type": "HEADER", "format": "TEXT", "text": header_texto[:60]})
+        elif header_tipo in ("IMAGE", "VIDEO", "DOCUMENT"):
+            comp_hdr: dict = {"type": "HEADER", "format": header_tipo}
+            if header_handle:
+                comp_hdr["example"] = {"header_handle": [header_handle]}
+            componentes.append(comp_hdr)
+        elif header_tipo == "LOCATION":
+            comp_hdr = {"type": "HEADER", "format": "LOCATION"}
+            if loc_lat and loc_lng:
+                comp_hdr["example"] = {
+                    "header_location": {
+                        "latitude": str(loc_lat),
+                        "longitude": str(loc_lng),
+                        "name": loc_name or "Ubicación de ejemplo",
+                    }
                 }
-            }
-        componentes.append(comp_hdr)
+            componentes.append(comp_hdr)
 
     # ── BODY ──
     import re as _re
@@ -1842,7 +1845,14 @@ async def inbox_plantillas_crear(
         componentes.append({"type": "FOOTER", "text": footer[:60]})
 
     # ── BUTTONS ──
-    if buttons:
+    if sub_category == "CATALOG_MESSAGE":
+        # Catálogo: solo un botón fijo de tipo CATALOG (Meta lo muestra como "Ver catálogo")
+        catalog_btn: dict = {"type": "CATALOG", "title": "Ver catálogo"}
+        componentes.append({"type": "BUTTONS", "buttons": [catalog_btn]})
+    elif sub_category == "CALL_PERMISSION_REQUEST":
+        # Permisos de llamada: Meta genera los botones automáticamente, no enviamos ninguno
+        pass
+    elif buttons:
         btn_list = []
         for b in buttons[:10]:
             btype = b.get("type", "").upper()

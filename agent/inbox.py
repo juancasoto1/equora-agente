@@ -753,14 +753,33 @@ tr:hover td{background:#f8f9fa}
                   </select>
                 </div>
 
+                <!-- ── CATÁLOGO (visible solo cuando subcat=CATALOG_MESSAGE) ── -->
+                <div id="catalog-section" style="display:none;margin-bottom:14px">
+                  <div class="sep-label">🛍️ Formato del catálogo</div>
+                  <div class="info-box" style="margin-bottom:10px">
+                    Conecta tu catálogo de productos para enviar mensajes de ventas directamente en WhatsApp.<br>
+                    <b>Nota:</b> No se permiten archivos multimedia en plantillas de catálogo. El catálogo vinculado se mostrará automáticamente.
+                  </div>
+                  <div id="catalog-format-opts" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+                    <label class="radio-opt chk" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid #e0e4e8;background:#fafbfc;gap:2px;cursor:pointer">
+                      <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="catalog-format" value="FULL" checked> <b style="font-size:.84rem;color:#1a2332">Mensaje de catálogo</b></span>
+                      <span style="font-size:.75rem;color:#6b7a8d;padding-left:22px">Incluye todo el catálogo para ofrecer una visión completa de todos tus productos.</span>
+                    </label>
+                    <label class="radio-opt" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid #e0e4e8;background:#fafbfc;gap:2px;cursor:pointer">
+                      <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="catalog-format" value="MULTI"> <b style="font-size:.84rem;color:#1a2332">Mensaje multiproducto</b></span>
+                      <span style="font-size:.75rem;color:#6b7a8d;padding-left:22px">Incluye hasta 30 productos específicos del catálogo. Deberás especificar los productos al enviar la plantilla via API.</span>
+                    </label>
+                  </div>
+                </div>
+
                 <!-- ── ENCABEZADO ── -->
+                <div id="hdr-section">
                 <div class="sep-label">📌 Encabezado <span class="opt-badge">Opcional</span></div>
 
                 <div class="f-group" style="margin-bottom:10px">
                   <span class="f-label">Tipo de encabezado</span>
                   <div class="radio-group" id="hdr-radio-group">
                     <label class="radio-opt chk"><input type="radio" name="hdr-type" value="NONE" checked onchange="toggleHdrType('NONE')"> Ninguno</label>
-                    <label class="radio-opt"><input type="radio" name="hdr-type" value="TEXT" onchange="toggleHdrType('TEXT')"> 📝 Texto</label>
                     <label class="radio-opt"><input type="radio" name="hdr-type" value="IMAGE" onchange="toggleHdrType('IMAGE')"> 🖼️ Imagen</label>
                     <label class="radio-opt"><input type="radio" name="hdr-type" value="VIDEO" onchange="toggleHdrType('VIDEO')"> 🎥 Video</label>
                     <label class="radio-opt"><input type="radio" name="hdr-type" value="DOCUMENT" onchange="toggleHdrType('DOCUMENT')"> 📄 Documento</label>
@@ -897,6 +916,7 @@ tr:hover td{background:#f8f9fa}
                     <input id="tpl-loc-name" class="f-inp" placeholder="Equora Distribuciones — Cali">
                   </div>
                 </div>
+                </div><!-- /hdr-section -->
 
                 <!-- ── CUERPO ── -->
                 <div class="sep-label">📝 Cuerpo del mensaje <span class="req">*</span></div>
@@ -975,6 +995,25 @@ tr:hover td{background:#f8f9fa}
                 </div>
 
                 <!-- ── BOTONES ── -->
+                <div id="btn-section">
+
+                <!-- Aviso fijo: catálogo (visible solo con CATALOG_MESSAGE) -->
+                <div id="catalog-btn-notice" style="display:none;margin-bottom:10px">
+                  <div class="sep-label">🔘 Botones</div>
+                  <div class="info-box" style="background:#f0f9f6;border-color:#b2dfdb">
+                    ℹ️ Solo se admite un botón para este tipo de plantilla. Meta agrega automáticamente el botón <b>"Ver catálogo"</b> y su texto no es editable.
+                  </div>
+                </div>
+
+                <!-- Aviso fijo: permisos de llamada (visible solo con CALL_PERMISSION_REQUEST) -->
+                <div id="call-perm-notice" style="display:none;margin-bottom:10px">
+                  <div class="sep-label">🔘 Botones</div>
+                  <div class="info-box" style="background:#fff8e1;border-color:#ffc107">
+                    ℹ️ Solo se admite un botón para este tipo de plantilla. Meta genera automáticamente las opciones de permiso de llamada. El texto del botón no es editable.
+                  </div>
+                </div>
+
+                <div id="btn-controls">
                 <div class="sep-label">🔘 Botones <span class="opt-badge">Opcional</span></div>
                 <div class="f-group" style="margin-bottom:10px">
                   <span class="f-label">Tipo de botones</span>
@@ -1011,6 +1050,9 @@ tr:hover td{background:#f8f9fa}
                     + Agregar botón
                   </button>
                 </div>
+                </div><!-- /btn-controls -->
+
+                </div><!-- /btn-section -->
 
                 <!-- Panel de aprobación (se muestra tras envío exitoso) -->
                 <div id="tpl-approval-panel" style="display:none;margin-bottom:14px;background:#eaf6ff;border:1.5px solid #90caf9;border-radius:10px;padding:16px 18px">
@@ -2007,6 +2049,8 @@ function _poblarFormulario(datos) {
   document.getElementById('tpl-nombre').value = datos.name || '';
   if (datos.category) document.getElementById('tpl-cat').value = datos.category;
   if (datos.language) document.getElementById('tpl-lang').value = datos.language;
+  // Renderizar subcategorías para la categoría seleccionada (también aplica reglas del subcat)
+  actualizarSubcat();
   document.getElementById('tpl-body').value   = datos.body || '';
   document.getElementById('tpl-footer').value = datos.footer || '';
   updateCounter('tpl-body','body-cnt',1024);
@@ -2147,24 +2191,79 @@ function actualizarSubcat() {
       + '<span style="font-size:.75rem;color:#6b7a8d;padding-left:22px">' + o.desc + '</span>'
       + '</label>';
   }).join('');
-  // Re-hook radio style
+  // Re-hook radio style + aplicar reglas al cambiar subcategoría
   el.querySelectorAll('input[type=radio]').forEach(function(r) {
     r.addEventListener('change', function() {
       el.querySelectorAll('.radio-opt').forEach(function(l) { l.classList.remove('chk'); });
       r.closest('.radio-opt').classList.add('chk');
+      _aplicarReglaSubcat();
     });
   });
   // Mostrar período de validez solo para MARKETING
   var ttlWrap = document.getElementById('ttl-wrap');
   if (ttlWrap) ttlWrap.style.display = (cat === 'MARKETING') ? '' : 'none';
+  // Aplicar reglas según la subcategoría seleccionada
+  _aplicarReglaSubcat();
+}
+
+/* ── Reglas por subcategoría (CATALOG_MESSAGE / CALL_PERMISSION_REQUEST / DEFAULT) ── */
+function _aplicarReglaSubcat() {
+  var subcat = (document.querySelector('input[name="tpl-subcat"]:checked') || {}).value || 'DEFAULT';
+  var hdrSec      = document.getElementById('hdr-section');
+  var catSec      = document.getElementById('catalog-section');
+  var btnControls = document.getElementById('btn-controls');
+  var catNotice   = document.getElementById('catalog-btn-notice');
+  var callNotice  = document.getElementById('call-perm-notice');
+
+  if (subcat === 'CATALOG_MESSAGE') {
+    // Ocultar encabezado (no permite multimedia)
+    if (hdrSec)    hdrSec.style.display    = 'none';
+    // Mostrar selector de formato catálogo
+    if (catSec)    catSec.style.display    = '';
+    // Ocultar controles normales de botones, mostrar aviso catálogo
+    if (btnControls) btnControls.style.display = 'none';
+    if (catNotice)   catNotice.style.display   = '';
+    if (callNotice)  callNotice.style.display  = 'none';
+    // Reset header a NONE
+    var r = document.querySelector('input[name="hdr-type"][value="NONE"]');
+    if (r) { r.checked = true; toggleHdrType('NONE'); }
+
+  } else if (subcat === 'CALL_PERMISSION_REQUEST') {
+    // Ocultar encabezado
+    if (hdrSec)    hdrSec.style.display    = 'none';
+    if (catSec)    catSec.style.display    = 'none';
+    // Ocultar controles normales de botones, mostrar aviso llamada
+    if (btnControls) btnControls.style.display = 'none';
+    if (catNotice)   catNotice.style.display   = 'none';
+    if (callNotice)  callNotice.style.display  = '';
+    // Reset header a NONE
+    var r2 = document.querySelector('input[name="hdr-type"][value="NONE"]');
+    if (r2) { r2.checked = true; toggleHdrType('NONE'); }
+
+  } else {
+    // DEFAULT u otros: mostrar todo normal
+    if (hdrSec)    hdrSec.style.display    = '';
+    if (catSec)    catSec.style.display    = 'none';
+    if (btnControls) btnControls.style.display = '';
+    if (catNotice)   catNotice.style.display   = 'none';
+    if (callNotice)  callNotice.style.display  = 'none';
+  }
+  actualizarPreview();
 }
 
 /* ── Tipo de encabezado ── */
 function toggleHdrType(tipo) {
-  var wraps = ['NONE','TEXT','IMAGE','VIDEO','DOCUMENT','LOCATION'];
-  wraps.forEach(function(t) {
-    var w = document.getElementById('hdr-' + t.toLowerCase() + '-wrap');
-    if (w) w.style.display = (t === tipo && tipo !== 'NONE') ? 'block' : 'none';
+  // Mapa explícito: valor del radio → ID del wrapper en el DOM
+  var idMap = {
+    TEXT:     'hdr-text-wrap',
+    IMAGE:    'hdr-img-wrap',
+    VIDEO:    'hdr-vid-wrap',
+    DOCUMENT: 'hdr-doc-wrap',
+    LOCATION: 'hdr-location-wrap',
+  };
+  Object.keys(idMap).forEach(function(t) {
+    var w = document.getElementById(idMap[t]);
+    if (w) w.style.display = (t === tipo) ? 'block' : 'none';
   });
   // Actualizar estilo radio buttons
   document.querySelectorAll('#hdr-radio-group .radio-opt').forEach(function(lbl) {
@@ -2379,6 +2478,7 @@ async function crearPlantilla() {
   var buttons  = _recolectarBotones(btnTipo);
   var subcat   = document.querySelector('input[name="tpl-subcat"]:checked');
   subcat = subcat ? subcat.value : 'DEFAULT';
+  var catalogFmt = (document.querySelector('input[name="catalog-format"]:checked') || {}).value || 'FULL';
   var varType  = document.querySelector('input[name="var-type"]:checked');
   varType = varType ? varType.value : 'NUMERO';
   var ttlActivo = document.getElementById('ttl-activo') ? document.getElementById('ttl-activo').checked : false;
@@ -2392,6 +2492,7 @@ async function crearPlantilla() {
     var payload = {
       name: nombre, category: cat, language: lang,
       sub_category: subcat,
+      catalog_format: catalogFmt,
       header_type: hdrTipo !== 'NONE' ? hdrTipo : null,
       header_text: hdrTexto || null,
       header_handle: headerHandle,
