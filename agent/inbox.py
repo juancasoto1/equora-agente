@@ -543,8 +543,10 @@ tr:hover td{background:#f8f9fa}
                   <span>✏️</span> Ingreso manual de contactos
                   <span style="font-weight:400;color:#6b7a8d;font-size:.76rem;margin-left:4px">— uno por línea: número,nombre</span>
                 </div>
-                <textarea id="dif-phones" class="f-ta" style="min-height:100px"
-                  placeholder="573001234567,Juan&#10;573009876543,María&#10;573001112233,Carlos"
+                <textarea id="dif-phones" class="f-ta" wrap="off"
+                  style="min-height:140px;font-family:'Courier New',Courier,monospace;font-size:.8rem;
+                         line-height:1.7;overflow-x:auto;white-space:pre;resize:vertical"
+                  placeholder="573001234567,Juan García&#10;573009876543,Supermercado La Cosecha del Valle&#10;573001112233,Carlos"
                   oninput="actualizarConteo()"></textarea>
                 <div id="dif-conteo" style="font-size:.75rem;color:#6b7a8d;margin-top:4px">0 destinatarios</div>
 
@@ -1422,6 +1424,7 @@ _convTimer = setInterval(loadConvs, 8000);
    DIFUSIÓN — templates y envío
    ══════════════════════════════════════════════════════ */
 var _dif_templates = [];
+var _csvContacts   = [];   // contactos cargados vía CSV (separados del textarea manual)
 
 async function cargarTemplates() {
   var sel = document.getElementById('dif-tpl');
@@ -1609,29 +1612,27 @@ function cargarArchivoCSV(input) {
     var esEncabezado = isNaN(primeraCol.replace(/\D/g,'')) || primeraCol.toLowerCase() === 'telefono';
     if (esEncabezado) lineas = lineas.slice(1);
 
-    // Validar cada línea: el primer campo debe tener mínimo 10 dígitos
+    // Validar: primer campo ≥ 10 dígitos
     var validas = [];
     var erroneas = 0;
     lineas.forEach(function(l) {
       var tel = l.split(',')[0].trim().replace(/\D/g,'');
-      if (tel.length >= 10) {
-        validas.push(l);
-      } else {
-        erroneas++;
-      }
+      if (tel.length >= 10) { validas.push(l); } else { erroneas++; }
     });
 
-    // Agregar válidas al textarea (sin sobreescribir lo manual existente)
-    var existing = document.getElementById('dif-phones').value.trim();
-    var nuevas = validas.join('\n');
-    document.getElementById('dif-phones').value = existing ? existing + '\n' + nuevas : nuevas;
+    // Guardar en array separado — NO tocar el textarea manual
+    _csvContacts = _csvContacts.concat(validas);
     actualizarConteo();
 
     // Mostrar estadísticas
     statsEl.style.display = 'block';
+    var totalCSV = _csvContacts.length;
     statsEl.innerHTML =
-      '<span style="color:#155724;font-weight:600">✅ ' + validas.length + ' contacto' + (validas.length===1?'':'s') + ' cargado' + (validas.length===1?'':'s') + ' de <b>' + file.name + '</b></span>' +
-      (erroneas > 0 ? '&nbsp;&nbsp;<span style="color:#721c24">❌ ' + erroneas + ' línea' + (erroneas===1?'':'s') + ' ignorada' + (erroneas===1?'':'s') + ' (número inválido)</span>' : '');
+      '<span style="color:#155724;font-weight:600">✅ ' + validas.length + ' nuevo' + (validas.length===1?'':'s') +
+      ' de <b>' + he(file.name) + '</b></span>' +
+      (erroneas > 0 ? ' &nbsp;<span style="color:#721c24">❌ ' + erroneas + ' ignorado' + (erroneas===1?'':'s') + ' (número inválido)</span>' : '') +
+      ' &nbsp;<span style="color:#4a5568">· Total CSV: <b>' + totalCSV + '</b></span>' +
+      ' &nbsp;<button onclick="limpiarCSV()" style="background:none;border:none;color:#721c24;cursor:pointer;font-size:.76rem;text-decoration:underline;padding:0">🗑️ Limpiar CSV</button>';
     input.value = '';
   };
   reader.onerror = function() {
@@ -1641,27 +1642,36 @@ function cargarArchivoCSV(input) {
   reader.readAsText(file, 'UTF-8');
 }
 
+function limpiarCSV() {
+  _csvContacts = [];
+  document.getElementById('dif-csv-stats').innerHTML =
+    '<span style="color:#6b7a8d">CSV limpiado — 0 contactos cargados</span>';
+  actualizarConteo();
+}
+
 function _parsearDestinatarios() {
-  var tpl  = _dif_templates.find(function(t) { return t.name === document.getElementById('dif-tpl').value; });
+  var tpl   = _dif_templates.find(function(t) { return t.name === document.getElementById('dif-tpl').value; });
   var nVars = tpl ? (tpl.variables || []).length : 0;
-  return document.getElementById('dif-phones').value
+  // Combinar CSV (_csvContacts) + líneas del textarea manual
+  var manualLineas = document.getElementById('dif-phones').value
     .split('\n')
     .map(function(l) { return l.trim(); })
-    .filter(function(l) { return l.length > 5; })
-    .map(function(l) {
-      var partes = l.split(',').map(function(p) { return p.trim(); });
-      var phone  = partes[0];
-      var vars = [];
-      for (var i = 0; i < nVars; i++) {
-        if (partes[i + 1] !== undefined && partes[i + 1] !== '') {
-          vars.push(partes[i + 1]);
-        } else {
-          var inp = document.getElementById('dif-var-' + (tpl.variables[i] || (i+1)));
-          vars.push(inp ? inp.value.trim() : '');
-        }
+    .filter(function(l) { return l.length > 5; });
+  var todasLineas = _csvContacts.concat(manualLineas);
+  return todasLineas.map(function(l) {
+    var partes = l.split(',').map(function(p) { return p.trim(); });
+    var phone  = partes[0];
+    var vars = [];
+    for (var i = 0; i < nVars; i++) {
+      if (partes[i + 1] !== undefined && partes[i + 1] !== '') {
+        vars.push(partes[i + 1]);
+      } else {
+        var inp = document.getElementById('dif-var-' + (tpl.variables[i] || (i+1)));
+        vars.push(inp ? inp.value.trim() : '');
       }
-      return {phone: phone, variables: vars};
-    });
+    }
+    return {phone: phone, variables: vars};
+  });
 }
 
 function actualizarConteo() {
