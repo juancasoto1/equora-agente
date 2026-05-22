@@ -1244,24 +1244,18 @@ async def inbox_broadcast_templates(
         raise HTTPException(status_code=401, detail="No autorizado")
 
     access_token    = os.getenv("META_ACCESS_TOKEN", "")
-    phone_number_id = os.getenv("META_PHONE_NUMBER_ID", "")
-    if not access_token or not phone_number_id:
-        return JSONResponse(content={"templates": [], "error": "META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados"})
+    waba_id         = os.getenv("META_WABA_ID", "")
+    if not access_token or not waba_id:
+        return JSONResponse(content={"templates": [], "error": "META_ACCESS_TOKEN o META_WABA_ID no configurados"})
 
-    # Obtener el WABA ID desde el phone_number_id
-    api_ver = "v21.0"
-    url = (
-        f"https://graph.facebook.com/{api_ver}/{phone_number_id}"
-        f"?fields=name&access_token={access_token}"
+    # Las plantillas pertenecen al WhatsApp Business Account (WABA), no al número
+    api_ver  = "v21.0"
+    waba_url = (
+        f"https://graph.facebook.com/{api_ver}/{waba_id}"
+        f"/message_templates?fields=name,status,components,language&limit=100"
+        f"&access_token={access_token}"
     )
     async with httpx.AsyncClient(timeout=15) as client:
-        # Primero obtenemos el WABA ID
-        r_phone = await client.get(url)
-        waba_url = (
-            f"https://graph.facebook.com/{api_ver}/{phone_number_id}"
-            f"/message_templates?fields=name,status,components,language&limit=100"
-            f"&access_token={access_token}"
-        )
         r = await client.get(waba_url)
         if r.status_code != 200:
             logger.error(f"[broadcast] Error obteniendo templates: {r.status_code} {r.text[:300]}")

@@ -490,6 +490,10 @@ async function cargarTemplates() {
   try {
     var r = await fetch('/inbox/broadcast/templates', {credentials:'include'});
     var d = await r.json();
+    if (d.error) {
+      sel.innerHTML = '<option value="">Error: ' + d.error + '</option>';
+      return;
+    }
     _dif_templates = d.templates || [];
     if (!_dif_templates.length) {
       sel.innerHTML = '<option value="">No hay plantillas aprobadas en Meta</option>';
