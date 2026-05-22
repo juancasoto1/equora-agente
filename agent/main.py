@@ -29,6 +29,7 @@ from agent.memory import (
     get_modo_humano, set_modo_humano,
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
     registrar_difusion, obtener_difusiones,
+    guardar_borrador_plantilla, obtener_borradores_plantillas, eliminar_borrador_plantilla,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
@@ -1299,7 +1300,7 @@ async def inbox_broadcast_templates_raw(
     api_ver = "v21.0"
     url = (
         f"https://graph.facebook.com/{api_ver}/{waba_id}"
-        f"/message_templates?fields=name,status,components,language&limit=20"
+        f"/message_templates?fields=id,name,status,components,language&limit=50"
         f"&access_token={access_token}"
     )
     async with httpx.AsyncClient(timeout=15) as client:
@@ -1327,7 +1328,7 @@ async def inbox_broadcast_templates(
         api_ver  = "v21.0"
         waba_url = (
             f"https://graph.facebook.com/{api_ver}/{waba_id}"
-            f"/message_templates?fields=name,status,components,language&limit=100"
+            f"/message_templates?fields=id,name,status,components,language&limit=100"
             f"&access_token={access_token}"
         )
         async with httpx.AsyncClient(timeout=15) as client:
@@ -1345,11 +1346,9 @@ async def inbox_broadcast_templates(
 
             templates_raw = data.get("data", [])
 
-            # Solo mostramos las APROBADAS
+            # Mostramos todas (APPROVED, PENDING, REJECTED, PAUSED)
             templates = []
             for t in templates_raw:
-                if t.get("status", "").upper() != "APPROVED":
-                    continue
                 # Extraer variables del body — usamos la fuente oficial de Meta:
                 # 1. body_text_named_params → variables con nombre ({{nombre}})
                 # 2. body_text              → variables posicionales ({{1}})
@@ -1390,12 +1389,15 @@ async def inbox_broadcast_templates(
                     break
 
                 templates.append({
+                    "id":          t.get("id", ""),       # ID de la plantilla en Meta (para editar)
                     "name":        t.get("name", ""),
                     "language":    t.get("language", "es_CO"),
+                    "status":      t.get("status", ""),
                     "variables":   variables,
                     "named":       named,       # True si usa {{nombre}}, False si usa {{1}}
                     "header_type": header_type, # "IMAGE", "TEXT", "VIDEO", None
                     "header_url":  header_url,  # URL de la imagen del header (si aplica)
+                    "components":  t.get("components", []),  # componentes completos para edición
                     "preview":     next(
                         (c.get("text", "") for c in t.get("components", [])
                          if c.get("type", "").upper() == "BODY"),
@@ -1867,6 +1869,163 @@ async def inbox_plantillas_crear(
                 return JSONResponse(content={"error": err.get("message", str(data))}, status_code=400)
     except Exception as e:
         logger.error(f"[plantillas] Excepción: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Borradores de plantillas (guardado local antes de enviar a Meta) ─────────
+
+@app.get("/inbox/plantillas/borradores")
+async def inbox_plantillas_borradores_list(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Lista todos los borradores de plantillas guardados localmente."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    borradores = await obtener_borradores_plantillas()
+    return JSONResponse(content={"borradores": borradores})
+
+
+@app.post("/inbox/plantillas/borrador")
+async def inbox_plantillas_borrador_guardar(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Guarda (crea o actualiza) un borrador de plantilla localmente.
+    Body JSON: los mismos campos del formulario de creación.
+    Si ya existe un borrador con el mismo nombre, lo sobreescribe.
+    """
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    nombre    = (body.get("name") or "").strip()
+    categoria = body.get("category", "MARKETING")
+    idioma    = body.get("language", "es_CO")
+    if not nombre:
+        return JSONResponse(content={"error": "El nombre es requerido"}, status_code=400)
+    bid = await guardar_borrador_plantilla(nombre, categoria, idioma, body)
+    logger.info(f"[plantillas] Borrador guardado id={bid} nombre={nombre}")
+    return JSONResponse(content={"ok": True, "id": bid})
+
+
+@app.delete("/inbox/plantillas/borrador/{bid}")
+async def inbox_plantillas_borrador_eliminar(
+    bid: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Elimina un borrador local por ID."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    eliminado = await eliminar_borrador_plantilla(bid)
+    if not eliminado:
+        raise HTTPException(status_code=404, detail="Borrador no encontrado")
+    return JSONResponse(content={"ok": True})
+
+
+@app.post("/inbox/plantillas/editar")
+async def inbox_plantillas_editar(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Edita una plantilla existente en Meta (solo se pueden cambiar los componentes).
+    Meta devuelve la plantilla a estado PENDING tras la edición.
+    Body JSON: { template_id, header_type?, header_text?, header_handle?,
+                 body, footer?, buttons? }
+    """
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    access_token = os.getenv("META_ACCESS_TOKEN", "")
+    if not access_token:
+        return JSONResponse(content={"error": "META_ACCESS_TOKEN no configurado"}, status_code=500)
+
+    body = await request.json()
+    template_id   = body.get("template_id", "")
+    cuerpo        = body.get("body", "")
+    header_tipo   = (body.get("header_type") or "").upper()
+    header_texto  = body.get("header_text", "")
+    header_handle = body.get("header_handle")
+    footer        = body.get("footer", "")
+    buttons       = body.get("buttons", [])
+
+    if not template_id or not cuerpo:
+        return JSONResponse(content={"error": "template_id y body son requeridos"}, status_code=400)
+
+    componentes = []
+
+    # HEADER
+    if header_tipo == "TEXT" and header_texto:
+        componentes.append({"type": "HEADER", "format": "TEXT", "text": header_texto[:60]})
+    elif header_tipo in ("IMAGE", "VIDEO", "DOCUMENT"):
+        comp_hdr: dict = {"type": "HEADER", "format": header_tipo}
+        if header_handle:
+            comp_hdr["example"] = {"header_handle": [header_handle]}
+        componentes.append(comp_hdr)
+
+    # BODY
+    import re as _re2
+    vars_encontradas = _re2.findall(r'\{\{([^}]+)\}\}', cuerpo)
+    body_comp: dict = {"type": "BODY", "text": cuerpo}
+    if vars_encontradas:
+        example_vals = ["ejemplo"] * len(vars_encontradas)
+        named_vars = [v for v in vars_encontradas if not v.isdigit()]
+        if named_vars:
+            body_comp["example"] = {
+                "body_text_named_params": [
+                    {"param_name": v, "example": ["ejemplo"]} for v in vars_encontradas
+                ]
+            }
+        else:
+            body_comp["example"] = {"body_text": [example_vals]}
+    componentes.append(body_comp)
+
+    # FOOTER
+    if footer:
+        componentes.append({"type": "FOOTER", "text": footer[:60]})
+
+    # BUTTONS
+    if buttons:
+        btn_list = []
+        for b in buttons[:10]:
+            btype = b.get("type", "").upper()
+            texto_btn = b.get("text", "")[:25]
+            if btype == "URL":
+                url_val = b.get("url", "")
+                if url_val and texto_btn:
+                    btn_obj = {"type": "URL", "text": texto_btn[:20], "url": url_val}
+                    if "{{1}}" in url_val:
+                        btn_obj["example"] = [url_val.replace("{{1}}", "ejemplo")]
+                    btn_list.append(btn_obj)
+            elif btype == "PHONE_NUMBER":
+                phone = b.get("phone_number", "")
+                if phone and texto_btn:
+                    btn_list.append({"type": "PHONE_NUMBER", "text": texto_btn[:20], "phone_number": phone})
+            elif btype == "QUICK_REPLY":
+                if texto_btn:
+                    btn_list.append({"type": "QUICK_REPLY", "text": texto_btn})
+        if btn_list:
+            componentes.append({"type": "BUTTONS", "buttons": btn_list})
+
+    api_ver = "v21.0"
+    url     = f"https://graph.facebook.com/{api_ver}/{template_id}"
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, json={"components": componentes}, headers=headers)
+            data = r.json()
+            if r.status_code == 200 and data.get("success"):
+                logger.info(f"[plantillas] Plantilla editada id={template_id}")
+                return JSONResponse(content={"ok": True})
+            else:
+                err = data.get("error", {})
+                logger.error(f"[plantillas] Error editando plantilla: {err}")
+                return JSONResponse(content={"error": err.get("message", str(data))}, status_code=400)
+    except Exception as e:
+        logger.error(f"[plantillas] Excepción editando: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 

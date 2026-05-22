@@ -60,6 +60,19 @@ CAMPOS_CLIENTE = (
 )
 
 
+class PlantillaBorrador(Base):
+    """Borradores de plantillas guardados localmente antes de enviar a Meta."""
+    __tablename__ = "plantillas_borradores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    nombre: Mapped[str] = mapped_column(String(512), default="")
+    categoria: Mapped[str] = mapped_column(String(50), default="MARKETING")
+    idioma: Mapped[str] = mapped_column(String(20), default="es_CO")
+    datos_json: Mapped[str] = mapped_column(Text, default="{}")   # todos los campos del formulario
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Difusion(Base):
     """Registro histórico de difusiones enviadas desde el inbox."""
     __tablename__ = "difusiones"
@@ -539,6 +552,59 @@ async def obtener_todas_conversaciones() -> list[dict]:
                 "modo_humano": bool(estado.modo_humano) if estado else False,
             })
         return convs
+
+
+async def guardar_borrador_plantilla(nombre: str, categoria: str, idioma: str, datos: dict) -> int:
+    """Crea o actualiza un borrador de plantilla. Retorna el ID del borrador."""
+    async with async_session() as session:
+        # Si ya existe un borrador con este nombre, actualizarlo
+        q = select(PlantillaBorrador).where(PlantillaBorrador.nombre == nombre)
+        result = await session.execute(q)
+        borrador = result.scalar_one_or_none()
+        ahora = datetime.utcnow()
+        if borrador:
+            borrador.categoria   = categoria
+            borrador.idioma      = idioma
+            borrador.datos_json  = json.dumps(datos, ensure_ascii=False)
+            borrador.updated_at  = ahora
+        else:
+            borrador = PlantillaBorrador(
+                nombre=nombre, categoria=categoria, idioma=idioma,
+                datos_json=json.dumps(datos, ensure_ascii=False),
+                created_at=ahora, updated_at=ahora,
+            )
+            session.add(borrador)
+        await session.commit()
+        await session.refresh(borrador)
+        return borrador.id
+
+
+async def obtener_borradores_plantillas() -> list[dict]:
+    async with async_session() as session:
+        q = select(PlantillaBorrador).order_by(PlantillaBorrador.updated_at.desc())
+        result = await session.execute(q)
+        rows = result.scalars().all()
+        return [
+            {
+                "id": b.id,
+                "nombre": b.nombre,
+                "categoria": b.categoria,
+                "idioma": b.idioma,
+                "datos": json.loads(b.datos_json or "{}"),
+                "updated_at": b.updated_at.isoformat() if b.updated_at else "",
+            }
+            for b in rows
+        ]
+
+
+async def eliminar_borrador_plantilla(bid: int) -> bool:
+    async with async_session() as session:
+        borrador = await session.get(PlantillaBorrador, bid)
+        if borrador:
+            await session.delete(borrador)
+            await session.commit()
+            return True
+        return False
 
 
 async def registrar_difusion(

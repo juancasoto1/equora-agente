@@ -565,7 +565,7 @@ tr:hover td{background:#f8f9fa}
 
             <!-- Lista de plantillas -->
             <div style="flex:1;min-width:0">
-              <div class="tbl-wrap" style="margin-bottom:0">
+              <div class="tbl-wrap" style="margin-bottom:16px">
                 <div class="tbl-head">
                   <h2>Plantillas en Meta</h2>
                   <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="cargarTablaPlantillas()">↺ Actualizar</button>
@@ -579,10 +579,35 @@ tr:hover td{background:#f8f9fa}
                         <th>Estado</th>
                         <th>Variables</th>
                         <th>Header</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody id="tpl-tabla-body">
-                      <tr><td colspan="5" class="loading-txt">Cargando...</td></tr>
+                      <tr><td colspan="6" class="loading-txt">Cargando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Borradores locales -->
+              <div class="tbl-wrap" style="margin-bottom:0">
+                <div class="tbl-head">
+                  <h2>💾 Borradores locales</h2>
+                  <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="cargarBorradores()">↺ Actualizar</button>
+                </div>
+                <div style="overflow-x:auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Categoría</th>
+                        <th>Idioma</th>
+                        <th>Guardado</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="borr-tabla-body">
+                      <tr><td colspan="5" class="loading-txt">Sin borradores</td></tr>
                     </tbody>
                   </table>
                 </div>
@@ -593,12 +618,15 @@ tr:hover td{background:#f8f9fa}
             <div style="width:440px;flex-shrink:0">
               <div class="form-card" style="max-height:calc(100vh - 200px);overflow-y:auto">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-                  <div style="font-size:1.3rem">✨</div>
-                  <div>
-                    <div style="font-weight:700;color:#1a2332;font-size:.95rem">Nueva plantilla</div>
-                    <div style="font-size:.76rem;color:#6b7a8d">Se envía a Meta · Aprobación en 24-48 h</div>
+                  <div id="tpl-form-icon" style="font-size:1.3rem">✨</div>
+                  <div style="flex:1">
+                    <div id="tpl-form-title" style="font-weight:700;color:#1a2332;font-size:.95rem">Nueva plantilla</div>
+                    <div id="tpl-form-sub" style="font-size:.76rem;color:#6b7a8d">Se envía a Meta · Aprobación en 24-48 h</div>
                   </div>
+                  <button id="tpl-cancelar-btn" class="btn-secondary" onclick="cancelarEdicion()" style="display:none;padding:4px 12px;font-size:.78rem">✕ Cancelar edición</button>
                 </div>
+                <!-- ID oculto de la plantilla Meta (cuando se edita) -->
+                <input type="hidden" id="tpl-meta-id" value="">
 
                 <!-- Nombre + Categoría -->
                 <div class="form-grid" style="margin-bottom:14px">
@@ -818,11 +846,29 @@ tr:hover td{background:#f8f9fa}
                   </button>
                 </div>
 
-                <!-- Resultado + botón enviar -->
+                <!-- Panel de aprobación (se muestra tras envío exitoso) -->
+                <div id="tpl-approval-panel" style="display:none;margin-bottom:14px;background:#eaf6ff;border:1.5px solid #90caf9;border-radius:10px;padding:16px 18px">
+                  <div style="font-weight:700;color:#1a5276;font-size:.95rem;margin-bottom:8px">📨 Plantilla enviada a Meta para aprobación</div>
+                  <div style="font-size:.83rem;color:#154360;line-height:1.7">
+                    <b>¿Qué pasa ahora?</b><br>
+                    1. Meta revisa que el contenido cumpla sus <a href="https://developers.facebook.com/docs/whatsapp/message-templates/guidelines" target="_blank" style="color:#1565c0">políticas de plantillas</a>.<br>
+                    2. El proceso tarda generalmente <b>entre 24 y 48 horas</b> (a veces minutos).<br>
+                    3. Cuando sea aprobada, aparecerá en la tabla con estado <span style="background:#d4edda;color:#155724;padding:1px 6px;border-radius:4px;font-size:.78rem">✅ Aprobada</span>.<br>
+                    4. Si es rechazada, revisa el motivo en el <a href="https://business.facebook.com/wa/manage/message-templates/" target="_blank" style="color:#1565c0">Manager de Meta</a> y edítala.<br>
+                  </div>
+                  <div id="tpl-approval-name" style="margin-top:10px;font-size:.82rem;color:#1a5276;font-weight:600"></div>
+                </div>
+                <!-- Resultado inline (errores) -->
                 <div id="tpl-result" style="display:none;margin-bottom:14px;font-size:.83rem;padding:10px 14px;border-radius:8px;line-height:1.5"></div>
-                <button class="btn-primary" id="tpl-crear-btn" onclick="crearPlantilla()" style="width:100%">
-                  📤 Enviar a Meta para aprobación
-                </button>
+                <!-- Botones acción -->
+                <div style="display:flex;gap:10px">
+                  <button class="btn-secondary" id="tpl-borrador-btn" onclick="guardarBorrador()" style="flex:1">
+                    💾 Guardar borrador
+                  </button>
+                  <button class="btn-primary" id="tpl-crear-btn" onclick="crearOEditarPlantilla()" style="flex:2">
+                    📤 Enviar a Meta para aprobación
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1430,51 +1476,299 @@ async function cargarHistorialDif() {
 /* ══════════════════════════════════════════════════════
    PLANTILLAS
    ══════════════════════════════════════════════════════ */
+// Mapa id→template para usar en edición
+var _tplMetaMap = {};
+
 async function cargarTablaPlantillas() {
   var tbody = document.getElementById('tpl-tabla-body');
-  tbody.innerHTML = '<tr><td colspan="5" class="loading-txt">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" class="loading-txt">Cargando...</td></tr>';
+  _tplMetaMap = {};
   try {
     var r = await fetch('/inbox/broadcast/templates', {credentials:'include'});
     var d = await r.json();
     var tpls = d.templates || [];
 
-    // También intentar traer todas (no solo aprobadas) via raw
-    var rRaw = await fetch('/inbox/broadcast/templates/raw', {credentials:'include'});
-    var dRaw = await rRaw.json();
-    var todas = (dRaw.data || []);
-
-    if (!todas.length && !tpls.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="loading-txt">Sin plantillas</td></tr>';
+    if (!tpls.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="loading-txt">Sin plantillas · Verifica META_WABA_ID</td></tr>';
       return;
     }
 
     var h = '';
-    todas.forEach(function(t) {
+    tpls.forEach(function(t) {
+      _tplMetaMap[t.id || t.name] = t;
       var status = (t.status || '').toUpperCase();
       var cls = status === 'APPROVED' ? 'badge-ok' : (status === 'PENDING' ? 'badge-warn' : (status === 'REJECTED' ? 'badge-err' : 'badge-pend'));
-      var lbl = status === 'APPROVED' ? 'Aprobada' : (status === 'PENDING' ? 'Pendiente' : (status === 'REJECTED' ? 'Rechazada' : status));
-      var vars = '';
-      var hdrFmt = '';
-      (t.components || []).forEach(function(c) {
-        if (c.type === 'BODY') {
-          var ex = c.example || {};
-          if (ex.body_text_named_params) vars = ex.body_text_named_params.map(function(p) { return '{{'+p.param_name+'}}'; }).join(', ');
-          else vars = (c.text || '').match(/\{\{[^}]+\}\}/g)?.join(', ') || '—';
-        }
-        if (c.type === 'HEADER') hdrFmt = c.format || '—';
-      });
+      var lbl = status === 'APPROVED' ? '✅ Aprobada' : (status === 'PENDING' ? '⏳ Pendiente' : (status === 'REJECTED' ? '❌ Rechazada' : status));
+      var vars = t.variables ? t.variables.join(', ') : '—';
+      var hdrFmt = t.header_type || '—';
+      var editBtn = '<button class="btn-secondary" style="padding:3px 10px;font-size:.75rem" onclick="cargarPlantillaParaEditar(' + JSON.stringify(JSON.stringify(t)) + ')" title="Editar componentes">✏️ Editar</button>';
       h += '<tr>'
         + '<td><b>' + he(t.name) + '</b></td>'
         + '<td>' + he(t.language || '') + '</td>'
         + '<td><span class="' + cls + '">' + lbl + '</span></td>'
         + '<td style="font-size:.78rem">' + he(vars || '—') + '</td>'
         + '<td style="font-size:.78rem">' + he(hdrFmt || '—') + '</td>'
+        + '<td>' + editBtn + '</td>'
         + '</tr>';
     });
-    tbody.innerHTML = h || '<tr><td colspan="5" class="loading-txt">Sin plantillas</td></tr>';
+    tbody.innerHTML = h || '<tr><td colspan="6" class="loading-txt">Sin plantillas</td></tr>';
   } catch(e) {
-    tbody.innerHTML = '<tr><td colspan="5" class="loading-txt" style="color:#721c24">Error cargando plantillas</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#721c24">Error cargando plantillas</td></tr>';
   }
+  // También cargar borradores
+  cargarBorradores();
+}
+
+/* ── Borradores locales ── */
+async function cargarBorradores() {
+  var tbody = document.getElementById('borr-tabla-body');
+  if (!tbody) return;
+  try {
+    var r = await fetch('/inbox/plantillas/borradores', {credentials:'include'});
+    var d = await r.json();
+    var borrs = d.borradores || [];
+    if (!borrs.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="loading-txt">Sin borradores guardados</td></tr>';
+      return;
+    }
+    var h = '';
+    borrs.forEach(function(b) {
+      var ts = b.updated_at ? b.updated_at.replace('T',' ').substring(0,16) : '';
+      h += '<tr>'
+        + '<td><b>' + he(b.nombre) + '</b></td>'
+        + '<td>' + he(b.categoria) + '</td>'
+        + '<td>' + he(b.idioma) + '</td>'
+        + '<td style="font-size:.78rem">' + he(ts) + '</td>'
+        + '<td style="white-space:nowrap">'
+          + '<button class="btn-secondary" style="padding:3px 9px;font-size:.75rem;margin-right:4px" onclick="cargarBorrador(' + b.id + ',' + JSON.stringify(JSON.stringify(b.datos)) + ')">📂 Abrir</button>'
+          + '<button class="btn-remove" style="padding:3px 8px;font-size:.75rem" onclick="eliminarBorrador(' + b.id + ')">🗑️</button>'
+        + '</td>'
+        + '</tr>';
+    });
+    tbody.innerHTML = h;
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="loading-txt" style="color:#721c24">Error</td></tr>';
+  }
+}
+
+async function guardarBorrador() {
+  var nombre = document.getElementById('tpl-nombre').value.trim();
+  if (!nombre) { showTplResult('err','⚠️ El nombre es obligatorio para guardar el borrador.'); return; }
+  var cat    = document.getElementById('tpl-cat').value;
+  var lang   = document.getElementById('tpl-lang').value;
+  var body   = document.getElementById('tpl-body').value.trim();
+  var footer = document.getElementById('tpl-footer').value.trim();
+  var hdrTipo  = document.querySelector('input[name="hdr-type"]:checked').value;
+  var hdrTexto = hdrTipo === 'TEXT' ? document.getElementById('tpl-hdr-text').value.trim() : '';
+  var btnTipo  = document.querySelector('input[name="btn-type"]:checked').value;
+  var buttons  = _recolectarBotones(btnTipo);
+  var payload  = {
+    name: nombre, category: cat, language: lang,
+    header_type: hdrTipo !== 'NONE' ? hdrTipo : null,
+    header_text: hdrTexto || null,
+    body: body, footer: footer || null, buttons: buttons,
+  };
+  var btn = document.getElementById('tpl-borrador-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Guardando...';
+  try {
+    var r = await fetch('/inbox/plantillas/borrador', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      showTplResult('ok','💾 Borrador <b>' + he(nombre) + '</b> guardado correctamente.');
+      cargarBorradores();
+    } else {
+      showTplResult('err','❌ ' + he(d.error || 'Error guardando borrador'));
+    }
+  } catch(e) {
+    showTplResult('err','Error: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = '💾 Guardar borrador';
+}
+
+async function eliminarBorrador(bid) {
+  if (!confirm('¿Eliminar este borrador?')) return;
+  try {
+    var r = await fetch('/inbox/plantillas/borrador/' + bid, {method:'DELETE', credentials:'include'});
+    if (r.ok) cargarBorradores();
+  } catch(e) {}
+}
+
+function cargarBorrador(bid, datosStr) {
+  // datosStr es el JSON del borrador (double-encoded)
+  try {
+    var datos = typeof datosStr === 'string' ? JSON.parse(datosStr) : datosStr;
+    _poblarFormulario(datos);
+    // Modo creación (no edición Meta)
+    document.getElementById('tpl-meta-id').value = '';
+    document.getElementById('tpl-form-icon').textContent = '📂';
+    document.getElementById('tpl-form-title').textContent = 'Borrador: ' + (datos.name || '');
+    document.getElementById('tpl-form-sub').textContent   = 'Cargado desde borrador local';
+    document.getElementById('tpl-cancelar-btn').style.display = 'none';
+    document.getElementById('tpl-crear-btn').textContent  = '📤 Enviar a Meta para aprobación';
+    showTplResult('warn','📂 Borrador cargado. Revisa el contenido y envíalo a Meta cuando esté listo.');
+    // Scroll al form
+    document.getElementById('tpl-nombre').scrollIntoView({behavior:'smooth', block:'center'});
+  } catch(e) { alert('Error cargando borrador'); }
+}
+
+/* ── Editar plantilla Meta ── */
+function cargarPlantillaParaEditar(tStr) {
+  try {
+    var t = typeof tStr === 'string' ? JSON.parse(tStr) : tStr;
+    // Extraer campos de los componentes
+    var datos = {
+      name: t.name,
+      category: '',    // Meta no devuelve categoría en templates list — dejamos en blanco
+      language: t.language,
+      body: '',
+      footer: null,
+      header_type: null,
+      header_text: null,
+      buttons: [],
+    };
+    (t.components || []).forEach(function(c) {
+      var tipo = (c.type || '').toUpperCase();
+      if (tipo === 'BODY')   datos.body   = c.text || '';
+      if (tipo === 'FOOTER') datos.footer = c.text || '';
+      if (tipo === 'HEADER') {
+        datos.header_type = c.format || 'TEXT';
+        datos.header_text = c.text || '';
+      }
+      if (tipo === 'BUTTONS') {
+        datos.buttons = (c.buttons || []).map(function(b) {
+          return {type: b.type, text: b.text, url: b.url || '', phone_number: b.phone_number || ''};
+        });
+      }
+    });
+    _poblarFormulario(datos);
+    // Poner en modo edición
+    var mid = t.id || '';
+    document.getElementById('tpl-meta-id').value = mid;
+    document.getElementById('tpl-form-icon').textContent = '✏️';
+    document.getElementById('tpl-form-title').textContent = 'Editando: ' + t.name;
+    document.getElementById('tpl-form-sub').textContent   = 'Se enviará a Meta · Volverá a estado PENDIENTE';
+    document.getElementById('tpl-cancelar-btn').style.display = '';
+    document.getElementById('tpl-crear-btn').textContent  = '✏️ Guardar cambios en Meta';
+    document.getElementById('tpl-nombre').disabled = true;
+    document.getElementById('tpl-cat').disabled    = true;
+    document.getElementById('tpl-lang').disabled   = true;
+    showTplResult('warn','✏️ Modo edición — solo puedes cambiar los componentes (cuerpo, encabezado, botones). Al guardar la plantilla vuelve a estado <b>PENDIENTE</b>.');
+    document.getElementById('tpl-nombre').scrollIntoView({behavior:'smooth', block:'center'});
+  } catch(e) { alert('Error cargando plantilla para edición: ' + e); }
+}
+
+function cancelarEdicion() {
+  document.getElementById('tpl-meta-id').value = '';
+  document.getElementById('tpl-form-icon').textContent  = '✨';
+  document.getElementById('tpl-form-title').textContent = 'Nueva plantilla';
+  document.getElementById('tpl-form-sub').textContent   = 'Se envía a Meta · Aprobación en 24-48 h';
+  document.getElementById('tpl-cancelar-btn').style.display = 'none';
+  document.getElementById('tpl-crear-btn').textContent  = '📤 Enviar a Meta para aprobación';
+  document.getElementById('tpl-nombre').disabled = false;
+  document.getElementById('tpl-cat').disabled    = false;
+  document.getElementById('tpl-lang').disabled   = false;
+  _limpiarFormulario();
+  document.getElementById('tpl-result').style.display = 'none';
+  document.getElementById('tpl-approval-panel').style.display = 'none';
+}
+
+function _poblarFormulario(datos) {
+  document.getElementById('tpl-nombre').value = datos.name || '';
+  if (datos.category) document.getElementById('tpl-cat').value = datos.category;
+  if (datos.language) document.getElementById('tpl-lang').value = datos.language;
+  document.getElementById('tpl-body').value   = datos.body || '';
+  document.getElementById('tpl-footer').value = datos.footer || '';
+  updateCounter('tpl-body','body-cnt',1024);
+  updateCounter('tpl-footer','footer-cnt',60);
+  // Header
+  var hdrTipo = datos.header_type || 'NONE';
+  var radios = document.querySelectorAll('input[name="hdr-type"]');
+  radios.forEach(function(r) { if (r.value === hdrTipo) r.checked = true; });
+  toggleHdrType(hdrTipo);
+  if (hdrTipo === 'TEXT') document.getElementById('tpl-hdr-text').value = datos.header_text || '';
+  // Botones
+  var buttons = datos.buttons || [];
+  document.getElementById('qr-list').innerHTML  = '';
+  document.getElementById('cta-list').innerHTML = '';
+  if (buttons.length) {
+    var hasQR  = buttons.some(function(b) { return b.type === 'QUICK_REPLY'; });
+    var hasCTA = buttons.some(function(b) { return b.type === 'URL' || b.type === 'PHONE_NUMBER'; });
+    if (hasQR) {
+      document.querySelector('input[name="btn-type"][value="QUICK_REPLY"]').checked = true;
+      toggleBtnType('QUICK_REPLY');
+      document.getElementById('qr-list').innerHTML = '';
+      buttons.filter(function(b) { return b.type === 'QUICK_REPLY'; }).forEach(function(b) {
+        agregarBotonQR();
+        var rows = document.querySelectorAll('#qr-list .qr-text');
+        if (rows.length) rows[rows.length-1].value = b.text || '';
+      });
+    } else if (hasCTA) {
+      document.querySelector('input[name="btn-type"][value="CTA"]').checked = true;
+      toggleBtnType('CTA');
+      document.getElementById('cta-list').innerHTML = '';
+      buttons.filter(function(b) { return b.type !== 'QUICK_REPLY'; }).forEach(function(b) {
+        agregarBotonCTA();
+        var rows = document.querySelectorAll('#cta-list .cta-row');
+        var row  = rows[rows.length-1];
+        if (!row) return;
+        row.querySelector('.cta-tipo').value   = b.type;
+        row.querySelector('.cta-texto').value  = b.text || '';
+        if (b.type === 'URL')          { row.querySelector('.cta-valor-url').value = b.url || ''; }
+        else if (b.type === 'PHONE_NUMBER') { row.querySelector('.cta-valor-tel').value = b.phone_number || ''; }
+        toggleCtaTipo(row.querySelector('.cta-tipo'));
+      });
+    }
+  } else {
+    document.querySelector('input[name="btn-type"][value="NONE"]').checked = true;
+    toggleBtnType('NONE');
+  }
+}
+
+function _limpiarFormulario() {
+  document.getElementById('tpl-nombre').value  = '';
+  document.getElementById('tpl-body').value    = '';
+  document.getElementById('tpl-footer').value  = '';
+  document.getElementById('tpl-hdr-text').value = '';
+  document.querySelector('input[name="hdr-type"][value="NONE"]').checked = true;
+  toggleHdrType('NONE');
+  document.querySelector('input[name="btn-type"][value="NONE"]').checked = true;
+  toggleBtnType('NONE');
+  document.getElementById('qr-list').innerHTML  = '';
+  document.getElementById('cta-list').innerHTML = '';
+  ['img','vid','doc'].forEach(limpiarArchivo);
+  updateCounter('tpl-body','body-cnt',1024);
+  updateCounter('tpl-footer','footer-cnt',60);
+}
+
+/* ── Helper compartido: recolectar botones del form ── */
+function _recolectarBotones(btnTipo) {
+  var buttons = [];
+  if (btnTipo === 'QUICK_REPLY') {
+    document.querySelectorAll('#qr-list .qr-text').forEach(function(inp) {
+      var txt = inp.value.trim();
+      if (txt) buttons.push({type:'QUICK_REPLY', text: txt});
+    });
+  } else if (btnTipo === 'CTA') {
+    document.querySelectorAll('#cta-list .cta-row').forEach(function(row) {
+      var tipo2  = row.querySelector('.cta-tipo').value;
+      var texto2 = row.querySelector('.cta-texto').value.trim();
+      if (!texto2) return;
+      if (tipo2 === 'URL') {
+        var url = row.querySelector('.cta-valor-url').value.trim();
+        if (url) buttons.push({type:'URL', text: texto2, url: url});
+      } else {
+        var tel = row.querySelector('.cta-valor-tel').value.trim();
+        if (tel) buttons.push({type:'PHONE_NUMBER', text: texto2, phone_number: tel});
+      }
+    });
+  }
+  return buttons;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1644,22 +1938,29 @@ async function subirHeaderMedia(tipo) {
   }
 }
 
-/* ── Crear plantilla ── */
+/* ── Crear o editar plantilla (router) ── */
+async function crearOEditarPlantilla() {
+  var metaId = document.getElementById('tpl-meta-id').value.trim();
+  if (metaId) {
+    await _editarPlantilla(metaId);
+  } else {
+    await crearPlantilla();
+  }
+}
+
+/* ── Crear plantilla nueva ── */
 async function crearPlantilla() {
   var nombre = document.getElementById('tpl-nombre').value.trim();
   var cat    = document.getElementById('tpl-cat').value;
   var lang   = document.getElementById('tpl-lang').value;
   var body   = document.getElementById('tpl-body').value.trim();
   var footer = document.getElementById('tpl-footer').value.trim();
-  var res    = document.getElementById('tpl-result');
   var btn    = document.getElementById('tpl-crear-btn');
 
   // Tipo header activo
-  var hdrTipo = document.querySelector('input[name="hdr-type"]:checked').value;
+  var hdrTipo  = document.querySelector('input[name="hdr-type"]:checked').value;
   var hdrTexto = hdrTipo === 'TEXT' ? document.getElementById('tpl-hdr-text').value.trim() : '';
-
-  // Tipo botones activo
-  var btnTipo = document.querySelector('input[name="btn-type"]:checked').value;
+  var btnTipo  = document.querySelector('input[name="btn-type"]:checked').value;
 
   // Validaciones
   if (!nombre) { showTplResult('err','⚠️ El nombre es obligatorio.'); return; }
@@ -1668,7 +1969,8 @@ async function crearPlantilla() {
 
   btn.disabled = true;
   btn.textContent = '⏳ Enviando...';
-  res.style.display = 'none';
+  document.getElementById('tpl-result').style.display = 'none';
+  document.getElementById('tpl-approval-panel').style.display = 'none';
 
   // Subir media si aplica
   var headerHandle = null;
@@ -1677,35 +1979,10 @@ async function crearPlantilla() {
     if (_tplFiles[tipoKey]) {
       btn.textContent = '⏳ Subiendo archivo...';
       headerHandle = await subirHeaderMedia(tipoKey);
-      if (!headerHandle) {
-        showTplResult('warn','⚠️ No se pudo subir el archivo a Meta. La plantilla se creará sin imagen de ejemplo (Meta igualmente la revisará). ¿Continuar?');
-        // Continuar igualmente - header sin handle
-      }
     }
   }
 
-  // Recolectar botones
-  var buttons = [];
-  if (btnTipo === 'QUICK_REPLY') {
-    document.querySelectorAll('#qr-list .qr-text').forEach(function(inp) {
-      var txt = inp.value.trim();
-      if (txt) buttons.push({type:'QUICK_REPLY', text: txt});
-    });
-  } else if (btnTipo === 'CTA') {
-    document.querySelectorAll('#cta-list .cta-row').forEach(function(row) {
-      var tipo2  = row.querySelector('.cta-tipo').value;
-      var texto2 = row.querySelector('.cta-texto').value.trim();
-      if (!texto2) return;
-      if (tipo2 === 'URL') {
-        var url = row.querySelector('.cta-valor-url').value.trim();
-        if (url) buttons.push({type:'URL', text: texto2, url: url});
-      } else {
-        var tel = row.querySelector('.cta-valor-tel').value.trim();
-        if (tel) buttons.push({type:'PHONE_NUMBER', text: texto2, phone_number: tel});
-      }
-    });
-  }
-
+  var buttons = _recolectarBotones(btnTipo);
   btn.textContent = '⏳ Creando plantilla...';
 
   try {
@@ -1714,37 +1991,90 @@ async function crearPlantilla() {
       header_type: hdrTipo !== 'NONE' ? hdrTipo : null,
       header_text: hdrTexto || null,
       header_handle: headerHandle,
-      body: body,
-      footer: footer || null,
-      buttons: buttons,
+      body: body, footer: footer || null, buttons: buttons,
     };
     var r = await fetch('/inbox/plantillas/crear', {
-      method: 'POST',
-      credentials: 'include',
+      method: 'POST', credentials: 'include',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(payload),
     });
     var d = await r.json();
     if (d.ok) {
-      showTplResult('ok','✅ Plantilla <b>' + he(nombre) + '</b> enviada a Meta — Estado: <b>' + (d.status || 'PENDING') + '</b>.<br>La aprobación tarda entre 24 y 48 horas.');
-      // Limpiar form
-      document.getElementById('tpl-nombre').value = '';
-      document.getElementById('tpl-hdr-text').value = '';
-      document.getElementById('tpl-body').value = '';
-      document.getElementById('tpl-footer').value = '';
-      ['img','vid','doc'].forEach(limpiarArchivo);
-      document.querySelectorAll('#qr-list, #cta-list').forEach(function(l) { l.innerHTML=''; });
-      updateCounter('tpl-body','body-cnt',1024);
-      updateCounter('tpl-footer','footer-cnt',60);
+      // Mostrar panel de aprobación prominente
+      document.getElementById('tpl-approval-name').textContent = '📋 Plantilla "' + nombre + '" — ID Meta: ' + (d.id || '—');
+      document.getElementById('tpl-approval-panel').style.display = 'block';
+      document.getElementById('tpl-result').style.display = 'none';
+      _limpiarFormulario();
       cargarTablaPlantillas();
     } else {
-      showTplResult('err','❌ Error de Meta: ' + he(d.error || 'Error desconocido') + (d.code ? ' (código ' + d.code + ')' : ''));
+      showTplResult('err','❌ Error de Meta: ' + he(d.error || 'Error desconocido'));
     }
   } catch(e) {
     showTplResult('err','Error de conexión: ' + e.message);
   }
   btn.disabled = false;
   btn.textContent = '📤 Enviar a Meta para aprobación';
+}
+
+/* ── Editar plantilla existente ── */
+async function _editarPlantilla(metaId) {
+  var body     = document.getElementById('tpl-body').value.trim();
+  var footer   = document.getElementById('tpl-footer').value.trim();
+  var hdrTipo  = document.querySelector('input[name="hdr-type"]:checked').value;
+  var hdrTexto = hdrTipo === 'TEXT' ? document.getElementById('tpl-hdr-text').value.trim() : '';
+  var btnTipo  = document.querySelector('input[name="btn-type"]:checked').value;
+  var btn      = document.getElementById('tpl-crear-btn');
+
+  if (!body) { showTplResult('err','⚠️ El cuerpo del mensaje es obligatorio.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Guardando cambios...';
+  document.getElementById('tpl-result').style.display = 'none';
+  document.getElementById('tpl-approval-panel').style.display = 'none';
+
+  // Subir media si aplica
+  var headerHandle = null;
+  if (['IMAGE','VIDEO','DOCUMENT'].includes(hdrTipo)) {
+    var tipoKey = hdrTipo === 'IMAGE' ? 'img' : (hdrTipo === 'VIDEO' ? 'vid' : 'doc');
+    if (_tplFiles[tipoKey]) {
+      btn.textContent = '⏳ Subiendo archivo...';
+      headerHandle = await subirHeaderMedia(tipoKey);
+    }
+  }
+
+  var buttons = _recolectarBotones(btnTipo);
+
+  try {
+    var payload = {
+      template_id: metaId,
+      header_type: hdrTipo !== 'NONE' ? hdrTipo : null,
+      header_text: hdrTexto || null,
+      header_handle: headerHandle,
+      body: body, footer: footer || null, buttons: buttons,
+    };
+    var r = await fetch('/inbox/plantillas/editar', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      var nombre = document.getElementById('tpl-nombre').value.trim();
+      document.getElementById('tpl-approval-name').textContent = '✏️ Plantilla "' + nombre + '" actualizada — vuelve a estado PENDIENTE.';
+      document.getElementById('tpl-approval-panel').style.display = 'block';
+      document.getElementById('tpl-approval-panel').style.background = '#fff8e1';
+      document.getElementById('tpl-approval-panel').style.borderColor = '#f9a825';
+      document.getElementById('tpl-approval-panel').querySelector('div').style.color = '#7b5e00';
+      cancelarEdicion();
+      cargarTablaPlantillas();
+    } else {
+      showTplResult('err','❌ Error: ' + he(d.error || 'Error desconocido'));
+    }
+  } catch(e) {
+    showTplResult('err','Error de conexión: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = '✏️ Guardar cambios en Meta';
 }
 
 function showTplResult(tipo, html) {
