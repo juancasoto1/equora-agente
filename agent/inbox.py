@@ -183,6 +183,46 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <div id="cl"></div>
   </aside>
 
+  <!-- ── MODAL DIFUSIÓN ── -->
+  <div id="dif-overlay" onclick="if(event.target===this)cerrarDifusion()">
+    <div id="dif-box">
+      <div id="dif-head">
+        <span style="font-size:1.2rem">📢</span>
+        <h3>Nueva Difusión</h3>
+        <button id="dif-close" onclick="cerrarDifusion()">✕</button>
+      </div>
+      <div id="dif-body">
+        <div>
+          <div class="dif-lbl">Plantilla aprobada</div>
+          <select id="dif-tpl" class="dif-sel" onchange="seleccionarTemplate()">
+            <option value="">Cargando plantillas...</option>
+          </select>
+        </div>
+        <div id="dif-vars-wrap" style="display:none">
+          <div class="dif-lbl">Variables de la plantilla</div>
+          <div id="dif-vars"></div>
+        </div>
+        <div>
+          <div class="dif-lbl">Vista previa</div>
+          <div id="dif-preview">Selecciona una plantilla para ver la vista previa.</div>
+        </div>
+        <div>
+          <div class="dif-lbl">Números de destino <span style="font-weight:400;text-transform:none">(uno por línea, con código de país)</span></div>
+          <textarea id="dif-phones" class="dif-ta" placeholder="573001234567&#10;573009876543&#10;573001112233" oninput="actualizarConteo()"></textarea>
+          <div id="dif-conteo" style="font-size:.75rem;color:#8696a0;margin-top:4px">0 números</div>
+        </div>
+      </div>
+      <div id="dif-foot">
+        <div id="dif-result"></div>
+        <div id="dif-prog">
+          <div class="prog-bar-wrap"><div class="prog-bar" id="dif-bar"></div></div>
+          <div class="prog-txt" id="dif-ptxt">Enviando...</div>
+        </div>
+        <button id="dif-sendbtn" onclick="enviarDifusion()" disabled>Enviar difusión</button>
+      </div>
+    </div>
+  </div>
+
   <section id="chat-area">
     <div id="empty">
       <div class="eic">💬</div>
