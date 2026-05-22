@@ -5,6 +5,7 @@ import httpx
 from fastapi import Request
 from fastapi.responses import PlainTextResponse
 from agent.providers.base import ProveedorWhatsApp, MensajeEntrante
+from agent.transcriber import transcribir_audio_meta
 
 logger = logging.getLogger("agentkit")
 
@@ -68,6 +69,28 @@ class ProveedorMeta(ProveedorWhatsApp):
                                 mensaje_id=msg_id,
                                 es_propio=False,
                             ))
+
+                    elif tipo == "audio":
+                        # Mensaje de voz → transcribir con Whisper y tratar como texto
+                        audio_data = msg.get("audio", {})
+                        media_id   = audio_data.get("id", "")
+                        mime_type  = audio_data.get("mime_type", "audio/ogg")
+                        if media_id and self.access_token:
+                            logger.info(f"[audio] Mensaje de voz de {telefono} — transcribiendo...")
+                            texto = await transcribir_audio_meta(
+                                media_id, self.access_token, mime_type
+                            )
+                            if texto:
+                                mensajes.append(MensajeEntrante(
+                                    telefono=telefono,
+                                    texto=texto,
+                                    mensaje_id=msg_id,
+                                    es_propio=False,
+                                ))
+                            else:
+                                logger.warning(
+                                    f"[audio] No se pudo transcribir el audio de {telefono} — ignorado"
+                                )
 
                     elif tipo == "order":
                         # El cliente confirmó su carrito desde el catálogo nativo de WhatsApp.
