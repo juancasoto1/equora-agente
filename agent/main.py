@@ -1454,7 +1454,13 @@ async def inbox_broadcast_send(
                 r = await client.post(api_url, json=payload, headers=headers)
                 if r.status_code == 200:
                     enviados += 1
-                    logger.info(f"[broadcast] Enviado a {tel[-4:]}****")
+                    try:
+                        resp_data = r.json()
+                        wamid = resp_data.get("messages", [{}])[0].get("id", "?")
+                        msg_status = resp_data.get("messages", [{}])[0].get("message_status", "?")
+                    except Exception:
+                        wamid, msg_status = "?", "?"
+                    logger.info(f"[broadcast] Enviado a {tel[-4:]}**** wamid={wamid} status={msg_status}")
                 else:
                     fallidos += 1
                     try:
