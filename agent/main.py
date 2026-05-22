@@ -28,6 +28,7 @@ from agent.memory import (
     verificar_cierre_enviado,
     get_modo_humano, set_modo_humano,
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
+    registrar_difusion, obtener_difusiones,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
@@ -1536,11 +1537,212 @@ async def inbox_broadcast_send(
             await asyncio.sleep(0.1)
 
     logger.info(f"[broadcast] Difusión '{template_name}': {enviados} enviados, {fallidos} fallidos")
+
+    # Registrar resultado en BD para el historial de difusiones
+    try:
+        await registrar_difusion(
+            template_name=template_name,
+            language=language,
+            destinatarios=len(recipients),
+            enviados=enviados,
+            fallidos=fallidos,
+            errores=errores,
+        )
+    except Exception as e:
+        logger.warning(f"[broadcast] No se pudo registrar difusión en BD: {e}")
+
     return JSONResponse(content={
         "enviados": enviados,
         "fallidos": fallidos,
         "errores":  errores[:20],
     })
+
+
+@app.get("/inbox/difusiones/historial")
+async def inbox_difusiones_historial(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Devuelve el historial de difusiones enviadas desde el inbox."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    rows = await obtener_difusiones(50)
+    return JSONResponse(content={"difusiones": rows})
+
+
+@app.get("/inbox/metricas/resumen")
+async def inbox_metricas_resumen(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Métricas de WhatsApp Business: mensajes enviados, entregados, leídos (últimos 30 días)."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    access_token = os.getenv("META_ACCESS_TOKEN", "")
+    waba_id      = os.getenv("META_WABA_ID", "")
+    phone_number_id = os.getenv("META_PHONE_NUMBER_ID", "")
+
+    if not access_token or not waba_id:
+        return JSONResponse(content={"error": "META_ACCESS_TOKEN o META_WABA_ID no configurados"})
+
+    import datetime as dt
+    hoy   = dt.date.today()
+    start = int((hoy - dt.timedelta(days=30)).strftime("%s") if hasattr(hoy, "strftime") else 0)
+    end   = int(hoy.strftime("%s") if hasattr(hoy, "strftime") else 0)
+
+    # Usar timestamps de época correctamente
+    import time as _time
+    end_ts   = int(_time.time())
+    start_ts = end_ts - 30 * 86400
+
+    api_ver = "v21.0"
+    # WABA Analytics: mensajes enviados, entregados y leídos por día
+    analytics_url = (
+        f"https://graph.facebook.com/{api_ver}/{waba_id}/analytics"
+        f"?granularity=MONTHLY&start={start_ts}&end={end_ts}"
+        f"&metric_types=['SENT','DELIVERED','READ']"
+        f"&access_token={access_token}"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(analytics_url)
+            data = r.json()
+            if "error" in data:
+                # Fallback: intentar con phone_number_id si WABA falla
+                ph_url = (
+                    f"https://graph.facebook.com/{api_ver}/{phone_number_id}/analytics"
+                    f"?granularity=MONTHLY&start={start_ts}&end={end_ts}"
+                    f"&metric_types=['SENT','DELIVERED','READ']"
+                    f"&access_token={access_token}"
+                )
+                r2 = await client.get(ph_url)
+                data = r2.json()
+            if "error" in data:
+                return JSONResponse(content={"error": data["error"].get("message", str(data["error"])), "raw": data})
+            # Sumar totales del periodo
+            puntos = data.get("data", {}).get("data_points", [])
+            totales = {"sent": 0, "delivered": 0, "read": 0}
+            for p in puntos:
+                totales["sent"]      += p.get("sent", 0)
+                totales["delivered"] += p.get("delivered", 0)
+                totales["read"]      += p.get("read", 0)
+            return JSONResponse(content={"resumen": totales, "puntos": puntos})
+    except Exception as e:
+        logger.error(f"[metricas] Error consultando Analytics API: {e}")
+        return JSONResponse(content={"error": str(e)})
+
+
+@app.get("/inbox/metricas/plantillas")
+async def inbox_metricas_plantillas(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Analíticas por plantilla: enviados, entregados, leídos, clics en botón."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    access_token = os.getenv("META_ACCESS_TOKEN", "")
+    waba_id      = os.getenv("META_WABA_ID", "")
+
+    if not access_token or not waba_id:
+        return JSONResponse(content={"error": "META_ACCESS_TOKEN o META_WABA_ID no configurados"})
+
+    import time as _time
+    end_ts   = int(_time.time())
+    start_ts = end_ts - 30 * 86400
+    api_ver  = "v21.0"
+
+    url = (
+        f"https://graph.facebook.com/{api_ver}/{waba_id}/template_analytics"
+        f"?granularity=MONTHLY&start={start_ts}&end={end_ts}"
+        f"&access_token={access_token}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(url)
+            data = r.json()
+            if "error" in data:
+                return JSONResponse(content={"error": data["error"].get("message", str(data["error"])), "raw": data})
+            return JSONResponse(content={"analytics": data.get("data", [])})
+    except Exception as e:
+        logger.error(f"[metricas] Error consultando template_analytics: {e}")
+        return JSONResponse(content={"error": str(e)})
+
+
+@app.post("/inbox/plantillas/crear")
+async def inbox_plantillas_crear(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Crea una nueva plantilla en Meta y la envía a revisión.
+    Body JSON: { name, category, language, header_text?, body, footer?, buttons? }
+    """
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    access_token = os.getenv("META_ACCESS_TOKEN", "")
+    waba_id      = os.getenv("META_WABA_ID", "")
+    if not access_token or not waba_id:
+        return JSONResponse(content={"error": "META_ACCESS_TOKEN o META_WABA_ID no configurados"}, status_code=500)
+
+    body = await request.json()
+    nombre    = (body.get("name") or "").lower().replace(" ", "_")
+    categoria = body.get("category", "MARKETING")
+    idioma    = body.get("language", "es_CO")
+    cuerpo    = body.get("body", "")
+    header_t  = body.get("header_text", "")
+    footer    = body.get("footer", "")
+    buttons   = body.get("buttons", [])
+
+    if not nombre or not cuerpo:
+        return JSONResponse(content={"error": "Nombre y cuerpo son requeridos"}, status_code=400)
+
+    componentes = []
+    if header_t:
+        componentes.append({"type": "HEADER", "format": "TEXT", "text": header_t[:60]})
+    componentes.append({"type": "BODY", "text": cuerpo})
+    if footer:
+        componentes.append({"type": "FOOTER", "text": footer[:60]})
+    if buttons:
+        btn_list = []
+        for b in buttons[:3]:
+            if b.get("type") == "URL":
+                btn_list.append({"type": "URL", "text": b.get("text", "Ver más")[:20], "url": b.get("url", "")})
+            elif b.get("type") == "PHONE_NUMBER":
+                btn_list.append({"type": "PHONE_NUMBER", "text": b.get("text", "Llamar")[:20], "phone_number": b.get("phone_number", "")})
+            else:
+                btn_list.append({"type": "QUICK_REPLY", "text": b.get("text", "Sí")[:25]})
+        if btn_list:
+            componentes.append({"type": "BUTTONS", "buttons": btn_list})
+
+    payload = {
+        "name": nombre,
+        "category": categoria,
+        "language": idioma,
+        "components": componentes,
+    }
+
+    api_ver = "v21.0"
+    url = f"https://graph.facebook.com/{api_ver}/{waba_id}/message_templates"
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            data = r.json()
+            if r.status_code == 200 or "id" in data:
+                logger.info(f"[plantillas] Plantilla '{nombre}' creada — id={data.get('id')} status={data.get('status')}")
+                return JSONResponse(content={"ok": True, "id": data.get("id"), "status": data.get("status")})
+            else:
+                err = data.get("error", {})
+                logger.error(f"[plantillas] Error creando plantilla: {err}")
+                return JSONResponse(content={"error": err.get("message", str(data))}, status_code=400)
+    except Exception as e:
+        logger.error(f"[plantillas] Excepción: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")

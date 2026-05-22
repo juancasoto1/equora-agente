@@ -60,6 +60,20 @@ CAMPOS_CLIENTE = (
 )
 
 
+class Difusion(Base):
+    """Registro histórico de difusiones enviadas desde el inbox."""
+    __tablename__ = "difusiones"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    template_name: Mapped[str] = mapped_column(String(100), default="")
+    language: Mapped[str] = mapped_column(String(20), default="es_CO")
+    destinatarios: Mapped[int] = mapped_column(Integer, default=0)
+    enviados: Mapped[int] = mapped_column(Integer, default=0)
+    fallidos: Mapped[int] = mapped_column(Integer, default=0)
+    errores_json: Mapped[str] = mapped_column(Text, default="[]")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class EstadoConversacion(Base):
     """Timestamps por conversación para gestionar seguimientos automáticos."""
     __tablename__ = "estado_conversacion"
@@ -77,6 +91,7 @@ async def inicializar_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Migración: agregar columnas nuevas si la tabla ya existía sin ellas
+        # La tabla difusiones se crea automáticamente por create_all arriba
         for sql in (
             "ALTER TABLE clientes ADD COLUMN pedido_pendiente TEXT DEFAULT ''",
             "ALTER TABLE clientes ADD COLUMN pedido_pendiente_at DATETIME",
@@ -524,6 +539,54 @@ async def obtener_todas_conversaciones() -> list[dict]:
                 "modo_humano": bool(estado.modo_humano) if estado else False,
             })
         return convs
+
+
+async def registrar_difusion(
+    template_name: str,
+    language: str,
+    destinatarios: int,
+    enviados: int,
+    fallidos: int,
+    errores: list[str],
+):
+    """Guarda el resultado de una difusión enviada."""
+    async with async_session() as session:
+        dif = Difusion(
+            template_name=template_name,
+            language=language,
+            destinatarios=destinatarios,
+            enviados=enviados,
+            fallidos=fallidos,
+            errores_json=json.dumps(errores[:20], ensure_ascii=False),
+            created_at=datetime.utcnow(),
+        )
+        session.add(dif)
+        await session.commit()
+
+
+async def obtener_difusiones(limite: int = 50) -> list[dict]:
+    """Lista de difusiones ordenadas por más recientes primero."""
+    async with async_session() as session:
+        query = (
+            select(Difusion)
+            .order_by(Difusion.created_at.desc())
+            .limit(limite)
+        )
+        result = await session.execute(query)
+        rows = result.scalars().all()
+        return [
+            {
+                "id": d.id,
+                "template_name": d.template_name,
+                "language": d.language,
+                "destinatarios": d.destinatarios,
+                "enviados": d.enviados,
+                "fallidos": d.fallidos,
+                "errores": json.loads(d.errores_json or "[]"),
+                "created_at": d.created_at.isoformat() if d.created_at else "",
+            }
+            for d in rows
+        ]
 
 
 async def obtener_historial_con_timestamps(telefono: str, limite: int = 150) -> list[dict]:
