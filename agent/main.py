@@ -1330,6 +1330,7 @@ async def inbox_broadcast_send(
     template_name = body.get("template", "")
     language      = body.get("language", "es_CO")
     recipients    = body.get("recipients", [])   # [{phone, variables:[]}]
+    var_names     = body.get("var_names", [])    # nombres de variables, ej: ["nombre"]
 
     if not template_name or not recipients:
         return JSONResponse(content={"error": "Faltan template o recipients"}, status_code=400)
@@ -1359,9 +1360,20 @@ async def inbox_broadcast_send(
             vars_dest = dest.get("variables", [])
             components = []
             if vars_dest:
+                # Si tenemos nombres de variables (ej. ["nombre"]) usamos parameter_name
+                # para plantillas con {{nombre}}; si son posicionales ({{1}}) solo text
+                parameters = []
+                for i, v in enumerate(vars_dest):
+                    param = {"type": "text", "text": str(v)}
+                    if i < len(var_names):
+                        # Solo incluir parameter_name si la variable NO es numérica
+                        vname = var_names[i]
+                        if not vname.isdigit():
+                            param["parameter_name"] = vname
+                    parameters.append(param)
                 components.append({
                     "type": "body",
-                    "parameters": [{"type": "text", "text": str(v)} for v in vars_dest],
+                    "parameters": parameters,
                 })
 
             payload = {
@@ -1375,15 +1387,16 @@ async def inbox_broadcast_send(
                 },
             }
             try:
+                logger.info(f"[broadcast] Payload → {payload}")
                 r = await client.post(api_url, json=payload, headers=headers)
                 if r.status_code == 200:
                     enviados += 1
                     logger.info(f"[broadcast] Enviado a {tel[-4:]}****")
                 else:
                     fallidos += 1
-                    err_msg = r.json().get("error", {}).get("message", r.text[:100])
+                    err_msg = r.json().get("error", {}).get("message", r.text[:200])
                     errores.append(f"{tel}: {err_msg}")
-                    logger.warning(f"[broadcast] Falló {tel}: {err_msg}")
+                    logger.warning(f"[broadcast] Falló {tel}: {r.status_code} — {r.text[:300]}")
             except Exception as e:
                 fallidos += 1
                 errores.append(f"{tel}: {e}")

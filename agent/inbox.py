@@ -153,6 +153,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 #dif-preview{background:#0b141a;border-radius:8px;padding:12px 14px;font-size:.84rem;line-height:1.5;color:#e9edef;white-space:pre-wrap;min-height:48px;border:1px solid #313d45}
 #dif-preview .ph{color:#00a884;font-weight:600}
 #dif-vars{display:flex;flex-direction:column;gap:8px}
+/* CSV upload */
+#dif-csv-wrap{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#dif-csv-label{display:flex;align-items:center;gap:6px;background:#2a3942;border:1.5px dashed #00a884;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:.83rem;color:#00a884;font-weight:600;transition:background .2s;flex:1;min-width:160px;justify-content:center}
+#dif-csv-label:hover{background:#1a2e35}
+#dif-csv-input{display:none}
+#dif-csv-fname{font-size:.76rem;color:#8696a0;margin-top:3px;text-align:center}
+.btn-dl-csv{display:flex;align-items:center;gap:5px;background:none;border:1.5px solid #313d45;border-radius:8px;padding:8px 14px;color:#8696a0;font-size:.83rem;cursor:pointer;font-weight:600;transition:all .2s;white-space:nowrap}
+.btn-dl-csv:hover{border-color:#00a884;color:#00a884}
 #dif-foot{padding:14px 18px;border-top:1px solid #313d45;display:flex;flex-direction:column;gap:10px}
 #dif-prog{display:none;flex-direction:column;gap:6px}
 .prog-bar-wrap{background:#313d45;border-radius:8px;height:8px;overflow:hidden}
@@ -208,7 +216,18 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
         </div>
         <div>
           <div class="dif-lbl">Destinatarios <span id="dif-formato-hint" style="font-weight:400;text-transform:none">(uno por línea: número,nombre)</span></div>
-          <textarea id="dif-phones" class="dif-ta" placeholder="573001234567,Juan&#10;573009876543,María&#10;573001112233,Carlos" oninput="actualizarConteo()"></textarea>
+          <!-- CSV upload + descarga formato -->
+          <div id="dif-csv-wrap">
+            <label id="dif-csv-label" for="dif-csv-input">
+              📂 Cargar desde CSV
+            </label>
+            <input type="file" id="dif-csv-input" accept=".csv,text/csv" onchange="cargarArchivoCSV(this)">
+            <button class="btn-dl-csv" onclick="descargarFormatoCSV()" type="button" title="Descargar plantilla CSV de ejemplo">
+              ⬇ Formato CSV
+            </button>
+          </div>
+          <div id="dif-csv-fname"></div>
+          <textarea id="dif-phones" class="dif-ta" style="margin-top:8px" placeholder="573001234567,Juan&#10;573009876543,María&#10;573001112233,Carlos" oninput="actualizarConteo()"></textarea>
           <div id="dif-conteo" style="font-size:.75rem;color:#8696a0;margin-top:4px">0 destinatarios</div>
         </div>
       </div>
@@ -482,6 +501,8 @@ function cerrarDifusion() {
   document.getElementById('dif-result').style.display = 'none';
   document.getElementById('dif-prog').style.display = 'none';
   document.getElementById('dif-sendbtn').disabled = false;
+  document.getElementById('dif-csv-fname').textContent = '';
+  document.getElementById('dif-csv-input').value = '';
 }
 
 async function cargarTemplates() {
@@ -556,6 +577,77 @@ function actualizarPreview() {
     });
   }
   document.getElementById('dif-preview').textContent = text;
+}
+
+/* ── DESCARGA FORMATO CSV ── */
+function descargarFormatoCSV() {
+  // Genera un CSV de ejemplo con los encabezados correctos según la plantilla activa
+  var name = document.getElementById('dif-tpl').value;
+  var tpl  = _dif_templates.find(t => t.name === name);
+  var extraCols = tpl && tpl.variables && tpl.variables.length
+    ? tpl.variables.map(function(v) { return v; })
+    : ['nombre'];
+
+  var encabezado = ['telefono'].concat(extraCols).join(',');
+  var ejemplos = [
+    ['573001234567', 'Juan'].concat(extraCols.slice(1).map(function() { return 'valor'; })).join(','),
+    ['573009876543', 'María'].concat(extraCols.slice(1).map(function() { return 'valor'; })).join(','),
+    ['573001112233', 'Carlos'].concat(extraCols.slice(1).map(function() { return 'valor'; })).join(','),
+  ];
+  var csv = [encabezado].concat(ejemplos).join('\r\n');
+
+  var blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8;'});
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url;
+  a.download = 'formato_difusion.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ── CARGAR ARCHIVO CSV ── */
+function cargarArchivoCSV(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  document.getElementById('dif-csv-fname').textContent = '📄 ' + file.name;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var texto = e.target.result;
+    // Eliminar BOM si existe
+    if (texto.charCodeAt(0) === 0xFEFF) texto = texto.slice(1);
+
+    var lineas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (!lineas.length) return;
+
+    // Detectar si la primera línea es encabezado (empieza con texto no numérico)
+    var primeraCol = lineas[0].split(',')[0].trim();
+    var esEncabezado = isNaN(primeraCol.replace(/\D/g,'')) || primeraCol.toLowerCase() === 'telefono';
+    if (esEncabezado) lineas = lineas.slice(1);
+
+    // Verificar que queden datos
+    if (!lineas.length) {
+      document.getElementById('dif-csv-fname').textContent = '⚠️ El archivo no tiene datos válidos';
+      return;
+    }
+
+    // Pegar en el textarea (reemplaza el contenido actual)
+    document.getElementById('dif-phones').value = lineas.join('\n');
+    actualizarConteo();
+
+    // Feedback
+    document.getElementById('dif-csv-fname').textContent =
+      '✅ ' + file.name + ' — ' + lineas.length + ' fila(s) cargada(s)';
+
+    // Limpiar el input para poder volver a cargar el mismo archivo
+    input.value = '';
+  };
+  reader.onerror = function() {
+    document.getElementById('dif-csv-fname').textContent = '❌ Error al leer el archivo';
+  };
+  reader.readAsText(file, 'UTF-8');
 }
 
 function _parsearDestinatarios() {
@@ -645,6 +737,7 @@ async function enviarDifusion() {
         body: JSON.stringify({
           template: name,
           language: tpl.language,
+          var_names: tpl.variables,
           recipients: lote,
         }),
       });
