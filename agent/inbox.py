@@ -134,6 +134,37 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 #ti::placeholder{color:var(--ts)}
 #sendbtn{background:var(--az);color:#fff;border:none;border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;font-size:1.1rem;transition:opacity .2s}
 #sendbtn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── DIFUSIÓN MODAL ── */
+#dif-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center}
+#dif-overlay.open{display:flex}
+#dif-box{background:#202c33;border-radius:14px;width:520px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.5)}
+#dif-head{background:#2a3942;padding:14px 18px;border-radius:14px 14px 0 0;display:flex;align-items:center;gap:10px}
+#dif-head h3{flex:1;font-size:.95rem;font-weight:700}
+#dif-close{background:none;border:none;color:#8696a0;font-size:1.4rem;cursor:pointer;line-height:1;padding:0 2px}
+#dif-close:hover{color:#e9edef}
+#dif-body{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+#dif-body::-webkit-scrollbar{width:4px}
+#dif-body::-webkit-scrollbar-thumb{background:#313d45}
+.dif-lbl{font-size:.78rem;color:#8696a0;margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.dif-sel,.dif-inp,.dif-ta{width:100%;background:#2a3942;border:1.5px solid #313d45;border-radius:8px;padding:9px 13px;color:#e9edef;font-size:.88rem;outline:none;font-family:inherit}
+.dif-sel:focus,.dif-inp:focus,.dif-ta:focus{border-color:#00a884}
+.dif-ta{resize:vertical;min-height:90px;line-height:1.5}
+#dif-preview{background:#0b141a;border-radius:8px;padding:12px 14px;font-size:.84rem;line-height:1.5;color:#e9edef;white-space:pre-wrap;min-height:48px;border:1px solid #313d45}
+#dif-preview .ph{color:#00a884;font-weight:600}
+#dif-vars{display:flex;flex-direction:column;gap:8px}
+#dif-foot{padding:14px 18px;border-top:1px solid #313d45;display:flex;flex-direction:column;gap:10px}
+#dif-prog{display:none;flex-direction:column;gap:6px}
+.prog-bar-wrap{background:#313d45;border-radius:8px;height:8px;overflow:hidden}
+.prog-bar{background:#00a884;height:100%;width:0%;transition:width .3s;border-radius:8px}
+.prog-txt{font-size:.78rem;color:#8696a0}
+#dif-sendbtn{background:#00a884;color:#fff;border:none;border-radius:10px;padding:12px;font-size:.92rem;font-weight:700;cursor:pointer;width:100%;transition:opacity .2s}
+#dif-sendbtn:disabled{opacity:.45;cursor:not-allowed}
+#dif-result{display:none;font-size:.82rem;padding:10px 14px;border-radius:8px;line-height:1.5}
+#dif-result.ok{background:#1f6b3320;color:#25d366;border:1px solid #1f6b33}
+#dif-result.err{background:#e5393520;color:#ef9a9a;border:1px solid #e53935}
+#dif-btn{background:none;border:1px solid #313d45;color:#8696a0;border-radius:8px;padding:5px 11px;font-size:.76rem;cursor:pointer;white-space:nowrap}
+#dif-btn:hover{color:#e9edef;border-color:#8696a0}
 </style>
 </head>
 <body>
@@ -143,6 +174,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
     <div id="sh">
       <h2>💬 Inbox Andrea</h2>
       <span class="cnt" id="total">0</span>
+      <button id="dif-btn" onclick="abrirDifusion()">📢 Difusión</button>
       <button id="logout" onclick="location.href='/inbox/logout'">Salir</button>
     </div>
     <div id="srch">
@@ -395,6 +427,169 @@ function autoResize() {
 /* ── INIT ── */
 loadConvs();
 _convTimer = setInterval(loadConvs, 8000);
+
+/* ══════════════════════════════════════════════════
+   DIFUSIÓN
+   ══════════════════════════════════════════════════ */
+var _dif_templates = [];
+
+function abrirDifusion() {
+  document.getElementById('dif-overlay').classList.add('open');
+  cargarTemplates();
+}
+function cerrarDifusion() {
+  document.getElementById('dif-overlay').classList.remove('open');
+  document.getElementById('dif-result').style.display = 'none';
+  document.getElementById('dif-prog').style.display = 'none';
+  document.getElementById('dif-sendbtn').disabled = false;
+}
+
+async function cargarTemplates() {
+  var sel = document.getElementById('dif-tpl');
+  sel.innerHTML = '<option value="">Cargando...</option>';
+  try {
+    var r = await fetch('/inbox/broadcast/templates', {credentials:'include'});
+    var d = await r.json();
+    _dif_templates = d.templates || [];
+    if (!_dif_templates.length) {
+      sel.innerHTML = '<option value="">No hay plantillas aprobadas en Meta</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— Selecciona una plantilla —</option>' +
+      _dif_templates.map(t =>
+        '<option value="' + t.name + '">' + t.name + ' (' + t.language + ')</option>'
+      ).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error cargando plantillas</option>';
+  }
+}
+
+function seleccionarTemplate() {
+  var name = document.getElementById('dif-tpl').value;
+  var tpl  = _dif_templates.find(t => t.name === name);
+  var prev = document.getElementById('dif-preview');
+  var varsWrap = document.getElementById('dif-vars-wrap');
+  var varsDiv  = document.getElementById('dif-vars');
+  var sendBtn  = document.getElementById('dif-sendbtn');
+
+  if (!tpl) {
+    prev.textContent = 'Selecciona una plantilla para ver la vista previa.';
+    varsWrap.style.display = 'none';
+    sendBtn.disabled = true;
+    return;
+  }
+
+  // Mostrar variables si las hay
+  varsDiv.innerHTML = '';
+  if (tpl.variables && tpl.variables.length) {
+    varsWrap.style.display = 'block';
+    tpl.variables.forEach(function(n) {
+      var row = document.createElement('div');
+      row.style.display = 'flex'; row.style.alignItems = 'center'; row.style.gap = '8px';
+      row.innerHTML =
+        '<label style="font-size:.82rem;color:#8696a0;white-space:nowrap;min-width:40px">{{' + n + '}}</label>' +
+        '<input class="dif-inp" id="dif-var-' + n + '" placeholder="Valor para {{' + n + '}}" oninput="actualizarPreview()">';
+      varsDiv.appendChild(row);
+    });
+  } else {
+    varsWrap.style.display = 'none';
+  }
+
+  actualizarPreview();
+  sendBtn.disabled = !document.getElementById('dif-phones').value.trim();
+}
+
+function actualizarPreview() {
+  var name = document.getElementById('dif-tpl').value;
+  var tpl  = _dif_templates.find(t => t.name === name);
+  if (!tpl) return;
+  var text = tpl.preview || '(Sin vista previa disponible)';
+  if (tpl.variables) {
+    tpl.variables.forEach(function(n) {
+      var inp = document.getElementById('dif-var-' + n);
+      var val = inp ? (inp.value || '{{' + n + '}}') : '{{' + n + '}}';
+      text = text.split('{{' + n + '}}').join(val);
+    });
+  }
+  document.getElementById('dif-preview').textContent = text;
+}
+
+function actualizarConteo() {
+  var lines = document.getElementById('dif-phones').value
+    .split('\n').map(l=>l.trim()).filter(l=>l.length>5);
+  document.getElementById('dif-conteo').textContent = lines.length + ' número' + (lines.length===1?'':'s');
+  var name = document.getElementById('dif-tpl').value;
+  document.getElementById('dif-sendbtn').disabled = !name || !lines.length;
+}
+
+async function enviarDifusion() {
+  var name  = document.getElementById('dif-tpl').value;
+  var tpl   = _dif_templates.find(t => t.name === name);
+  if (!tpl) return;
+
+  var phones = document.getElementById('dif-phones').value
+    .split('\n').map(l=>l.trim()).filter(l=>l.length>5);
+  if (!phones.length) return;
+
+  var variables = (tpl.variables||[]).map(function(n) {
+    var inp = document.getElementById('dif-var-' + n);
+    return inp ? inp.value.trim() : '';
+  });
+
+  // UI: mostrar progreso
+  var btn  = document.getElementById('dif-sendbtn');
+  var prog = document.getElementById('dif-prog');
+  var bar  = document.getElementById('dif-bar');
+  var ptxt = document.getElementById('dif-ptxt');
+  var res  = document.getElementById('dif-result');
+  btn.disabled = true;
+  prog.style.display = 'flex';
+  bar.style.width = '0%';
+  ptxt.textContent = 'Enviando 0 / ' + phones.length + '...';
+  res.style.display = 'none';
+
+  try {
+    // Enviamos en lotes de 50 para poder mostrar progreso
+    var LOTE = 50;
+    var enviados = 0; var fallidos = 0; var todosErrores = [];
+    for (var i = 0; i < phones.length; i += LOTE) {
+      var lote = phones.slice(i, i + LOTE);
+      var r = await fetch('/inbox/broadcast/send', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          template: name,
+          language: tpl.language,
+          variables: variables,
+          phones: lote,
+        }),
+      });
+      var d = await r.json();
+      enviados += d.enviados || 0;
+      fallidos += d.fallidos || 0;
+      todosErrores = todosErrores.concat(d.errores || []);
+      var pct = Math.round(((i + lote.length) / phones.length) * 100);
+      bar.style.width = Math.min(pct, 100) + '%';
+      ptxt.textContent = 'Enviando ' + Math.min(i+LOTE, phones.length) + ' / ' + phones.length + '...';
+    }
+    bar.style.width = '100%';
+    ptxt.textContent = 'Listo';
+    res.style.display = 'block';
+    if (fallidos === 0) {
+      res.className = 'dif-result ok';
+      res.textContent = '✅ Difusión completada: ' + enviados + ' mensajes enviados correctamente.';
+    } else {
+      res.className = 'dif-result err';
+      res.textContent = '⚠️ ' + enviados + ' enviados, ' + fallidos + ' fallidos.\n' + todosErrores.slice(0,5).join('\n');
+    }
+  } catch(e) {
+    res.style.display = 'block';
+    res.className = 'dif-result err';
+    res.textContent = 'Error de conexión: ' + e.message;
+  }
+  btn.disabled = false;
+}
 </script>
 </body>
 </html>"""

@@ -1232,6 +1232,162 @@ async def inbox_modo(
     return JSONResponse(content={"ok": True, "modo_humano": activo})
 
 
+# ── Difusión / Broadcast ───────────────────────────────────────────────────
+
+@app.get("/inbox/broadcast/templates")
+async def inbox_broadcast_templates(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Lista las plantillas aprobadas en Meta para usar en difusiones."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    access_token    = os.getenv("META_ACCESS_TOKEN", "")
+    phone_number_id = os.getenv("META_PHONE_NUMBER_ID", "")
+    if not access_token or not phone_number_id:
+        return JSONResponse(content={"templates": [], "error": "META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados"})
+
+    # Obtener el WABA ID desde el phone_number_id
+    api_ver = "v21.0"
+    url = (
+        f"https://graph.facebook.com/{api_ver}/{phone_number_id}"
+        f"?fields=name&access_token={access_token}"
+    )
+    async with httpx.AsyncClient(timeout=15) as client:
+        # Primero obtenemos el WABA ID
+        r_phone = await client.get(url)
+        waba_url = (
+            f"https://graph.facebook.com/{api_ver}/{phone_number_id}"
+            f"/message_templates?fields=name,status,components,language&limit=100"
+            f"&access_token={access_token}"
+        )
+        r = await client.get(waba_url)
+        if r.status_code != 200:
+            logger.error(f"[broadcast] Error obteniendo templates: {r.status_code} {r.text[:300]}")
+            return JSONResponse(content={"templates": [], "error": r.text[:200]})
+
+        data = r.json()
+        templates_raw = data.get("data", [])
+
+        # Solo mostramos las APROBADAS
+        templates = []
+        for t in templates_raw:
+            if t.get("status", "").upper() != "APPROVED":
+                continue
+            # Extraer placeholders {{N}} del body
+            variables = []
+            for comp in t.get("components", []):
+                if comp.get("type", "").upper() == "BODY":
+                    import re as _re
+                    text = comp.get("text", "")
+                    nums = sorted(set(_re.findall(r'\{\{(\d+)\}\}', text)))
+                    variables = nums
+                    break
+            templates.append({
+                "name":      t.get("name"),
+                "language":  t.get("language", "es_CO"),
+                "variables": variables,   # ["1","2",...] o []
+                "preview":   next(
+                    (c.get("text","") for c in t.get("components",[]) if c.get("type","").upper()=="BODY"),
+                    ""
+                ),
+            })
+
+        return JSONResponse(content={"templates": templates})
+
+
+@app.post("/inbox/broadcast/send")
+async def inbox_broadcast_send(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """
+    Envía una plantilla aprobada a una lista de números.
+    Body JSON:
+      { "template": "nombre_plantilla",
+        "language": "es_CO",
+        "variables": ["valor1", "valor2"],
+        "phones": ["573001234567", ...] }
+    """
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    body = await request.json()
+    template_name = body.get("template", "")
+    language      = body.get("language", "es_CO")
+    variables     = body.get("variables", [])    # valores para {{1}}, {{2}}, ...
+    phones_raw    = body.get("phones", [])
+
+    if not template_name or not phones_raw:
+        return JSONResponse(content={"error": "Faltan template o phones"}, status_code=400)
+
+    access_token    = os.getenv("META_ACCESS_TOKEN", "")
+    phone_number_id = os.getenv("META_PHONE_NUMBER_ID", "")
+    if not access_token or not phone_number_id:
+        return JSONResponse(content={"error": "META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados"}, status_code=500)
+
+    api_ver = "v21.0"
+    api_url = f"https://graph.facebook.com/{api_ver}/{phone_number_id}/messages"
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    # Construir componentes con variables
+    components = []
+    if variables:
+        components.append({
+            "type": "body",
+            "parameters": [{"type": "text", "text": str(v)} for v in variables],
+        })
+
+    enviados = 0
+    fallidos = 0
+    errores  = []
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        for raw in phones_raw:
+            # Limpiar número: solo dígitos
+            tel = "".join(filter(str.isdigit, str(raw)))
+            if not tel or len(tel) < 10:
+                fallidos += 1
+                errores.append(f"Número inválido: {raw}")
+                continue
+
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": tel,
+                "type": "template",
+                "template": {
+                    "name": template_name,
+                    "language": {"code": language},
+                    **({"components": components} if components else {}),
+                },
+            }
+            try:
+                r = await client.post(api_url, json=payload, headers=headers)
+                if r.status_code == 200:
+                    enviados += 1
+                    logger.info(f"[broadcast] Enviado a {tel[-4:]}****")
+                else:
+                    fallidos += 1
+                    err_msg = r.json().get("error", {}).get("message", r.text[:100])
+                    errores.append(f"{tel}: {err_msg}")
+                    logger.warning(f"[broadcast] Falló {tel}: {err_msg}")
+            except Exception as e:
+                fallidos += 1
+                errores.append(f"{tel}: {e}")
+
+            # Cadencia: 10 mensajes/segundo para no saturar la API de Meta
+            await asyncio.sleep(0.1)
+
+    logger.info(f"[broadcast] Difusión '{template_name}': {enviados} enviados, {fallidos} fallidos")
+    return JSONResponse(content={
+        "enviados": enviados,
+        "fallidos": fallidos,
+        "errores":  errores[:20],   # máximo 20 errores en la respuesta
+    })
+
+
 SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
 # Cache de deduplicación: evita procesar el mismo webhook de Shopify más de una vez
 # Shopify reintenta hasta 19 veces si no recibe 200 — guardamos los procesados por 10 min
