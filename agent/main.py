@@ -1243,52 +1243,66 @@ async def inbox_broadcast_templates(
     if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
-    access_token    = os.getenv("META_ACCESS_TOKEN", "")
-    waba_id         = os.getenv("META_WABA_ID", "")
+    access_token = os.getenv("META_ACCESS_TOKEN", "")
+    waba_id      = os.getenv("META_WABA_ID", "")
+    logger.info(f"[broadcast] access_token={'OK' if access_token else 'FALTA'} waba_id={waba_id or 'FALTA'}")
+
     if not access_token or not waba_id:
-        return JSONResponse(content={"templates": [], "error": "META_ACCESS_TOKEN o META_WABA_ID no configurados"})
+        return JSONResponse(content={"templates": [], "error": "META_ACCESS_TOKEN o META_WABA_ID no configurados en Railway"})
 
-    # Las plantillas pertenecen al WhatsApp Business Account (WABA), no al número
-    api_ver  = "v21.0"
-    waba_url = (
-        f"https://graph.facebook.com/{api_ver}/{waba_id}"
-        f"/message_templates?fields=name,status,components,language&limit=100"
-        f"&access_token={access_token}"
-    )
-    async with httpx.AsyncClient(timeout=15) as client:
-        r = await client.get(waba_url)
-        if r.status_code != 200:
-            logger.error(f"[broadcast] Error obteniendo templates: {r.status_code} {r.text[:300]}")
-            return JSONResponse(content={"templates": [], "error": r.text[:200]})
+    try:
+        # Las plantillas pertenecen al WhatsApp Business Account (WABA), no al número
+        api_ver  = "v21.0"
+        waba_url = (
+            f"https://graph.facebook.com/{api_ver}/{waba_id}"
+            f"/message_templates?fields=name,status,components,language&limit=100"
+            f"&access_token={access_token}"
+        )
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(waba_url)
+            logger.info(f"[broadcast] Meta templates response: {r.status_code} {r.text[:300]}")
+            if r.status_code != 200:
+                return JSONResponse(content={"templates": [], "error": f"Meta API {r.status_code}: {r.text[:200]}"})
 
-        data = r.json()
-        templates_raw = data.get("data", [])
+            data = r.json()
+            # Meta a veces devuelve {"error": ...} con status 200
+            if "error" in data:
+                err_msg = data["error"].get("message", str(data["error"]))
+                logger.error(f"[broadcast] Meta error en templates: {err_msg}")
+                return JSONResponse(content={"templates": [], "error": err_msg})
 
-        # Solo mostramos las APROBADAS
-        templates = []
-        for t in templates_raw:
-            if t.get("status", "").upper() != "APPROVED":
-                continue
-            # Extraer placeholders {{N}} del body
-            variables = []
-            for comp in t.get("components", []):
-                if comp.get("type", "").upper() == "BODY":
-                    import re as _re
-                    text = comp.get("text", "")
-                    nums = sorted(set(_re.findall(r'\{\{(\d+)\}\}', text)))
-                    variables = nums
-                    break
-            templates.append({
-                "name":      t.get("name"),
-                "language":  t.get("language", "es_CO"),
-                "variables": variables,   # ["1","2",...] o []
-                "preview":   next(
-                    (c.get("text","") for c in t.get("components",[]) if c.get("type","").upper()=="BODY"),
-                    ""
-                ),
-            })
+            templates_raw = data.get("data", [])
 
-        return JSONResponse(content={"templates": templates})
+            # Solo mostramos las APROBADAS
+            templates = []
+            for t in templates_raw:
+                if t.get("status", "").upper() != "APPROVED":
+                    continue
+                # Extraer placeholders {{N}} del body
+                variables = []
+                for comp in t.get("components", []):
+                    if comp.get("type", "").upper() == "BODY":
+                        text = comp.get("text", "")
+                        nums = sorted(set(re.findall(r'\{\{(\d+)\}\}', text)))
+                        variables = nums
+                        break
+                templates.append({
+                    "name":      t.get("name", ""),
+                    "language":  t.get("language", "es_CO"),
+                    "variables": variables,
+                    "preview":   next(
+                        (c.get("text", "") for c in t.get("components", [])
+                         if c.get("type", "").upper() == "BODY"),
+                        ""
+                    ),
+                })
+
+            logger.info(f"[broadcast] {len(templates)} plantillas APPROVED encontradas de {len(templates_raw)} totales")
+            return JSONResponse(content={"templates": templates})
+
+    except Exception as e:
+        logger.error(f"[broadcast] Excepción en inbox_broadcast_templates: {e}", exc_info=True)
+        return JSONResponse(content={"templates": [], "error": f"Error interno: {str(e)}"})
 
 
 @app.post("/inbox/broadcast/send")
