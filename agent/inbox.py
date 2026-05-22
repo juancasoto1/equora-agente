@@ -266,14 +266,9 @@ tr:hover td{background:#f8f9fa}
 .btn-secondary:hover{border-color:#b0bec5;color:#2d3748}
 .sep{height:1px;background:#e0e4e8;margin:20px 0}
 
-/* ── DIFUSIÓN inline (vista full-page) ── */
+/* ── DIFUSIÓN ── */
 #dif-split{display:flex;gap:24px;align-items:flex-start}
 #dif-form-col{flex:1;min-width:0}
-#dif-hist-col{width:340px;flex-shrink:0}
-/* preview */
-#dif-preview-box{background:#f8f9fa;border-radius:8px;padding:12px 14px;
-  font-size:.84rem;line-height:1.5;color:#2d3748;white-space:pre-wrap;min-height:52px;
-  border:1px solid #e0e4e8}
 /* progress */
 #dif-prog-wrap{display:none;flex-direction:column;gap:6px;margin-top:12px}
 .prog-bar-wrap{background:#e0e4e8;border-radius:8px;height:8px;overflow:hidden}
@@ -289,11 +284,19 @@ tr:hover td{background:#f8f9fa}
   font-weight:600;flex:1;min-width:140px;justify-content:center;transition:background .2s}
 #dif-csv-label:hover{background:#e0f5ee}
 #dif-csv-input{display:none}
+#dif-csv-stats{font-size:.78rem;margin-top:4px;padding:8px 12px;border-radius:8px;display:none;background:#f8f9fa;border:1px solid #e0e4e8}
 #dif-csv-fname{font-size:.76rem;color:#6b7a8d;margin-bottom:4px}
 .btn-dl-csv{display:flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #e0e4e8;
   border-radius:8px;padding:8px 14px;color:#6b7a8d;font-size:.83rem;cursor:pointer;
   font-weight:600;transition:all .2s;white-space:nowrap}
 .btn-dl-csv:hover{border-color:var(--az);color:var(--az)}
+/* historial abajo */
+#dif-hist-below{margin-top:20px}
+/* separador cargue manual */
+.dif-manual-hdr{display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:700;
+  color:#2d3748;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #e0e4e8}
+/* preview WhatsApp difusión */
+#dif-wa-prev-col{width:240px;flex-shrink:0;position:sticky;top:20px}
 /* vars */
 #dif-vars{display:flex;flex-direction:column;gap:8px}
 
@@ -496,6 +499,8 @@ tr:hover td{background:#f8f9fa}
           </div>
         </div>
         <div class="sec-body">
+
+          <!-- Fila superior: formulario + preview WhatsApp -->
           <div id="dif-split">
 
             <!-- Formulario nueva difusión -->
@@ -505,74 +510,126 @@ tr:hover td{background:#f8f9fa}
                   <div style="font-size:1.3rem">✉️</div>
                   <div>
                     <div style="font-weight:700;color:#1a2332;font-size:.95rem">Nueva difusión</div>
-                    <div style="font-size:.78rem;color:#6b7a8d">Selecciona plantilla y destinatarios</div>
+                    <div style="font-size:.78rem;color:#6b7a8d">Solo plantillas aprobadas por Meta</div>
                   </div>
                 </div>
 
+                <!-- Plantilla -->
                 <div class="f-group" style="margin-bottom:16px">
-                  <span class="f-label">Plantilla aprobada</span>
+                  <span class="f-label">Plantilla aprobada ✅</span>
                   <select id="dif-tpl" class="f-sel" onchange="seleccionarTemplate()">
                     <option value="">Cargando plantillas...</option>
                   </select>
                 </div>
 
+                <!-- Variables de la plantilla -->
                 <div id="dif-vars-wrap" style="display:none;margin-bottom:16px">
                   <span class="f-label" style="display:block;margin-bottom:8px">Variables de la plantilla</span>
                   <div id="dif-vars"></div>
                 </div>
 
-                <div class="f-group" style="margin-bottom:16px">
-                  <span class="f-label">Vista previa</span>
-                  <div id="dif-preview-box">Selecciona una plantilla para ver la vista previa.</div>
+                <!-- ── CARGUE MASIVO CSV ── -->
+                <div class="sep-label" style="margin-top:4px">📥 Cargue masivo de contactos <span class="opt-badge">CSV</span></div>
+                <div id="dif-csv-wrap">
+                  <label id="dif-csv-label" for="dif-csv-input">📂 Cargar CSV</label>
+                  <input type="file" id="dif-csv-input" accept=".csv,text/csv" onchange="cargarArchivoCSV(this)">
+                  <button class="btn-dl-csv" onclick="descargarFormatoCSV()" type="button">⬇ Formato</button>
                 </div>
+                <!-- Estadísticas del CSV (visible tras cargar) -->
+                <div id="dif-csv-stats"></div>
 
-                <div class="f-group" style="margin-bottom:16px">
-                  <span class="f-label">
-                    Destinatarios
-                    <span id="dif-formato-hint" style="font-weight:400;text-transform:none;letter-spacing:0">
-                      — uno por línea: número,nombre
-                    </span>
-                  </span>
-                  <div id="dif-csv-wrap">
-                    <label id="dif-csv-label" for="dif-csv-input">📂 Cargar CSV</label>
-                    <input type="file" id="dif-csv-input" accept=".csv,text/csv" onchange="cargarArchivoCSV(this)">
-                    <button class="btn-dl-csv" onclick="descargarFormatoCSV()" type="button">⬇ Formato</button>
-                  </div>
-                  <div id="dif-csv-fname"></div>
-                  <textarea id="dif-phones" class="f-ta" style="min-height:120px"
-                    placeholder="573001234567,Juan&#10;573009876543,María&#10;573001112233,Carlos"
-                    oninput="actualizarConteo()"></textarea>
-                  <div id="dif-conteo" style="font-size:.75rem;color:#6b7a8d;margin-top:4px">0 destinatarios</div>
+                <!-- ── INGRESO MANUAL ── -->
+                <div class="dif-manual-hdr">
+                  <span>✏️</span> Ingreso manual de contactos
+                  <span style="font-weight:400;color:#6b7a8d;font-size:.76rem;margin-left:4px">— uno por línea: número,nombre</span>
                 </div>
+                <textarea id="dif-phones" class="f-ta" style="min-height:100px"
+                  placeholder="573001234567,Juan&#10;573009876543,María&#10;573001112233,Carlos"
+                  oninput="actualizarConteo()"></textarea>
+                <div id="dif-conteo" style="font-size:.75rem;color:#6b7a8d;margin-top:4px">0 destinatarios</div>
 
-                <div id="dif-res-box"></div>
-                <div id="dif-prog-wrap">
+                <!-- Barra de progreso -->
+                <div id="dif-prog-wrap" style="margin-top:12px">
                   <div class="prog-bar-wrap"><div class="prog-bar" id="dif-bar"></div></div>
                   <div class="prog-txt" id="dif-ptxt">Enviando...</div>
                 </div>
+                <div id="dif-res-box"></div>
 
-                <div style="display:flex;gap:10px;margin-top:8px">
-                  <button class="btn-primary" id="dif-sendbtn" onclick="enviarDifusion()" disabled>
+                <div style="margin-top:14px">
+                  <button class="btn-primary" id="dif-sendbtn" onclick="enviarDifusion()" disabled style="width:100%">
                     📤 Enviar difusión
                   </button>
                 </div>
               </div>
             </div><!-- /dif-form-col -->
 
-            <!-- Historial difusiones -->
-            <div id="dif-hist-col">
-              <div class="tbl-wrap">
-                <div class="tbl-head">
-                  <h2>Historial</h2>
-                  <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="cargarHistorialDif()">↺ Actualizar</button>
+            <!-- Preview WhatsApp -->
+            <div id="dif-wa-prev-col" class="wa-phone">
+              <div class="wa-phone-shell">
+                <div class="wa-phone-bar">
+                  <div class="wa-av">🤖</div>
+                  <div>
+                    <div class="wa-name">Equora Distribuciones</div>
+                    <div class="wa-sub">en línea</div>
+                  </div>
                 </div>
-                <div id="dif-hist-body" style="max-height:520px;overflow-y:auto">
-                  <div class="loading-txt">Cargando...</div>
+                <div class="wa-chat">
+                  <div class="wa-bubble" id="dif-wa-bubble">
+                    <div class="wa-hdr-img" id="dif-prev-hdr-img" style="display:none">
+                      <div style="position:relative;z-index:1;font-size:2.5rem">🖼️</div>
+                      <img id="dif-prev-hdr-img-tag" src="" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover" alt="">
+                    </div>
+                    <div class="wa-hdr-vid-wrap wa-hdr-img" id="dif-prev-hdr-vid" style="display:none;background:#111">
+                      <div style="font-size:2.5rem">🎥</div>
+                      <div class="wa-play">▶</div>
+                    </div>
+                    <div class="wa-hdr-doc" id="dif-prev-hdr-doc" style="display:none">
+                      <span style="font-size:1.4rem">📄</span>
+                      <div>
+                        <div style="font-size:.75rem;font-weight:600;color:#111">documento.pdf</div>
+                        <div style="font-size:.68rem;color:#667781">PDF</div>
+                      </div>
+                    </div>
+                    <div class="wa-hdr-txt" id="dif-prev-hdr-txt" style="display:none"></div>
+                    <div class="wa-body-text" id="dif-prev-body" style="color:#999;font-style:italic">Selecciona una plantilla para ver la vista previa...</div>
+                    <div class="wa-footer-text" id="dif-prev-footer" style="display:none"></div>
+                    <div class="wa-ts">10:50 pm <span class="wa-tick">✓✓</span></div>
+                    <div class="wa-btns" id="dif-prev-btns" style="display:none"></div>
+                  </div>
                 </div>
               </div>
+              <div class="wa-preview-label">Vista previa · Solo referencia</div>
             </div>
 
           </div><!-- /dif-split -->
+
+          <!-- Historial abajo, ancho completo -->
+          <div id="dif-hist-below">
+            <div class="tbl-wrap">
+              <div class="tbl-head">
+                <h2>📋 Historial de difusiones</h2>
+                <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="cargarHistorialDif()">↺ Actualizar</button>
+              </div>
+              <div style="overflow-x:auto">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Plantilla</th>
+                      <th>Fecha</th>
+                      <th>Destinatarios</th>
+                      <th>✅ Enviados</th>
+                      <th>❌ Fallidos</th>
+                      <th>% Éxito</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dif-hist-body">
+                    <tr><td colspan="6" class="loading-txt">Sin difusiones enviadas aún</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div><!-- /sec-difusiones -->
 
@@ -655,7 +712,7 @@ tr:hover td{background:#f8f9fa}
                 <input type="hidden" id="tpl-meta-id" value="">
 
                 <!-- Nombre + Categoría -->
-                <div class="form-grid" style="margin-bottom:14px">
+                <div class="form-grid" style="margin-bottom:10px">
                   <div class="f-group">
                     <span class="f-label">Nombre <span class="req">*</span></span>
                     <input id="tpl-nombre" class="f-inp" placeholder="oferta_especial"
@@ -664,12 +721,20 @@ tr:hover td{background:#f8f9fa}
                   </div>
                   <div class="f-group">
                     <span class="f-label">Categoría <span class="req">*</span></span>
-                    <select id="tpl-cat" class="f-sel">
+                    <select id="tpl-cat" class="f-sel" onchange="actualizarSubcat()">
                       <option value="MARKETING">📣 Marketing</option>
                       <option value="UTILITY">🔔 Utilidad</option>
                       <option value="AUTHENTICATION">🔐 Autenticación</option>
                     </select>
                     <span class="f-hint">Marketing: promos · Utilidad: confirmaciones · Auth: OTP</span>
+                  </div>
+                </div>
+
+                <!-- Subcategoría (depende de la categoría) -->
+                <div class="f-group" style="margin-bottom:14px" id="subcat-wrap">
+                  <span class="f-label">Tipo de plantilla</span>
+                  <div id="subcat-opts" class="radio-group" style="flex-direction:column;gap:8px">
+                    <!-- se rellena dinámicamente -->
                   </div>
                 </div>
 
@@ -697,6 +762,7 @@ tr:hover td{background:#f8f9fa}
                     <label class="radio-opt"><input type="radio" name="hdr-type" value="IMAGE" onchange="toggleHdrType('IMAGE')"> 🖼️ Imagen</label>
                     <label class="radio-opt"><input type="radio" name="hdr-type" value="VIDEO" onchange="toggleHdrType('VIDEO')"> 🎥 Video</label>
                     <label class="radio-opt"><input type="radio" name="hdr-type" value="DOCUMENT" onchange="toggleHdrType('DOCUMENT')"> 📄 Documento</label>
+                    <label class="radio-opt"><input type="radio" name="hdr-type" value="LOCATION" onchange="toggleHdrType('LOCATION')"> 📍 Ubicación</label>
                   </div>
                 </div>
 
@@ -805,6 +871,31 @@ tr:hover td{background:#f8f9fa}
                   </div>
                 </div>
 
+                <!-- Header: UBICACIÓN -->
+                <div id="hdr-location-wrap" style="display:none;margin-bottom:10px">
+                  <div class="info-box">
+                    <b>📍 Encabezado de ubicación:</b><br>
+                    • El cliente verá un mapa estático como encabezado del mensaje<br>
+                    • Debes enviar <code>latitude</code>, <code>longitude</code> y <code>name</code> al usar la plantilla via API<br>
+                    • No requiere subir ningún archivo — Meta usa las coordenadas en tiempo real<br>
+                    • Ideal para: confirmación de punto de entrega, tiendas físicas, eventos
+                  </div>
+                  <div style="display:flex;gap:10px;margin-top:8px">
+                    <div class="f-group" style="flex:1">
+                      <span class="f-label">Latitud de ejemplo</span>
+                      <input id="tpl-loc-lat" class="f-inp" placeholder="3.4516" type="number" step="any">
+                    </div>
+                    <div class="f-group" style="flex:1">
+                      <span class="f-label">Longitud de ejemplo</span>
+                      <input id="tpl-loc-lng" class="f-inp" placeholder="-76.5320" type="number" step="any">
+                    </div>
+                  </div>
+                  <div class="f-group" style="margin-top:8px">
+                    <span class="f-label">Nombre del lugar (ejemplo)</span>
+                    <input id="tpl-loc-name" class="f-inp" placeholder="Equora Distribuciones — Cali">
+                  </div>
+                </div>
+
                 <!-- ── CUERPO ── -->
                 <div class="sep-label">📝 Cuerpo del mensaje <span class="req">*</span></div>
                 <div class="f-group" style="margin-bottom:4px">
@@ -816,10 +907,25 @@ tr:hover td{background:#f8f9fa}
                     <span class="char-counter"><span id="body-cnt">0</span>/1024</span>
                   </div>
                 </div>
-                <div class="info-box" style="margin-bottom:14px">
-                  <b>💡 Variables de personalización:</b> usa <code>{{nombre}}</code> o <code>{{1}}</code> — hasta 10 variables<br>
+                <div class="info-box" style="margin-bottom:10px">
                   <b>✏️ Formato de texto:</b> <code>*negrita*</code> &nbsp; <code>_cursiva_</code> &nbsp; <code>~tachado~</code> &nbsp; <code>```monoespaciado```</code><br>
                   <b>⚠️ No usar:</b> saltos de línea excesivos, emojis en exceso, mayúsculas totales, URLs acortadas
+                </div>
+
+                <!-- Tipo de variable -->
+                <div class="f-group" style="margin-bottom:14px">
+                  <span class="f-label">Tipo de variable <span class="opt-badge">Opcional</span></span>
+                  <div class="radio-group" style="gap:10px">
+                    <label class="radio-opt chk" id="vartype-num-lbl">
+                      <input type="radio" name="var-type" value="NUMERO" checked onchange="actualizarTipoVar('NUMERO')">
+                      Número &nbsp;<span style="font-size:.72rem;color:#6b7a8d">usa <code>{{1}}</code>, <code>{{2}}</code>…</span>
+                    </label>
+                    <label class="radio-opt" id="vartype-name-lbl">
+                      <input type="radio" name="var-type" value="NOMBRE" onchange="actualizarTipoVar('NOMBRE')">
+                      Nombre &nbsp;<span style="font-size:.72rem;color:#6b7a8d">usa <code>{{nombre}}</code>, <code>{{ciudad}}</code>…</span>
+                    </label>
+                  </div>
+                  <span class="f-hint" id="vartype-hint">Escribe <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo para insertar variables posicionales</span>
                 </div>
 
                 <!-- ── PIE DE PÁGINA ── -->
@@ -831,6 +937,38 @@ tr:hover td{background:#f8f9fa}
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
                     <span class="f-hint">Texto gris pequeño debajo del cuerpo · No admite variables ni formato</span>
                     <span class="char-counter"><span id="footer-cnt">0</span>/60</span>
+                  </div>
+                </div>
+
+                <!-- ── PERÍODO DE VALIDEZ (solo Marketing) ── -->
+                <div id="ttl-wrap" style="display:none;margin-bottom:14px">
+                  <div class="sep-label">⏱️ Período de validez <span class="opt-badge">Solo Marketing</span></div>
+                  <div class="info-box" style="margin-bottom:10px">
+                    <b>¿Para qué sirve?</b> Si el mensaje no se entrega dentro del período elegido, Meta lo cancela y <b>no te cobra</b> esa conversación. Útil para ofertas con fecha límite o mensajes urgentes.<br>
+                    Si no activas esto, WhatsApp aplica el período estándar de <b>30 días</b>.
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.84rem;font-weight:600;color:#2d3748">
+                      <input type="checkbox" id="ttl-activo" onchange="toggleTTL()"
+                        style="width:16px;height:16px;accent-color:var(--az);cursor:pointer">
+                      Activar período de validez personalizado
+                    </label>
+                  </div>
+                  <div id="ttl-sel-wrap" style="display:none">
+                    <div class="f-group">
+                      <span class="f-label">Período de validez</span>
+                      <select id="tpl-ttl" class="f-sel">
+                        <option value="1800">⚡ 30 minutos</option>
+                        <option value="3600">🕐 1 hora</option>
+                        <option value="7200">🕑 2 horas</option>
+                        <option value="21600">🕕 6 horas</option>
+                        <option value="43200" selected>🕛 12 horas</option>
+                        <option value="86400">📅 24 horas</option>
+                        <option value="172800">📅 48 horas</option>
+                        <option value="259200">📅 72 horas</option>
+                      </select>
+                      <span class="f-hint">Si el mensaje no se entrega en este tiempo, se cancela sin costo</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1058,7 +1196,7 @@ function showSec(id) {
   if (!_secCargadas[id]) {
     _secCargadas[id] = true;
     if (id === 'difusiones')    { cargarTemplates(); cargarHistorialDif(); }
-    if (id === 'plantillas')    { cargarTablaPlantillas(); setTimeout(_hookPreview, 200); }
+    if (id === 'plantillas')    { cargarTablaPlantillas(); actualizarSubcat(); setTimeout(_hookPreview, 200); }
     if (id === 'metricas')      { cargarMetricas(); }
     if (id === 'configuracion') { cargarConfiguracion(); }
   }
@@ -1295,14 +1433,16 @@ async function cargarTemplates() {
       sel.innerHTML = '<option value="">Error: ' + d.error + '</option>';
       return;
     }
-    _dif_templates = d.templates || [];
+    // Solo plantillas APPROVED para difusiones
+    var todas = d.templates || [];
+    _dif_templates = todas.filter(function(t) { return (t.status || '').toUpperCase() === 'APPROVED'; });
     if (!_dif_templates.length) {
       sel.innerHTML = '<option value="">No hay plantillas aprobadas en Meta</option>';
       return;
     }
     sel.innerHTML = '<option value="">— Selecciona una plantilla —</option>' +
       _dif_templates.map(function(t) {
-        return '<option value="' + t.name + '">' + t.name + ' (' + t.language + ')</option>';
+        return '<option value="' + t.name + '">✅ ' + t.name + ' (' + t.language + ')</option>';
       }).join('');
   } catch(e) {
     sel.innerHTML = '<option value="">Error cargando plantillas</option>';
@@ -1312,13 +1452,12 @@ async function cargarTemplates() {
 function seleccionarTemplate() {
   var name = document.getElementById('dif-tpl').value;
   var tpl  = _dif_templates.find(function(t) { return t.name === name; });
-  var prev = document.getElementById('dif-preview-box');
   var varsWrap = document.getElementById('dif-vars-wrap');
   var varsDiv  = document.getElementById('dif-vars');
   var sendBtn  = document.getElementById('dif-sendbtn');
 
   if (!tpl) {
-    prev.textContent = 'Selecciona una plantilla para ver la vista previa.';
+    _difActualizarPreview(null);
     varsWrap.style.display = 'none';
     sendBtn.disabled = true;
     return;
@@ -1331,31 +1470,101 @@ function seleccionarTemplate() {
       var row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
       row.innerHTML =
-        '<label style="font-size:.82rem;color:#6b7a8d;white-space:nowrap;min-width:50px">{{' + n + '}}</label>' +
-        '<input class="f-inp" id="dif-var-' + n + '" style="flex:1" placeholder="Valor para {{' + n + '}}" oninput="actualizarPreview()">';
+        '<label style="font-size:.82rem;color:#6b7a8d;white-space:nowrap;min-width:50px">{{' + he(n) + '}}</label>' +
+        '<input class="f-inp" id="dif-var-' + n + '" style="flex:1" placeholder="Valor de ejemplo para {{' + n + '}}" oninput="_difActualizarPreview(_dif_templates.find(function(t){return t.name===document.getElementById(\'dif-tpl\').value;}))">';
       varsDiv.appendChild(row);
     });
   } else {
     varsWrap.style.display = 'none';
   }
 
-  actualizarPreview();
-  sendBtn.disabled = !document.getElementById('dif-phones').value.trim();
+  _difActualizarPreview(tpl);
+  sendBtn.disabled = !document.getElementById('dif-phones').value.trim() && !document.getElementById('dif-conteo').textContent.match(/[1-9]/);
 }
 
-function actualizarPreview() {
-  var name = document.getElementById('dif-tpl').value;
-  var tpl  = _dif_templates.find(function(t) { return t.name === name; });
-  if (!tpl) return;
-  var text = tpl.preview || '(Sin vista previa disponible)';
+/* Actualiza el teléfono WhatsApp de difusiones */
+function _difActualizarPreview(tpl) {
+  var elBody = document.getElementById('dif-prev-body');
+  var elHdrImg = document.getElementById('dif-prev-hdr-img');
+  var elHdrVid = document.getElementById('dif-prev-hdr-vid');
+  var elHdrDoc = document.getElementById('dif-prev-hdr-doc');
+  var elHdrTxt = document.getElementById('dif-prev-hdr-txt');
+  var elFooter = document.getElementById('dif-prev-footer');
+  var elBtns   = document.getElementById('dif-prev-btns');
+
+  // Limpiar todos los headers
+  [elHdrImg,elHdrVid,elHdrDoc,elHdrTxt].forEach(function(e) { if(e) e.style.display='none'; });
+
+  if (!tpl) {
+    elBody.textContent = 'Selecciona una plantilla para ver la vista previa...';
+    elBody.style.cssText = 'color:#999;font-style:italic';
+    if(elFooter) elFooter.style.display='none';
+    if(elBtns)   elBtns.style.display='none';
+    return;
+  }
+
+  // Header
+  var hdrType = (tpl.header_type || '').toUpperCase();
+  if (hdrType === 'IMAGE') {
+    elHdrImg.style.display = '';
+    if (tpl.header_url) {
+      var imgTag = document.getElementById('dif-prev-hdr-img-tag');
+      imgTag.src = tpl.header_url;
+      imgTag.style.display = '';
+      elHdrImg.querySelector('div').style.display = 'none';
+    }
+  } else if (hdrType === 'VIDEO') {
+    elHdrVid.style.display = '';
+  } else if (hdrType === 'DOCUMENT') {
+    elHdrDoc.style.display = '';
+  } else if (hdrType === 'TEXT') {
+    // Buscar texto del header en components
+    var hdrTxt = '';
+    (tpl.components || []).forEach(function(c) {
+      if ((c.type||'').toUpperCase() === 'HEADER') hdrTxt = c.text || '';
+    });
+    if (hdrTxt) { elHdrTxt.style.display=''; elHdrTxt.textContent = hdrTxt; }
+  }
+
+  // Body: sustituir variables con valores de ejemplo ingresados
+  var text = tpl.preview || '';
   if (tpl.variables) {
     tpl.variables.forEach(function(n) {
       var inp = document.getElementById('dif-var-' + n);
-      var val = inp ? (inp.value || '{{' + n + '}}') : '{{' + n + '}}';
+      var val = (inp && inp.value) ? inp.value : ('{{' + n + '}}');
+      // Escapa el nombre de variable para usarlo en split
       text = text.split('{{' + n + '}}').join(val);
     });
   }
-  document.getElementById('dif-preview-box').textContent = text;
+  // Renderizar formato WhatsApp
+  var bodyHtml = he(text)
+    .replace(/\*([^*\n]+)\*/g,'<b>$1</b>')
+    .replace(/_([^_\n]+)_/g,'<i>$1</i>')
+    .replace(/~([^~\n]+)~/g,'<s>$1</s>')
+    .replace(/\{\{([^}]+)\}\}/g,'<span style="background:#e8f5e9;color:#2e7d32;border-radius:3px;padding:0 2px;font-weight:600">{{$1}}</span>');
+  elBody.innerHTML = bodyHtml;
+  elBody.style.cssText = '';
+
+  // Footer
+  var footerTxt = '';
+  (tpl.components || []).forEach(function(c) {
+    if ((c.type||'').toUpperCase() === 'FOOTER') footerTxt = c.text || '';
+  });
+  elFooter.style.display = footerTxt ? '' : 'none';
+  elFooter.textContent   = footerTxt;
+
+  // Botones
+  var btnsHtml = '';
+  (tpl.components || []).forEach(function(c) {
+    if ((c.type||'').toUpperCase() !== 'BUTTONS') return;
+    (c.buttons || []).forEach(function(b) {
+      var btype = (b.type||'').toUpperCase();
+      var ic = btype === 'QUICK_REPLY' ? '↩️' : (btype === 'URL' ? '🔗' : '📞');
+      btnsHtml += '<div class="wa-btn"><span class="wa-btn-ic">' + ic + '</span>' + he(b.text||'') + '</div>';
+    });
+  });
+  elBtns.style.display = btnsHtml ? '' : 'none';
+  elBtns.innerHTML     = btnsHtml;
 }
 
 function descargarFormatoCSV() {
@@ -1383,28 +1592,51 @@ function descargarFormatoCSV() {
 function cargarArchivoCSV(input) {
   var file = input.files && input.files[0];
   if (!file) return;
-  document.getElementById('dif-csv-fname').textContent = '📄 ' + file.name;
+  var statsEl = document.getElementById('dif-csv-stats');
+  statsEl.style.display = 'none';
   var reader = new FileReader();
   reader.onload = function(e) {
     var texto = e.target.result;
     if (texto.charCodeAt(0) === 0xFEFF) texto = texto.slice(1);
     var lineas = texto.split(/\r?\n/).map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
-    if (!lineas.length) return;
+    if (!lineas.length) {
+      statsEl.style.display = 'block';
+      statsEl.innerHTML = '⚠️ El archivo no tiene datos válidos.';
+      return;
+    }
+    // Detectar y saltar encabezado
     var primeraCol = lineas[0].split(',')[0].trim();
     var esEncabezado = isNaN(primeraCol.replace(/\D/g,'')) || primeraCol.toLowerCase() === 'telefono';
     if (esEncabezado) lineas = lineas.slice(1);
-    if (!lineas.length) {
-      document.getElementById('dif-csv-fname').textContent = '⚠️ El archivo no tiene datos válidos';
-      return;
-    }
-    document.getElementById('dif-phones').value = lineas.join('\n');
+
+    // Validar cada línea: el primer campo debe tener mínimo 10 dígitos
+    var validas = [];
+    var erroneas = 0;
+    lineas.forEach(function(l) {
+      var tel = l.split(',')[0].trim().replace(/\D/g,'');
+      if (tel.length >= 10) {
+        validas.push(l);
+      } else {
+        erroneas++;
+      }
+    });
+
+    // Agregar válidas al textarea (sin sobreescribir lo manual existente)
+    var existing = document.getElementById('dif-phones').value.trim();
+    var nuevas = validas.join('\n');
+    document.getElementById('dif-phones').value = existing ? existing + '\n' + nuevas : nuevas;
     actualizarConteo();
-    document.getElementById('dif-csv-fname').textContent =
-      '✅ ' + file.name + ' — ' + lineas.length + ' fila(s)';
+
+    // Mostrar estadísticas
+    statsEl.style.display = 'block';
+    statsEl.innerHTML =
+      '<span style="color:#155724;font-weight:600">✅ ' + validas.length + ' contacto' + (validas.length===1?'':'s') + ' cargado' + (validas.length===1?'':'s') + ' de <b>' + file.name + '</b></span>' +
+      (erroneas > 0 ? '&nbsp;&nbsp;<span style="color:#721c24">❌ ' + erroneas + ' línea' + (erroneas===1?'':'s') + ' ignorada' + (erroneas===1?'':'s') + ' (número inválido)</span>' : '');
     input.value = '';
   };
   reader.onerror = function() {
-    document.getElementById('dif-csv-fname').textContent = '❌ Error al leer el archivo';
+    statsEl.style.display = 'block';
+    statsEl.innerHTML = '❌ Error al leer el archivo.';
   };
   reader.readAsText(file, 'UTF-8');
 }
@@ -1434,10 +1666,15 @@ function _parsearDestinatarios() {
 
 function actualizarConteo() {
   var dests = _parsearDestinatarios();
-  document.getElementById('dif-conteo').textContent =
-    dests.length + ' destinatario' + (dests.length === 1 ? '' : 's');
+  var n = dests.length;
+  var el = document.getElementById('dif-conteo');
+  if (n > 0) {
+    el.innerHTML = '<span style="color:var(--az);font-weight:600">' + n + ' destinatario' + (n===1?'':'s') + ' listo' + (n===1?'':'s') + '</span>';
+  } else {
+    el.textContent = '0 destinatarios';
+  }
   var name = document.getElementById('dif-tpl').value;
-  document.getElementById('dif-sendbtn').disabled = !name || !dests.length;
+  document.getElementById('dif-sendbtn').disabled = !name || !n;
 }
 
 async function enviarDifusion() {
@@ -1520,30 +1757,34 @@ async function enviarDifusion() {
 }
 
 async function cargarHistorialDif() {
-  var box = document.getElementById('dif-hist-body');
+  var tbody = document.getElementById('dif-hist-body');
+  if (!tbody) return;
   try {
     var r = await fetch('/inbox/difusiones/historial', {credentials:'include'});
     var d = await r.json();
     var rows = d.difusiones || [];
     if (!rows.length) {
-      box.innerHTML = '<div class="loading-txt">Sin difusiones enviadas aún</div>';
+      tbody.innerHTML = '<tr><td colspan="6" class="loading-txt">Sin difusiones enviadas aún</td></tr>';
       return;
     }
-    var h = '<table style="width:100%"><thead><tr><th>Plantilla</th><th>Fecha</th><th>✅</th><th>❌</th></tr></thead><tbody>';
+    var h = '';
     rows.forEach(function(row) {
       var pct = row.destinatarios > 0 ? Math.round(row.enviados / row.destinatarios * 100) : 0;
-      var cls = row.fallidos === 0 ? 'badge-ok' : (row.fallidos < row.destinatarios ? 'badge-warn' : 'badge-err');
+      var clsEnv = row.fallidos === 0 ? 'badge-ok' : 'badge-warn';
+      var clsFall = row.fallidos > 0 ? 'badge-err' : '';
+      var pctColor = pct >= 90 ? '#155724' : (pct >= 60 ? '#856404' : '#721c24');
       h += '<tr>'
-        + '<td><b>' + he(row.template_name) + '</b><br><small style="color:#6b7a8d">' + he(row.language) + ' · ' + row.destinatarios + ' dest.</small></td>'
-        + '<td style="font-size:.78rem;color:#6b7a8d">' + fmtFecha(row.created_at) + '</td>'
-        + '<td><span class="' + cls + '">' + row.enviados + '</span></td>'
-        + '<td style="color:' + (row.fallidos > 0 ? '#721c24' : '#6b7a8d') + '">' + row.fallidos + '</td>'
+        + '<td><b>' + he(row.template_name) + '</b><br><small style="color:#6b7a8d">' + he(row.language) + '</small></td>'
+        + '<td style="font-size:.78rem;color:#6b7a8d;white-space:nowrap">' + fmtFecha(row.created_at) + '</td>'
+        + '<td style="text-align:center">' + row.destinatarios + '</td>'
+        + '<td style="text-align:center"><span class="' + clsEnv + '">' + row.enviados + '</span></td>'
+        + '<td style="text-align:center">' + (row.fallidos > 0 ? '<span class="badge-err">' + row.fallidos + '</span>' : '<span style="color:#6b7a8d">0</span>') + '</td>'
+        + '<td style="text-align:center;font-weight:700;color:' + pctColor + '">' + pct + '%</td>'
         + '</tr>';
     });
-    h += '</tbody></table>';
-    box.innerHTML = h;
+    tbody.innerHTML = h;
   } catch(e) {
-    box.innerHTML = '<div class="loading-txt" style="color:#721c24">Error cargando historial</div>';
+    tbody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#721c24">Error cargando historial</td></tr>';
   }
 }
 
@@ -1818,6 +2059,15 @@ function _limpiarFormulario() {
   ['img','vid','doc'].forEach(limpiarArchivo);
   updateCounter('tpl-body','body-cnt',1024);
   updateCounter('tpl-footer','footer-cnt',60);
+  // Resetear campos nuevos
+  document.querySelector('input[name="var-type"][value="NUMERO"]').checked = true;
+  actualizarTipoVar('NUMERO');
+  var ttlCb = document.getElementById('ttl-activo');
+  if (ttlCb) { ttlCb.checked = false; toggleTTL(); }
+  var locLat = document.getElementById('tpl-loc-lat'); if (locLat) locLat.value = '';
+  var locLng = document.getElementById('tpl-loc-lng'); if (locLng) locLng.value = '';
+  var locNm  = document.getElementById('tpl-loc-name'); if (locNm) locNm.value = '';
+  actualizarSubcat();
 }
 
 /* ── Helper compartido: recolectar botones del form ── */
@@ -1861,9 +2111,47 @@ function updateCounter(inputId, counterId, max) {
   el.parentElement.className = 'char-counter' + (val > max * .85 ? ' warn' : '');
 }
 
+/* ── Subcategoría según categoría ── */
+var _SUBCATS = {
+  MARKETING: [
+    {value:'DEFAULT',                  label:'Predeterminado',               desc:'Envía mensajes con contenido multimedia y botones personalizados para captar el interés de tus clientes.'},
+    {value:'CATALOG_MESSAGE',          label:'Catálogo',                     desc:'Conecta tu catálogo de productos para enviar mensajes que impulsen las ventas.'},
+    {value:'CALL_PERMISSION_REQUEST',  label:'Solicitud de permisos de llamada', desc:'Pide permiso al cliente para poder llamarle por WhatsApp.'},
+  ],
+  UTILITY: [
+    {value:'DEFAULT',                  label:'Predeterminado',               desc:'Envía mensajes sobre un pedido o una cuenta existentes.'},
+    {value:'CALL_PERMISSION_REQUEST',  label:'Solicitud de permisos de llamada', desc:'Ask customers if you can call them on WhatsApp.'},
+  ],
+  AUTHENTICATION: [
+    {value:'DEFAULT',                  label:'OTP estándar',                 desc:'Envía contraseñas de un solo uso (códigos de verificación).'},
+  ],
+};
+
+function actualizarSubcat() {
+  var cat  = document.getElementById('tpl-cat').value;
+  var opts = _SUBCATS[cat] || _SUBCATS.MARKETING;
+  var el   = document.getElementById('subcat-opts');
+  el.innerHTML = opts.map(function(o, i) {
+    return '<label class="radio-opt' + (i===0?' chk':'') + '" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid #e0e4e8;background:#fafbfc;gap:2px;cursor:pointer">'
+      + '<span style="display:flex;align-items:center;gap:8px"><input type="radio" name="tpl-subcat" value="' + o.value + '"' + (i===0?' checked':'') + '> <b style="font-size:.84rem;color:#1a2332">' + o.label + '</b></span>'
+      + '<span style="font-size:.75rem;color:#6b7a8d;padding-left:22px">' + o.desc + '</span>'
+      + '</label>';
+  }).join('');
+  // Re-hook radio style
+  el.querySelectorAll('input[type=radio]').forEach(function(r) {
+    r.addEventListener('change', function() {
+      el.querySelectorAll('.radio-opt').forEach(function(l) { l.classList.remove('chk'); });
+      r.closest('.radio-opt').classList.add('chk');
+    });
+  });
+  // Mostrar período de validez solo para MARKETING
+  var ttlWrap = document.getElementById('ttl-wrap');
+  if (ttlWrap) ttlWrap.style.display = (cat === 'MARKETING') ? '' : 'none';
+}
+
 /* ── Tipo de encabezado ── */
 function toggleHdrType(tipo) {
-  var wraps = ['NONE','TEXT','IMAGE','VIDEO','DOCUMENT'];
+  var wraps = ['NONE','TEXT','IMAGE','VIDEO','DOCUMENT','LOCATION'];
   wraps.forEach(function(t) {
     var w = document.getElementById('hdr-' + t.toLowerCase() + '-wrap');
     if (w) w.style.display = (t === tipo && tipo !== 'NONE') ? 'block' : 'none';
@@ -1873,6 +2161,26 @@ function toggleHdrType(tipo) {
     var inp = lbl.querySelector('input');
     lbl.classList.toggle('chk', inp && inp.value === tipo);
   });
+  actualizarPreview();
+}
+
+/* ── Tipo de variable ── */
+function actualizarTipoVar(tipo) {
+  var hint = document.getElementById('vartype-hint');
+  document.querySelectorAll('[name=var-type]').forEach(function(r) {
+    r.closest('.radio-opt').classList.toggle('chk', r.value === tipo);
+  });
+  if (tipo === 'NOMBRE') {
+    hint.innerHTML = 'Escribe <code>{{nombre}}</code>, <code>{{ciudad}}</code>… en el cuerpo · Las variables deben coincidir exactamente al enviar';
+  } else {
+    hint.innerHTML = 'Escribe <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo para insertar variables posicionales';
+  }
+}
+
+/* ── Período de validez ── */
+function toggleTTL() {
+  var activo = document.getElementById('ttl-activo').checked;
+  document.getElementById('ttl-sel-wrap').style.display = activo ? '' : 'none';
 }
 
 /* ── Tipo de botones ── */
@@ -2058,16 +2366,32 @@ async function crearPlantilla() {
     }
   }
 
-  var buttons = _recolectarBotones(btnTipo);
+  var buttons  = _recolectarBotones(btnTipo);
+  var subcat   = document.querySelector('input[name="tpl-subcat"]:checked');
+  subcat = subcat ? subcat.value : 'DEFAULT';
+  var varType  = document.querySelector('input[name="var-type"]:checked');
+  varType = varType ? varType.value : 'NUMERO';
+  var ttlActivo = document.getElementById('ttl-activo') ? document.getElementById('ttl-activo').checked : false;
+  var ttlSecs   = document.getElementById('tpl-ttl') ? parseInt(document.getElementById('tpl-ttl').value) : 43200;
+  var locLat    = document.getElementById('tpl-loc-lat') ? document.getElementById('tpl-loc-lat').value : '';
+  var locLng    = document.getElementById('tpl-loc-lng') ? document.getElementById('tpl-loc-lng').value : '';
+  var locName   = document.getElementById('tpl-loc-name') ? document.getElementById('tpl-loc-name').value.trim() : '';
   btn.textContent = '⏳ Creando plantilla...';
 
   try {
     var payload = {
       name: nombre, category: cat, language: lang,
+      sub_category: subcat,
       header_type: hdrTipo !== 'NONE' ? hdrTipo : null,
       header_text: hdrTexto || null,
       header_handle: headerHandle,
       body: body, footer: footer || null, buttons: buttons,
+      var_type: varType,
+      ttl_activo: ttlActivo,
+      ttl: ttlSecs,
+      loc_lat: locLat || null,
+      loc_lng: locLng || null,
+      loc_name: locName || null,
     };
     var r = await fetch('/inbox/plantillas/crear', {
       method: 'POST', credentials: 'include',
@@ -2205,7 +2529,23 @@ function actualizarPreview() {
     elHdrDoc.style.display = '';
     var fileD = _tplFiles.doc;
     document.getElementById('prev-doc-name').textContent = fileD ? fileD.name : 'documento.pdf';
+  } else if (hdrTipo === 'LOCATION') {
+    elHdrImg.style.display = '';
+    var imgTagL = document.getElementById('prev-hdr-img-tag');
+    var emojiL  = document.getElementById('prev-hdr-img-emoji');
+    var locName = (document.getElementById('tpl-loc-name') || {}).value || '';
+    imgTagL.style.display = 'none';
+    emojiL.style.display  = '';
+    emojiL.textContent    = '📍';
+    // Mostrar nombre del lugar debajo del emoji en la preview
+    elHdrImg.style.flexDirection = 'column';
+    elHdrImg.style.gap = '4px';
+    var locLabel = elHdrImg.querySelector('.wa-loc-label');
+    if (!locLabel) { locLabel = document.createElement('span'); locLabel.className = 'wa-loc-label'; locLabel.style.cssText='font-size:.72rem;color:#fff;font-weight:600;text-align:center;padding:0 8px'; elHdrImg.appendChild(locLabel); }
+    locLabel.textContent = locName || 'Ubicación';
   } else if (hdrTipo === 'TEXT') {
+    // Limpiar label de ubicación si cambian el tipo
+    var locLbl = document.querySelector('.wa-loc-label'); if (locLbl) locLbl.remove();
     var hdrTexto = (document.getElementById('tpl-hdr-text').value || '').trim();
     if (hdrTexto) {
       elHdrTxt.style.display = '';
@@ -2268,7 +2608,7 @@ document.addEventListener('click', function(e) {
 
 /* Hook: conectar preview a todos los campos del form */
 function _hookPreview() {
-  var ids = ['tpl-hdr-text','tpl-body','tpl-footer'];
+  var ids = ['tpl-hdr-text','tpl-body','tpl-footer','tpl-loc-name','tpl-loc-lat','tpl-loc-lng'];
   ids.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('input', actualizarPreview);

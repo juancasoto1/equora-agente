@@ -1777,11 +1777,19 @@ async def inbox_plantillas_crear(
     categoria    = body.get("category", "MARKETING")
     idioma       = body.get("language", "es_CO")
     cuerpo       = body.get("body", "")
-    header_tipo  = (body.get("header_type") or "").upper()   # NONE|TEXT|IMAGE|VIDEO|DOCUMENT
-    header_texto = body.get("header_text", "")
-    header_handle= body.get("header_handle")                 # handle de Resumable Upload
-    footer       = body.get("footer", "")
-    buttons      = body.get("buttons", [])
+    header_tipo   = (body.get("header_type") or "").upper()  # NONE|TEXT|IMAGE|VIDEO|DOCUMENT|LOCATION
+    header_texto  = body.get("header_text", "")
+    header_handle = body.get("header_handle")                # handle de Resumable Upload
+    footer        = body.get("footer", "")
+    buttons       = body.get("buttons", [])
+    sub_category  = body.get("sub_category", "DEFAULT")      # DEFAULT|CATALOG_MESSAGE|CALL_PERMISSION_REQUEST
+    var_type      = (body.get("var_type") or "").upper()     # NOMBRE | NUMERO (controla ejemplo de variables)
+    ttl_activo    = body.get("ttl_activo", False)
+    ttl_secs      = int(body.get("ttl", 43200))              # período de validez en segundos
+    # Ubicación: campos de ejemplo para LOCATION header
+    loc_lat  = body.get("loc_lat")
+    loc_lng  = body.get("loc_lng")
+    loc_name = body.get("loc_name", "")
 
     if not nombre or not cuerpo:
         return JSONResponse(content={"error": "Nombre y cuerpo son requeridos"}, status_code=400)
@@ -1794,20 +1802,32 @@ async def inbox_plantillas_crear(
     elif header_tipo in ("IMAGE", "VIDEO", "DOCUMENT"):
         comp_hdr: dict = {"type": "HEADER", "format": header_tipo}
         if header_handle:
-            # Adjuntar ejemplo con el handle subido vía Resumable Upload
             comp_hdr["example"] = {"header_handle": [header_handle]}
+        componentes.append(comp_hdr)
+    elif header_tipo == "LOCATION":
+        comp_hdr = {"type": "HEADER", "format": "LOCATION"}
+        if loc_lat and loc_lng:
+            comp_hdr["example"] = {
+                "header_location": {
+                    "latitude": str(loc_lat),
+                    "longitude": str(loc_lng),
+                    "name": loc_name or "Ubicación de ejemplo",
+                }
+            }
         componentes.append(comp_hdr)
 
     # ── BODY ──
-    # Detectar si hay variables nombradas o posicionales para el campo example
     import re as _re
     vars_encontradas = _re.findall(r'\{\{([^}]+)\}\}', cuerpo)
     body_comp: dict = {"type": "BODY", "text": cuerpo}
     if vars_encontradas:
-        # Ejemplo de valores para que Meta pueda previsualizar
         example_vals = ["ejemplo"] * len(vars_encontradas)
+        # var_type=NOMBRE fuerza named params aunque el usuario use {{1}} por error
+        # var_type=NUMERO fuerza posicional aunque el usuario use {{nombre}}
+        # Si no se especifica, auto-detectar
         named_vars = [v for v in vars_encontradas if not v.isdigit()]
-        if named_vars:
+        usar_named = (var_type == "NOMBRE") or (var_type != "NUMERO" and bool(named_vars))
+        if usar_named:
             body_comp["example"] = {
                 "body_text_named_params": [
                     {"param_name": v, "example": ["ejemplo"]} for v in vars_encontradas
@@ -1831,7 +1851,6 @@ async def inbox_plantillas_crear(
                 url_val = b.get("url", "")
                 if url_val and texto_btn:
                     btn_obj = {"type": "URL", "text": texto_btn[:20], "url": url_val}
-                    # Si la URL tiene {{1}}, agregar example
                     if "{{1}}" in url_val:
                         btn_obj["example"] = [url_val.replace("{{1}}", "ejemplo")]
                     btn_list.append(btn_obj)
@@ -1851,6 +1870,12 @@ async def inbox_plantillas_crear(
         "language": idioma,
         "components": componentes,
     }
+    # Subcategoría (solo si no es DEFAULT para evitar errores en Auth)
+    if sub_category and sub_category != "DEFAULT":
+        payload["sub_category"] = sub_category
+    # Período de validez (solo Marketing)
+    if ttl_activo and categoria == "MARKETING" and ttl_secs:
+        payload["message_send_ttl_seconds"] = ttl_secs
 
     api_ver = "v21.0"
     url = f"https://graph.facebook.com/{api_ver}/{waba_id}/message_templates"
