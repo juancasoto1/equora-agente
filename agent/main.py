@@ -1284,7 +1284,7 @@ async def inbox_broadcast_templates(
                 for comp in t.get("components", []):
                     if comp.get("type", "").upper() == "BODY":
                         text = comp.get("text", "")
-                        nums = sorted(set(re.findall(r'\{\{(\d+)\}\}', text)))
+                        nums = sorted(set(re.findall(r'\{\{([^}]+)\}\}', text)))
                         variables = nums
                         break
                 templates.append({
