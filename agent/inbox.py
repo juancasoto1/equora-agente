@@ -1902,34 +1902,32 @@ function irADifusionConPlantilla(tName) {
   var intentos = 0;
   function _intentar() {
     var sel = document.getElementById('dif-tpl');
-    if (sel && _dif_templates.length) {
+    // Esperar a que el select tenga las opciones reales (no solo "Cargando...")
+    // y que _dif_templates esté poblado. Si cargarTemplates() limpia el select
+    // y vuelve a llenarlo, sel.options.length > 1 garantiza que ya terminó.
+    var optsListas = sel && sel.options.length > 1;
+    if (optsListas) {
       // Buscar la opción por nombre
-      var found = false;
       for (var i = 0; i < sel.options.length; i++) {
         if (sel.options[i].value === tName) {
           sel.value = tName;
           seleccionarTemplate();
-          // Hacer scroll suave hasta el selector para que el usuario lo vea
           sel.scrollIntoView({behavior: 'smooth', block: 'center'});
-          // Efecto visual breve para destacar el selector
           sel.style.transition = 'box-shadow .3s';
           sel.style.boxShadow  = '0 0 0 3px rgba(18,140,126,.45)';
           setTimeout(function() { sel.style.boxShadow = ''; }, 1400);
-          found = true;
-          break;
+          return;
         }
       }
-      if (!found) {
-        // La plantilla no está en la lista (no está aprobada) — ya no reintentar
-        console.warn('[irADifusion] Plantilla "' + tName + '" no encontrada en lista de aprobadas');
-      }
+      // Si llegó aquí con opciones cargadas pero no encontró la plantilla,
+      // no tiene sentido reintentar (la plantilla simplemente no está aprobada)
+      console.warn('[irADifusion] "' + tName + '" no encontrada en plantillas aprobadas');
       return;
     }
-    // Aún cargando: reintentar cada 200 ms durante máx 4 segundos
-    if (intentos++ < 20) setTimeout(_intentar, 200);
+    // Opciones aún no listas — reintentar cada 200 ms, máx 5 segundos
+    if (intentos++ < 25) setTimeout(_intentar, 200);
   }
-  // Pequeño delay inicial para que cambiarSec() y cargarTemplates() arranquen
-  setTimeout(_intentar, 120);
+  setTimeout(_intentar, 150);
 }
 
 /* ── Borradores locales ── */
