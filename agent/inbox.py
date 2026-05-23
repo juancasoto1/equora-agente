@@ -252,7 +252,7 @@ tr:hover td{background:#f8f9fa}
 .f-inp,.f-sel,.f-ta{
   padding:9px 13px;border-radius:8px;border:1.5px solid #e0e4e8;
   font-size:.88rem;color:#2d3748;background:#fff;outline:none;font-family:inherit;
-  transition:border-color .15s;
+  transition:border-color .15s;width:100%;box-sizing:border-box;
 }
 .f-inp:focus,.f-sel:focus,.f-ta:focus{border-color:var(--az)}
 .f-ta{resize:vertical;min-height:100px;line-height:1.5}
@@ -1843,8 +1843,9 @@ async function cargarHistorialDif() {
 /* ══════════════════════════════════════════════════════
    PLANTILLAS
    ══════════════════════════════════════════════════════ */
-// Mapa id→template para usar en edición
+// Mapa id/name→template (plantillas Meta) y id→datos (borradores locales)
 var _tplMetaMap = {};
+var _borrMap    = {};
 
 async function cargarTablaPlantillas() {
   var tbody = document.getElementById('tpl-tabla-body');
@@ -1868,9 +1869,11 @@ async function cargarTablaPlantillas() {
       var lbl = status === 'APPROVED' ? '✅ Aprobada' : (status === 'PENDING' ? '⏳ Pendiente' : (status === 'REJECTED' ? '❌ Rechazada' : status));
       var vars = t.variables ? t.variables.join(', ') : '—';
       var hdrFmt = t.header_type || '—';
-      var editBtn = '<button class="btn-secondary" style="padding:3px 10px;font-size:.75rem" onclick="cargarPlantillaParaEditar(' + JSON.stringify(JSON.stringify(t)) + ')" title="Editar componentes">✏️ Editar</button>';
+      // Usar la clave del mapa (_tplMetaMap) — evita doble JSON.stringify que rompe onclick=""
+      var mapKey  = t.id || t.name;
+      var editBtn = '<button class="btn-secondary" style="padding:3px 10px;font-size:.75rem" onclick="cargarPlantillaParaEditar(\'' + mapKey + '\')" title="Editar componentes">✏️ Editar</button>';
       var difBtn  = status === 'APPROVED'
-        ? ' <button class="btn-primary" style="padding:3px 10px;font-size:.75rem" onclick="irADifusionConPlantilla(' + JSON.stringify(t.name) + ')" title="Enviar difusión con esta plantilla">📤 Difusión</button>'
+        ? ' <button class="btn-primary" style="padding:3px 10px;font-size:.75rem" onclick="irADifusionConPlantilla(\'' + t.name + '\')" title="Enviar difusión con esta plantilla">📤 Difusión</button>'
         : '';
       h += '<tr>'
         + '<td><b>' + he(t.name) + '</b></td>'
@@ -1942,7 +1945,10 @@ async function cargarBorradores() {
       return;
     }
     var h = '';
+    _borrMap = {};
     borrs.forEach(function(b) {
+      // Guardar datos en mapa para evitar doble JSON.stringify en onclick
+      _borrMap[b.id] = typeof b.datos === 'string' ? JSON.parse(b.datos) : b.datos;
       var ts = b.updated_at ? b.updated_at.replace('T',' ').substring(0,16) : '';
       h += '<tr>'
         + '<td><b>' + he(b.nombre) + '</b></td>'
@@ -1950,7 +1956,7 @@ async function cargarBorradores() {
         + '<td>' + he(b.idioma) + '</td>'
         + '<td style="font-size:.78rem">' + he(ts) + '</td>'
         + '<td style="white-space:nowrap">'
-          + '<button class="btn-secondary" style="padding:3px 9px;font-size:.75rem;margin-right:4px" onclick="cargarBorrador(' + b.id + ',' + JSON.stringify(JSON.stringify(b.datos)) + ')">📂 Abrir</button>'
+          + '<button class="btn-secondary" style="padding:3px 9px;font-size:.75rem;margin-right:4px" onclick="cargarBorrador(' + b.id + ')">📂 Abrir</button>'
           + '<button class="btn-remove" style="padding:3px 8px;font-size:.75rem" onclick="eliminarBorrador(' + b.id + ')">🗑️</button>'
         + '</td>'
         + '</tr>';
@@ -2009,10 +2015,10 @@ async function eliminarBorrador(bid) {
   } catch(e) {}
 }
 
-function cargarBorrador(bid, datosStr) {
-  // datosStr es el JSON del borrador (double-encoded)
+function cargarBorrador(bid) {
   try {
-    var datos = typeof datosStr === 'string' ? JSON.parse(datosStr) : datosStr;
+    var datos = _borrMap[bid];
+    if (!datos) { console.error('[borrador] No encontrado en mapa:', bid); return; }
     _poblarFormulario(datos);
     // Modo creación (no edición Meta)
     document.getElementById('tpl-meta-id').value = '';
@@ -2028,9 +2034,13 @@ function cargarBorrador(bid, datosStr) {
 }
 
 /* ── Editar plantilla Meta ── */
-function cargarPlantillaParaEditar(tStr) {
+function cargarPlantillaParaEditar(keyOrObj) {
   try {
-    var t = typeof tStr === 'string' ? JSON.parse(tStr) : tStr;
+    // Acepta: clave del mapa (string/number) o objeto directo (legacy)
+    var t = (typeof keyOrObj === 'object' && keyOrObj !== null)
+      ? keyOrObj
+      : _tplMetaMap[keyOrObj];
+    if (!t) { console.error('[editar] Plantilla no encontrada en mapa:', keyOrObj); return; }
     // Extraer campos de los componentes
     var datos = {
       name: t.name,
