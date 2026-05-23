@@ -1894,20 +1894,25 @@ async function cargarTablaPlantillas() {
 
 /* ── Ir a Difusiones con plantilla precargada ── */
 function irADifusionConPlantilla(tName) {
-  // 1. Navegar a la sección difusiones (carga cargarTemplates() si es la 1ª vez)
-  cambiarSec('difusiones');
+  // 1. Navegar a difusiones (si ya está ahí, showSec hace no-op, pero
+  //    igual refrescamos el select para incluir la plantilla recién aprobada)
+  var eraOtraSec = (_secActual !== 'difusiones');
+  showSec('difusiones');
 
-  // 2. Intentar seleccionar la plantilla en el <select> con reintentos
-  //    (el fetch es async; esperamos hasta que aparezca en las opciones)
+  // 2. Si ya estábamos en difusiones, cargarTemplates no fue llamado por showSec
+  //    (el flag _secCargadas ya estaba en true). Forzar recarga del select.
+  if (!eraOtraSec) {
+    cargarTemplates();
+  }
+
+  // 3. Intentar seleccionar la plantilla en el <select> con reintentos
+  //    (el fetch es async; esperamos hasta que el select tenga opciones reales)
   var intentos = 0;
   function _intentar() {
     var sel = document.getElementById('dif-tpl');
-    // Esperar a que el select tenga las opciones reales (no solo "Cargando...")
-    // y que _dif_templates esté poblado. Si cargarTemplates() limpia el select
-    // y vuelve a llenarlo, sel.options.length > 1 garantiza que ya terminó.
+    // Opciones listas = más de 1 (el placeholder "Cargando..." cuenta como 1)
     var optsListas = sel && sel.options.length > 1;
     if (optsListas) {
-      // Buscar la opción por nombre
       for (var i = 0; i < sel.options.length; i++) {
         if (sel.options[i].value === tName) {
           sel.value = tName;
@@ -1919,12 +1924,11 @@ function irADifusionConPlantilla(tName) {
           return;
         }
       }
-      // Si llegó aquí con opciones cargadas pero no encontró la plantilla,
-      // no tiene sentido reintentar (la plantilla simplemente no está aprobada)
+      // Opciones cargadas pero la plantilla no aparece (raro: debería ser APPROVED)
       console.warn('[irADifusion] "' + tName + '" no encontrada en plantillas aprobadas');
       return;
     }
-    // Opciones aún no listas — reintentar cada 200 ms, máx 5 segundos
+    // Todavía cargando — reintentar cada 200 ms, máx 5 segundos (25 intentos)
     if (intentos++ < 25) setTimeout(_intentar, 200);
   }
   setTimeout(_intentar, 150);
