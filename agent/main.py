@@ -1891,20 +1891,38 @@ async def inbox_plantillas_crear(
     url = f"https://graph.facebook.com/{api_ver}/{waba_id}/message_templates"
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
+    logger.info(f"[plantillas] Enviando a Meta — nombre={nombre} cat={categoria} sub={sub_category} componentes={len(componentes)}")
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             r = await client.post(url, json=payload, headers=headers)
-            data = r.json()
-            if r.status_code == 200 or "id" in data:
+            # Parsear respuesta de Meta — puede no ser JSON en casos de error
+            try:
+                data = r.json()
+            except Exception as json_err:
+                raw = r.text[:600]
+                logger.error(f"[plantillas] Meta devolvió respuesta no-JSON (status={r.status_code}): {raw}")
+                return JSONResponse(
+                    content={"error": f"Meta devolvió respuesta no válida (status {r.status_code}): {raw}"},
+                    status_code=502,
+                )
+            if not isinstance(data, dict):
+                logger.error(f"[plantillas] Respuesta inesperada de Meta (tipo={type(data).__name__}): {str(data)[:300]}")
+                return JSONResponse(
+                    content={"error": f"Respuesta inesperada de Meta: {str(data)[:200]}"},
+                    status_code=502,
+                )
+            if r.status_code in (200, 201) or "id" in data:
                 logger.info(f"[plantillas] Plantilla '{nombre}' creada — id={data.get('id')} status={data.get('status')}")
                 return JSONResponse(content={"ok": True, "id": data.get("id"), "status": data.get("status")})
             else:
                 err = data.get("error", {})
-                logger.error(f"[plantillas] Error creando plantilla: {err}")
-                return JSONResponse(content={"error": err.get("message", str(data))}, status_code=400)
+                err_msg = err.get("message", str(data)) if isinstance(err, dict) else str(err)
+                err_details = err.get("error_data", {}) if isinstance(err, dict) else {}
+                logger.error(f"[plantillas] Error de Meta (status={r.status_code} code={err.get('code') if isinstance(err,dict) else '?'}): {err_msg} | details={err_details}")
+                return JSONResponse(content={"error": err_msg, "details": err_details}, status_code=400)
     except Exception as e:
-        logger.error(f"[plantillas] Excepción: {e}")
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        logger.error(f"[plantillas] Excepción ({type(e).__name__}): {e}", exc_info=True)
+        return JSONResponse(content={"error": str(e) or type(e).__name__}, status_code=500)
 
 
 # ── Borradores de plantillas (guardado local antes de enviar a Meta) ─────────
