@@ -81,22 +81,28 @@ async def generar_respuesta(
     # Si el cliente responde a una difusión reciente, Andrea sabe de qué campaña
     # viene y no pregunta cosas que ya están claras por el contexto.
     if contexto_campana:
-        nombre = contexto_campana.get("campaign_name", "")
-        horas  = contexto_campana.get("horas_ago", 0)
-        tiempo_str = f"hace {horas} hora{'s' if horas != 1 else ''}" if horas > 0 else "hace menos de una hora"
+        nombre        = contexto_campana.get("campaign_name", "")
+        template_name = contexto_campana.get("template_name", "")
+        horas         = contexto_campana.get("horas_ago", 0)
+        tiempo_str    = f"hace {horas} hora{'s' if horas != 1 else ''}" if horas > 0 else "hace menos de una hora"
+
+        # Construir identificador del producto lo más claro posible
+        id_campana = nombre
+        if template_name and template_name != nombre:
+            id_campana = f"{nombre} (plantilla: {template_name})"
+
         system_prompt += f"""
 
-## Contexto: respuesta a campaña de difusión
-Este cliente acaba de responder a una campaña de WhatsApp que le enviaste {tiempo_str}.
-Nombre de la campaña: "{nombre}"
+## ⚠️ CONTEXTO OBLIGATORIO: el cliente responde a una difusión tuya
+Enviaste un mensaje de difusión a este número {tiempo_str}.
+Campaña: "{id_campana}"
 
-INSTRUCCIONES IMPORTANTES para este mensaje:
-- El cliente probablemente está preguntando por el producto/oferta de esa campaña.
-- NO preguntes "¿en qué producto estás interesado?" ni "¿qué estás buscando?"
-  si el contexto de la campaña lo hace evidente.
-- Asume que su pregunta (precio, disponibilidad, cómo comprar, etc.) es sobre esa campaña.
-- Si la campaña habla de un producto específico, responde directamente sobre ese producto.
-- Solo pide clarificación si el mensaje del cliente habla de algo claramente diferente."""
+REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
+1. ESTÁ PROHIBIDO preguntarle al cliente "¿qué producto te interesa?", "¿sobre qué producto preguntas?", "¿vienes de algún anuncio?" o cualquier variante. Ya sabes qué producto es: el de la campaña indicada arriba.
+2. Su mensaje (precio, presentaciones, cómo comprar, disponibilidad, etc.) se refiere AL PRODUCTO DE ESA CAMPAÑA. Responde directamente sobre ese producto.
+3. Si preguntan el precio → da el precio de ese producto ya, sin preguntar más.
+4. Si preguntan presentaciones → lista las presentaciones de ese producto ya.
+5. Solo pide aclaración si el cliente menciona explícitamente un producto DIFERENTE al de la campaña."""
 
     # Inyectar catálogo (desde cache — sin HTTP en cada mensaje)
     catalogo = await obtener_catalogo_shopify()

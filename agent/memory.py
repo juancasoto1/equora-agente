@@ -987,6 +987,7 @@ async def obtener_campana_reciente_para_telefono(
         return {
             "campaign_id":   row[0] or "",
             "campaign_name": row[1] or row[3] or "campaña reciente",
+            "template_name": row[3] or "",
             "sent_at":       sent_at_iso,
             "horas_ago":     horas_ago,
         }
