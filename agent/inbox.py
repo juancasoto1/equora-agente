@@ -1193,37 +1193,69 @@ tr:hover td{background:#f8f9fa}
         <div class="sec-hdr">
           <div>
             <h1>📊 Métricas</h1>
-            <p>Rendimiento de mensajes y plantillas — últimos 30 días</p>
+            <p>Rendimiento de campañas y conversaciones — últimos 30 días</p>
           </div>
-          <button class="btn-secondary" onclick="cargarMetricas()">↺ Actualizar</button>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="met-periodo" onchange="cargarMetricas()" style="padding:6px 10px;border:1px solid #dde1e7;border-radius:8px;font-size:.82rem;color:#1a2332">
+              <option value="7">Últimos 7 días</option>
+              <option value="30" selected>Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+            </select>
+            <button class="btn-secondary" onclick="cargarMetricas()">↺ Actualizar</button>
+          </div>
         </div>
         <div class="sec-body">
-          <div class="cards" id="met-cards">
-            <div class="loading-txt" style="grid-column:1/-1">Cargando métricas...</div>
+
+          <!-- Fila 1: Difusiones -->
+          <div style="margin-bottom:6px">
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">📤 Difusiones</p>
+          </div>
+          <div class="cards" id="met-cards-dif">
+            <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
           </div>
 
-          <div class="tbl-wrap">
+          <!-- Fila 2: Conversaciones IA -->
+          <div style="margin:20px 0 6px">
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">🤖 Conversaciones IA</p>
+          </div>
+          <div class="cards" id="met-cards-conv">
+            <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
+          </div>
+
+          <!-- Tabla de rendimiento por campaña -->
+          <div class="tbl-wrap" style="margin-top:28px">
             <div class="tbl-head">
-              <h2>Analíticas por plantilla</h2>
+              <h2>Rendimiento por campaña</h2>
+              <span id="met-aviso-tracking" style="font-size:.75rem;color:#6b7a8d;display:none">
+                ⓘ Solo campañas con tracking activo muestran % de entrega y lectura.
+              </span>
             </div>
             <div style="overflow-x:auto">
               <table>
                 <thead>
                   <tr>
-                    <th>Plantilla</th>
-                    <th>Enviados</th>
-                    <th>Entregados</th>
-                    <th>Leídos</th>
-                    <th>Clics botón</th>
-                    <th>% Lectura</th>
+                    <th>Campaña</th>
+                    <th>Fecha</th>
+                    <th style="text-align:right">Enviados</th>
+                    <th style="text-align:right">📦 Entregados</th>
+                    <th style="text-align:right">👁 Leídos</th>
+                    <th style="text-align:right">❌ Fallidos</th>
                   </tr>
                 </thead>
-                <tbody id="met-tpl-body">
+                <tbody id="met-camp-body">
                   <tr><td colspan="6" class="loading-txt">Cargando...</td></tr>
                 </tbody>
               </table>
             </div>
           </div>
+
+          <!-- Nota informativa -->
+          <div style="margin-top:20px;padding:12px 16px;background:#f0f4ff;border-radius:10px;border-left:3px solid #4a7cf7;font-size:.78rem;color:#3a4a6b;line-height:1.5">
+            ℹ️ <strong>Métricas propias de Equora.</strong> Los datos de entrega y lectura provienen del tracking
+            webhook de Meta y la base de datos interna. Las Analytics de Meta (API oficial) requieren permisos
+            de <em>Business Solution Provider</em> no disponibles en cuentas estándar.
+          </div>
+
         </div>
       </div><!-- /sec-metricas -->
 
@@ -3077,63 +3109,97 @@ function _hookPreview() {
    MÉTRICAS
    ══════════════════════════════════════════════════════ */
 async function cargarMetricas() {
-  var cards = document.getElementById('met-cards');
-  var tplBody = document.getElementById('met-tpl-body');
-  cards.innerHTML = '<div class="loading-txt" style="grid-column:1/-1">Cargando métricas...</div>';
-  tplBody.innerHTML = '<tr><td colspan="6" class="loading-txt">Cargando...</td></tr>';
+  var cardsDif  = document.getElementById('met-cards-dif');
+  var cardsConv = document.getElementById('met-cards-conv');
+  var campBody  = document.getElementById('met-camp-body');
+  var aviso     = document.getElementById('met-aviso-tracking');
+  var periodo   = document.getElementById('met-periodo').value || '30';
 
-  // Resumen general
+  cardsDif.innerHTML  = '<div class="loading-txt" style="grid-column:1/-1">Cargando...</div>';
+  cardsConv.innerHTML = '<div class="loading-txt" style="grid-column:1/-1">Cargando...</div>';
+  campBody.innerHTML  = '<tr><td colspan="6" class="loading-txt">Cargando...</td></tr>';
+  if (aviso) aviso.style.display = 'none';
+
   try {
-    var r = await fetch('/inbox/metricas/resumen', {credentials:'include'});
+    var r = await fetch('/inbox/metricas/interno?dias=' + periodo, {credentials:'include'});
     var d = await r.json();
-    if (d.error) {
-      cards.innerHTML = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">⚠️ ' + he(d.error) + '<br><small>La Analytics API de Meta requiere permisos especiales en tu WABA.</small></div>';
-    } else {
-      var res = d.resumen || {};
-      var sent = res.sent || 0;
-      var del = res.delivered || 0;
-      var read = res.read || 0;
-      var noEntregados = sent - del;
-      var pctLectura = sent > 0 ? Math.round(read / sent * 100) : 0;
-      cards.innerHTML =
-        mkCard('📤', 'Enviados', sent, 'Total últimos 30 días') +
-        mkCard('✅', 'Entregados', del, sent > 0 ? Math.round(del/sent*100)+'% de enviados' : '—') +
-        mkCard('👁️', 'Leídos', read, pctLectura + '% de lectura') +
-        mkCard('⚠️', 'No entregados', noEntregados, 'Posibles números inválidos');
-    }
-  } catch(e) {
-    cards.innerHTML = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">Error consultando Analytics API</div>';
-  }
 
-  // Por plantilla
-  try {
-    var r2 = await fetch('/inbox/metricas/plantillas', {credentials:'include'});
-    var d2 = await r2.json();
-    var analytics = d2.analytics || [];
-    if (!analytics.length) {
-      tplBody.innerHTML = '<tr><td colspan="6" class="loading-txt">Sin datos de plantillas o API no disponible</td></tr>';
+    if (d.error) {
+      var msg = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">⚠️ ' + he(d.error) + '</div>';
+      cardsDif.innerHTML = cardsConv.innerHTML = msg;
+      campBody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#721c24">Error al cargar</td></tr>';
       return;
     }
+
+    // ── Tarjetas de Difusiones ───────────────────────────────────────────
+    var dif = d.difusiones || {};
+    var ra  = dif.rastreados  || 0;
+    var en  = dif.entregados  || 0;
+    var le  = dif.leidos      || 0;
+    var fa  = dif.fallidos    || 0;
+    var env = dif.total_enviados || 0;
+    var camps = dif.total_campanas || 0;
+    var pctE  = dif.tasa_entrega || 0;
+    var pctL  = dif.tasa_lectura  || 0;
+
+    cardsDif.innerHTML =
+      mkCard('📣', 'Campañas', camps, 'en el período') +
+      mkCard('📤', 'Enviados', env, 'mensajes totales') +
+      mkCard('📦', 'Entregados', ra > 0 ? en : '—', ra > 0 ? pctE + '% de rastreados' : 'Sin tracking') +
+      mkCard('👁', 'Leídos', ra > 0 ? le : '—', ra > 0 ? pctL + '% de rastreados' : 'Sin tracking') +
+      mkCard('❌', 'Fallidos', ra > 0 ? fa : '—', ra > 0 ? (fa > 0 ? 'Ver detalle en Difusiones' : 'Sin errores') : 'Sin tracking');
+
+    // ── Tarjetas de Conversaciones IA ────────────────────────────────────
+    var conv = d.conversaciones || {};
+    var chats = conv.chats_activos      || 0;
+    var recv  = conv.mensajes_recibidos || 0;
+    var aiMsg = conv.mensajes_ai        || 0;
+    var total = recv + aiMsg;
+
+    cardsConv.innerHTML =
+      mkCard('💬', 'Chats activos', chats, 'números únicos') +
+      mkCard('📨', 'Mensajes recibidos', recv, 'de clientes') +
+      mkCard('🤖', 'Respuestas IA', aiMsg, 'generadas por Claude') +
+      mkCard('⚡', 'Total interacciones', total, 'en el período');
+
+    // ── Tabla de campañas ────────────────────────────────────────────────
+    var campanas = d.campanas || [];
+    if (!campanas.length) {
+      campBody.innerHTML = '<tr><td colspan="6" class="loading-txt">Sin campañas en este período</td></tr>';
+      return;
+    }
+
+    var hasTracking = campanas.some(function(c){ return c.rastreados > 0; });
+    if (aviso && hasTracking) aviso.style.display = 'inline';
+
     var h = '';
-    analytics.forEach(function(item) {
-      var dp = (item.data_points || [])[0] || {};
-      var s = dp.sent || 0;
-      var dl = dp.delivered || 0;
-      var rd = dp.read || 0;
-      var clicks = dp.clicked || 0;
-      var pct = s > 0 ? Math.round(rd/s*100) + '%' : '—';
+    campanas.forEach(function(c) {
+      var fecha = c.fecha ? c.fecha.substring(0,10) : '—';
+      var pE = c.pct_entrega != null ? c.pct_entrega.toFixed(1) + '%' : '—';
+      var pL = c.pct_lectura != null ? c.pct_lectura.toFixed(1) + '%' : '—';
+      var fa2 = c.rastreados > 0 ? c.fallidos : '—';
+      var enStr = c.rastreados > 0
+        ? (c.entregados).toLocaleString('es-CO') + ' <small style="color:#6b7a8d">(' + pE + ')</small>'
+        : '—';
+      var leStr = c.rastreados > 0
+        ? (c.leidos).toLocaleString('es-CO') + ' <small style="color:#6b7a8d">(' + pL + ')</small>'
+        : '—';
       h += '<tr>'
-        + '<td><b>' + he(item.template_id || '—') + '</b></td>'
-        + '<td>' + s + '</td>'
-        + '<td>' + dl + '</td>'
-        + '<td>' + rd + '</td>'
-        + '<td>' + clicks + '</td>'
-        + '<td>' + pct + '</td>'
+        + '<td><b>' + he(c.campaign_name || '—') + '</b></td>'
+        + '<td style="color:#6b7a8d;font-size:.8rem">' + fecha + '</td>'
+        + '<td style="text-align:right">' + (c.enviados || 0).toLocaleString('es-CO') + '</td>'
+        + '<td style="text-align:right">' + enStr + '</td>'
+        + '<td style="text-align:right">' + leStr + '</td>'
+        + '<td style="text-align:right;color:' + (c.fallidos > 0 ? '#c62828' : '#6b7a8d') + '">'
+          + (c.rastreados > 0 ? c.fallidos : '—') + '</td>'
         + '</tr>';
     });
-    tplBody.innerHTML = h;
+    campBody.innerHTML = h;
+
   } catch(e) {
-    tplBody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#721c24">Error cargando analíticas de plantillas</td></tr>';
+    var errMsg = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">Error al cargar métricas</div>';
+    cardsDif.innerHTML = cardsConv.innerHTML = errMsg;
+    campBody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#721c24">Error al cargar</td></tr>';
   }
 }
 

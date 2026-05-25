@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, Integer, func
+from sqlalchemy import String, Text, DateTime, select, Integer, func, text
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -860,6 +860,156 @@ async def obtener_difusiones(limite: int = 100) -> list[dict]:
                              else (row.created_at.isoformat() if row.created_at else ""),
         })
     return resultado
+
+
+async def obtener_metricas_internas(dias: int = 30) -> dict:
+    """
+    Métricas calculadas íntegramente desde la base de datos local.
+    No depende de ninguna API externa de Meta.
+    """
+    desde = datetime.utcnow() - timedelta(days=dias)
+
+    async with async_session() as session:
+        # ── Difusiones (campañas) ──────────────────────────────────────────
+        r_dif = await session.execute(
+            text(
+                """
+                SELECT
+                  COUNT(DISTINCT COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))) AS total_campanas,
+                  COALESCE(SUM(enviados), 0)      AS total_enviados,
+                  COALESCE(SUM(destinatarios), 0) AS total_destinatarios
+                FROM difusiones
+                WHERE created_at >= :desde
+                """
+            ),
+            {"desde": desde},
+        )
+        row_dif = r_dif.fetchone()
+        total_campanas    = int(row_dif[0] or 0)
+        total_enviados    = int(row_dif[1] or 0)
+
+        # ── Tracking de difusión (difusion_mensajes) ──────────────────────
+        r_tr = await session.execute(
+            text(
+                """
+                SELECT
+                  COUNT(*)                                        AS rastreados,
+                  SUM(CASE WHEN status IN ('delivered','read') THEN 1 ELSE 0 END) AS entregados,
+                  SUM(CASE WHEN status = 'read'  THEN 1 ELSE 0 END)              AS leidos,
+                  SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)             AS fallidos
+                FROM difusion_mensajes
+                WHERE sent_at >= :desde
+                """
+            ),
+            {"desde": desde},
+        )
+        row_tr = r_tr.fetchone()
+        rastreados  = int(row_tr[0] or 0)
+        entregados  = int(row_tr[1] or 0)
+        leidos      = int(row_tr[2] or 0)
+        fallidos    = int(row_tr[3] or 0)
+
+        tasa_entrega = round(entregados / rastreados * 100, 1) if rastreados else 0
+        tasa_lectura = round(leidos     / rastreados * 100, 1) if rastreados else 0
+
+        # ── Conversaciones (mensajes) ─────────────────────────────────────
+        r_conv = await session.execute(
+            text(
+                """
+                SELECT
+                  COUNT(DISTINCT telefono)                                         AS chats_activos,
+                  SUM(CASE WHEN role = 'user'      THEN 1 ELSE 0 END)             AS mensajes_recibidos,
+                  SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END)             AS mensajes_enviados_ai
+                FROM mensajes
+                WHERE timestamp >= :desde
+                """
+            ),
+            {"desde": desde},
+        )
+        row_conv = r_conv.fetchone()
+        chats_activos      = int(row_conv[0] or 0)
+        mensajes_recibidos = int(row_conv[1] or 0)
+        mensajes_ai        = int(row_conv[2] or 0)
+
+        # ── Rendimiento por campaña (top 15 más recientes) ────────────────
+        r_camp = await session.execute(
+            text(
+                """
+                SELECT
+                  d.campaign_id,
+                  d.campaign_name,
+                  d.created_at,
+                  d.enviados,
+                  COALESCE(tr.rastreados, 0)  AS rastreados,
+                  COALESCE(tr.entregados, 0)  AS entregados,
+                  COALESCE(tr.leidos, 0)      AS leidos,
+                  COALESCE(tr.fallidos, 0)    AS fallidos
+                FROM (
+                  SELECT
+                    COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT)) AS campaign_id,
+                    COALESCE(NULLIF(campaign_name,''), nombre_plantilla, 'Sin nombre') AS campaign_name,
+                    MAX(created_at) AS created_at,
+                    SUM(enviados)   AS enviados
+                  FROM difusiones
+                  WHERE created_at >= :desde
+                  GROUP BY COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))
+                ) d
+                LEFT JOIN (
+                  SELECT
+                    campaign_id,
+                    COUNT(*)                                                       AS rastreados,
+                    SUM(CASE WHEN status IN ('delivered','read') THEN 1 ELSE 0 END) AS entregados,
+                    SUM(CASE WHEN status = 'read'   THEN 1 ELSE 0 END)            AS leidos,
+                    SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)            AS fallidos
+                  FROM difusion_mensajes
+                  WHERE sent_at >= :desde
+                  GROUP BY campaign_id
+                ) tr ON d.campaign_id = tr.campaign_id
+                ORDER BY d.created_at DESC
+                LIMIT 15
+                """
+            ),
+            {"desde": desde},
+        )
+        campanas = []
+        for rw in r_camp.fetchall():
+            env = int(rw[3] or 0)
+            ra  = int(rw[4] or 0)
+            en  = int(rw[5] or 0)
+            le  = int(rw[6] or 0)
+            fa  = int(rw[7] or 0)
+            campanas.append({
+                "campaign_id":   rw[0],
+                "campaign_name": rw[1],
+                "fecha":         rw[2].isoformat() if rw[2] else "",
+                "enviados":      env,
+                "rastreados":    ra,
+                "entregados":    en,
+                "leidos":        le,
+                "fallidos":      fa,
+                "pct_entrega":   round(en / ra * 100, 1) if ra else None,
+                "pct_lectura":   round(le / ra * 100, 1) if ra else None,
+            })
+
+    return {
+        "periodo_dias": dias,
+        "difusiones": {
+            "total_campanas":  total_campanas,
+            "total_enviados":  total_enviados,
+            "rastreados":      rastreados,
+            "entregados":      entregados,
+            "leidos":          leidos,
+            "fallidos":        fallidos,
+            "tasa_entrega":    tasa_entrega,
+            "tasa_lectura":    tasa_lectura,
+        },
+        "conversaciones": {
+            "chats_activos":      chats_activos,
+            "mensajes_recibidos": mensajes_recibidos,
+            "mensajes_ai":        mensajes_ai,
+        },
+        "campanas": campanas,
+    }
 
 
 async def obtener_historial_con_timestamps(telefono: str, limite: int = 150) -> list[dict]:

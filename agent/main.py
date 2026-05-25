@@ -31,6 +31,7 @@ from agent.memory import (
     registrar_difusion, obtener_difusiones,
     guardar_borrador_plantilla, obtener_borradores_plantillas, eliminar_borrador_plantilla,
     guardar_mensaje_difusion, actualizar_status_difusion, obtener_detalle_campana,
+    obtener_metricas_internas,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
@@ -1736,6 +1737,23 @@ async def inbox_metricas_plantillas(
     except Exception as e:
         logger.error(f"[metricas] Error consultando template_analytics: {e}")
         return JSONResponse(content={"error": str(e)})
+
+
+@app.get("/inbox/metricas/interno")
+async def inbox_metricas_interno(
+    dias: int = 30,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Métricas calculadas desde la base de datos interna (sin depender de Meta Analytics API)."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        data = await obtener_metricas_internas(dias=dias)
+        return JSONResponse(content=data)
+    except Exception as e:
+        logger.error(f"[metricas-interno] Error: {e}", exc_info=True)
+        return JSONResponse(content={"error": str(e) or type(e).__name__})
 
 
 @app.post("/inbox/plantillas/subir-header")
