@@ -1193,7 +1193,7 @@ tr:hover td{background:#f8f9fa}
         <div class="sec-hdr">
           <div>
             <h1>📊 Métricas</h1>
-            <p>Rendimiento de campañas y conversaciones — últimos 30 días</p>
+            <p>Rendimiento de campañas, costo Meta y ventas atribuidas</p>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <select id="met-periodo" onchange="cargarMetricas()" style="padding:6px 10px;border:1px solid #dde1e7;border-radius:8px;font-size:.82rem;color:#1a2332">
@@ -1206,33 +1206,41 @@ tr:hover td{background:#f8f9fa}
         </div>
         <div class="sec-body">
 
-          <!-- Fila 1: Difusiones -->
+          <!-- Fila 1: KPIs globales de difusiones -->
           <div style="margin-bottom:6px">
-            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">📤 Difusiones</p>
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">📤 Difusiones del período</p>
           </div>
           <div class="cards" id="met-cards-dif">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
           </div>
 
-          <!-- Fila 2: Conversaciones IA -->
-          <div style="margin:20px 0 6px">
+          <!-- Fila 2: Costo Meta + Ventas + ROI -->
+          <div style="margin:24px 0 6px">
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">💰 Costo & Retorno</p>
+          </div>
+          <div class="cards" id="met-cards-roi">
+            <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
+          </div>
+
+          <!-- Fila 3: Conversaciones IA -->
+          <div style="margin:24px 0 6px">
             <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">🤖 Conversaciones IA</p>
           </div>
           <div class="cards" id="met-cards-conv">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
           </div>
 
-          <!-- Tabla de rendimiento por campaña -->
+          <!-- Tabla por campaña -->
           <div class="tbl-wrap" style="margin-top:28px">
             <div class="tbl-head">
               <h2>Rendimiento por campaña</h2>
               <span id="met-aviso-tracking" style="font-size:.75rem;color:#6b7a8d;display:none">
-                ⓘ Solo campañas con tracking activo muestran % de entrega y lectura.
+                ⓘ % entrega/lectura solo en campañas con tracking activo
               </span>
             </div>
             <div style="overflow-x:auto">
-              <table>
-                <thead>
+              <table id="met-camp-tbl">
+                <thead id="met-camp-thead">
                   <tr>
                     <th>Campaña</th>
                     <th>Fecha</th>
@@ -1240,20 +1248,29 @@ tr:hover td{background:#f8f9fa}
                     <th style="text-align:right">📦 Entregados</th>
                     <th style="text-align:right">👁 Leídos</th>
                     <th style="text-align:right">❌ Fallidos</th>
+                    <th style="text-align:right">💵 Costo Meta</th>
+                    <th style="text-align:right" id="met-th-ventas" class="met-col-roi">🛒 Ventas 7d</th>
+                    <th style="text-align:right" id="met-th-roas"   class="met-col-roi">📈 ROAS</th>
                   </tr>
                 </thead>
                 <tbody id="met-camp-body">
-                  <tr><td colspan="6" class="loading-txt">Cargando...</td></tr>
+                  <tr><td colspan="9" class="loading-txt">Cargando...</td></tr>
                 </tbody>
               </table>
             </div>
+            <p style="font-size:.72rem;color:#8a94a6;margin-top:8px">
+              💵 Costo Meta = enviados × USD $<span id="met-tarifa">0.0165</span> (conversación de marketing).
+              Meta cobra al iniciar la conversación, no por entrega ni lectura.
+              <span class="met-col-roi"> | 🛒 Ventas = órdenes Shopify de destinatarios en los 7 días siguientes al envío.</span>
+            </p>
           </div>
 
           <!-- Nota informativa -->
-          <div style="margin-top:20px;padding:12px 16px;background:#f0f4ff;border-radius:10px;border-left:3px solid #4a7cf7;font-size:.78rem;color:#3a4a6b;line-height:1.5">
-            ℹ️ <strong>Métricas propias de Equora.</strong> Los datos de entrega y lectura provienen del tracking
-            webhook de Meta y la base de datos interna. Las Analytics de Meta (API oficial) requieren permisos
-            de <em>Business Solution Provider</em> no disponibles en cuentas estándar.
+          <div style="margin-top:20px;padding:12px 16px;background:#f0f4ff;border-radius:10px;border-left:3px solid #4a7cf7;font-size:.78rem;color:#3a4a6b;line-height:1.6">
+            ℹ️ <strong>Métricas propias de Equora.</strong>
+            Entrega y lectura: tracking via webhook de Meta.
+            Costo: tarifa oficial Meta conversaciones de marketing (Colombia).
+            Ventas atribuidas: órdenes Shopify cruzadas por teléfono del destinatario en ventana de 7 días.
           </div>
 
         </div>
@@ -3110,14 +3127,17 @@ function _hookPreview() {
    ══════════════════════════════════════════════════════ */
 async function cargarMetricas() {
   var cardsDif  = document.getElementById('met-cards-dif');
+  var cardsRoi  = document.getElementById('met-cards-roi');
   var cardsConv = document.getElementById('met-cards-conv');
   var campBody  = document.getElementById('met-camp-body');
   var aviso     = document.getElementById('met-aviso-tracking');
   var periodo   = document.getElementById('met-periodo').value || '30';
+  var ld = '<div class="loading-txt" style="grid-column:1/-1">Cargando...</div>';
 
-  cardsDif.innerHTML  = '<div class="loading-txt" style="grid-column:1/-1">Cargando...</div>';
-  cardsConv.innerHTML = '<div class="loading-txt" style="grid-column:1/-1">Cargando...</div>';
-  campBody.innerHTML  = '<tr><td colspan="6" class="loading-txt">Cargando...</td></tr>';
+  cardsDif.innerHTML  = ld;
+  cardsRoi.innerHTML  = ld;
+  cardsConv.innerHTML = ld;
+  campBody.innerHTML  = '<tr><td colspan="9" class="loading-txt">Cargando...</td></tr>';
   if (aviso) aviso.style.display = 'none';
 
   try {
@@ -3126,46 +3146,88 @@ async function cargarMetricas() {
 
     if (d.error) {
       var msg = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">⚠️ ' + he(d.error) + '</div>';
-      cardsDif.innerHTML = cardsConv.innerHTML = msg;
-      campBody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#721c24">Error al cargar</td></tr>';
+      cardsDif.innerHTML = cardsRoi.innerHTML = cardsConv.innerHTML = msg;
+      campBody.innerHTML = '<tr><td colspan="9" class="loading-txt" style="color:#721c24">Error al cargar</td></tr>';
       return;
     }
 
-    // ── Tarjetas de Difusiones ───────────────────────────────────────────
-    var dif = d.difusiones || {};
-    var ra  = dif.rastreados  || 0;
-    var en  = dif.entregados  || 0;
-    var le  = dif.leidos      || 0;
-    var fa  = dif.fallidos    || 0;
-    var env = dif.total_enviados || 0;
-    var camps = dif.total_campanas || 0;
-    var pctE  = dif.tasa_entrega || 0;
-    var pctL  = dif.tasa_lectura  || 0;
+    var shopifyOk = !!d.shopify_habilitado;
+    var tarifa    = d.tarifa_meta_usd || 0.0165;
+    var el = document.getElementById('met-tarifa');
+    if (el) el.textContent = tarifa.toFixed(4);
+
+    // Ocultar columnas ROI si Shopify no está habilitado
+    document.querySelectorAll('.met-col-roi').forEach(function(el){
+      el.style.display = shopifyOk ? '' : 'none';
+    });
+
+    // ── Fila 1: KPIs difusiones ──────────────────────────────────────────
+    var dif  = d.difusiones || {};
+    var ra   = dif.rastreados     || 0;
+    var en   = dif.entregados     || 0;
+    var le   = dif.leidos         || 0;
+    var fa   = dif.fallidos       || 0;
+    var env  = dif.total_enviados || 0;
+    var camps= dif.total_campanas || 0;
+    var pctE = dif.tasa_entrega   || 0;
+    var pctL = dif.tasa_lectura   || 0;
 
     cardsDif.innerHTML =
       mkCard('📣', 'Campañas', camps, 'en el período') +
-      mkCard('📤', 'Enviados', env, 'mensajes totales') +
-      mkCard('📦', 'Entregados', ra > 0 ? en : '—', ra > 0 ? pctE + '% de rastreados' : 'Sin tracking') +
-      mkCard('👁', 'Leídos', ra > 0 ? le : '—', ra > 0 ? pctL + '% de rastreados' : 'Sin tracking') +
-      mkCard('❌', 'Fallidos', ra > 0 ? fa : '—', ra > 0 ? (fa > 0 ? 'Ver detalle en Difusiones' : 'Sin errores') : 'Sin tracking');
+      mkCard('📤', 'Enviados', env.toLocaleString('es-CO'), 'conversaciones Meta') +
+      mkCard('📦', 'Entregados', ra > 0 ? en.toLocaleString('es-CO') : '—',
+             ra > 0 ? pctE + '% de rastreados' : 'Sin tracking aún') +
+      mkCard('👁',  'Leídos',     ra > 0 ? le.toLocaleString('es-CO') : '—',
+             ra > 0 ? pctL + '% de rastreados' : 'Sin tracking aún') +
+      mkCard('❌', 'Fallidos',   ra > 0 ? fa.toLocaleString('es-CO') : '—',
+             ra > 0 ? (fa > 0 ? 'Ver detalle en Difusiones' : 'Sin errores') : 'Sin tracking aún');
 
-    // ── Tarjetas de Conversaciones IA ────────────────────────────────────
-    var conv = d.conversaciones || {};
+    // ── Fila 2: Costo Meta + Ventas + ROI ───────────────────────────────
+    var costoTotalUsd  = dif.costo_total_usd   || 0;
+    var ventasTotalCop = d.ventas_total_cop     || 0;
+    var costoStr  = 'USD $' + costoTotalUsd.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    var ventasStr = ventasTotalCop > 0
+      ? '$' + ventasTotalCop.toLocaleString('es-CO', {minimumFractionDigits:0, maximumFractionDigits:0})
+      : (shopifyOk ? '$0' : 'Shopify no conectado');
+    var costoPorEnv = env > 0
+      ? 'USD $' + (costoTotalUsd / env).toFixed(4) + ' / conv.'
+      : 'Sin envíos';
+
+    var roiCards = mkCard('💵', 'Costo Meta', costoStr, costoPorEnv)
+                 + mkCard('💱', 'Tarifa / conv.', 'USD $' + tarifa.toFixed(4), 'marketing · Colombia');
+    if (shopifyOk) {
+      roiCards += mkCard('🛒', 'Ventas atribuidas', ventasStr, 'COP · 7 días post-envío');
+      if (costoTotalUsd > 0 && ventasTotalCop > 0) {
+        // ROAS en ratio puro (ventas COP / costo USD — comparativo relativo)
+        // Para un ROAS real en misma moneda se necesita TRM; mostramos ratio
+        var roas = (ventasTotalCop / costoTotalUsd).toFixed(1);
+        roiCards += mkCard('📈', 'ROAS', roas + 'x', 'COP ventas / USD costo');
+      } else {
+        roiCards += mkCard('📈', 'ROAS', '—', 'Sin ventas atribuidas aún');
+      }
+    } else {
+      roiCards += mkCard('🛒', 'Ventas Shopify', '—', 'Configura SHOPIFY_ADMIN_TOKEN') +
+                  mkCard('📈', 'ROAS', '—', 'Requiere integración Shopify');
+    }
+    cardsRoi.innerHTML = roiCards;
+
+    // ── Fila 3: Conversaciones IA ────────────────────────────────────────
+    var conv  = d.conversaciones || {};
     var chats = conv.chats_activos      || 0;
     var recv  = conv.mensajes_recibidos || 0;
     var aiMsg = conv.mensajes_ai        || 0;
-    var total = recv + aiMsg;
 
     cardsConv.innerHTML =
-      mkCard('💬', 'Chats activos', chats, 'números únicos') +
-      mkCard('📨', 'Mensajes recibidos', recv, 'de clientes') +
-      mkCard('🤖', 'Respuestas IA', aiMsg, 'generadas por Claude') +
-      mkCard('⚡', 'Total interacciones', total, 'en el período');
+      mkCard('💬', 'Chats activos', chats.toLocaleString('es-CO'), 'números únicos') +
+      mkCard('📨', 'Mensajes recibidos', recv.toLocaleString('es-CO'), 'de clientes') +
+      mkCard('🤖', 'Respuestas IA', aiMsg.toLocaleString('es-CO'), 'generadas por Claude') +
+      mkCard('⚡', 'Total interacciones', (recv + aiMsg).toLocaleString('es-CO'), 'en el período');
 
-    // ── Tabla de campañas ────────────────────────────────────────────────
+    // ── Tabla por campaña ────────────────────────────────────────────────
     var campanas = d.campanas || [];
+    var colSpan  = shopifyOk ? 9 : 7;
     if (!campanas.length) {
-      campBody.innerHTML = '<tr><td colspan="6" class="loading-txt">Sin campañas en este período</td></tr>';
+      campBody.innerHTML = '<tr><td colspan="' + colSpan + '" class="loading-txt">Sin campañas en este período</td></tr>';
       return;
     }
 
@@ -3177,29 +3239,48 @@ async function cargarMetricas() {
       var fecha = c.fecha ? c.fecha.substring(0,10) : '—';
       var pE = c.pct_entrega != null ? c.pct_entrega.toFixed(1) + '%' : '—';
       var pL = c.pct_lectura != null ? c.pct_lectura.toFixed(1) + '%' : '—';
-      var fa2 = c.rastreados > 0 ? c.fallidos : '—';
       var enStr = c.rastreados > 0
-        ? (c.entregados).toLocaleString('es-CO') + ' <small style="color:#6b7a8d">(' + pE + ')</small>'
-        : '—';
+        ? c.entregados.toLocaleString('es-CO') + ' <small style="color:#6b7a8d">(' + pE + ')</small>'
+        : '<span style="color:#aaa">—</span>';
       var leStr = c.rastreados > 0
-        ? (c.leidos).toLocaleString('es-CO') + ' <small style="color:#6b7a8d">(' + pL + ')</small>'
-        : '—';
+        ? c.leidos.toLocaleString('es-CO') + ' <small style="color:#6b7a8d">(' + pL + ')</small>'
+        : '<span style="color:#aaa">—</span>';
+      var faStr = c.rastreados > 0
+        ? '<span style="color:' + (c.fallidos > 0 ? '#c62828' : '#4caf50') + '">' + c.fallidos + '</span>'
+        : '<span style="color:#aaa">—</span>';
+      var costoStr2 = c.costo_usd > 0
+        ? 'USD $' + c.costo_usd.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+        : '<span style="color:#aaa">—</span>';
+      var ventasStr2 = shopifyOk
+        ? (c.ventas_cop > 0
+            ? '<span style="color:#2e7d32;font-weight:600">$' + c.ventas_cop.toLocaleString('es-CO',{minimumFractionDigits:0,maximumFractionDigits:0}) + '</span>'
+            : '<span style="color:#aaa">$0</span>')
+        : '';
+      var roasStr = '';
+      if (shopifyOk) {
+        roasStr = (c.costo_usd > 0 && c.ventas_cop > 0)
+          ? '<span style="color:#1565c0;font-weight:700">' + (c.ventas_cop / c.costo_usd).toFixed(1) + 'x</span>'
+          : '<span style="color:#aaa">—</span>';
+      }
+
       h += '<tr>'
         + '<td><b>' + he(c.campaign_name || '—') + '</b></td>'
         + '<td style="color:#6b7a8d;font-size:.8rem">' + fecha + '</td>'
         + '<td style="text-align:right">' + (c.enviados || 0).toLocaleString('es-CO') + '</td>'
         + '<td style="text-align:right">' + enStr + '</td>'
         + '<td style="text-align:right">' + leStr + '</td>'
-        + '<td style="text-align:right;color:' + (c.fallidos > 0 ? '#c62828' : '#6b7a8d') + '">'
-          + (c.rastreados > 0 ? c.fallidos : '—') + '</td>'
+        + '<td style="text-align:right">' + faStr + '</td>'
+        + '<td style="text-align:right;font-family:monospace;font-size:.82rem">' + costoStr2 + '</td>'
+        + (shopifyOk ? '<td style="text-align:right" class="met-col-roi">' + ventasStr2 + '</td>' : '')
+        + (shopifyOk ? '<td style="text-align:right" class="met-col-roi">' + roasStr + '</td>' : '')
         + '</tr>';
     });
     campBody.innerHTML = h;
 
   } catch(e) {
-    var errMsg = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">Error al cargar métricas</div>';
-    cardsDif.innerHTML = cardsConv.innerHTML = errMsg;
-    campBody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#721c24">Error al cargar</td></tr>';
+    var errMsg = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">Error al cargar métricas: ' + he(String(e)) + '</div>';
+    cardsDif.innerHTML = cardsRoi.innerHTML = cardsConv.innerHTML = errMsg;
+    campBody.innerHTML = '<tr><td colspan="9" class="loading-txt" style="color:#721c24">Error al cargar</td></tr>';
   }
 }
 

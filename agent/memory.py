@@ -862,10 +862,84 @@ async def obtener_difusiones(limite: int = 100) -> list[dict]:
     return resultado
 
 
+# Tarifa Meta por conversación de marketing iniciada por empresa (USD)
+# Meta cobra cuando el template se envía y abre una ventana de 24 h.
+# 1 destinatario = 1 conversación = 1 cobro.
+# Fuente: Meta Business Messaging Pricing (Colombia/LATAM, categoría Marketing)
+META_TARIFA_MARKETING_USD = 0.0165
+
+
+async def _atribuir_ventas_shopify(
+    campaign_id: str,
+    telefono_lista: list[str],
+    desde_dt: datetime,
+    ventana_dias: int = 7,
+) -> float:
+    """
+    Consulta Shopify Admin API para sumar ventas de órdenes creadas
+    dentro de `ventana_dias` días después de `desde_dt`,
+    cuyos clientes tienen teléfono en `telefono_lista`.
+    Retorna total en COP (currency del store).
+    """
+    import os, httpx
+    store       = os.getenv("SHOPIFY_STORE", "")
+    admin_token = os.getenv("SHOPIFY_ADMIN_TOKEN", "")
+    if not store or not admin_token or not telefono_lista:
+        return 0.0
+
+    hasta_dt = desde_dt + timedelta(days=ventana_dias)
+    # Normalizar teléfonos: quitar +57 y dejar solo dígitos para comparar
+    def _norm(p: str) -> str:
+        d = "".join(c for c in p if c.isdigit())
+        return d[-10:] if len(d) >= 10 else d  # últimos 10 dígitos
+
+    tels_norm = {_norm(t) for t in telefono_lista if t}
+
+    url = (
+        f"https://{store}/admin/api/2024-10/orders.json"
+        f"?status=any&created_at_min={desde_dt.isoformat()}Z"
+        f"&created_at_max={hasta_dt.isoformat()}Z"
+        f"&limit=250&fields=total_price,currency,billing_address,customer"
+    )
+    headers = {"X-Shopify-Access-Token": admin_token}
+
+    total = 0.0
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            while url:
+                r = await client.get(url, headers=headers)
+                data = r.json()
+                for order in data.get("orders", []):
+                    # Obtener teléfono del cliente desde billing_address o customer
+                    phone = ""
+                    ba = order.get("billing_address") or {}
+                    phone = ba.get("phone", "") or ""
+                    if not phone:
+                        cust = order.get("customer") or {}
+                        phone = cust.get("phone", "") or ""
+                    if _norm(phone) in tels_norm:
+                        try:
+                            total += float(order.get("total_price", 0) or 0)
+                        except (ValueError, TypeError):
+                            pass
+                # Paginación via Link header
+                link = r.headers.get("link", "")
+                url = None
+                if 'rel="next"' in link:
+                    import re as _re
+                    m = _re.search(r'<([^>]+)>;\s*rel="next"', link)
+                    if m:
+                        url = m.group(1)
+    except Exception:
+        pass
+    return round(total, 2)
+
+
 async def obtener_metricas_internas(dias: int = 30) -> dict:
     """
     Métricas calculadas íntegramente desde la base de datos local.
-    No depende de ninguna API externa de Meta.
+    Incluye costo Meta (conversaciones iniciadas × tarifa) y
+    atribución de ventas Shopify por teléfonos de destinatarios.
     """
     desde = datetime.utcnow() - timedelta(days=dias)
 
@@ -971,31 +1045,88 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
             ),
             {"desde": desde},
         )
-        campanas = []
-        for rw in r_camp.fetchall():
-            env = int(rw[3] or 0)
-            ra  = int(rw[4] or 0)
-            en  = int(rw[5] or 0)
-            le  = int(rw[6] or 0)
-            fa  = int(rw[7] or 0)
-            campanas.append({
-                "campaign_id":   rw[0],
-                "campaign_name": rw[1],
-                "fecha":         rw[2].isoformat() if rw[2] else "",
-                "enviados":      env,
-                "rastreados":    ra,
-                "entregados":    en,
-                "leidos":        le,
-                "fallidos":      fa,
-                "pct_entrega":   round(en / ra * 100, 1) if ra else None,
-                "pct_lectura":   round(le / ra * 100, 1) if ra else None,
-            })
+        # Recopilar filas de campañas primero
+        camp_rows = r_camp.fetchall()
+
+        # ── Teléfonos por campaña (para atribución Shopify) ──────────────
+        campaign_ids = [rw[0] for rw in camp_rows if rw[0]]
+        tels_por_campana: dict[str, list[str]] = {}
+        if campaign_ids:
+            placeholders = ",".join([f"'{cid}'" for cid in campaign_ids])
+            r_tels = await session.execute(
+                text(
+                    f"""
+                    SELECT campaign_id, telefono
+                    FROM difusion_mensajes
+                    WHERE campaign_id IN ({placeholders})
+                    """
+                )
+            )
+            for row in r_tels.fetchall():
+                tels_por_campana.setdefault(row[0], []).append(row[1])
+
+    # ── Atribución de ventas Shopify (fuera del session context) ─────────
+    # Se hace de forma asíncrona por campaña
+    ventas_por_campana: dict[str, float] = {}
+    for rw in camp_rows:
+        cid   = rw[0]
+        fecha = rw[2]  # datetime
+        tels  = tels_por_campana.get(cid, [])
+        if tels and fecha:
+            ventas = await _atribuir_ventas_shopify(cid, tels, fecha, ventana_dias=7)
+            ventas_por_campana[cid] = ventas
+
+    # ── Totales globales de costo y ventas ────────────────────────────────
+    costo_total_usd = round(total_enviados * META_TARIFA_MARKETING_USD, 4)
+    ventas_total_cop = sum(ventas_por_campana.values())
+
+    campanas = []
+    for rw in camp_rows:
+        env   = int(rw[3] or 0)
+        ra    = int(rw[4] or 0)
+        en    = int(rw[5] or 0)
+        le    = int(rw[6] or 0)
+        fa    = int(rw[7] or 0)
+        cid   = rw[0]
+        fecha = rw[2]
+
+        # Costo Meta: 1 conversación por destinatario enviado × tarifa
+        costo_usd   = round(env * META_TARIFA_MARKETING_USD, 4)
+        ventas_cop  = ventas_por_campana.get(cid, 0.0)
+
+        roi = None
+        roas = None
+        if costo_usd > 0 and ventas_cop > 0:
+            # ROI y ROAS requieren moneda común — se calcula como ratio puro
+            # (ventas en COP, costo en USD: se muestran por separado)
+            # ROAS = ventas / costo (en misma moneda, usamos ratio ventas/costo_cop)
+            # Para ROI necesitamos convertir → se omite conversión automática,
+            # se muestran las cifras separadas y el usuario interpreta.
+            roas = round(ventas_cop / (costo_usd * 1), 2)  # placeholder ratio
+
+        campanas.append({
+            "campaign_id":   cid,
+            "campaign_name": rw[1],
+            "fecha":         fecha.isoformat() if fecha else "",
+            "enviados":      env,
+            "rastreados":    ra,
+            "entregados":    en,
+            "leidos":        le,
+            "fallidos":      fa,
+            "pct_entrega":   round(en / ra * 100, 1) if ra else None,
+            "pct_lectura":   round(le / ra * 100, 1) if ra else None,
+            "costo_usd":     costo_usd,
+            "ventas_cop":    ventas_cop,
+            "tiene_ventas":  ventas_cop > 0,
+        })
 
     return {
         "periodo_dias": dias,
+        "tarifa_meta_usd": META_TARIFA_MARKETING_USD,
         "difusiones": {
             "total_campanas":  total_campanas,
             "total_enviados":  total_enviados,
+            "costo_total_usd": costo_total_usd,
             "rastreados":      rastreados,
             "entregados":      entregados,
             "leidos":          leidos,
@@ -1008,7 +1139,9 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
             "mensajes_recibidos": mensajes_recibidos,
             "mensajes_ai":        mensajes_ai,
         },
-        "campanas": campanas,
+        "campanas":           campanas,
+        "ventas_total_cop":   ventas_total_cop,
+        "shopify_habilitado": bool(os.getenv("SHOPIFY_ADMIN_TOKEN", "")),
     }
 
 
