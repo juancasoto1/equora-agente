@@ -66,11 +66,37 @@ def obtener_mensaje_fallback() -> str:
     )
 
 
-async def generar_respuesta(mensaje: str, historial: list[dict], telefono: str | None = None) -> str:
+async def generar_respuesta(
+    mensaje: str,
+    historial: list[dict],
+    telefono: str | None = None,
+    contexto_campana: dict | None = None,
+) -> str:
     if not mensaje or len(mensaje.strip()) < 2:
         return obtener_mensaje_fallback()
 
     system_prompt = cargar_system_prompt()
+
+    # ── Contexto de campaña de difusión ───────────────────────────────────────
+    # Si el cliente responde a una difusión reciente, Andrea sabe de qué campaña
+    # viene y no pregunta cosas que ya están claras por el contexto.
+    if contexto_campana:
+        nombre = contexto_campana.get("campaign_name", "")
+        horas  = contexto_campana.get("horas_ago", 0)
+        tiempo_str = f"hace {horas} hora{'s' if horas != 1 else ''}" if horas > 0 else "hace menos de una hora"
+        system_prompt += f"""
+
+## Contexto: respuesta a campaña de difusión
+Este cliente acaba de responder a una campaña de WhatsApp que le enviaste {tiempo_str}.
+Nombre de la campaña: "{nombre}"
+
+INSTRUCCIONES IMPORTANTES para este mensaje:
+- El cliente probablemente está preguntando por el producto/oferta de esa campaña.
+- NO preguntes "¿en qué producto estás interesado?" ni "¿qué estás buscando?"
+  si el contexto de la campaña lo hace evidente.
+- Asume que su pregunta (precio, disponibilidad, cómo comprar, etc.) es sobre esa campaña.
+- Si la campaña habla de un producto específico, responde directamente sobre ese producto.
+- Solo pide clarificación si el mensaje del cliente habla de algo claramente diferente."""
 
     # Inyectar catálogo (desde cache — sin HTTP en cada mensaje)
     catalogo = await obtener_catalogo_shopify()

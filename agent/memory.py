@@ -935,6 +935,50 @@ async def _atribuir_ventas_shopify(
     return round(total, 2)
 
 
+async def obtener_campana_reciente_para_telefono(
+    telefono: str,
+    max_horas: int = 72,
+) -> dict | None:
+    """
+    Retorna la campaña más reciente enviada a este teléfono (dentro de max_horas).
+    Se usa para inyectar contexto cuando el cliente responde a una difusión.
+    Retorna None si no hay campaña reciente o si el cliente ya inició conversación antes de responder.
+    """
+    desde = datetime.utcnow() - timedelta(hours=max_horas)
+    async with async_session() as session:
+        r = await session.execute(
+            text(
+                """
+                SELECT dm.campaign_id, dm.campaign_name, dm.sent_at,
+                       d.template_name
+                FROM difusion_mensajes dm
+                LEFT JOIN difusiones d ON d.campaign_id = dm.campaign_id
+                WHERE dm.telefono = :tel
+                  AND dm.sent_at  >= :desde
+                ORDER BY dm.sent_at DESC
+                LIMIT 1
+                """
+            ),
+            {"tel": telefono, "desde": desde},
+        )
+        row = r.fetchone()
+        if not row:
+            return None
+
+        sent_at = row[2]
+        horas_ago = 0
+        if sent_at:
+            delta = datetime.utcnow() - sent_at
+            horas_ago = int(delta.total_seconds() / 3600)
+
+        return {
+            "campaign_id":   row[0] or "",
+            "campaign_name": row[1] or row[3] or "campaña reciente",
+            "sent_at":       sent_at.isoformat() if sent_at else "",
+            "horas_ago":     horas_ago,
+        }
+
+
 async def obtener_metricas_internas(dias: int = 30) -> dict:
     """
     Métricas calculadas íntegramente desde la base de datos local.

@@ -31,7 +31,7 @@ from agent.memory import (
     registrar_difusion, obtener_difusiones,
     guardar_borrador_plantilla, obtener_borradores_plantillas, eliminar_borrador_plantilla,
     guardar_mensaje_difusion, actualizar_status_difusion, obtener_detalle_campana,
-    obtener_metricas_internas,
+    obtener_metricas_internas, obtener_campana_reciente_para_telefono,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
@@ -716,6 +716,55 @@ async def _procesar_status_difusion(status: dict) -> None:
         logger.debug(f"[webhook-status] Error actualizando {wamid[:20]}: {e}")
 
 
+def _es_respuesta_automatica(texto: str) -> bool:
+    """
+    Detecta si un mensaje parece ser una respuesta automática de WhatsApp Business.
+    Estos mensajes no deben procesarse con Andrea para evitar conversaciones entre bots.
+
+    Ejemplos típicos:
+    - "Hola, somos Pizzería Pepito. ¿Qué deseas pedir?"
+    - "Gracias por contactarnos, en breve te atendemos."
+    - "Este es un mensaje automático. Estamos fuera de horario."
+    """
+    import re as _re
+    t = texto.strip()
+    if not t or len(t) > 500:  # Los mensajes reales suelen ser cortos en auto-reply
+        return False
+
+    tl = t.lower()
+
+    # Patrones de respuesta automática
+    patrones = [
+        r'respuesta automát',
+        r'mensaje automát',
+        r'auto.?reply',
+        r'bot\b',
+        r'fuera de horario',
+        r'fuera de servicio',
+        r'no estamos disponibles',
+        r'en este momento no (podemos|estamos|hay)',
+        r'atenderemos (tu|su|el) (mensaje|consulta|pedido)',
+        r'te (responderemos|contestaremos|atenderemos) (pronto|en breve|a la brevedad)',
+        r'en breve (te|le) (atendemos|contactamos|respondemos)',
+        r'gracias por (contactar|escribir|comunicarte|tu mensaje)',
+        r'business hours',
+        r'working hours',
+        r'somos un (negocio|restaurante|empresa|tienda)',
+        r'^hola[,\.]?\s+(somos|soy)\s+\w',        # "Hola, somos Pizzería..."
+        r'^buenos\s+(días|tardes|noches)[,\.]?\s+(somos|soy)\s',
+        r'pedido.*deseas\s+(pedir|ordenar)',
+        r'(deseas|quieres)\s+(pedir|ordenar|comprar)',
+        r'menú\s+(disponible|del día)',
+    ]
+
+    for patron in patrones:
+        if _re.search(patron, tl):
+            logger.info(f"[auto-reply] Mensaje ignorado (patrón: {patron[:30]}): {t[:60]}")
+            return True
+
+    return False
+
+
 @app.post("/webhook")
 async def webhook_handler(request: Request):
     # ── Status updates de Meta (delivery/read/failed) ─────────────────────────
@@ -737,6 +786,11 @@ async def webhook_handler(request: Request):
                 continue
 
             logger.info(f"Mensaje de {msg.telefono}: {msg.texto[:80]}")
+
+            # ── Filtro: respuestas automáticas de WhatsApp Business ───────────
+            # Evita que Andrea quede atrapada respondiendo bots de otros negocios
+            if _es_respuesta_automatica(msg.texto):
+                continue  # ignorar silenciosamente
 
             # ── Orden directa desde catálogo nativo WhatsApp ──────────────────
             # El cliente armó su carrito en WhatsApp y confirmó — bypaseamos Claude
@@ -828,7 +882,20 @@ async def webhook_handler(request: Request):
             if not historial:
                 asyncio.create_task(capi_lead(msg.telefono))
 
-            respuesta = await generar_respuesta(msg.texto, historial, msg.telefono)
+            # ── Contexto de campaña ───────────────────────────────────────────
+            # Si el cliente responde dentro de las 72 h de recibir una difusión,
+            # Andrea sabe de qué producto/campaña viene y no lo pregunta de nuevo.
+            contexto_campana = await obtener_campana_reciente_para_telefono(msg.telefono)
+            if contexto_campana:
+                logger.info(
+                    f"[campaña] {msg.telefono} respondió a campaña "
+                    f'"{contexto_campana["campaign_name"]}" '
+                    f'(hace {contexto_campana["horas_ago"]}h)'
+                )
+
+            respuesta = await generar_respuesta(
+                msg.texto, historial, msg.telefono, contexto_campana
+            )
 
             await guardar_mensaje(msg.telefono, "user", msg.texto)
             await guardar_mensaje(msg.telefono, "assistant", respuesta)
