@@ -965,16 +965,29 @@ async def obtener_campana_reciente_para_telefono(
         if not row:
             return None
 
-        sent_at = row[2]
+        sent_at_raw = row[2]
         horas_ago = 0
-        if sent_at:
-            delta = datetime.utcnow() - sent_at
-            horas_ago = int(delta.total_seconds() / 3600)
+        sent_at_iso = ""
+
+        # SQLite devuelve strings al usar text() — convertir si es necesario
+        if sent_at_raw:
+            if isinstance(sent_at_raw, str):
+                try:
+                    sent_at_dt = datetime.fromisoformat(sent_at_raw.replace("Z", ""))
+                except ValueError:
+                    sent_at_dt = None
+            else:
+                sent_at_dt = sent_at_raw  # ya es datetime
+
+            if sent_at_dt:
+                delta = datetime.utcnow() - sent_at_dt
+                horas_ago = max(0, int(delta.total_seconds() / 3600))
+                sent_at_iso = sent_at_dt.isoformat()
 
         return {
             "campaign_id":   row[0] or "",
             "campaign_name": row[1] or row[3] or "campaña reciente",
-            "sent_at":       sent_at.isoformat() if sent_at else "",
+            "sent_at":       sent_at_iso,
             "horas_ago":     horas_ago,
         }
 
