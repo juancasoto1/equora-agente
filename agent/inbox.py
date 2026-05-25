@@ -514,6 +514,14 @@ tr:hover td{background:#f8f9fa}
                   </div>
                 </div>
 
+                <!-- Nombre de campaña -->
+                <div class="f-group" style="margin-bottom:16px">
+                  <span class="f-label">Nombre de la campaña</span>
+                  <input id="dif-campaign-name" class="f-inp" type="text"
+                    placeholder="ej: Promo Mayo – Desengrasante Cocina"
+                    maxlength="200" oninput="actualizarConteo()">
+                </div>
+
                 <!-- Plantilla -->
                 <div class="f-group" style="margin-bottom:16px">
                   <span class="f-label">Plantilla aprobada ✅</span>
@@ -616,7 +624,7 @@ tr:hover td{background:#f8f9fa}
                 <table>
                   <thead>
                     <tr>
-                      <th>Plantilla</th>
+                      <th>Campaña</th>
                       <th>Fecha</th>
                       <th>Destinatarios</th>
                       <th>✅ Enviados</th>
@@ -1732,7 +1740,18 @@ function actualizarConteo() {
 async function enviarDifusion() {
   var name  = document.getElementById('dif-tpl').value;
   var tpl   = _dif_templates.find(function(t) { return t.name === name; });
+  var res   = document.getElementById('dif-res-box');
   if (!tpl) return;
+
+  // Nombre de campaña (obligatorio)
+  var campaignName = (document.getElementById('dif-campaign-name').value || '').trim();
+  if (!campaignName) {
+    res.style.display = 'block';
+    res.className = 'dif-res-box err';
+    res.textContent = '⚠️ Escribe un nombre para la campaña antes de enviar.';
+    document.getElementById('dif-campaign-name').focus();
+    return;
+  }
 
   var recipients = _parsearDestinatarios();
   if (!recipients.length) return;
@@ -1742,19 +1761,20 @@ async function enviarDifusion() {
       return r.variables.some(function(v) { return !v || v.trim() === ''; });
     });
     if (sinNombre.length) {
-      var res = document.getElementById('dif-res-box');
       res.style.display = 'block';
-      res.className = 'dif-result err';
+      res.className = 'dif-res-box err';
       res.textContent = '⚠️ ' + sinNombre.length + ' destinatario(s) tienen variables vacías.';
       return;
     }
   }
 
+  // ID único para agrupar todos los lotes de esta campaña en el historial
+  var campaignId = 'dif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
   var btn  = document.getElementById('dif-sendbtn');
   var prog = document.getElementById('dif-prog-wrap');
   var bar  = document.getElementById('dif-bar');
   var ptxt = document.getElementById('dif-ptxt');
-  var res  = document.getElementById('dif-res-box');
   btn.disabled = true;
   prog.style.display = 'flex';
   bar.style.width = '0%';
@@ -1777,6 +1797,8 @@ async function enviarDifusion() {
           named: tpl.named === true,
           header_type: tpl.header_type || null,
           header_url:  tpl.header_url  || null,
+          campaign_name: campaignName,
+          campaign_id:   campaignId,
           recipients: lote,
         }),
       });
@@ -1822,11 +1844,14 @@ async function cargarHistorialDif() {
     var h = '';
     rows.forEach(function(row) {
       var pct = row.destinatarios > 0 ? Math.round(row.enviados / row.destinatarios * 100) : 0;
-      var clsEnv = row.fallidos === 0 ? 'badge-ok' : 'badge-warn';
-      var clsFall = row.fallidos > 0 ? 'badge-err' : '';
+      var clsEnv  = row.fallidos === 0 ? 'badge-ok' : 'badge-warn';
       var pctColor = pct >= 90 ? '#155724' : (pct >= 60 ? '#856404' : '#721c24');
+      var campaignLabel = he(row.campaign_name || row.template_name);
+      var tplLabel = (row.campaign_name && row.campaign_name !== row.template_name)
+        ? '<small style="color:#6b7a8d">📋 ' + he(row.template_name) + ' · ' + he(row.language) + '</small>'
+        : '<small style="color:#6b7a8d">' + he(row.language) + '</small>';
       h += '<tr>'
-        + '<td><b>' + he(row.template_name) + '</b><br><small style="color:#6b7a8d">' + he(row.language) + '</small></td>'
+        + '<td><b>' + campaignLabel + '</b><br>' + tplLabel + '</td>'
         + '<td style="font-size:.78rem;color:#6b7a8d;white-space:nowrap">' + fmtFecha(row.created_at) + '</td>'
         + '<td style="text-align:center">' + row.destinatarios + '</td>'
         + '<td style="text-align:center"><span class="' + clsEnv + '">' + row.enviados + '</span></td>'

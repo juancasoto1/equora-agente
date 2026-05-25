@@ -1441,6 +1441,8 @@ async def inbox_broadcast_send(
     is_named      = body.get("named", False)     # True si plantilla usa {{nombre}}, False si {{1}}
     header_type   = body.get("header_type")      # "IMAGE", "TEXT", etc.
     header_url    = body.get("header_url")       # URL de imagen del header (si aplica)
+    campaign_name = body.get("campaign_name", "")  # nombre de la campaña dado por el usuario
+    campaign_id   = body.get("campaign_id", "")    # ID único compartido entre todos los lotes
 
     if not template_name or not recipients:
         return JSONResponse(content={"error": "Faltan template o recipients"}, status_code=400)
@@ -1549,6 +1551,8 @@ async def inbox_broadcast_send(
             enviados=enviados,
             fallidos=fallidos,
             errores=errores,
+            campaign_name=campaign_name,
+            campaign_id=campaign_id,
         )
     except Exception as e:
         logger.warning(f"[broadcast] No se pudo registrar difusión en BD: {e}")

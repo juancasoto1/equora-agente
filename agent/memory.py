@@ -78,6 +78,8 @@ class Difusion(Base):
     __tablename__ = "difusiones"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    campaign_name: Mapped[str] = mapped_column(String(200), default="")   # nombre que da el usuario
+    campaign_id: Mapped[str] = mapped_column(String(100), default="")     # ID único por acción de envío
     template_name: Mapped[str] = mapped_column(String(100), default="")
     language: Mapped[str] = mapped_column(String(20), default="es_CO")
     destinatarios: Mapped[int] = mapped_column(Integer, default=0)
@@ -112,6 +114,8 @@ async def inicializar_db():
             "ALTER TABLE clientes ADD COLUMN carrito_activo_at DATETIME",
             "ALTER TABLE clientes ADD COLUMN pedido_checkout_url TEXT DEFAULT ''",
             "ALTER TABLE estado_conversacion ADD COLUMN modo_humano INTEGER DEFAULT 0",
+            "ALTER TABLE difusiones ADD COLUMN campaign_name TEXT DEFAULT ''",
+            "ALTER TABLE difusiones ADD COLUMN campaign_id TEXT DEFAULT ''",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -614,10 +618,15 @@ async def registrar_difusion(
     enviados: int,
     fallidos: int,
     errores: list[str],
+    campaign_name: str = "",
+    campaign_id: str = "",
 ):
-    """Guarda el resultado de una difusión enviada."""
+    """Guarda el resultado de un lote de difusión. Cada lote de 50 es un registro;
+    se agrupan por campaign_id al consultar el historial."""
     async with async_session() as session:
         dif = Difusion(
+            campaign_name=campaign_name,
+            campaign_id=campaign_id,
             template_name=template_name,
             language=language,
             destinatarios=destinatarios,
@@ -630,28 +639,41 @@ async def registrar_difusion(
         await session.commit()
 
 
-async def obtener_difusiones(limite: int = 50) -> list[dict]:
-    """Lista de difusiones ordenadas por más recientes primero."""
+async def obtener_difusiones(limite: int = 100) -> list[dict]:
+    """Lista de campañas de difusión agrupadas por campaign_id.
+    Registros antiguos sin campaign_id se muestran individualmente."""
+    from sqlalchemy import text
     async with async_session() as session:
-        query = (
-            select(Difusion)
-            .order_by(Difusion.created_at.desc())
-            .limit(limite)
-        )
-        result = await session.execute(query)
-        rows = result.scalars().all()
+        # Agrupa los lotes por campaign_id; lotes sin campaign_id usan su propio id.
+        sql = text("""
+            SELECT
+                COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))  AS grp,
+                COALESCE(NULLIF(campaign_name,''), template_name)   AS campaign_name,
+                template_name,
+                language,
+                SUM(destinatarios) AS destinatarios,
+                SUM(enviados)      AS enviados,
+                SUM(fallidos)      AS fallidos,
+                MIN(created_at)    AS created_at
+            FROM difusiones
+            GROUP BY COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))
+            ORDER BY MIN(created_at) DESC
+            LIMIT :lim
+        """)
+        result = await session.execute(sql, {"lim": limite})
+        rows = result.fetchall()
         return [
             {
-                "id": d.id,
-                "template_name": d.template_name,
-                "language": d.language,
-                "destinatarios": d.destinatarios,
-                "enviados": d.enviados,
-                "fallidos": d.fallidos,
-                "errores": json.loads(d.errores_json or "[]"),
-                "created_at": d.created_at.isoformat() if d.created_at else "",
+                "campaign_name": row.campaign_name or row.template_name,
+                "template_name": row.template_name,
+                "language":      row.language,
+                "destinatarios": row.destinatarios,
+                "enviados":      row.enviados,
+                "fallidos":      row.fallidos,
+                "created_at":    row.created_at if isinstance(row.created_at, str)
+                                 else (row.created_at.isoformat() if row.created_at else ""),
             }
-            for d in rows
+            for row in rows
         ]
 
 
