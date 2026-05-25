@@ -887,10 +887,14 @@ async def webhook_handler(request: Request):
             # Andrea sabe de qué producto/campaña viene y no lo pregunta de nuevo.
             contexto_campana = await obtener_campana_reciente_para_telefono(msg.telefono)
             if contexto_campana:
-                logger.info(
-                    f"[campaña] {msg.telefono} respondió a campaña "
+                logger.warning(
+                    f"[campaña✅] {msg.telefono} respondió a campaña "
                     f'"{contexto_campana["campaign_name"]}" '
                     f'(hace {contexto_campana["horas_ago"]}h)'
+                )
+            else:
+                logger.warning(
+                    f"[campaña❌] Sin campaña reciente en difusion_mensajes para {msg.telefono}"
                 )
 
             respuesta = await generar_respuesta(
@@ -1636,8 +1640,11 @@ async def inbox_broadcast_send(
                                 campaign_name=campaign_name,
                                 telefono=tel,
                             )
+                            logger.warning(f"[broadcast✅] wamid guardado para {tel[-4:]}**** campaign={campaign_id[:20]}")
                         except Exception as _e:
-                            logger.debug(f"[broadcast] No se guardó wamid: {_e}")
+                            logger.warning(f"[broadcast⚠️] No se guardó wamid en difusion_mensajes: {_e}")
+                    elif not campaign_id:
+                        logger.warning(f"[broadcast⚠️] campaign_id vacío — no se guarda wamid para {tel[-4:]}****")
                 else:
                     fallidos += 1
                     try:
