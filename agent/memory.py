@@ -947,7 +947,7 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
                 FROM (
                   SELECT
                     COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT)) AS campaign_id,
-                    COALESCE(NULLIF(campaign_name,''), nombre_plantilla, 'Sin nombre') AS campaign_name,
+                    COALESCE(NULLIF(campaign_name,''), template_name, 'Sin nombre') AS campaign_name,
                     MAX(created_at) AS created_at,
                     SUM(enviados)   AS enviados
                   FROM difusiones
