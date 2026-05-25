@@ -292,6 +292,51 @@ tr:hover td{background:#f8f9fa}
 .btn-dl-csv:hover{border-color:var(--az);color:var(--az)}
 /* historial abajo */
 #dif-hist-below{margin-top:20px}
+/* ── Modal de detalle de campaña ─────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(10,20,40,.55);z-index:2000;
+  display:flex;align-items:center;justify-content:center;padding:16px;
+  animation:fadeIn .15s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.modal-box{background:#fff;border-radius:18px;max-width:780px;width:100%;
+  max-height:90vh;overflow-y:auto;padding:32px;
+  box-shadow:0 24px 64px rgba(0,0,0,.22);animation:slideUp .2s ease}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px}
+.modal-title{font-size:1.1rem;font-weight:700;color:#1a2332}
+.modal-sub{font-size:.78rem;color:#6b7a8d;margin-top:4px}
+.modal-close{background:none;border:1.5px solid #e0e4e8;border-radius:8px;
+  width:34px;height:34px;cursor:pointer;font-size:1rem;color:#6b7a8d;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.modal-close:hover{background:#f5f7fa;color:#1a2332;border-color:#cbd5e0}
+/* stat cards del modal */
+.det-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+@media(max-width:600px){.det-cards{grid-template-columns:repeat(2,1fr)}}
+.det-card{border-radius:12px;padding:16px 12px;text-align:center}
+.det-card-val{font-size:1.7rem;font-weight:800;line-height:1.1}
+.det-card-lbl{font-size:.68rem;color:#6b7a8d;margin-top:5px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em}
+/* funnel */
+.funnel-section{margin-bottom:24px}
+.funnel-section h4{font-size:.82rem;font-weight:700;color:#4a5568;
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.funnel-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+.funnel-lbl{font-size:.75rem;color:#6b7a8d;width:82px;text-align:right;flex-shrink:0}
+.funnel-wrap{flex:1;background:#f0f2f5;border-radius:6px;height:24px;overflow:hidden}
+.funnel-fill{height:100%;border-radius:6px;display:flex;align-items:center;
+  padding-left:10px;font-size:.74rem;font-weight:700;color:#fff;
+  transition:width .7s cubic-bezier(.4,0,.2,1);min-width:2px}
+.funnel-cnt{font-size:.78rem;font-weight:700;color:#2d3748;width:70px;flex-shrink:0;white-space:nowrap}
+/* tabla de errores */
+.det-err-section h4{font-size:.82rem;font-weight:700;color:#4a5568;
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
+.det-errtbl{width:100%;border-collapse:collapse;font-size:.81rem}
+.det-errtbl th{background:#f8f9fa;padding:9px 12px;text-align:left;font-weight:600;
+  color:#4a5568;border-bottom:2px solid #e0e4e8;white-space:nowrap}
+.det-errtbl td{padding:10px 12px;border-bottom:1px solid #f0f2f5;vertical-align:top}
+.det-errtbl tr:last-child td{border-bottom:none}
+.err-badge{background:#fff3cd;color:#856404;border:1px solid #ffc107;
+  border-radius:5px;padding:2px 8px;font-size:.7rem;font-weight:700;display:inline-block}
+.err-nums{color:#6b7a8d;font-size:.73rem;margin-top:3px;font-family:'Courier New',monospace}
 /* separador cargue manual */
 .dif-manual-hdr{display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:700;
   color:#2d3748;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #e0e4e8}
@@ -626,14 +671,15 @@ tr:hover td{background:#f8f9fa}
                     <tr>
                       <th>Campaña</th>
                       <th>Fecha</th>
-                      <th>Destinatarios</th>
-                      <th>✅ Enviados</th>
-                      <th>❌ Fallidos</th>
-                      <th>% Éxito</th>
+                      <th style="text-align:center">Enviados</th>
+                      <th style="text-align:center">📦 Entregados</th>
+                      <th style="text-align:center">👁 Leídos</th>
+                      <th style="text-align:center">❌ Fallidos</th>
+                      <th style="text-align:center">Detalle</th>
                     </tr>
                   </thead>
                   <tbody id="dif-hist-body">
-                    <tr><td colspan="6" class="loading-txt">Sin difusiones enviadas aún</td></tr>
+                    <tr><td colspan="7" class="loading-txt">Sin difusiones enviadas aún</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -1227,6 +1273,72 @@ tr:hover td{background:#f8f9fa}
     </div><!-- /main -->
   </div><!-- /body -->
 </div><!-- /shell -->
+
+<!-- ══════════════════════════════════════════════════════
+     Modal de detalle de campaña de difusión
+     ══════════════════════════════════════════════════════ -->
+<div id="dif-detail-modal" class="modal-overlay" style="display:none" onclick="cerrarDetalleCampana(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title" id="dif-det-titulo">Detalle de campaña</div>
+        <div class="modal-sub"  id="dif-det-sub"></div>
+      </div>
+      <button class="modal-close" onclick="cerrarDetalleCampana()" title="Cerrar">✕</button>
+    </div>
+
+    <!-- Cards resumen -->
+    <div class="det-cards" id="dif-det-cards">
+      <div class="det-card" style="background:#e8f5e9">
+        <div class="det-card-val" style="color:#2e7d32" id="dc-total">—</div>
+        <div class="det-card-lbl">Rastreados</div>
+      </div>
+      <div class="det-card" style="background:#e3f2fd">
+        <div class="det-card-val" style="color:#1565c0" id="dc-entregados">—</div>
+        <div class="det-card-lbl">Entregados</div>
+      </div>
+      <div class="det-card" style="background:#e8eaf6">
+        <div class="det-card-val" style="color:#283593" id="dc-leidos">—</div>
+        <div class="det-card-lbl">Leídos</div>
+      </div>
+      <div class="det-card" style="background:#fce4ec">
+        <div class="det-card-val" style="color:#b71c1c" id="dc-fallidos">—</div>
+        <div class="det-card-lbl">Fallidos</div>
+      </div>
+    </div>
+
+    <!-- Funnel de entrega -->
+    <div class="funnel-section" id="dif-det-funnel"></div>
+
+    <!-- Tabla de errores agrupados -->
+    <div class="det-err-section" id="dif-det-errores" style="display:none">
+      <h4>⚠️ Mensajes no entregados — motivo del error</h4>
+      <table class="det-errtbl">
+        <thead>
+          <tr>
+            <th>Motivo</th>
+            <th style="width:60px;text-align:center">Cant.</th>
+            <th>Números afectados</th>
+          </tr>
+        </thead>
+        <tbody id="dif-det-errbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Pendientes aún sin confirmar -->
+    <div id="dif-det-pendientes" style="display:none;margin-top:16px;padding:12px 16px;
+      background:#fffbeb;border:1px solid #fde68a;border-radius:10px;font-size:.82rem;color:#92400e">
+      ⏳ <b id="dif-det-pend-cnt">0</b> mensajes aún no confirman entrega
+      (el destinatario puede tener el teléfono apagado o sin conexión).
+    </div>
+
+    <div style="text-align:right;margin-top:24px">
+      <button class="btn-secondary" onclick="cerrarDetalleCampana()" style="padding:8px 20px;font-size:.83rem">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ══════════════════════════════════════════════════════
@@ -1843,25 +1955,144 @@ async function cargarHistorialDif() {
     }
     var h = '';
     rows.forEach(function(row) {
-      var pct = row.destinatarios > 0 ? Math.round(row.enviados / row.destinatarios * 100) : 0;
-      var clsEnv  = row.fallidos === 0 ? 'badge-ok' : 'badge-warn';
-      var pctColor = pct >= 90 ? '#155724' : (pct >= 60 ? '#856404' : '#721c24');
+      var env  = row.enviados || 0;
+      var ent  = row.entregados;   // null si sin tracking
+      var lei  = row.leidos;       // null si sin tracking
+      var failWh = row.fallidos_wh; // null si sin tracking
+
+      var pctEnt = (ent !== null && env > 0) ? Math.round(ent / env * 100) : null;
+      var pctLei = (lei !== null && env > 0) ? Math.round(lei / env * 100) : null;
+
       var campaignLabel = he(row.campaign_name || row.template_name);
       var tplLabel = (row.campaign_name && row.campaign_name !== row.template_name)
         ? '<small style="color:#6b7a8d">📋 ' + he(row.template_name) + ' · ' + he(row.language) + '</small>'
         : '<small style="color:#6b7a8d">' + he(row.language) + '</small>';
+
+      function fmtStat(val, pct, colorOk, colorWarn) {
+        if (val === null) return '<span style="color:#cbd5e0;font-size:.75rem">—</span>';
+        var color = pct !== null ? (pct >= 80 ? colorOk : (pct >= 50 ? '#856404' : colorWarn)) : colorOk;
+        var badge = '<span style="font-weight:700;color:' + color + '">' + val + '</span>';
+        return pct !== null ? badge + ' <small style="color:#a0aec0">(' + pct + '%)</small>' : badge;
+      }
+
+      var detBtn = row.has_tracking && row.campaign_id
+        ? '<button class="btn-secondary" style="padding:3px 10px;font-size:.73rem;white-space:nowrap" '
+          + 'onclick="verDetalleCampana(\'' + row.campaign_id + '\',\'' + he(row.campaign_name||row.template_name).replace(/'/g,"\\'") + '\')">'
+          + '🔍 Ver detalle</button>'
+        : '<span style="color:#cbd5e0;font-size:.75rem">Sin tracking</span>';
+
       h += '<tr>'
         + '<td><b>' + campaignLabel + '</b><br>' + tplLabel + '</td>'
         + '<td style="font-size:.78rem;color:#6b7a8d;white-space:nowrap">' + fmtFecha(row.created_at) + '</td>'
-        + '<td style="text-align:center">' + row.destinatarios + '</td>'
-        + '<td style="text-align:center"><span class="' + clsEnv + '">' + row.enviados + '</span></td>'
-        + '<td style="text-align:center">' + (row.fallidos > 0 ? '<span class="badge-err">' + row.fallidos + '</span>' : '<span style="color:#6b7a8d">0</span>') + '</td>'
-        + '<td style="text-align:center;font-weight:700;color:' + pctColor + '">' + pct + '%</td>'
+        + '<td style="text-align:center;font-weight:600">' + env + '</td>'
+        + '<td style="text-align:center">' + fmtStat(ent, pctEnt, '#155724', '#721c24') + '</td>'
+        + '<td style="text-align:center">' + fmtStat(lei, pctLei, '#283593', '#856404') + '</td>'
+        + '<td style="text-align:center">' + (failWh !== null
+            ? (failWh > 0 ? '<span class="badge-err">' + failWh + '</span>' : '<span style="color:#155724;font-weight:600">0</span>')
+            : '<span style="color:#cbd5e0;font-size:.75rem">—</span>') + '</td>'
+        + '<td style="text-align:center">' + detBtn + '</td>'
         + '</tr>';
     });
     tbody.innerHTML = h;
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#721c24">Error cargando historial</td></tr>';
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   DETALLE DE CAMPAÑA — modal
+   ══════════════════════════════════════════════════════ */
+async function verDetalleCampana(campaignId, campaignName) {
+  var modal = document.getElementById('dif-detail-modal');
+  document.getElementById('dif-det-titulo').textContent = campaignName || 'Detalle de campaña';
+  document.getElementById('dif-det-sub').textContent    = '⏳ Cargando estadísticas...';
+  document.getElementById('dc-total').textContent     = '—';
+  document.getElementById('dc-entregados').textContent = '—';
+  document.getElementById('dc-leidos').textContent    = '—';
+  document.getElementById('dc-fallidos').textContent  = '—';
+  document.getElementById('dif-det-funnel').innerHTML  = '';
+  document.getElementById('dif-det-errores').style.display   = 'none';
+  document.getElementById('dif-det-pendientes').style.display = 'none';
+  modal.style.display = 'flex';
+
+  try {
+    var r = await fetch('/inbox/difusiones/campana/' + encodeURIComponent(campaignId), {credentials:'include'});
+    var d = await r.json();
+    _renderDetalleCampana(d, campaignName);
+  } catch(e) {
+    document.getElementById('dif-det-sub').textContent = '❌ Error cargando datos: ' + e.message;
+  }
+}
+
+function cerrarDetalleCampana(evt) {
+  if (evt && evt.target !== document.getElementById('dif-detail-modal')) return;
+  document.getElementById('dif-detail-modal').style.display = 'none';
+}
+
+function _renderDetalleCampana(d, campaignName) {
+  var total    = d.total     || 0;
+  var ent      = d.entregados|| 0;
+  var lei      = d.leidos    || 0;
+  var fail     = d.fallidos  || 0;
+  var pend     = d.pendientes|| 0;
+  var errores  = d.errores   || [];
+
+  var pctEnt  = total > 0 ? Math.round(ent  / total * 100) : 0;
+  var pctLei  = total > 0 ? Math.round(lei  / total * 100) : 0;
+  var pctFail = total > 0 ? Math.round(fail / total * 100) : 0;
+
+  document.getElementById('dif-det-sub').textContent =
+    total + ' mensajes rastreados · ' + pctEnt + '% entregados · ' + pctLei + '% leídos';
+
+  document.getElementById('dc-total').textContent      = total;
+  document.getElementById('dc-entregados').textContent = ent + ' (' + pctEnt + '%)';
+  document.getElementById('dc-leidos').textContent     = lei + ' (' + pctLei + '%)';
+  document.getElementById('dc-fallidos').textContent   = fail + ' (' + pctFail + '%)';
+
+  // ── Funnel de entrega ──────────────────────────────
+  var funnelEl = document.getElementById('dif-det-funnel');
+  function mkFunnelRow(lbl, val, pct, color) {
+    var w = Math.max(pct, 2);
+    return '<div class="funnel-row">'
+      + '<span class="funnel-lbl">' + lbl + '</span>'
+      + '<div class="funnel-wrap"><div class="funnel-fill" style="width:' + w + '%;background:' + color + '">'
+      + (pct > 12 ? pct + '%' : '') + '</div></div>'
+      + '<span class="funnel-cnt">' + val + ' <small style="color:#a0aec0;font-weight:400">(' + pct + '%)</small></span>'
+      + '</div>';
+  }
+  funnelEl.innerHTML = '<h4 style="font-size:.82rem;font-weight:700;color:#4a5568;'
+    + 'text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">📊 Embudo de entrega</h4>'
+    + mkFunnelRow('Enviados',   total, 100,    '#4299e1')
+    + mkFunnelRow('Entregados', ent,   pctEnt, '#48bb78')
+    + mkFunnelRow('Leídos',     lei,   pctLei, '#667eea')
+    + (fail > 0 ? mkFunnelRow('Fallidos', fail, pctFail, '#fc8181') : '');
+
+  // ── Mensajes pendientes ─────────────────────────────
+  if (pend > 0) {
+    document.getElementById('dif-det-pend-cnt').textContent = pend;
+    document.getElementById('dif-det-pendientes').style.display = 'block';
+  }
+
+  // ── Tabla de errores ────────────────────────────────
+  if (errores.length > 0) {
+    var errEl = document.getElementById('dif-det-errores');
+    errEl.style.display = 'block';
+    var tbody = document.getElementById('dif-det-errbody');
+    tbody.innerHTML = errores.map(function(err) {
+      var nums = (err.numeros || []).map(function(n) {
+        // Enmascarar últimos 4 dígitos: 573001234567 → +57 300 123 ****
+        var s = String(n);
+        return s.length > 4 ? s.slice(0, -4).replace(/(\d{2})(\d{3})(\d*)/, '+$1 $2 $3').trim() + ' ****' : s;
+      });
+      var moreCount = (err.count || 0) - nums.length;
+      return '<tr>'
+        + '<td><b>' + he(err.description || 'Error desconocido') + '</b>'
+        + (err.code ? ' <span class="err-badge">Código ' + err.code + '</span>' : '') + '</td>'
+        + '<td style="text-align:center;font-weight:700;color:#b71c1c">' + err.count + '</td>'
+        + '<td><div class="err-nums">' + nums.join('<br>')
+          + (moreCount > 0 ? '<br><i>...y ' + moreCount + ' más</i>' : '') + '</div></td>'
+        + '</tr>';
+    }).join('');
   }
 }
 
@@ -2789,6 +3020,16 @@ function actualizarPreview() {
   btnsEl.style.display = btnsHtml ? '' : 'none';
   btnsEl.innerHTML     = btnsHtml;
 }
+
+/* Cerrar modal de detalle con Escape */
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var modal = document.getElementById('dif-detail-modal');
+    if (modal && modal.style.display !== 'none') {
+      modal.style.display = 'none';
+    }
+  }
+});
 
 /* Delegación de eventos para botones de remoción */
 document.addEventListener('click', function(e) {

@@ -30,6 +30,7 @@ from agent.memory import (
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
     registrar_difusion, obtener_difusiones,
     guardar_borrador_plantilla, obtener_borradores_plantillas, eliminar_borrador_plantilla,
+    guardar_mensaje_difusion, actualizar_status_difusion, obtener_detalle_campana,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
@@ -689,8 +690,44 @@ def extraer_marcador_tienda(respuesta: str) -> tuple[str, bool, str]:
     return respuesta, False, ''
 
 
+async def _procesar_status_difusion(status: dict) -> None:
+    """Procesa un status update de Meta (delivered/read/failed) para tracking de difusiones."""
+    wamid      = status.get("id", "")
+    status_val = status.get("status", "")   # sent | delivered | read | failed
+    ts_str     = status.get("timestamp", "")
+    errors     = status.get("errors", [])
+    error_code = int(errors[0].get("code", 0)) if errors else None
+    error_title = errors[0].get("title", "")   if errors else ""
+
+    if not wamid or status_val not in ("sent", "delivered", "read", "failed"):
+        return
+    try:
+        await actualizar_status_difusion(
+            wamid=wamid,
+            status=status_val,
+            error_code=error_code,
+            error_title=error_title,
+            ts_str=ts_str,
+        )
+        if status_val == "failed":
+            logger.info(f"[webhook-status] FAILED wamid={wamid[:20]} code={error_code} title={error_title}")
+    except Exception as e:
+        logger.debug(f"[webhook-status] Error actualizando {wamid[:20]}: {e}")
+
+
 @app.post("/webhook")
 async def webhook_handler(request: Request):
+    # ── Status updates de Meta (delivery/read/failed) ─────────────────────────
+    # Llegan en el mismo POST que los mensajes, en el campo "statuses"
+    try:
+        raw_body = await request.json()
+        for entry in raw_body.get("entry", []):
+            for change in entry.get("changes", []):
+                for status in change.get("value", {}).get("statuses", []):
+                    asyncio.create_task(_procesar_status_difusion(status))
+    except Exception:
+        pass  # no interferir con el flujo normal de mensajes
+
     try:
         mensajes = await proveedor.parsear_webhook(request)
 
@@ -1516,12 +1553,23 @@ async def inbox_broadcast_send(
                 if r.status_code == 200:
                     enviados += 1
                     try:
-                        resp_data = r.json()
-                        wamid = resp_data.get("messages", [{}])[0].get("id", "?")
+                        resp_data  = r.json()
+                        wamid      = resp_data.get("messages", [{}])[0].get("id", "")
                         msg_status = resp_data.get("messages", [{}])[0].get("message_status", "?")
                     except Exception:
-                        wamid, msg_status = "?", "?"
-                    logger.info(f"[broadcast] Enviado a {tel[-4:]}**** wamid={wamid} status={msg_status}")
+                        wamid, msg_status = "", "?"
+                    logger.info(f"[broadcast] Enviado a {tel[-4:]}**** wamid={wamid[:20] if wamid else '?'} status={msg_status}")
+                    # Guardar wamid para tracking de delivery/lectura
+                    if wamid and campaign_id:
+                        try:
+                            await guardar_mensaje_difusion(
+                                wamid=wamid,
+                                campaign_id=campaign_id,
+                                campaign_name=campaign_name,
+                                telefono=tel,
+                            )
+                        except Exception as _e:
+                            logger.debug(f"[broadcast] No se guardó wamid: {_e}")
                 else:
                     fallidos += 1
                     try:
@@ -1572,8 +1620,21 @@ async def inbox_difusiones_historial(
     """Devuelve el historial de difusiones enviadas desde el inbox."""
     if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    rows = await obtener_difusiones(50)
+    rows = await obtener_difusiones(100)
     return JSONResponse(content={"difusiones": rows})
+
+
+@app.get("/inbox/difusiones/campana/{campaign_id:path}")
+async def inbox_difusion_detalle(
+    campaign_id: str,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Detalle de una campaña: breakdown de entregados, leídos, fallidos con motivo de error."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    data = await obtener_detalle_campana(campaign_id)
+    return JSONResponse(content=data)
 
 
 @app.get("/inbox/metricas/resumen")

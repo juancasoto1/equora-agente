@@ -89,6 +89,51 @@ class Difusion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+# Mapa de códigos de error de Meta → descripción amigable en español
+_META_ERROR_CODES: dict[int, str] = {
+    130429: "Límite de tasa alcanzado — intenta más tarde",
+    131000: "Error interno de Meta",
+    131005: "Permiso denegado por Meta",
+    131008: "Parámetro requerido ausente",
+    131009: "Valor de parámetro inválido",
+    131016: "Servicio de Meta no disponible temporalmente",
+    131021: "Número no está en la lista de prueba (sandbox)",
+    131026: "Número no registrado en WhatsApp",
+    131031: "Cuenta de empresa bloqueada por Meta",
+    131047: "Ventana de 24 h expirada — el cliente debe escribir primero",
+    131048: "Límite de mensajes no solicitados alcanzado",
+    131049: "Mensaje expirado antes de entregarse",
+    131051: "Tipo de mensaje no soportado",
+    131053: "Error al subir archivo multimedia",
+    132001: "Plantilla no encontrada en Meta",
+    132005: "Error al personalizar variables de la plantilla",
+    132007: "Texto de plantilla viola políticas de formato",
+    132008: "Formato de parámetro no coincide con la plantilla",
+    132009: "Número de parámetros no coincide con la plantilla",
+    132012: "Número de botones no coincide con la plantilla",
+    132015: "URL del botón inválida",
+    133010: "Número de teléfono del negocio no verificado",
+}
+
+
+class DifusionMensaje(Base):
+    """Tracking individual de cada mensaje de difusión: delivery, lectura y errores."""
+    __tablename__ = "difusion_mensajes"
+
+    id:            Mapped[int]            = mapped_column(Integer, primary_key=True, autoincrement=True)
+    wamid:         Mapped[str]            = mapped_column(String(200), unique=True, index=True)
+    campaign_id:   Mapped[str]            = mapped_column(String(100), index=True, default="")
+    campaign_name: Mapped[str]            = mapped_column(String(200), default="")
+    telefono:      Mapped[str]            = mapped_column(String(50),  index=True, default="")
+    status:        Mapped[str]            = mapped_column(String(20),  default="sent")  # sent/delivered/read/failed
+    error_code:    Mapped[int | None]     = mapped_column(Integer,     nullable=True)
+    error_title:   Mapped[str]            = mapped_column(String(500), default="")
+    sent_at:       Mapped[datetime]       = mapped_column(DateTime,    default=datetime.utcnow)
+    delivered_at:  Mapped[datetime | None]= mapped_column(DateTime,    nullable=True)
+    read_at:       Mapped[datetime | None]= mapped_column(DateTime,    nullable=True)
+    failed_at:     Mapped[datetime | None]= mapped_column(DateTime,    nullable=True)
+
+
 class EstadoConversacion(Base):
     """Timestamps por conversación para gestionar seguimientos automáticos."""
     __tablename__ = "estado_conversacion"
@@ -116,11 +161,13 @@ async def inicializar_db():
             "ALTER TABLE estado_conversacion ADD COLUMN modo_humano INTEGER DEFAULT 0",
             "ALTER TABLE difusiones ADD COLUMN campaign_name TEXT DEFAULT ''",
             "ALTER TABLE difusiones ADD COLUMN campaign_id TEXT DEFAULT ''",
+            # difusion_mensajes se crea via create_all, pero por si acaso:
+            "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
         ):
             try:
                 await conn.exec_driver_sql(sql)
             except Exception:
-                pass  # ya existe
+                pass  # ya existe o no aplica
 
 
 async def guardar_mensaje(telefono: str, role: str, content: str):
@@ -611,6 +658,125 @@ async def eliminar_borrador_plantilla(bid: int) -> bool:
         return False
 
 
+async def guardar_mensaje_difusion(
+    wamid: str,
+    campaign_id: str,
+    campaign_name: str,
+    telefono: str,
+) -> None:
+    """Registra un mensaje de difusión recién enviado para tracking posterior."""
+    if not wamid or not campaign_id:
+        return
+    async with async_session() as session:
+        msg = DifusionMensaje(
+            wamid=wamid,
+            campaign_id=campaign_id,
+            campaign_name=campaign_name,
+            telefono=telefono,
+            status="sent",
+            sent_at=datetime.utcnow(),
+        )
+        session.add(msg)
+        try:
+            await session.commit()
+        except Exception:
+            pass  # duplicado (wamid ya existe)
+
+
+async def actualizar_status_difusion(
+    wamid: str,
+    status: str,
+    error_code: int | None = None,
+    error_title: str = "",
+    ts_str: str = "",
+) -> None:
+    """Actualiza el estado de entrega/lectura/fallo de un mensaje de difusión.
+    Llamado desde el webhook de Meta cuando llega un status update."""
+    if not wamid or not status:
+        return
+    try:
+        ts = datetime.utcfromtimestamp(int(ts_str)) if ts_str else datetime.utcnow()
+    except (ValueError, OSError, OverflowError):
+        ts = datetime.utcnow()
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(DifusionMensaje).where(DifusionMensaje.wamid == wamid)
+        )
+        msg = result.scalar_one_or_none()
+        if not msg:
+            return  # no era un mensaje de difusión rastreado
+
+        msg.status = status
+        if status == "delivered":
+            if not msg.delivered_at:
+                msg.delivered_at = ts
+        elif status == "read":
+            if not msg.delivered_at:
+                msg.delivered_at = ts   # read implica delivered
+            if not msg.read_at:
+                msg.read_at = ts
+        elif status == "failed":
+            msg.failed_at = ts or datetime.utcnow()
+            if error_code is not None:
+                msg.error_code = error_code
+            # Descripción amigable: prioridad a la de nuestro mapa, luego la de Meta
+            friendly = _META_ERROR_CODES.get(error_code or 0, "")
+            msg.error_title = friendly or error_title or f"Error {error_code}"
+
+        await session.commit()
+
+
+async def obtener_detalle_campana(campaign_id: str) -> dict:
+    """Estadísticas detalladas de una campaña: resumen + errores agrupados."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(DifusionMensaje)
+            .where(DifusionMensaje.campaign_id == campaign_id)
+            .order_by(DifusionMensaje.sent_at.asc())
+        )
+        msgs = result.scalars().all()
+
+    total       = len(msgs)
+    entregados  = sum(1 for m in msgs if m.status in ("delivered", "read"))
+    leidos      = sum(1 for m in msgs if m.status == "read")
+    fallidos    = sum(1 for m in msgs if m.status == "failed")
+    pendientes  = total - entregados - fallidos  # aún sin confirmar entrega
+
+    # Agrupar fallidos por código de error
+    from collections import defaultdict
+    err_groups: dict[int, dict] = defaultdict(lambda: {"count": 0, "numeros": [], "title": ""})
+    for m in msgs:
+        if m.status == "failed":
+            key = m.error_code or 0
+            err_groups[key]["count"] += 1
+            err_groups[key]["title"] = m.error_title or _META_ERROR_CODES.get(key, f"Código {key}")
+            if len(err_groups[key]["numeros"]) < 8:
+                err_groups[key]["numeros"].append(m.telefono)
+
+    errores_agrupados = sorted(
+        [
+            {
+                "code": k,
+                "description": v["title"],
+                "count": v["count"],
+                "numeros": v["numeros"],
+            }
+            for k, v in err_groups.items()
+        ],
+        key=lambda x: -x["count"],
+    )
+
+    return {
+        "total":      total,
+        "entregados": entregados,
+        "leidos":     leidos,
+        "fallidos":   fallidos,
+        "pendientes": pendientes,
+        "errores":    errores_agrupados,
+    }
+
+
 async def registrar_difusion(
     template_name: str,
     language: str,
@@ -640,41 +806,60 @@ async def registrar_difusion(
 
 
 async def obtener_difusiones(limite: int = 100) -> list[dict]:
-    """Lista de campañas de difusión agrupadas por campaign_id.
-    Registros antiguos sin campaign_id se muestran individualmente."""
+    """Campañas de difusión agrupadas por campaign_id, con stats en vivo de delivery/lectura."""
     from sqlalchemy import text
     async with async_session() as session:
-        # Agrupa los lotes por campaign_id; lotes sin campaign_id usan su propio id.
-        sql = text("""
+        # ── Query 1: base de difusiones (agrupada) ──────────────────────────
+        sql_base = text("""
             SELECT
                 COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))  AS grp,
                 COALESCE(NULLIF(campaign_name,''), template_name)   AS campaign_name,
                 template_name,
                 language,
-                SUM(destinatarios) AS destinatarios,
-                SUM(enviados)      AS enviados,
-                SUM(fallidos)      AS fallidos,
-                MIN(created_at)    AS created_at
+                SUM(destinatarios)                                  AS destinatarios,
+                SUM(enviados)                                       AS enviados,
+                MIN(created_at)                                     AS created_at,
+                MAX(CASE WHEN campaign_id != '' THEN campaign_id ELSE NULL END) AS campaign_id
             FROM difusiones
             GROUP BY COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))
             ORDER BY MIN(created_at) DESC
             LIMIT :lim
         """)
-        result = await session.execute(sql, {"lim": limite})
-        rows = result.fetchall()
-        return [
-            {
-                "campaign_name": row.campaign_name or row.template_name,
-                "template_name": row.template_name,
-                "language":      row.language,
-                "destinatarios": row.destinatarios,
-                "enviados":      row.enviados,
-                "fallidos":      row.fallidos,
-                "created_at":    row.created_at if isinstance(row.created_at, str)
-                                 else (row.created_at.isoformat() if row.created_at else ""),
-            }
-            for row in rows
-        ]
+        r1 = await session.execute(sql_base, {"lim": limite})
+        rows = r1.fetchall()
+
+        # ── Query 2: stats en vivo de difusion_mensajes ──────────────────────
+        sql_stats = text("""
+            SELECT
+                campaign_id,
+                COUNT(CASE WHEN status IN ('delivered','read') THEN 1 END) AS entregados,
+                COUNT(CASE WHEN status = 'read'                THEN 1 END) AS leidos,
+                COUNT(CASE WHEN status = 'failed'              THEN 1 END) AS fallidos_wh
+            FROM difusion_mensajes
+            GROUP BY campaign_id
+        """)
+        r2 = await session.execute(sql_stats)
+        stats_map = {row.campaign_id: row for row in r2.fetchall()}
+
+    resultado = []
+    for row in rows:
+        cid   = row.campaign_id       # None si registro antiguo sin campaign_id
+        stats = stats_map.get(cid) if cid else None
+        resultado.append({
+            "campaign_id":   cid or "",
+            "campaign_name": row.campaign_name or row.template_name,
+            "template_name": row.template_name,
+            "language":      row.language,
+            "destinatarios": row.destinatarios,
+            "enviados":      row.enviados,
+            "entregados":    stats.entregados if stats else None,
+            "leidos":        stats.leidos     if stats else None,
+            "fallidos_wh":   stats.fallidos_wh if stats else None,
+            "has_tracking":  cid is not None,
+            "created_at":    row.created_at if isinstance(row.created_at, str)
+                             else (row.created_at.isoformat() if row.created_at else ""),
+        })
+    return resultado
 
 
 async def obtener_historial_con_timestamps(telefono: str, limite: int = 150) -> list[dict]:
