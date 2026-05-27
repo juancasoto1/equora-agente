@@ -1870,7 +1870,8 @@ tr:hover td{background:#f8f9fa}
             <!-- Próximas integraciones -->
             <div class="cfg-card" style="border-style:dashed;background:#fafbfc">
               <div class="cfg-card-title" style="color:#6b7a8d;margin-bottom:12px">🚀 Próximas integraciones</div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;font-size:.83rem;color:#6b7a8d">
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;font-size:.83rem;color:#6b7a8d">
+                <div>🛒 <b style="color:#4a5568">Shopify OAuth</b><br><span style="font-size:.76rem">Conectar con un clic cuando Andrea sea app de Shopify</span></div>
                 <div>📧 Email (SendGrid / Resend)</div>
                 <div>📅 Calendly / Google Calendar</div>
                 <div>🗃️ CRM (HubSpot / Pipedrive)</div>
