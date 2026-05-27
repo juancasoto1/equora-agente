@@ -1954,19 +1954,20 @@ async def inbox_revertir_opt_out(
 _CONFIG_KEYS_ALLOWED = {
     "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
     "ANTHROPIC_API_KEY", "AI_MODEL",
-    "SHOPIFY_ACCESS_TOKEN", "SHOPIFY_STORE_DOMAIN", "SHOPIFY_WEBHOOK_SECRET",
+    "SHOPIFY_STORE", "SHOPIFY_STOREFRONT_TOKEN", "SHOPIFY_ADMIN_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
 }
 
 _CONFIG_META = {
-    "META_ACCESS_TOKEN":    {"label": "Token de acceso", "tipo": "secret"},
-    "META_PHONE_NUMBER_ID": {"label": "Phone Number ID", "tipo": "plain"},
-    "META_WABA_ID":         {"label": "WABA ID",         "tipo": "plain"},
-    "META_VERIFY_TOKEN":    {"label": "Verify Token",    "tipo": "plain"},
-    "ANTHROPIC_API_KEY":    {"label": "API Key",         "tipo": "secret"},
-    "AI_MODEL":             {"label": "Modelo IA",       "tipo": "plain"},
-    "SHOPIFY_ACCESS_TOKEN": {"label": "Access Token",    "tipo": "secret"},
-    "SHOPIFY_STORE_DOMAIN": {"label": "Dominio",         "tipo": "plain"},
-    "SHOPIFY_WEBHOOK_SECRET": {"label": "Webhook Secret","tipo": "secret"},
+    "META_ACCESS_TOKEN":       {"label": "Token de acceso",    "tipo": "secret"},
+    "META_PHONE_NUMBER_ID":    {"label": "Phone Number ID",    "tipo": "plain"},
+    "META_WABA_ID":            {"label": "WABA ID",            "tipo": "plain"},
+    "META_VERIFY_TOKEN":       {"label": "Verify Token",       "tipo": "plain"},
+    "ANTHROPIC_API_KEY":       {"label": "API Key",            "tipo": "secret"},
+    "AI_MODEL":                {"label": "Modelo IA",          "tipo": "plain"},
+    "SHOPIFY_STORE":           {"label": "Dominio tienda",     "tipo": "plain"},
+    "SHOPIFY_STOREFRONT_TOKEN":{"label": "Storefront Token",   "tipo": "secret"},
+    "SHOPIFY_ADMIN_TOKEN":     {"label": "Admin Token",        "tipo": "secret"},
+    "SHOPIFY_WEBHOOK_SECRET":  {"label": "Webhook Secret",     "tipo": "secret"},
 }
 
 
@@ -2049,19 +2050,31 @@ async def inbox_test_config(
             return JSONResponse(content={"ok": False, "error": err})
 
         elif service == "shopify":
-            sh_token = _val("SHOPIFY_ACCESS_TOKEN")
-            domain   = _val("SHOPIFY_STORE_DOMAIN").replace("https://","").replace("http://","").rstrip("/")
-            if not sh_token or not domain:
-                return JSONResponse(content={"ok": False, "error": "Token o dominio no configurado"})
+            # Andrea usa la Storefront API (no Admin API) para catálogo y checkouts
+            sf_token = _val("SHOPIFY_STOREFRONT_TOKEN")
+            domain   = _val("SHOPIFY_STORE").replace("https://","").replace("http://","").rstrip("/")
+            if not sf_token or not domain:
+                return JSONResponse(content={"ok": False, "error": "Storefront Token o dominio no configurado"})
+            # Consulta mínima a la Storefront GraphQL API para verificar credenciales
+            gql = '{"query":"{ shop { name } }"}'
             async with httpx.AsyncClient(timeout=12) as cli:
-                r = await cli.get(
-                    f"https://{domain}/admin/api/2024-01/shop.json",
-                    headers={"X-Shopify-Access-Token": sh_token},
+                r = await cli.post(
+                    f"https://{domain}/api/2024-10/graphql.json",
+                    content=gql,
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-Shopify-Storefront-Access-Token": sf_token,
+                    },
                 )
             if r.status_code == 200:
-                shop = r.json().get("shop", {})
-                return JSONResponse(content={"ok": True, "msg": f"✅ Tienda conectada · {shop.get('name', domain)}"})
-            return JSONResponse(content={"ok": False, "error": "Token inválido o dominio incorrecto"})
+                data = r.json()
+                errors = data.get("errors")
+                if errors:
+                    msg = errors[0].get("message", "Token inválido") if errors else "Token inválido"
+                    return JSONResponse(content={"ok": False, "error": msg})
+                shop_name = (data.get("data") or {}).get("shop", {}).get("name", domain)
+                return JSONResponse(content={"ok": True, "msg": f"✅ Tienda conectada · {shop_name}"})
+            return JSONResponse(content={"ok": False, "error": f"Error HTTP {r.status_code} — verifica el dominio y el token"})
 
         elif service == "anthropic":
             api_key = _val("ANTHROPIC_API_KEY")

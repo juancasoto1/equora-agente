@@ -1767,14 +1767,15 @@ tr:hover td{background:#f8f9fa}
                     <span class="req">*</span>
                   </div>
                   <div class="cfg-help-box" id="help-sh-domain">
-                    El dominio de tu tienda en formato <code>mitienda.myshopify.com</code><br>
-                    Lo encuentras en: Admin de Shopify → <b>Configuración → Dominios</b>.<br>
-                    <b>No incluyas</b> <code>https://</code> al inicio ni la barra al final.<br>
-                    Ejemplo: <code>equoradistribuciones.myshopify.com</code>
+                    El subdominio interno de tu tienda Shopify, siempre termina en <code>.myshopify.com</code><br>
+                    <b>Dónde encontrarlo:</b> Shopify Admin → <b>Configuración → Dominios</b> → busca el dominio que dice <em>"mitienda.myshopify.com"</em><br>
+                    ⚠️ <b>No uses</b> el dominio personalizado (ej: <code>equoradistribuciones.com</code>) — usa el <code>.myshopify.com</code><br>
+                    <b>No incluyas</b> <code>https://</code> al inicio ni <code>/</code> al final.<br>
+                    Ejemplo: <code>equora-6.myshopify.com</code>
                   </div>
                   <div class="cfg-field-row">
                     <input type="text" id="cfg-sh-domain" class="f-inp" placeholder="mitienda.myshopify.com" autocomplete="off" style="flex:1">
-                    <span class="cfg-field-status" id="st-SHOPIFY_STORE_DOMAIN"></span>
+                    <span class="cfg-field-status" id="st-SHOPIFY_STORE"></span>
                   </div>
                 </div>
               </div>
@@ -1783,25 +1784,28 @@ tr:hover td{background:#f8f9fa}
                 <div class="cfg-step-num">2</div>
                 <div class="cfg-step-body">
                   <div class="cfg-field-lbl">
-                    Access Token (Admin API)
-                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-token')" type="button" aria-label="Ayuda">?</button>
+                    Token de Storefront API
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-sftoken')" type="button" aria-label="Ayuda">?</button>
                     <span class="req">*</span>
                   </div>
-                  <div class="cfg-help-box" id="help-sh-token">
-                    <b>Cómo crear el token:</b><br>
-                    1. Shopify Admin → <b>Configuración → Apps y canales de ventas</b><br>
-                    2. Clic en <b>"Desarrollar apps"</b> → <b>"Crear una app"</b><br>
-                    3. Nombre: "Equora Andrea" → <b>Configurar permisos del Admin API</b>:<br>
-                    &nbsp;&nbsp;✅ <code>read_products</code> &nbsp; ✅ <code>read_customers</code> &nbsp; ✅ <code>write_draft_orders</code> &nbsp; ✅ <code>read_orders</code><br>
-                    4. Clic en <b>"Instalar app"</b> → copia el <b>"Token de acceso del Admin API"</b><br>
-                    Empieza con <code>shpat_…</code>
+                  <div class="cfg-help-box" id="help-sh-sftoken">
+                    Andrea usa la <b>Storefront API</b> para leer el catálogo de productos y crear checkouts.<br>
+                    <b>Cómo obtener el token:</b><br>
+                    1. Shopify Admin → <b>Configuración → Apps y canales de ventas → Desarrollar apps</b><br>
+                    2. Selecciona tu app (o crea una) → pestaña <b>"Credenciales de la API"</b><br>
+                    3. En la sección <b>"Storefront API"</b> → activa los permisos:<br>
+                    &nbsp;&nbsp;✅ <code>unauthenticated_read_product_listings</code><br>
+                    &nbsp;&nbsp;✅ <code>unauthenticated_write_checkouts</code><br>
+                    &nbsp;&nbsp;✅ <code>unauthenticated_read_checkouts</code><br>
+                    4. Copia el <b>"Token de acceso de Storefront API"</b><br>
+                    Formato nuevo: empieza con <code>atkn_…</code> &nbsp;|&nbsp; Formato anterior: cadena de 32 caracteres hex
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-token" class="f-inp" placeholder="shpat_..." autocomplete="off">
-                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-token',this)" type="button">👁</button>
+                      <input type="password" id="cfg-sh-sftoken" class="f-inp" placeholder="atkn_xxxx... o hex de 32 chars" autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-sftoken',this)" type="button">👁</button>
                     </div>
-                    <span class="cfg-field-status" id="st-SHOPIFY_ACCESS_TOKEN"></span>
+                    <span class="cfg-field-status" id="st-SHOPIFY_STOREFRONT_TOKEN"></span>
                   </div>
                 </div>
               </div>
@@ -1810,14 +1814,39 @@ tr:hover td{background:#f8f9fa}
                 <div class="cfg-step-num">3</div>
                 <div class="cfg-step-body">
                   <div class="cfg-field-lbl">
+                    Token Admin API
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-admintoken')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge">Opcional</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-sh-admintoken">
+                    Solo se usa para leer las <b>zonas y tarifas de envío</b> directamente de tu configuración en Shopify.<br>
+                    Si no lo configuras, el sistema usa los valores de envío fijos definidos en las variables de entorno.<br>
+                    <b>Cómo obtenerlo:</b> misma app del paso 2 → pestaña <b>"Credenciales de la API"</b> → sección <b>"Admin API"</b> →<br>
+                    activa <code>read_shipping</code> → copia el token de Admin API.<br>
+                    Empieza con <code>shpat_…</code> (formato anterior) o <code>atkn_…</code> (formato nuevo)
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-sh-admintoken" class="f-inp" placeholder="shpat_... o atkn_..." autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-admintoken',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-SHOPIFY_ADMIN_TOKEN"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">4</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
                     Webhook Secret
                     <button class="cfg-help-btn" onclick="toggleHelp('help-sh-whsec')" type="button" aria-label="Ayuda">?</button>
                     <span class="opt-badge">Opcional</span>
                   </div>
                   <div class="cfg-help-box" id="help-sh-whsec">
-                    Verifica que las notificaciones de órdenes llegan realmente de Shopify.<br>
-                    Lo encuentras en: Shopify Admin → <b>Configuración → Notificaciones → Webhooks → "Clave secreta del webhook"</b>.<br>
-                    Si no lo configuras, el sistema funciona igual pero no puede validar el origen de las notificaciones de nuevas órdenes.
+                    Permite verificar que las notificaciones de nuevas órdenes llegan <b>realmente de Shopify</b> y no de terceros.<br>
+                    <b>Dónde está:</b> Shopify Admin → <b>Configuración → Notificaciones → Webhooks</b> → sección <b>"Clave secreta del webhook"</b>.<br>
+                    Si no lo configuras, el sistema acepta todas las notificaciones de órdenes sin verificar su origen.
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
@@ -4250,11 +4279,12 @@ async function cargarConfiguracion() {
     META_PHONE_NUMBER_ID: 'cfg-meta-pid',
     META_WABA_ID:         'cfg-meta-waba',
     META_VERIFY_TOKEN:    'cfg-meta-verify',
-    ANTHROPIC_API_KEY:    'cfg-ant-key',
-    AI_MODEL:             'cfg-ant-model',
-    SHOPIFY_STORE_DOMAIN: 'cfg-sh-domain',
-    SHOPIFY_ACCESS_TOKEN: 'cfg-sh-token',
-    SHOPIFY_WEBHOOK_SECRET:'cfg-sh-whsec',
+    ANTHROPIC_API_KEY:       'cfg-ant-key',
+    AI_MODEL:                'cfg-ant-model',
+    SHOPIFY_STORE:           'cfg-sh-domain',
+    SHOPIFY_STOREFRONT_TOKEN:'cfg-sh-sftoken',
+    SHOPIFY_ADMIN_TOKEN:     'cfg-sh-admintoken',
+    SHOPIFY_WEBHOOK_SECRET:  'cfg-sh-whsec',
   };
 
   try {
@@ -4290,7 +4320,7 @@ async function cargarConfiguracion() {
     var ok = function(k) { return d[k] && d[k].configurado; };
     var metaOk  = ok('META_ACCESS_TOKEN') && ok('META_PHONE_NUMBER_ID');
     var aiOk    = ok('ANTHROPIC_API_KEY');
-    var shopOk  = ok('SHOPIFY_ACCESS_TOKEN') && ok('SHOPIFY_STORE_DOMAIN');
+    var shopOk  = ok('SHOPIFY_STOREFRONT_TOKEN') && ok('SHOPIFY_STORE');
 
     _setCfgPill('pill-meta',       metaOk ? 'ok' : 'error');
     _setCfgPill('pill-anthropic',  aiOk   ? 'ok' : 'error');
@@ -4324,12 +4354,14 @@ async function guardarConfig(service) {
     if (k) payload.ANTHROPIC_API_KEY = k;
     if (m) payload.AI_MODEL          = m;
   } else if (service === 'shopify') {
-    var sd = (document.getElementById('cfg-sh-domain').value  || '').trim();
-    var st = (document.getElementById('cfg-sh-token').value   || '').trim();
-    var sw = (document.getElementById('cfg-sh-whsec').value   || '').trim();
-    if (sd) payload.SHOPIFY_STORE_DOMAIN    = sd;
-    if (st) payload.SHOPIFY_ACCESS_TOKEN    = st;
-    if (sw) payload.SHOPIFY_WEBHOOK_SECRET  = sw;
+    var sd  = (document.getElementById('cfg-sh-domain').value     || '').trim();
+    var sf  = (document.getElementById('cfg-sh-sftoken').value    || '').trim();
+    var sad = (document.getElementById('cfg-sh-admintoken').value || '').trim();
+    var sw  = (document.getElementById('cfg-sh-whsec').value      || '').trim();
+    if (sd)  payload.SHOPIFY_STORE            = sd;
+    if (sf)  payload.SHOPIFY_STOREFRONT_TOKEN = sf;
+    if (sad) payload.SHOPIFY_ADMIN_TOKEN      = sad;
+    if (sw)  payload.SHOPIFY_WEBHOOK_SECRET   = sw;
   }
 
   if (!Object.keys(payload).length) {
@@ -4383,10 +4415,10 @@ async function testConexion(service) {
     if (k) payload.ANTHROPIC_API_KEY = k;
     if (m) payload.AI_MODEL          = m;
   } else if (service === 'shopify') {
-    var sd = (document.getElementById('cfg-sh-domain').value || '').trim();
-    var st = (document.getElementById('cfg-sh-token').value  || '').trim();
-    if (sd) payload.SHOPIFY_STORE_DOMAIN = sd;
-    if (st) payload.SHOPIFY_ACCESS_TOKEN = st;
+    var sd = (document.getElementById('cfg-sh-domain').value  || '').trim();
+    var sf = (document.getElementById('cfg-sh-sftoken').value || '').trim();
+    if (sd) payload.SHOPIFY_STORE            = sd;
+    if (sf) payload.SHOPIFY_STOREFRONT_TOKEN = sf;
   }
 
   _showCfgResult(resultId, null, '🔄 Probando conexión…');
