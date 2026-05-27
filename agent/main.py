@@ -33,6 +33,7 @@ from agent.memory import (
     guardar_mensaje_difusion, actualizar_status_difusion, obtener_detalle_campana,
     obtener_metricas_internas, obtener_campana_reciente_para_telefono,
     marcar_opt_out, verificar_opt_out, revertir_opt_out, obtener_opt_outs,
+    obtener_clientes_con_estado,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
@@ -1913,6 +1914,21 @@ async def inbox_opt_outs(
         raise HTTPException(status_code=401, detail="No autorizado")
     rows = await obtener_opt_outs()
     return JSONResponse(content={"opt_outs": rows, "total": len(rows)})
+
+
+@app.get("/inbox/api/clientes")
+async def inbox_clientes(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Base de clientes con estado de engagement (activo/tibio/frío/baja)."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    clientes = await obtener_clientes_con_estado()
+    resumen = {"total": len(clientes), "activo": 0, "tibio": 0, "frio": 0, "baja": 0}
+    for c in clientes:
+        resumen[c["estado"]] = resumen.get(c["estado"], 0) + 1
+    return JSONResponse(content={"clientes": clientes, "resumen": resumen})
 
 
 @app.delete("/inbox/api/opt-outs/{telefono}")

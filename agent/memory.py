@@ -608,6 +608,87 @@ async def obtener_opt_outs() -> list[dict]:
         ]
 
 
+async def obtener_clientes_con_estado(limite: int = 500) -> list[dict]:
+    """
+    Devuelve la base de clientes con su estado de engagement:
+      activo  — último mensaje hace < 30 días
+      tibio   — último mensaje hace 30-90 días
+      frio    — último mensaje hace > 90 días
+      baja    — registrado en opt_outs
+    """
+    ahora = datetime.utcnow()
+    async with async_session() as session:
+        # Subconsulta: último mensaje por teléfono y su timestamp
+        sub = (
+            select(
+                Mensaje.telefono,
+                func.max(Mensaje.timestamp).label("last_msg"),
+                func.count(Mensaje.id).label("total_msgs"),
+            )
+            .where(~Mensaje.telefono.like("test-%"))
+            .group_by(Mensaje.telefono)
+            .subquery()
+        )
+        query = (
+            select(sub, Cliente, OptOut)
+            .outerjoin(Cliente, sub.c.telefono == Cliente.telefono)
+            .outerjoin(OptOut,  sub.c.telefono == OptOut.telefono)
+            .order_by(sub.c.last_msg.desc())
+            .limit(limite)
+        )
+        result = await session.execute(query)
+        rows = result.all()
+
+    clientes = []
+    for row in rows:
+        tel        = row.telefono
+        last_msg   = row.last_msg
+        total_msgs = row.total_msgs or 0
+        cliente    = row.Cliente
+        opt_out    = row.OptOut
+
+        # Calcular días desde el último mensaje
+        if isinstance(last_msg, str):
+            try:
+                last_msg = datetime.fromisoformat(last_msg.replace("Z", ""))
+            except Exception:
+                last_msg = None
+
+        if opt_out:
+            estado = "baja"
+        elif last_msg is None:
+            estado = "frio"
+        else:
+            dias = (ahora - last_msg).days
+            if dias < 30:
+                estado = "activo"
+            elif dias < 90:
+                estado = "tibio"
+            else:
+                estado = "frio"
+
+        nombre = ""
+        pedidos = 0
+        ciudad = ""
+        if cliente:
+            nombre  = f"{cliente.nombres or ''} {cliente.apellidos or ''}".strip()
+            pedidos = cliente.pedidos_realizados or 0
+            ciudad  = cliente.ciudad or ""
+
+        clientes.append({
+            "telefono":   tel,
+            "nombre":     nombre or "",
+            "ciudad":     ciudad,
+            "estado":     estado,
+            "pedidos":    pedidos,
+            "total_msgs": total_msgs,
+            "last_msg":   last_msg.isoformat() if last_msg else "",
+            "opt_out_motivo": opt_out.motivo if opt_out else "",
+        })
+
+    return clientes
+
+
 # ── Inbox / panel de administración ─────────────────────────────────────────
 
 async def get_modo_humano(telefono: str) -> bool:

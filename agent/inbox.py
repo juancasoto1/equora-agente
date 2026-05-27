@@ -11,6 +11,7 @@ def obtener_login_html(error: bool = False) -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>Inbox — Equora</title>
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
@@ -38,7 +39,9 @@ button:hover{{opacity:.88}}
   <p class="sub">Equora Distribuciones</p>
   {err}
   <form method="POST" action="/inbox/login">
-    <input type="password" name="password" placeholder="Contraseña de acceso" autofocus required>
+    <label for="pwd" style="display:none">Contraseña</label>
+    <input type="password" id="pwd" name="password" placeholder="Contraseña de acceso"
+           autocomplete="current-password" autofocus required>
     <button type="submit">Entrar →</button>
   </form>
 </div>
@@ -52,6 +55,7 @@ _HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>Andrea · Equora</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -432,6 +436,88 @@ tr:hover td{background:#f8f9fa}
 
 /* ── loading spinner ── */
 .loading-txt{color:#6b7a8d;font-size:.85rem;padding:32px;text-align:center}
+
+/* ── Focus visible — accesibilidad teclado ── */
+.nav-item:focus-visible{outline:2px solid var(--az);outline-offset:-2px;border-radius:4px}
+.ci:focus-visible{outline:2px solid var(--az);outline-offset:-2px}
+#srinput:focus-visible{outline:2px solid var(--az);outline-offset:0}
+#ti:focus-visible{outline:2px solid var(--az);outline-offset:0}
+#sendbtn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.btn-primary:focus-visible,.btn-secondary:focus-visible{outline:2px solid var(--az);outline-offset:2px}
+.modal-close:focus-visible{outline:2px solid var(--az);outline-offset:2px}
+
+/* ── Reduced motion — respetar preferencias del SO ── */
+@media (prefers-reduced-motion: reduce) {
+  *{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  .funnel-fill{transition:none}
+  .prog-bar{transition:none}
+}
+
+/* ══════════════════════════════════════════════
+   SECCIÓN: CLIENTES
+   ══════════════════════════════════════════════ */
+#sec-clientes{flex-direction:column}
+
+/* Stat cards de estado */
+.estado-cards{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px}
+@media(max-width:900px){.estado-cards{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:560px){.estado-cards{grid-template-columns:repeat(2,1fr)}}
+.estado-card{border-radius:14px;padding:18px 16px;border:1px solid transparent;cursor:pointer;
+  transition:transform .15s,box-shadow .15s;user-select:none;position:relative;overflow:hidden}
+.estado-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.10)}
+.estado-card.sel-estado{box-shadow:0 0 0 2px var(--az) inset}
+.estado-card::before{content:'';position:absolute;top:0;right:0;width:60px;height:60px;
+  border-radius:50%;opacity:.08;transform:translate(20px,-20px)}
+.ec-total {background:#f0f9f6;border-color:#9ae6c4}.ec-total::before{background:#00a884}
+.ec-activo{background:#f0fdf4;border-color:#86efac}.ec-activo::before{background:#16a34a}
+.ec-tibio {background:#fffbeb;border-color:#fcd34d}.ec-tibio::before{background:#d97706}
+.ec-frio  {background:#eff6ff;border-color:#93c5fd}.ec-frio::before{background:#2563eb}
+.ec-baja  {background:#f8fafc;border-color:#cbd5e1}.ec-baja::before{background:#64748b}
+.ec-val{font-size:2rem;font-weight:800;line-height:1;margin-bottom:6px}
+.ec-total .ec-val{color:#00875a}
+.ec-activo .ec-val{color:#15803d}
+.ec-tibio  .ec-val{color:#b45309}
+.ec-frio   .ec-val{color:#1d4ed8}
+.ec-baja   .ec-val{color:#475569}
+.ec-lbl{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4a5568}
+.ec-sub{font-size:.7rem;color:#6b7a8d;margin-top:3px}
+
+/* Filter pills */
+.cli-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.cli-pill{padding:6px 16px;border-radius:20px;border:1.5px solid #e0e4e8;background:#fff;
+  font-size:.8rem;font-weight:600;color:#4a5568;cursor:pointer;transition:all .12s;user-select:none}
+.cli-pill:hover{border-color:#b0bec5;color:#2d3748}
+.cli-pill.active{background:var(--az);border-color:var(--az);color:#fff}
+.cli-search{flex:1;min-width:160px;max-width:280px;position:relative}
+.cli-search input{width:100%;padding:7px 12px 7px 34px;border-radius:20px;border:1.5px solid #e0e4e8;
+  font-size:.82rem;color:#2d3748;outline:none;transition:border-color .15s;background:#fff}
+.cli-search input:focus{border-color:var(--az)}
+.cli-search::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  font-size:.8rem;pointer-events:none}
+
+/* Tabla clientes */
+.cli-tbl-wrap{background:#fff;border-radius:14px;border:1px solid #e0e4e8;overflow:hidden}
+.cli-tbl-info{padding:12px 20px;background:#f8f9fa;border-bottom:1px solid #e0e4e8;
+  font-size:.78rem;color:#6b7a8d;display:flex;align-items:center;gap:8px}
+.cli-tbl-info strong{color:#2d3748}
+.cli-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:1rem;font-weight:700;flex-shrink:0;color:#fff}
+.cli-av-activo{background:linear-gradient(135deg,#16a34a,#22c55e)}
+.cli-av-tibio {background:linear-gradient(135deg,#d97706,#f59e0b)}
+.cli-av-frio  {background:linear-gradient(135deg,#1d4ed8,#3b82f6)}
+.cli-av-baja  {background:linear-gradient(135deg,#475569,#94a3b8)}
+.est-pill{border-radius:20px;padding:3px 10px;font-size:.7rem;font-weight:700;
+  display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.est-activo{background:#dcfce7;color:#15803d}
+.est-tibio {background:#fef9c3;color:#854d0e}
+.est-frio  {background:#dbeafe;color:#1e40af}
+.est-baja  {background:#f1f5f9;color:#475569}
+.cli-act-btn{background:none;border:1px solid #e0e4e8;border-radius:7px;padding:4px 10px;
+  font-size:.75rem;color:#4a5568;cursor:pointer;transition:all .12s;white-space:nowrap}
+.cli-act-btn:hover{border-color:var(--az);color:var(--az)}
+.cli-empty{padding:64px 20px;text-align:center;color:#94a3b8}
+.cli-empty-ic{font-size:3rem;margin-bottom:12px;opacity:.5}
+.cli-empty-txt{font-size:.9rem;font-weight:500;color:#64748b}
 </style>
 </head>
 <body>
@@ -454,23 +540,32 @@ tr:hover td{background:#f8f9fa}
     <!-- ── LEFT NAV ── -->
     <nav id="nav">
       <div class="nav-section">Principal</div>
-      <div class="nav-item active" data-sec="conversaciones" onclick="showSec('conversaciones')">
-        <span class="ni">💬</span> Conversaciones
-        <span class="nb" id="conv-badge" style="display:none">0</span>
+      <div class="nav-item active" role="button" tabindex="0" data-sec="conversaciones"
+           onclick="showSec('conversaciones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('conversaciones')">
+        <span class="ni" aria-hidden="true">💬</span> Conversaciones
+        <span class="nb" id="conv-badge" style="display:none" aria-live="polite">0</span>
       </div>
-      <div class="nav-item" data-sec="difusiones" onclick="showSec('difusiones')">
-        <span class="ni">📢</span> Difusiones
+      <div class="nav-item" role="button" tabindex="0" data-sec="difusiones"
+           onclick="showSec('difusiones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('difusiones')">
+        <span class="ni" aria-hidden="true">📢</span> Difusiones
       </div>
       <div class="nav-section">Gestión</div>
-      <div class="nav-item" data-sec="plantillas" onclick="showSec('plantillas')">
-        <span class="ni">📋</span> Plantillas
+      <div class="nav-item" role="button" tabindex="0" data-sec="clientes"
+           onclick="showSec('clientes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('clientes')">
+        <span class="ni" aria-hidden="true">👥</span> Clientes
       </div>
-      <div class="nav-item" data-sec="metricas" onclick="showSec('metricas')">
-        <span class="ni">📊</span> Métricas
+      <div class="nav-item" role="button" tabindex="0" data-sec="plantillas"
+           onclick="showSec('plantillas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('plantillas')">
+        <span class="ni" aria-hidden="true">📋</span> Plantillas
+      </div>
+      <div class="nav-item" role="button" tabindex="0" data-sec="metricas"
+           onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')">
+        <span class="ni" aria-hidden="true">📊</span> Métricas
       </div>
       <div class="nav-section">Sistema</div>
-      <div class="nav-item" data-sec="configuracion" onclick="showSec('configuracion')">
-        <span class="ni">⚙️</span> Configuración
+      <div class="nav-item" role="button" tabindex="0" data-sec="configuracion"
+           onclick="showSec('configuracion')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('configuracion')">
+        <span class="ni" aria-hidden="true">⚙️</span> Configuración
       </div>
       <div class="nav-footer">
         <small>AgentKit v1.0</small>
@@ -491,7 +586,9 @@ tr:hover td{background:#f8f9fa}
             <span class="cnt" id="total">0</span>
           </div>
           <div id="srch">
-            <input id="srinput" placeholder="Buscar por nombre o número..." oninput="filtrar()">
+            <label for="srinput" style="display:none">Buscar conversaciones</label>
+            <input id="srinput" placeholder="Buscar por nombre o número…"
+                   aria-label="Buscar conversaciones" oninput="filtrar()">
           </div>
           <div id="cl"></div>
         </aside>
@@ -504,7 +601,7 @@ tr:hover td{background:#f8f9fa}
 
           <div id="cv">
             <div id="ch">
-              <button id="back" onclick="volverLista()">‹</button>
+              <button id="back" onclick="volverLista()" aria-label="Volver a conversaciones">‹</button>
               <div class="av2">👤</div>
               <div class="inf2">
                 <div class="nm2" id="cnm">—</div>
@@ -514,8 +611,9 @@ tr:hover td{background:#f8f9fa}
 
             <div id="mbar">
               <span class="lbl">Andrea responde</span>
-              <label class="tog">
-                <input type="checkbox" id="togInput" onchange="toggleModo()">
+              <label class="tog" aria-label="Activar modo humano">
+                <input type="checkbox" id="togInput" onchange="toggleModo()"
+                       aria-label="Modo humano — cuando está activo, Andrea no responde">
                 <span class="sl"></span>
               </label>
               <span class="lbl">Modo humano</span>
@@ -525,9 +623,11 @@ tr:hover td{background:#f8f9fa}
             <div id="msgs"></div>
 
             <div id="ib">
-              <textarea id="ti" rows="1" placeholder="Escribe un mensaje y presiona Enter..."
+              <label for="ti" style="display:none">Mensaje</label>
+              <textarea id="ti" rows="1" placeholder="Escribe un mensaje y presiona Enter…"
+                aria-label="Escribe un mensaje"
                 onkeydown="onKey(event)" oninput="autoResize()"></textarea>
-              <button id="sendbtn" onclick="sendMsg()">➤</button>
+              <button id="sendbtn" onclick="sendMsg()" aria-label="Enviar mensaje">➤</button>
             </div>
           </div>
         </section>
@@ -1278,6 +1378,97 @@ tr:hover td{background:#f8f9fa}
       </div><!-- /sec-metricas -->
 
       <!-- ═══════════════════════════════════════
+           SECCIÓN: CLIENTES
+           ═══════════════════════════════════════ -->
+      <div class="sec sec-light" id="sec-clientes">
+        <div class="sec-hdr">
+          <div>
+            <h1>👥 Clientes</h1>
+            <p>Base de clientes segmentada por nivel de engagement</p>
+          </div>
+          <button class="btn-secondary" style="padding:7px 16px;font-size:.82rem"
+                  onclick="cargarClientes()" aria-label="Actualizar lista de clientes">↺ Actualizar</button>
+        </div>
+        <div class="sec-body">
+
+          <!-- Stat cards por estado -->
+          <div class="estado-cards" id="cli-cards">
+            <div class="estado-card ec-total" onclick="filtrarClientes('todos')" role="button" tabindex="0"
+                 aria-label="Ver todos los clientes">
+              <div class="ec-val" id="ec-total">—</div>
+              <div class="ec-lbl">Total clientes</div>
+              <div class="ec-sub">toda la base</div>
+            </div>
+            <div class="estado-card ec-activo" onclick="filtrarClientes('activo')" role="button" tabindex="0"
+                 aria-label="Ver clientes activos">
+              <div class="ec-val" id="ec-activo">—</div>
+              <div class="ec-lbl">🟢 Activos</div>
+              <div class="ec-sub">últimos 30 días</div>
+            </div>
+            <div class="estado-card ec-tibio" onclick="filtrarClientes('tibio')" role="button" tabindex="0"
+                 aria-label="Ver clientes tibios">
+              <div class="ec-val" id="ec-tibio">—</div>
+              <div class="ec-lbl">🟡 Tibios</div>
+              <div class="ec-sub">30 – 90 días</div>
+            </div>
+            <div class="estado-card ec-frio" onclick="filtrarClientes('frio')" role="button" tabindex="0"
+                 aria-label="Ver clientes fríos">
+              <div class="ec-val" id="ec-frio">—</div>
+              <div class="ec-lbl">🔵 Fríos</div>
+              <div class="ec-sub">más de 90 días</div>
+            </div>
+            <div class="estado-card ec-baja" onclick="filtrarClientes('baja')" role="button" tabindex="0"
+                 aria-label="Ver clientes dados de baja">
+              <div class="ec-val" id="ec-baja">—</div>
+              <div class="ec-lbl">🚫 Bajas</div>
+              <div class="ec-sub">opt-out activo</div>
+            </div>
+          </div>
+
+          <!-- Filtros + búsqueda -->
+          <div class="cli-filters" role="group" aria-label="Filtrar clientes por estado">
+            <button class="cli-pill active" data-est="todos"   onclick="filtrarClientes('todos')"  >Todos</button>
+            <button class="cli-pill"        data-est="activo"  onclick="filtrarClientes('activo')" >🟢 Activos</button>
+            <button class="cli-pill"        data-est="tibio"   onclick="filtrarClientes('tibio')"  >🟡 Tibios</button>
+            <button class="cli-pill"        data-est="frio"    onclick="filtrarClientes('frio')"   >🔵 Fríos</button>
+            <button class="cli-pill"        data-est="baja"    onclick="filtrarClientes('baja')"   >🚫 Baja</button>
+            <div class="cli-search" style="margin-left:auto">
+              <label for="cli-q" style="display:none">Buscar cliente</label>
+              <input id="cli-q" type="search" placeholder="Buscar nombre o número…"
+                     aria-label="Buscar cliente" oninput="renderClientes()">
+            </div>
+          </div>
+
+          <!-- Tabla -->
+          <div class="cli-tbl-wrap">
+            <div class="cli-tbl-info">
+              Mostrando <strong id="cli-count">—</strong> clientes
+            </div>
+            <div style="overflow-x:auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:44px"></th>
+                    <th>Nombre / Teléfono</th>
+                    <th>Ciudad</th>
+                    <th>Último contacto</th>
+                    <th>Estado</th>
+                    <th style="text-align:center">Pedidos</th>
+                    <th style="text-align:center">Mensajes</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="cli-tbody">
+                  <tr><td colspan="8" class="loading-txt">Cargando clientes…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /sec-clientes -->
+
+      <!-- ═══════════════════════════════════════
            SECCIÓN: CONFIGURACIÓN
            ═══════════════════════════════════════ -->
       <div class="sec sec-light" id="sec-configuracion">
@@ -1412,27 +1603,33 @@ function showSec(id) {
     if (id === 'difusiones')    { cargarTemplates(); cargarHistorialDif(); }
     if (id === 'plantillas')    { cargarTablaPlantillas(); actualizarSubcat(); setTimeout(_hookPreview, 200); }
     if (id === 'metricas')      { cargarMetricas(); }
+    if (id === 'clientes')      { cargarClientes(); }
     if (id === 'configuracion') { cargarConfiguracion(); }
   }
+  // Reflejar sección en el hash de la URL para deep-linking
+  try { history.replaceState(null, '', '#' + id); } catch(e) {}
 }
 
 /* ══════════════════════════════════════════════════════
    UTILS
    ══════════════════════════════════════════════════════ */
+var _dtfHoy  = new Intl.DateTimeFormat('es-CO', {hour:'2-digit', minute:'2-digit', hour12:true});
+var _dtfAnio = new Intl.DateTimeFormat('es-CO', {day:'2-digit', month:'short'});
+
 function fmt(ts) {
   if (!ts) return '';
   var d = new Date(ts.endsWith('Z') ? ts : ts + 'Z');
   var now = new Date();
   var diff = (now - d) / 1000;
-  if (diff < 60) return 'ahora';
-  if (diff < 3600) return Math.floor(diff / 60) + ' min';
-  if (diff < 86400) return d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
-  return d.toLocaleDateString('es-CO', {day:'2-digit', month:'2-digit'});
+  if (diff < 60)    return 'ahora';
+  if (diff < 3600)  return Math.floor(diff / 60) + ' min';
+  if (diff < 86400) return _dtfHoy.format(d);
+  return _dtfAnio.format(d);
 }
 function fmtH(ts) {
   if (!ts) return '';
   var d = new Date(ts.endsWith('Z') ? ts : ts + 'Z');
-  return d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+  return _dtfHoy.format(d);
 }
 function fmtFecha(ts) {
   if (!ts) return '';
@@ -1501,8 +1698,9 @@ function renderLista() {
     var sel = c.telefono === TEL ? ' sel' : '';
     var badge    = c.modo_humano ? '<span class="hmbadge">HUMANO</span>' : '';
     var optBadge = c.opt_out    ? '<span class="optbadge">🚫 Baja</span>' : '';
-    h += '<div class="ci' + sel + '" data-tel="' + he(c.telefono) + '">'
-       + '<div class="av">👤</div>'
+    h += '<div class="ci' + sel + '" role="button" tabindex="0" data-tel="' + he(c.telefono) + '"'
+       + ' aria-label="Conversación con ' + he(nm) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \')abrirConv(this.dataset.tel)">'
+       + '<div class="av" aria-hidden="true">👤</div>'
        + '<div class="inf">'
        + '<div class="nm">' + he(nm) + '</div>'
        + '<div class="lm">' + icono + preview + '</div>'
@@ -1626,6 +1824,119 @@ function autoResize() {
   var ti = document.getElementById('ti');
   ti.style.height = 'auto';
   ti.style.height = Math.min(ti.scrollHeight, 120) + 'px';
+}
+
+/* ══════════════════════════════════════════════════════
+   CLIENTES
+   ══════════════════════════════════════════════════════ */
+var _CLI_DATA   = [];   // todos los clientes cargados
+var _CLI_ESTADO = 'todos'; // filtro activo
+
+function cargarClientes() {
+  document.getElementById('cli-tbody').innerHTML =
+    '<tr><td colspan="8" class="loading-txt">Cargando…</td></tr>';
+  api('/inbox/api/clientes').then(function(data) {
+    _CLI_DATA = data.clientes || [];
+    var r = data.resumen || {};
+    document.getElementById('ec-total').textContent  = (r.total  || 0).toLocaleString('es-CO');
+    document.getElementById('ec-activo').textContent = (r.activo || 0).toLocaleString('es-CO');
+    document.getElementById('ec-tibio').textContent  = (r.tibio  || 0).toLocaleString('es-CO');
+    document.getElementById('ec-frio').textContent   = (r.frio   || 0).toLocaleString('es-CO');
+    document.getElementById('ec-baja').textContent   = (r.baja   || 0).toLocaleString('es-CO');
+    renderClientes();
+  }).catch(function() {
+    document.getElementById('cli-tbody').innerHTML =
+      '<tr><td colspan="8" class="loading-txt">Error al cargar clientes</td></tr>';
+  });
+}
+
+function filtrarClientes(estado) {
+  _CLI_ESTADO = estado;
+  // Actualizar pills
+  document.querySelectorAll('.cli-pill').forEach(function(p) {
+    p.classList.toggle('active', p.dataset.est === estado);
+  });
+  // Highlight card seleccionada
+  document.querySelectorAll('.estado-card').forEach(function(c) {
+    c.classList.remove('sel-estado');
+  });
+  renderClientes();
+}
+
+function renderClientes() {
+  var q = (document.getElementById('cli-q').value || '').trim().toLowerCase();
+  var lista = _CLI_DATA.filter(function(c) {
+    var estadoOk = _CLI_ESTADO === 'todos' || c.estado === _CLI_ESTADO;
+    var busqOk   = !q ||
+      c.telefono.includes(q) ||
+      (c.nombre  || '').toLowerCase().includes(q) ||
+      (c.ciudad  || '').toLowerCase().includes(q);
+    return estadoOk && busqOk;
+  });
+
+  document.getElementById('cli-count').textContent = lista.length.toLocaleString('es-CO');
+
+  if (!lista.length) {
+    document.getElementById('cli-tbody').innerHTML =
+      '<tr><td colspan="8">' +
+      '<div class="cli-empty">' +
+      '<div class="cli-empty-ic">👥</div>' +
+      '<div class="cli-empty-txt">No hay clientes en este segmento</div>' +
+      '</div></td></tr>';
+    return;
+  }
+
+  var cfg = {
+    activo: {lbl:'Activo',   cls:'est-activo', avcls:'cli-av-activo'},
+    tibio:  {lbl:'Tibio',    cls:'est-tibio',  avcls:'cli-av-tibio'},
+    frio:   {lbl:'Frío',     cls:'est-frio',   avcls:'cli-av-frio'},
+    baja:   {lbl:'Baja',     cls:'est-baja',   avcls:'cli-av-baja'},
+  };
+
+  var h = '';
+  for (var i = 0; i < lista.length; i++) {
+    var c  = lista[i];
+    var cf = cfg[c.estado] || cfg.frio;
+    var nm = c.nombre || '';
+    var ini = nm ? nm.charAt(0).toUpperCase() : c.telefono.slice(-2);
+    var disp = nm || ('+' + c.telefono);
+    var tel  = '+' + c.telefono;
+    var lastRel = c.last_msg ? fmtRelativo(c.last_msg) : '—';
+    h += '<tr>'
+       + '<td><div class="cli-av ' + cf.avcls + '" aria-hidden="true">' + he(ini) + '</div></td>'
+       + '<td><div style="font-weight:600;font-size:.86rem;color:#1a2332">' + he(disp) + '</div>'
+       +     '<div style="font-size:.74rem;color:#6b7a8d">' + he(tel) + '</div></td>'
+       + '<td style="color:#4a5568;font-size:.83rem">' + he(c.ciudad || '—') + '</td>'
+       + '<td style="font-size:.82rem;color:#4a5568">' + he(lastRel) + '</td>'
+       + '<td><span class="est-pill ' + cf.cls + '">' + cf.lbl + '</span></td>'
+       + '<td style="text-align:center;font-weight:700;color:#2d3748">' + (c.pedidos || 0) + '</td>'
+       + '<td style="text-align:center;color:#6b7a8d">' + (c.total_msgs || 0) + '</td>'
+       + '<td><button class="cli-act-btn" onclick="verChatCliente(' + JSON.stringify(c.telefono) + ')"'
+       +    ' aria-label="Ver chat de ' + he(disp) + '">Ver chat</button></td>'
+       + '</tr>';
+  }
+  document.getElementById('cli-tbody').innerHTML = h;
+}
+
+function fmtRelativo(ts) {
+  if (!ts) return '—';
+  try {
+    var d   = new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+    var seg = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (seg < 60)    return 'Hace un momento';
+    if (seg < 3600)  return 'Hace ' + Math.floor(seg / 60) + ' min';
+    if (seg < 86400) return 'Hoy';
+    var dias = Math.floor(seg / 86400);
+    if (dias === 1)  return 'Ayer';
+    if (dias < 30)   return 'Hace ' + dias + ' días';
+    if (dias < 90)   return 'Hace ' + Math.floor(dias / 30) + ' mes' + (dias >= 60 ? 'es' : '');
+    return 'Hace ' + Math.floor(dias / 30) + ' meses';
+  } catch(e) { return '—'; }
+}
+
+function verChatCliente(tel) {
+  showSec('conversaciones');
+  setTimeout(function() { abrirConv(tel); }, 100);
 }
 
 /* ── INIT conversaciones ── */
