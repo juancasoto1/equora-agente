@@ -155,6 +155,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .meta2{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
 .cts{font-size:.68rem;color:var(--ts)}
 .hmbadge{background:var(--red);color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
+.optbadge{background:#64748b;color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
 
 /* chat vacío */
 #empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--ts)}
@@ -1498,14 +1499,15 @@ function renderLista() {
     var icono = c.ultimo_role === 'user' ? '👤 ' : '🤖 ';
     var preview = he((c.ultimo_mensaje || '').substring(0, 60));
     var sel = c.telefono === TEL ? ' sel' : '';
-    var badge = c.modo_humano ? '<span class="hmbadge">HUMANO</span>' : '';
+    var badge    = c.modo_humano ? '<span class="hmbadge">HUMANO</span>' : '';
+    var optBadge = c.opt_out    ? '<span class="optbadge">🚫 Baja</span>' : '';
     h += '<div class="ci' + sel + '" data-tel="' + he(c.telefono) + '">'
        + '<div class="av">👤</div>'
        + '<div class="inf">'
        + '<div class="nm">' + he(nm) + '</div>'
        + '<div class="lm">' + icono + preview + '</div>'
        + '</div>'
-       + '<div class="meta2"><span class="cts">' + fmt(c.timestamp) + '</span>' + badge + '</div>'
+       + '<div class="meta2"><span class="cts">' + fmt(c.timestamp) + '</span>' + optBadge + badge + '</div>'
        + '</div>';
   }
   document.getElementById('cl').innerHTML = h;

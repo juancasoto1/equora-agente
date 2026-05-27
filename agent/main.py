@@ -32,6 +32,7 @@ from agent.memory import (
     guardar_borrador_plantilla, obtener_borradores_plantillas, eliminar_borrador_plantilla,
     guardar_mensaje_difusion, actualizar_status_difusion, obtener_detalle_campana,
     obtener_metricas_internas, obtener_campana_reciente_para_telefono,
+    marcar_opt_out, verificar_opt_out, revertir_opt_out, obtener_opt_outs,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
@@ -716,6 +717,47 @@ async def _procesar_status_difusion(status: dict) -> None:
         logger.debug(f"[webhook-status] Error actualizando {wamid[:20]}: {e}")
 
 
+# ── Palabras clave de opt-out (baja de difusiones) ───────────────────────────
+# Solo palabras con intención EXPLÍCITA de darse de baja.
+# "No gracias", "No", "Cancelar" NO están aquí porque tienen otros contextos válidos.
+PALABRAS_OPT_OUT: set[str] = {
+    "stop",
+    "baja",
+    "dar de baja",
+    "darme de baja",
+    "dame de baja",
+    "quitar de la lista",
+    "quitarme de la lista",
+    "no quiero más mensajes",
+    "no quiero recibir más",
+    "no quiero recibir más mensajes",
+    "cancelar suscripción",
+    "cancelar suscripcion",
+    "desuscribir",
+    "desuscribirme",
+    "unsubscribe",
+}
+
+
+def _es_solicitud_opt_out(texto: str) -> bool:
+    """
+    Retorna True si el mensaje es una solicitud explícita de darse de baja.
+    Incluye el botón 'Dar de baja' (quick reply de plantilla) y palabras clave exactas.
+    """
+    t = texto.strip().lower()
+    # Coincidencia exacta primero (más segura — evita falsos positivos)
+    if t in PALABRAS_OPT_OUT:
+        return True
+    # El botón quick reply de la plantilla llega exactamente como "Dar de baja"
+    if t == "dar de baja":
+        return True
+    # Frases que contienen palabras clave de opt-out claras
+    for palabra in PALABRAS_OPT_OUT:
+        if len(palabra) > 6 and palabra in t:  # solo frases largas para evitar "baja" en otro contexto
+            return True
+    return False
+
+
 def _es_respuesta_automatica(texto: str) -> bool:
     """
     Detecta si un mensaje parece ser una respuesta automática de WhatsApp Business.
@@ -791,6 +833,21 @@ async def webhook_handler(request: Request):
             # Evita que Andrea quede atrapada respondiendo bots de otros negocios
             if _es_respuesta_automatica(msg.texto):
                 continue  # ignorar silenciosamente
+
+            # ── Opt-out: el cliente pide darse de baja de las difusiones ──────
+            if _es_solicitud_opt_out(msg.texto):
+                await marcar_opt_out(msg.telefono, motivo=msg.texto.strip()[:200])
+                await guardar_mensaje(msg.telefono, "user", msg.texto)
+                respuesta_baja = (
+                    "Listo ✅ Te quitamos de nuestra lista de difusiones. "
+                    "No volverás a recibir mensajes masivos de nuestra parte.\n\n"
+                    "Si en algún momento cambias de opinión y quieres volver a recibir "
+                    "nuestras ofertas y novedades, solo escríbenos. 🌿"
+                )
+                await proveedor.enviar_mensaje(msg.telefono, respuesta_baja)
+                await guardar_mensaje(msg.telefono, "assistant", respuesta_baja)
+                logger.info(f"[opt-out] {msg.telefono} dado de baja — motivo: {msg.texto[:50]}")
+                continue  # no pasar por Claude
 
             # ── Orden directa desde catálogo nativo WhatsApp ──────────────────
             # El cliente armó su carrito en WhatsApp y confirmó — bypaseamos Claude
@@ -1565,9 +1622,15 @@ async def inbox_broadcast_send(
     api_url = f"https://graph.facebook.com/{api_ver}/{phone_number_id}/messages"
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
-    enviados = 0
-    fallidos = 0
-    errores  = []
+    enviados   = 0
+    fallidos   = 0
+    opt_outs   = 0
+    errores    = []
+
+    # Pre-cargar lista de opt-outs para filtrar sin consulta por cada destinatario
+    opt_out_set: set[str] = {r["telefono"] for r in await obtener_opt_outs()}
+    if opt_out_set:
+        logger.info(f"[broadcast] {len(opt_out_set)} números en opt-out — serán saltados")
 
     # Si el template tiene IMAGE header, subir la imagen una sola vez y cachear el media_id
     header_media_id: str | None = None
@@ -1582,6 +1645,12 @@ async def inbox_broadcast_send(
             if not tel or len(tel) < 10:
                 fallidos += 1
                 errores.append(f"Número inválido: {dest.get('phone')}")
+                continue
+
+            # Saltar números dados de baja
+            if tel in opt_out_set:
+                opt_outs += 1
+                logger.info(f"[broadcast] {tel[-4:]}**** saltado — opt-out")
                 continue
 
             # Variables específicas de este destinatario
@@ -1663,7 +1732,10 @@ async def inbox_broadcast_send(
             # Cadencia: 10 mensajes/segundo
             await asyncio.sleep(0.1)
 
-    logger.info(f"[broadcast] Difusión '{template_name}': {enviados} enviados, {fallidos} fallidos")
+    logger.info(
+        f"[broadcast] Difusión '{template_name}': "
+        f"{enviados} enviados, {fallidos} fallidos, {opt_outs} opt-outs saltados"
+    )
 
     # Registrar resultado en BD para el historial de difusiones
     try:
@@ -1681,9 +1753,10 @@ async def inbox_broadcast_send(
         logger.warning(f"[broadcast] No se pudo registrar difusión en BD: {e}")
 
     return JSONResponse(content={
-        "enviados": enviados,
-        "fallidos": fallidos,
-        "errores":  errores[:20],
+        "enviados":  enviados,
+        "fallidos":  fallidos,
+        "opt_outs":  opt_outs,
+        "errores":   errores[:20],
     })
 
 
@@ -1828,6 +1901,32 @@ async def inbox_metricas_interno(
     except Exception as e:
         logger.error(f"[metricas-interno] Error: {e}", exc_info=True)
         return JSONResponse(content={"error": str(e) or type(e).__name__})
+
+
+@app.get("/inbox/api/opt-outs")
+async def inbox_opt_outs(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Lista de números dados de baja de difusiones masivas."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    rows = await obtener_opt_outs()
+    return JSONResponse(content={"opt_outs": rows, "total": len(rows)})
+
+
+@app.delete("/inbox/api/opt-outs/{telefono}")
+async def inbox_revertir_opt_out(
+    telefono: str,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Reactiva un número para recibir difusiones (el cliente cambió de opinión)."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    await revertir_opt_out(telefono)
+    logger.info(f"[opt-out] {telefono} reactivado desde inbox")
+    return JSONResponse(content={"ok": True})
 
 
 @app.post("/inbox/plantillas/subir-header")

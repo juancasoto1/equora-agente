@@ -147,6 +147,15 @@ class EstadoConversacion(Base):
     actualizado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class OptOut(Base):
+    """Números que pidieron ser dados de baja de las difusiones masivas."""
+    __tablename__ = "opt_outs"
+
+    telefono:  Mapped[str]      = mapped_column(String(50), primary_key=True)
+    motivo:    Mapped[str]      = mapped_column(String(200), default="")  # "STOP", "DAR DE BAJA", etc.
+    creado_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 async def inicializar_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -163,6 +172,8 @@ async def inicializar_db():
             "ALTER TABLE difusiones ADD COLUMN campaign_id TEXT DEFAULT ''",
             # difusion_mensajes se crea via create_all, pero por si acaso:
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
+            # opt_outs se crea via create_all, índice por si acaso:
+            "CREATE INDEX IF NOT EXISTS ix_opt_outs_telefono ON opt_outs (telefono)",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -549,6 +560,54 @@ async def verificar_cierre_enviado(telefono: str) -> bool:
         return bool(estado and estado.cierre_at)
 
 
+# ── Opt-out — gestión de bajas de difusiones ─────────────────────────────────
+
+async def marcar_opt_out(telefono: str, motivo: str = "") -> None:
+    """Registra que este número no quiere recibir más difusiones masivas."""
+    async with async_session() as session:
+        existente = await session.get(OptOut, telefono)
+        if not existente:
+            session.add(OptOut(
+                telefono=telefono,
+                motivo=motivo[:200],
+                creado_at=datetime.utcnow(),
+            ))
+            await session.commit()
+
+
+async def verificar_opt_out(telefono: str) -> bool:
+    """Retorna True si el número está dado de baja de las difusiones."""
+    async with async_session() as session:
+        registro = await session.get(OptOut, telefono)
+        return registro is not None
+
+
+async def revertir_opt_out(telefono: str) -> None:
+    """Reactiva el número para recibir difusiones (el cliente cambió de opinión)."""
+    async with async_session() as session:
+        registro = await session.get(OptOut, telefono)
+        if registro:
+            await session.delete(registro)
+            await session.commit()
+
+
+async def obtener_opt_outs() -> list[dict]:
+    """Devuelve la lista completa de números dados de baja."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(OptOut).order_by(OptOut.creado_at.desc())
+        )
+        rows = result.scalars().all()
+        return [
+            {
+                "telefono": r.telefono,
+                "motivo": r.motivo,
+                "fecha": r.creado_at.isoformat() if r.creado_at else "",
+            }
+            for r in rows
+        ]
+
+
 # ── Inbox / panel de administración ─────────────────────────────────────────
 
 async def get_modo_humano(telefono: str) -> bool:
@@ -579,10 +638,11 @@ async def obtener_todas_conversaciones() -> list[dict]:
             .subquery()
         )
         query = (
-            select(Mensaje, EstadoConversacion, Cliente)
+            select(Mensaje, EstadoConversacion, Cliente, OptOut)
             .join(sub, Mensaje.id == sub.c.max_id)
             .outerjoin(EstadoConversacion, Mensaje.telefono == EstadoConversacion.telefono)
             .outerjoin(Cliente, Mensaje.telefono == Cliente.telefono)
+            .outerjoin(OptOut, Mensaje.telefono == OptOut.telefono)
             .where(~Mensaje.telefono.like("test-%"))
             .order_by(Mensaje.timestamp.desc())
             .limit(300)
@@ -590,7 +650,7 @@ async def obtener_todas_conversaciones() -> list[dict]:
         result = await session.execute(query)
         rows = result.all()
         convs = []
-        for msg, estado, cliente in rows:
+        for msg, estado, cliente, opt_out in rows:
             nombre = ""
             if cliente:
                 nombre = f"{cliente.nombres or ''} {cliente.apellidos or ''}".strip()
@@ -601,6 +661,7 @@ async def obtener_todas_conversaciones() -> list[dict]:
                 "ultimo_role": msg.role,
                 "timestamp": msg.timestamp.isoformat() if msg.timestamp else "",
                 "modo_humano": bool(estado.modo_humano) if estado else False,
+                "opt_out": opt_out is not None,
             })
         return convs
 
