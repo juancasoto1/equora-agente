@@ -156,6 +156,15 @@ class OptOut(Base):
     creado_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class ConfigValue(Base):
+    """Valores de configuración dinámica guardados en BD (sobrescriben variables de entorno)."""
+    __tablename__ = "config_values"
+
+    clave:         Mapped[str]      = mapped_column(String(100), primary_key=True)
+    valor:         Mapped[str]      = mapped_column(Text, default="")
+    actualizado_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 async def inicializar_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -174,6 +183,8 @@ async def inicializar_db():
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
             # opt_outs se crea via create_all, índice por si acaso:
             "CREATE INDEX IF NOT EXISTS ix_opt_outs_telefono ON opt_outs (telefono)",
+            # config_values: índice (la tabla se crea via create_all)
+            "CREATE INDEX IF NOT EXISTS ix_config_values_clave ON config_values (clave)",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -1364,3 +1375,53 @@ async def obtener_historial_con_timestamps(telefono: str, limite: int = 150) -> 
             }
             for msg in mensajes
         ]
+
+
+# ── Configuración dinámica ──────────────────────────────────────────────────
+
+async def get_config_value(clave: str) -> str | None:
+    """Lee un valor de configuración desde la BD. Retorna None si no existe."""
+    async with async_session() as session:
+        row = await session.get(ConfigValue, clave)
+        return row.valor if row and row.valor else None
+
+
+async def set_config_value(clave: str, valor: str) -> None:
+    """Guarda o actualiza un valor de configuración en la BD."""
+    async with async_session() as session:
+        row = await session.get(ConfigValue, clave)
+        ahora = datetime.utcnow()
+        if row:
+            row.valor = valor
+            row.actualizado_at = ahora
+        else:
+            session.add(ConfigValue(clave=clave, valor=valor, actualizado_at=ahora))
+        await session.commit()
+
+
+async def get_all_config_values() -> dict[str, str]:
+    """Devuelve todos los valores de configuración como dict {clave: valor}."""
+    async with async_session() as session:
+        result = await session.execute(select(ConfigValue))
+        return {row.clave: row.valor for row in result.scalars().all() if row.valor}
+
+
+async def resolve_setting(clave: str, default: str = "") -> str:
+    """Lee el valor de BD primero; si no existe, usa la variable de entorno."""
+    db_val = await get_config_value(clave)
+    if db_val:
+        return db_val
+    return os.getenv(clave, default)
+
+
+async def cargar_config_en_env() -> None:
+    """Al iniciar, carga los valores de config_values de la BD en os.environ.
+    Así todas las partes del sistema que leen os.getenv() reciben los valores
+    guardados por el usuario sin necesidad de reiniciar."""
+    try:
+        valores = await get_all_config_values()
+        for clave, valor in valores.items():
+            if valor:
+                os.environ[clave] = valor
+    except Exception:
+        pass  # La tabla puede no existir aún en el primer arranque

@@ -34,6 +34,7 @@ from agent.memory import (
     obtener_metricas_internas, obtener_campana_reciente_para_telefono,
     marcar_opt_out, verificar_opt_out, revertir_opt_out, obtener_opt_outs,
     obtener_clientes_con_estado,
+    get_config_value, set_config_value, get_all_config_values, cargar_config_en_env,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html
 from agent.providers import obtener_proveedor
@@ -134,7 +135,8 @@ PRODUCTOS_ESTRELLA = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await inicializar_db()
-    logger.info("Base de datos inicializada")
+    await cargar_config_en_env()   # carga credenciales guardadas en BD → os.environ
+    logger.info("Base de datos inicializada y configuración cargada")
     # Pre-calentar catálogo Shopify al arrancar para que _variant_map esté listo
     # antes de que llegue cualquier petición a /tienda/confirmar
     try:
@@ -1943,6 +1945,146 @@ async def inbox_revertir_opt_out(
     await revertir_opt_out(telefono)
     logger.info(f"[opt-out] {telefono} reactivado desde inbox")
     return JSONResponse(content={"ok": True})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONFIGURACIÓN DINÁMICA — guardar credenciales en BD + probar conexiones
+# ══════════════════════════════════════════════════════════════════════════════
+
+_CONFIG_KEYS_ALLOWED = {
+    "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
+    "ANTHROPIC_API_KEY", "AI_MODEL",
+    "SHOPIFY_ACCESS_TOKEN", "SHOPIFY_STORE_DOMAIN", "SHOPIFY_WEBHOOK_SECRET",
+}
+
+_CONFIG_META = {
+    "META_ACCESS_TOKEN":    {"label": "Token de acceso", "tipo": "secret"},
+    "META_PHONE_NUMBER_ID": {"label": "Phone Number ID", "tipo": "plain"},
+    "META_WABA_ID":         {"label": "WABA ID",         "tipo": "plain"},
+    "META_VERIFY_TOKEN":    {"label": "Verify Token",    "tipo": "plain"},
+    "ANTHROPIC_API_KEY":    {"label": "API Key",         "tipo": "secret"},
+    "AI_MODEL":             {"label": "Modelo IA",       "tipo": "plain"},
+    "SHOPIFY_ACCESS_TOKEN": {"label": "Access Token",    "tipo": "secret"},
+    "SHOPIFY_STORE_DOMAIN": {"label": "Dominio",         "tipo": "plain"},
+    "SHOPIFY_WEBHOOK_SECRET": {"label": "Webhook Secret","tipo": "secret"},
+}
+
+
+@app.get("/inbox/api/config")
+async def inbox_get_config(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Devuelve el estado de cada clave de configuración (sin exponer valores secretos)."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    resultado = {}
+    for clave, meta in _CONFIG_META.items():
+        db_val  = await get_config_value(clave)
+        env_val = os.getenv(clave, "")
+        valor   = db_val if db_val else env_val
+        if valor:
+            display = "•" * 8 if meta["tipo"] == "secret" else valor
+            resultado[clave] = {"configurado": True, "display": display,
+                                "fuente": "db" if db_val else "env"}
+        else:
+            resultado[clave] = {"configurado": False, "display": "", "fuente": None}
+
+    return JSONResponse(content=resultado)
+
+
+@app.post("/inbox/api/config/save")
+async def inbox_save_config(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Guarda credenciales en la BD y las inyecta en el entorno actual."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    body = await request.json()
+    saved = []
+    for clave, valor in body.items():
+        if clave in _CONFIG_KEYS_ALLOWED and isinstance(valor, str):
+            valor = valor.strip()
+            if valor:
+                await set_config_value(clave, valor)
+                os.environ[clave] = valor   # actualizar en tiempo real
+                saved.append(clave)
+    return JSONResponse(content={"ok": True, "saved": saved})
+
+
+@app.post("/inbox/api/config/test/{service}")
+async def inbox_test_config(
+    service: str,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Prueba la conexión a Meta, Shopify o Anthropic con las credenciales proporcionadas."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    body = await request.json()
+
+    def _val(clave: str) -> str:
+        return (body.get(clave) or "").strip() or os.getenv(clave, "")
+
+    try:
+        if service == "meta":
+            access_token = _val("META_ACCESS_TOKEN")
+            if not access_token:
+                return JSONResponse(content={"ok": False, "error": "Token de acceso no configurado"})
+            async with httpx.AsyncClient(timeout=12) as cli:
+                r = await cli.get(
+                    "https://graph.facebook.com/v21.0/me",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+            if r.status_code == 200:
+                nombre = r.json().get("name") or r.json().get("id") or "OK"
+                return JSONResponse(content={"ok": True, "msg": f"✅ Conectado · {nombre}"})
+            err = r.json().get("error", {}).get("message", f"HTTP {r.status_code}")
+            return JSONResponse(content={"ok": False, "error": err})
+
+        elif service == "shopify":
+            sh_token = _val("SHOPIFY_ACCESS_TOKEN")
+            domain   = _val("SHOPIFY_STORE_DOMAIN").replace("https://","").replace("http://","").rstrip("/")
+            if not sh_token or not domain:
+                return JSONResponse(content={"ok": False, "error": "Token o dominio no configurado"})
+            async with httpx.AsyncClient(timeout=12) as cli:
+                r = await cli.get(
+                    f"https://{domain}/admin/api/2024-01/shop.json",
+                    headers={"X-Shopify-Access-Token": sh_token},
+                )
+            if r.status_code == 200:
+                shop = r.json().get("shop", {})
+                return JSONResponse(content={"ok": True, "msg": f"✅ Tienda conectada · {shop.get('name', domain)}"})
+            return JSONResponse(content={"ok": False, "error": "Token inválido o dominio incorrecto"})
+
+        elif service == "anthropic":
+            api_key = _val("ANTHROPIC_API_KEY")
+            if not api_key:
+                return JSONResponse(content={"ok": False, "error": "API Key no configurada"})
+            async with httpx.AsyncClient(timeout=20) as cli:
+                r = await cli.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
+                             "content-type": "application/json"},
+                    json={"model": "claude-haiku-4-5", "max_tokens": 5,
+                          "messages": [{"role": "user", "content": "hi"}]},
+                )
+            if r.status_code == 200:
+                return JSONResponse(content={"ok": True, "msg": "✅ API key válida · Conexión exitosa"})
+            if r.status_code == 401:
+                return JSONResponse(content={"ok": False, "error": "API key inválida o revocada"})
+            return JSONResponse(content={"ok": False, "error": f"Error {r.status_code}"})
+
+    except Exception as e:
+        return JSONResponse(content={"ok": False, "error": str(e)[:120]})
+
+    return JSONResponse(content={"ok": False, "error": "Servicio no reconocido"})
 
 
 @app.post("/inbox/plantillas/subir-header")

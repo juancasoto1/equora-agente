@@ -173,7 +173,7 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
 
     try:
         response = await client.messages.create(
-            model="claude-haiku-4-5",  # Más rápido que sonnet para respuestas conversacionales
+            model=os.getenv("AI_MODEL", "claude-haiku-4-5"),  # Configurable desde panel de Configuración
             max_tokens=1024,
             system=system_prompt,
             messages=mensajes

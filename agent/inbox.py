@@ -475,7 +475,7 @@ tr:hover td{background:#f8f9fa}
 .wa-btn .wa-btn-ic{font-size:.9rem}
 .wa-preview-label{font-size:.72rem;color:#6b7a8d;text-align:center;margin-top:8px;font-style:italic}
 
-/* ── CONFIGURACIÓN ── */
+/* ── CONFIGURACIÓN — legacy (puede quedar para otros usos) ── */
 .config-item{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid #f0f2f5}
 .config-item:last-child{border-bottom:none}
 .config-key{font-size:.84rem;font-weight:600;color:#2d3748;flex:1}
@@ -483,6 +483,54 @@ tr:hover td{background:#f8f9fa}
   font-family:monospace;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .config-ok{color:var(--az);font-weight:700;font-size:.84rem}
 .config-miss{color:var(--red);font-weight:700;font-size:.84rem}
+/* ── CONFIGURACIÓN — cards interactivas ── */
+.cfg-overview{display:flex;gap:12px;margin-bottom:28px;flex-wrap:wrap}
+.cfg-ov-item{background:#fff;border:1px solid #e0e4e8;border-radius:12px;padding:14px 20px;
+  display:flex;align-items:center;gap:12px;flex:1;min-width:160px}
+.cfg-ov-icon{font-size:1.5rem;flex-shrink:0}
+.cfg-ov-name{font-weight:700;color:#1a2332;font-size:.86rem}
+.cfg-ov-status{font-size:.76rem;margin-top:2px}
+.cfg-pill-ok{color:#2d7d32;font-weight:600}
+.cfg-pill-err{color:#c62828;font-weight:600}
+.cfg-pill-pend{color:#8a94a6}
+.cfg-card{background:#fff;border:1px solid #e0e4e8;border-radius:14px;
+  padding:24px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;
+  padding-bottom:16px;border-bottom:1px solid #f0f2f5}
+.cfg-card-title{font-weight:700;color:#1a2332;font-size:1rem}
+.cfg-status-pill{font-size:.74rem;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap}
+.cfg-pill-connected{background:#e8f5e9;color:#2d7d32}
+.cfg-pill-error{background:#fce4e4;color:#c62828}
+.cfg-pill-pending{background:#f0f2f5;color:#6b7a8d}
+.cfg-step{display:flex;gap:14px;margin-bottom:18px}
+.cfg-step-num{width:24px;height:24px;border-radius:50%;background:#eef2ff;color:var(--az);
+  font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:2px}
+.cfg-step-body{flex:1}
+.cfg-field-lbl{font-size:.84rem;font-weight:600;color:#2d3748;margin-bottom:6px;
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cfg-help-btn{background:none;border:1px solid #c9d0da;border-radius:50%;width:18px;height:18px;
+  font-size:.7rem;font-weight:700;color:#6b7a8d;cursor:pointer;display:inline-flex;
+  align-items:center;justify-content:center;padding:0;flex-shrink:0;line-height:1}
+.cfg-help-btn:hover{background:#eef2ff;border-color:var(--az);color:var(--az)}
+.cfg-help-box{display:none;background:#f5f7ff;border:1px solid #d0d8f0;border-radius:8px;
+  padding:12px 14px;font-size:.79rem;color:#3a4a6b;line-height:1.65;margin-bottom:10px}
+.cfg-help-box a{color:var(--az)}
+.cfg-help-box.open{display:block}
+.cfg-field-row{display:flex;align-items:center;gap:8px}
+.cfg-input-wrap{position:relative;flex:1;display:flex;align-items:center}
+.cfg-input-wrap .f-inp{padding-right:38px}
+.cfg-inp{flex:1}
+.cfg-eye-btn{position:absolute;right:10px;background:none;border:none;cursor:pointer;
+  font-size:.85rem;padding:0;color:#8a94a6;line-height:1}
+.cfg-eye-btn:hover{color:#1a2332}
+.cfg-field-status{font-size:.95rem;flex-shrink:0;width:20px;text-align:center}
+.cfg-actions{display:flex;gap:10px;align-items:center;margin-top:22px;
+  padding-top:18px;border-top:1px solid #f0f2f5;flex-wrap:wrap}
+.cfg-test-result{font-size:.82rem;padding:8px 14px;border-radius:8px;line-height:1.5;flex:1;min-width:180px}
+.cfg-test-ok{background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7}
+.cfg-test-err{background:#fce4e4;color:#b71c1c;border:1px solid #ef9a9a}
+.cfg-separator{border:none;border-top:1px solid #f0f2f5;margin:8px 0}
 
 /* ── loading spinner ── */
 .loading-txt{color:#6b7a8d;font-size:.85rem;padding:32px;text-align:center}
@@ -1511,35 +1559,294 @@ tr:hover td{background:#f8f9fa}
 
           <!-- ── Pane: Integraciones ── -->
           <div class="cfg-pane active" id="cfg-pane-integraciones">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
 
-              <div class="form-card">
-                <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🔑 Credenciales Meta</div>
-                <div id="cfg-meta" class="loading-txt">Cargando...</div>
+            <!-- Overview: estado de las 3 integraciones -->
+            <div class="cfg-overview" id="cfg-overview">
+              <div class="cfg-ov-item">
+                <span class="cfg-ov-icon">🔑</span>
+                <div>
+                  <div class="cfg-ov-name">Meta WhatsApp</div>
+                  <div class="cfg-ov-status cfg-pill-pend" id="ov-meta-status">Verificando…</div>
+                </div>
+              </div>
+              <div class="cfg-ov-item">
+                <span class="cfg-ov-icon">🤖</span>
+                <div>
+                  <div class="cfg-ov-name">Anthropic IA</div>
+                  <div class="cfg-ov-status cfg-pill-pend" id="ov-ai-status">Verificando…</div>
+                </div>
+              </div>
+              <div class="cfg-ov-item">
+                <span class="cfg-ov-icon">🛒</span>
+                <div>
+                  <div class="cfg-ov-name">Shopify</div>
+                  <div class="cfg-ov-status cfg-pill-pend" id="ov-shopify-status">Verificando…</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Card: Meta ── -->
+            <div class="cfg-card" id="card-meta">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-title">🔑 Meta WhatsApp Business API</div>
+                <span class="cfg-status-pill cfg-pill-pending" id="pill-meta">Verificando…</span>
               </div>
 
-              <div class="form-card">
-                <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🤖 Anthropic / IA</div>
-                <div id="cfg-ai" class="loading-txt">Cargando...</div>
-              </div>
-
-              <div class="form-card">
-                <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🛒 Shopify</div>
-                <div id="cfg-shopify" class="loading-txt">Cargando...</div>
-              </div>
-
-              <div class="form-card">
-                <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🚀 Próximas integraciones</div>
-                <div style="color:#6b7a8d;font-size:.85rem;line-height:1.7">
-                  Las siguientes integraciones estarán disponibles próximamente:<br><br>
-                  • 📧 Email (SendGrid / Resend)<br>
-                  • 📅 Calendly / Google Calendar<br>
-                  • 🗃️ CRM (HubSpot / Pipedrive)<br>
-                  • 💳 Pagos en línea (Stripe / PSE)
+              <div class="cfg-step">
+                <div class="cfg-step-num">1</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Token de acceso permanente
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-meta-token')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-meta-token">
+                    <b>Cómo obtenerlo (paso a paso):</b><br>
+                    1. Ve a <a href="https://developers.facebook.com" target="_blank">developers.facebook.com</a> e inicia sesión<br>
+                    2. Abre tu app → menú izquierdo <b>WhatsApp → Configuración de la API</b><br>
+                    3. En la sección <b>Token de acceso</b> haz clic en <b>Generar token</b><br>
+                    4. Para producción, crea un <em>System User Token</em> permanente en Meta Business Suite → Configuración → Usuarios del sistema<br>
+                    5. El token empieza con <code>EAAxxxxx…</code> — pégalo completo aquí<br>
+                    <a href="#cfg-pane-documentacion" onclick="cfgTab('documentacion',document.querySelector('.cfg-tab:last-child'))">📋 Ver guía completa en Documentación →</a>
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-meta-token" class="f-inp" placeholder="EAAxxxxx..." autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-meta-token',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-META_ACCESS_TOKEN"></span>
+                  </div>
                 </div>
               </div>
 
+              <div class="cfg-step">
+                <div class="cfg-step-num">2</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Phone Number ID
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-meta-pid')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-meta-pid">
+                    <b>¿Qué es?</b> Es el identificador del número de WhatsApp Business, <em>no</em> el número de teléfono en sí.<br>
+                    <b>Dónde está:</b> Meta for Developers → tu app → WhatsApp → Configuración de la API → sección <b>"Números de teléfono"</b> → columna <b>"ID del número de teléfono"</b><br>
+                    Ejemplo: <code>123456789012345</code>
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="text" id="cfg-meta-pid" class="f-inp" placeholder="123456789012345" autocomplete="off" style="flex:1">
+                    <span class="cfg-field-status" id="st-META_PHONE_NUMBER_ID"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">3</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    WhatsApp Business Account ID (WABA ID)
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-meta-waba')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-meta-waba">
+                    <b>Dónde está:</b><br>
+                    • Meta Business Suite → Configuración → <b>WhatsApp Business</b> → columna "ID de cuenta"<br>
+                    • O en Meta for Developers → tu app → WhatsApp → Configuración → sección <b>"WhatsApp Business Account ID"</b><br>
+                    Ejemplo: <code>987654321012345</code>
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="text" id="cfg-meta-waba" class="f-inp" placeholder="987654321012345" autocomplete="off" style="flex:1">
+                    <span class="cfg-field-status" id="st-META_WABA_ID"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">4</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Verify Token (para el webhook)
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-meta-verify')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge">Opcional</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-meta-verify">
+                    <b>¿Para qué sirve?</b> Es una contraseña que <em>tú inventas</em> para verificar que Meta es quien envía los webhooks a tu servidor.<br>
+                    Cuando configures el webhook en la consola de Meta, pon exactamente el mismo texto aquí y en el campo <b>"Verify Token"</b> de Meta.<br>
+                    Puede ser cualquier texto, sin espacios. Ejemplo: <code>equora-webhook-2025</code>
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="text" id="cfg-meta-verify" class="f-inp" placeholder="equora-webhook-2025" autocomplete="off" style="flex:1">
+                    <span class="cfg-field-status" id="st-META_VERIFY_TOKEN"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-actions">
+                <div id="cfg-meta-result" class="cfg-test-result" style="display:none"></div>
+                <button class="btn-secondary" onclick="testConexion('meta')" type="button" id="btn-test-meta">
+                  🔌 Probar conexión
+                </button>
+                <button class="btn-primary" onclick="guardarConfig('meta')" type="button" id="btn-save-meta">
+                  💾 Guardar
+                </button>
+              </div>
+            </div><!-- /card-meta -->
+
+            <!-- ── Card: Anthropic ── -->
+            <div class="cfg-card" id="card-anthropic">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-title">🤖 Anthropic — Motor de IA (Andrea)</div>
+                <span class="cfg-status-pill cfg-pill-pending" id="pill-anthropic">Verificando…</span>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">1</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    API Key de Anthropic
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-ant-key')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-ant-key">
+                    <b>Cómo obtenerla:</b><br>
+                    1. Ve a <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> y crea una cuenta<br>
+                    2. Menú → <b>Settings → API Keys → Create Key</b><br>
+                    3. Dale un nombre (ej: "Equora") y cópiala <b>inmediatamente</b><br>
+                    4. Empieza con <code>sk-ant-api03-…</code><br>
+                    <b>⚠️ Solo se muestra una vez</b> — guárdala en un lugar seguro antes de cerrar
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-ant-key" class="f-inp" placeholder="sk-ant-api03-..." autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-ant-key',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-ANTHROPIC_API_KEY"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">2</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">Modelo de IA
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-ant-model')" type="button" aria-label="Ayuda">?</button>
+                  </div>
+                  <div class="cfg-help-box" id="help-ant-model">
+                    <b>Haiku</b> — El más rápido y económico. Ideal para respuestas de WhatsApp. <b>Recomendado para producción.</b><br>
+                    <b>Sonnet</b> — Más inteligente, pero más lento y costoso. Útil para conversaciones más complejas.<br>
+                    <b>Opus</b> — El más potente, mayor costo. Para casos de uso muy avanzados.
+                  </div>
+                  <select id="cfg-ant-model" class="f-sel" style="max-width:360px">
+                    <option value="claude-haiku-4-5">claude-haiku-4-5 — Rápido · Económico ⭐ Recomendado</option>
+                    <option value="claude-sonnet-4-5">claude-sonnet-4-5 — Balanceado</option>
+                    <option value="claude-opus-4-5">claude-opus-4-5 — Más inteligente · Mayor costo</option>
+                  </select>
+                  <span class="f-hint">El modelo Haiku es el óptimo para WhatsApp — respuestas en &lt;2 segundos al costo más bajo.</span>
+                </div>
+              </div>
+
+              <div class="cfg-actions">
+                <div id="cfg-anthropic-result" class="cfg-test-result" style="display:none"></div>
+                <button class="btn-secondary" onclick="testConexion('anthropic')" type="button">🔌 Probar conexión</button>
+                <button class="btn-primary" onclick="guardarConfig('anthropic')" type="button">💾 Guardar</button>
+              </div>
+            </div><!-- /card-anthropic -->
+
+            <!-- ── Card: Shopify ── -->
+            <div class="cfg-card" id="card-shopify">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-title">🛒 Shopify — Tienda en línea</div>
+                <span class="cfg-status-pill cfg-pill-pending" id="pill-shopify">Verificando…</span>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">1</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Dominio de la tienda
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-domain')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-sh-domain">
+                    El dominio de tu tienda en formato <code>mitienda.myshopify.com</code><br>
+                    Lo encuentras en: Admin de Shopify → <b>Configuración → Dominios</b>.<br>
+                    <b>No incluyas</b> <code>https://</code> al inicio ni la barra al final.<br>
+                    Ejemplo: <code>equoradistribuciones.myshopify.com</code>
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="text" id="cfg-sh-domain" class="f-inp" placeholder="mitienda.myshopify.com" autocomplete="off" style="flex:1">
+                    <span class="cfg-field-status" id="st-SHOPIFY_STORE_DOMAIN"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">2</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Access Token (Admin API)
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-token')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-sh-token">
+                    <b>Cómo crear el token:</b><br>
+                    1. Shopify Admin → <b>Configuración → Apps y canales de ventas</b><br>
+                    2. Clic en <b>"Desarrollar apps"</b> → <b>"Crear una app"</b><br>
+                    3. Nombre: "Equora Andrea" → <b>Configurar permisos del Admin API</b>:<br>
+                    &nbsp;&nbsp;✅ <code>read_products</code> &nbsp; ✅ <code>read_customers</code> &nbsp; ✅ <code>write_draft_orders</code> &nbsp; ✅ <code>read_orders</code><br>
+                    4. Clic en <b>"Instalar app"</b> → copia el <b>"Token de acceso del Admin API"</b><br>
+                    Empieza con <code>shpat_…</code>
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-sh-token" class="f-inp" placeholder="shpat_..." autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-token',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-SHOPIFY_ACCESS_TOKEN"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">3</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Webhook Secret
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-whsec')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge">Opcional</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-sh-whsec">
+                    Verifica que las notificaciones de órdenes llegan realmente de Shopify.<br>
+                    Lo encuentras en: Shopify Admin → <b>Configuración → Notificaciones → Webhooks → "Clave secreta del webhook"</b>.<br>
+                    Si no lo configuras, el sistema funciona igual pero no puede validar el origen de las notificaciones de nuevas órdenes.
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-sh-whsec" class="f-inp" placeholder="shpss_..." autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-whsec',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-SHOPIFY_WEBHOOK_SECRET"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-actions">
+                <div id="cfg-shopify-result" class="cfg-test-result" style="display:none"></div>
+                <button class="btn-secondary" onclick="testConexion('shopify')" type="button">🔌 Probar conexión</button>
+                <button class="btn-primary" onclick="guardarConfig('shopify')" type="button">💾 Guardar</button>
+              </div>
+            </div><!-- /card-shopify -->
+
+            <!-- Próximas integraciones -->
+            <div class="cfg-card" style="border-style:dashed;background:#fafbfc">
+              <div class="cfg-card-title" style="color:#6b7a8d;margin-bottom:12px">🚀 Próximas integraciones</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;font-size:.83rem;color:#6b7a8d">
+                <div>📧 Email (SendGrid / Resend)</div>
+                <div>📅 Calendly / Google Calendar</div>
+                <div>🗃️ CRM (HubSpot / Pipedrive)</div>
+                <div>💳 Pagos (Stripe / PSE)</div>
+              </div>
             </div>
+
           </div><!-- /pane integraciones -->
 
           <!-- ── Pane: Documentación ── -->
@@ -3868,7 +4175,7 @@ function mkCard(ic, lbl, val, sub) {
 }
 
 /* ══════════════════════════════════════════════════════
-   CONFIGURACIÓN — tabs
+   CONFIGURACIÓN — tabs + gestión interactiva
    ══════════════════════════════════════════════════════ */
 function cfgTab(id, el) {
   document.querySelectorAll('.cfg-tab').forEach(function(t) { t.classList.remove('active'); });
@@ -3878,38 +4185,240 @@ function cfgTab(id, el) {
   if (pane) pane.classList.add('active');
 }
 
-async function cargarConfiguracion() {
-  // Inferimos estado de config desde los endpoints que ya tenemos
-  // (sin exponer las keys reales)
-  try {
-    var r = await fetch('/inbox/broadcast/templates', {credentials:'include'});
-    var d = await r.json();
-    var metaOk = !d.error;
+/* ── Helpers de estado ── */
+function _setCfgPill(pillId, state) {
+  var pill = document.getElementById(pillId);
+  if (!pill) return;
+  pill.className = 'cfg-status-pill';
+  if (state === 'ok')      { pill.classList.add('cfg-pill-connected'); pill.textContent = '✅ Conectado'; }
+  else if (state === 'error') { pill.classList.add('cfg-pill-error');  pill.textContent = '⚠️ Sin conectar'; }
+  else                     { pill.classList.add('cfg-pill-pending');   pill.textContent = 'Verificando…'; }
+}
 
-    document.getElementById('cfg-meta').innerHTML = cfgRow('META_ACCESS_TOKEN', metaOk, metaOk ? '••••••••' : 'No configurado') +
-      cfgRow('META_PHONE_NUMBER_ID', metaOk, metaOk ? 'Configurado' : 'No configurado') +
-      cfgRow('META_WABA_ID', metaOk, metaOk ? 'Configurado' : 'No configurado') +
-      cfgRow('META_VERIFY_TOKEN', true, 'Configurado');
+function _setCfgOvStatus(ovId, state, txt) {
+  var el = document.getElementById(ovId);
+  if (!el) return;
+  el.className = 'cfg-ov-status';
+  if (state === 'ok')      { el.classList.add('cfg-pill-connected'); }
+  else if (state === 'error') { el.classList.add('cfg-pill-error'); }
+  else                     { el.classList.add('cfg-pill-pend'); }
+  el.textContent = txt || (state === 'ok' ? '✅ Conectado' : state === 'error' ? '⚠️ Sin configurar' : 'Verificando…');
+}
 
-    document.getElementById('cfg-ai').innerHTML =
-      cfgRow('ANTHROPIC_API_KEY', true, 'Configurado') +
-      cfgRow('Modelo IA', true, 'claude-sonnet-4-6');
+function _setCfgFieldStatus(statusId, state) {
+  var el = document.getElementById(statusId);
+  if (!el) return;
+  if (state === 'ok')    { el.textContent = '✓'; el.style.color = '#2e7d32'; el.style.fontWeight = '700'; }
+  else if (state === 'err') { el.textContent = '✗'; el.style.color = '#c62828'; el.style.fontWeight = '700'; }
+  else                   { el.textContent = ''; }
+}
 
-    document.getElementById('cfg-shopify').innerHTML =
-      cfgRow('SHOPIFY_ACCESS_TOKEN', true, 'Configurado') +
-      cfgRow('SHOPIFY_STORE_DOMAIN', true, 'equoradistribuciones.com') +
-      cfgRow('SHOPIFY_WEBHOOK_SECRET', true, 'Configurado');
-  } catch(e) {
-    document.getElementById('cfg-meta').innerHTML = '<div class="loading-txt">Error cargando configuración</div>';
+function _showCfgResult(divId, ok, msg) {
+  var div = document.getElementById(divId);
+  if (!div) return;
+  div.style.display = '';
+  div.className = 'cfg-test-result';
+  if (ok === true)        div.classList.add('cfg-test-ok');
+  else if (ok === false)  div.classList.add('cfg-test-err');
+  div.textContent = msg || '';
+  // Auto-ocultar tras 8 s si hay resultado definitivo
+  if (ok !== null) {
+    var _msg = msg;
+    setTimeout(function() { if (div.textContent === _msg) div.style.display = 'none'; }, 8000);
   }
 }
 
-function cfgRow(key, ok, val) {
-  return '<div class="config-item">'
-    + '<span class="config-key">' + he(key) + '</span>'
-    + '<span class="' + (ok ? 'config-ok' : 'config-miss') + '">' + (ok ? '✓' : '✗') + '</span>'
-    + '<span class="config-val">' + he(val) + '</span>'
-    + '</div>';
+/* ── toggleHelp: muestra / oculta caja de ayuda inline ── */
+function toggleHelp(id) {
+  var box = document.getElementById(id);
+  if (box) box.classList.toggle('open');
+}
+
+/* ── togglePwd: alterna visibilidad del campo contraseña ── */
+function togglePwd(inputId, btn) {
+  var inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (inp.type === 'password') { inp.type = 'text';     btn.textContent = '🙈'; }
+  else                         { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
+/* ── cargarConfiguracion: pide GET /inbox/api/config y rellena indicadores ── */
+async function cargarConfiguracion() {
+  // Mapeo campo_db → id del <input> / <select>
+  var fieldMap = {
+    META_ACCESS_TOKEN:    'cfg-meta-token',
+    META_PHONE_NUMBER_ID: 'cfg-meta-pid',
+    META_WABA_ID:         'cfg-meta-waba',
+    META_VERIFY_TOKEN:    'cfg-meta-verify',
+    ANTHROPIC_API_KEY:    'cfg-ant-key',
+    AI_MODEL:             'cfg-ant-model',
+    SHOPIFY_STORE_DOMAIN: 'cfg-sh-domain',
+    SHOPIFY_ACCESS_TOKEN: 'cfg-sh-token',
+    SHOPIFY_WEBHOOK_SECRET:'cfg-sh-whsec',
+  };
+
+  try {
+    var r = await fetch('/inbox/api/config', {credentials:'include'});
+    var d = await r.json();
+
+    Object.keys(d).forEach(function(key) {
+      var info    = d[key];
+      var fieldId = fieldMap[key];
+      var inp     = fieldId ? document.getElementById(fieldId) : null;
+
+      // Indicador ✓ / ✗ junto al campo
+      _setCfgFieldStatus('st-' + key, info.configurado ? 'ok' : '');
+
+      if (!inp) return;
+
+      if (info.configurado) {
+        if (inp.tagName === 'SELECT') {
+          // Para el selector de modelo mostramos el valor real
+          if (info.display) inp.value = info.display;
+        } else if (inp.type === 'password') {
+          // Secretos: solo actualizar el placeholder para señalar que ya está guardado
+          inp.placeholder = '••••••••  (guardado)';
+          // NO rellenamos el input — que el usuario escriba el nuevo valor si quiere cambiarlo
+        } else {
+          // Campos de texto plano (dominio, ID, etc.): mostrar valor real
+          inp.value = info.display || '';
+        }
+      }
+    });
+
+    // ── Calcular estado por servicio ──
+    var ok = function(k) { return d[k] && d[k].configurado; };
+    var metaOk  = ok('META_ACCESS_TOKEN') && ok('META_PHONE_NUMBER_ID');
+    var aiOk    = ok('ANTHROPIC_API_KEY');
+    var shopOk  = ok('SHOPIFY_ACCESS_TOKEN') && ok('SHOPIFY_STORE_DOMAIN');
+
+    _setCfgPill('pill-meta',       metaOk ? 'ok' : 'error');
+    _setCfgPill('pill-anthropic',  aiOk   ? 'ok' : 'error');
+    _setCfgPill('pill-shopify',    shopOk ? 'ok' : 'error');
+    _setCfgOvStatus('ov-meta-status',    metaOk ? 'ok' : 'error');
+    _setCfgOvStatus('ov-ai-status',      aiOk   ? 'ok' : 'error');
+    _setCfgOvStatus('ov-shopify-status', shopOk ? 'ok' : 'error');
+
+  } catch(e) {
+    console.error('Error cargando configuración:', e);
+  }
+}
+
+/* ── guardarConfig: POST /inbox/api/config/save con campos del servicio ── */
+async function guardarConfig(service) {
+  var payload    = {};
+  var resultId   = 'cfg-' + service + '-result';
+
+  if (service === 'meta') {
+    var t = (document.getElementById('cfg-meta-token').value  || '').trim();
+    var p = (document.getElementById('cfg-meta-pid').value    || '').trim();
+    var w = (document.getElementById('cfg-meta-waba').value   || '').trim();
+    var v = (document.getElementById('cfg-meta-verify').value || '').trim();
+    if (t) payload.META_ACCESS_TOKEN    = t;
+    if (p) payload.META_PHONE_NUMBER_ID = p;
+    if (w) payload.META_WABA_ID         = w;
+    if (v) payload.META_VERIFY_TOKEN    = v;
+  } else if (service === 'anthropic') {
+    var k = (document.getElementById('cfg-ant-key').value   || '').trim();
+    var m = (document.getElementById('cfg-ant-model').value || '').trim();
+    if (k) payload.ANTHROPIC_API_KEY = k;
+    if (m) payload.AI_MODEL          = m;
+  } else if (service === 'shopify') {
+    var sd = (document.getElementById('cfg-sh-domain').value  || '').trim();
+    var st = (document.getElementById('cfg-sh-token').value   || '').trim();
+    var sw = (document.getElementById('cfg-sh-whsec').value   || '').trim();
+    if (sd) payload.SHOPIFY_STORE_DOMAIN    = sd;
+    if (st) payload.SHOPIFY_ACCESS_TOKEN    = st;
+    if (sw) payload.SHOPIFY_WEBHOOK_SECRET  = sw;
+  }
+
+  if (!Object.keys(payload).length) {
+    _showCfgResult(resultId, false, 'No hay valores para guardar — escribe al menos un campo.');
+    return;
+  }
+
+  // Feedback visual en el botón
+  var btnId  = service === 'anthropic' ? 'card-anthropic' : 'card-' + service;
+  var btnEl  = document.querySelector('#' + btnId + ' .btn-primary');
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Guardando…'; }
+
+  try {
+    var r = await fetch('/inbox/api/config/save', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    var d = await r.json();
+    if (d.ok) {
+      var n = d.saved ? d.saved.length : 0;
+      _showCfgResult(resultId, true, '✅ Guardado correctamente (' + n + ' campo' + (n !== 1 ? 's' : '') + ')');
+      await cargarConfiguracion();   // refrescar indicadores
+    } else {
+      _showCfgResult(resultId, false, '⚠️ Error al guardar — intenta de nuevo.');
+    }
+  } catch(e) {
+    _showCfgResult(resultId, false, 'Error de red: ' + String(e));
+  } finally {
+    if (btnEl) { btnEl.disabled = false; btnEl.textContent = '💾 Guardar'; }
+  }
+}
+
+/* ── testConexion: POST /inbox/api/config/test/{service} ── */
+async function testConexion(service) {
+  var payload  = {};
+  var resultId = 'cfg-' + service + '-result';
+  var pillId   = service === 'anthropic' ? 'pill-anthropic' : 'pill-' + service;
+  var ovId     = service === 'meta' ? 'ov-meta-status'
+               : service === 'anthropic' ? 'ov-ai-status' : 'ov-shopify-status';
+
+  // Pasar los valores del form (si están vacíos, el servidor usará lo que tenga en BD / env)
+  if (service === 'meta') {
+    var t = (document.getElementById('cfg-meta-token').value || '').trim();
+    var p = (document.getElementById('cfg-meta-pid').value   || '').trim();
+    if (t) payload.META_ACCESS_TOKEN    = t;
+    if (p) payload.META_PHONE_NUMBER_ID = p;
+  } else if (service === 'anthropic') {
+    var k = (document.getElementById('cfg-ant-key').value   || '').trim();
+    var m = (document.getElementById('cfg-ant-model').value || '').trim();
+    if (k) payload.ANTHROPIC_API_KEY = k;
+    if (m) payload.AI_MODEL          = m;
+  } else if (service === 'shopify') {
+    var sd = (document.getElementById('cfg-sh-domain').value || '').trim();
+    var st = (document.getElementById('cfg-sh-token').value  || '').trim();
+    if (sd) payload.SHOPIFY_STORE_DOMAIN = sd;
+    if (st) payload.SHOPIFY_ACCESS_TOKEN = st;
+  }
+
+  _showCfgResult(resultId, null, '🔄 Probando conexión…');
+  _setCfgPill(pillId, 'pending');
+
+  // Deshabilitar botón mientras prueba
+  var btnTest = document.querySelector('#' + (service === 'anthropic' ? 'card-anthropic' : 'card-' + service) + ' .btn-secondary');
+  if (btnTest) { btnTest.disabled = true; btnTest.textContent = '🔄 Probando…'; }
+
+  try {
+    var r = await fetch('/inbox/api/config/test/' + service, {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    var d = await r.json();
+    if (d.ok) {
+      _showCfgResult(resultId, true,  d.msg   || '✅ Conexión exitosa');
+      _setCfgPill(pillId, 'ok');
+      _setCfgOvStatus(ovId, 'ok');
+    } else {
+      _showCfgResult(resultId, false, d.error || '⚠️ No se pudo conectar');
+      _setCfgPill(pillId, 'error');
+      _setCfgOvStatus(ovId, 'error');
+    }
+  } catch(e) {
+    _showCfgResult(resultId, false, 'Error de red: ' + String(e));
+    _setCfgPill(pillId, 'error');
+    _setCfgOvStatus(ovId, 'error');
+  } finally {
+    if (btnTest) { btnTest.disabled = false; btnTest.textContent = '🔌 Probar conexión'; }
+  }
 }
 </script>
 </body>
