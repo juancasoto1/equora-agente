@@ -250,6 +250,34 @@ tr:hover td{background:#f8f9fa}
 
 /* Formularios light */
 .form-card{background:#fff;border-radius:12px;border:1px solid #e0e4e8;padding:24px}
+/* Tabs de Configuración */
+.cfg-tabs{display:flex;gap:0;border-bottom:2px solid #e8ecf0;margin-bottom:28px}
+.cfg-tab{padding:10px 22px;font-size:.86rem;font-weight:600;color:#6b7a8d;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .15s,border-color .15s;white-space:nowrap}
+.cfg-tab.active{color:var(--az);border-bottom-color:var(--az)}
+.cfg-tab:hover:not(.active){color:#1a2332}
+.cfg-pane{display:none}.cfg-pane.active{display:block}
+/* Doc cards */
+.doc-section{margin-bottom:32px}
+.doc-section-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  color:#6b7a8d;margin:0 0 14px;padding-bottom:6px;border-bottom:1px solid #e8ecf0}
+.doc-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.doc-grid{grid-template-columns:1fr}}
+.doc-card{background:#fff;border:1px solid #e0e4e8;border-radius:12px;padding:20px}
+.doc-card-title{font-weight:700;color:#1a2332;font-size:.9rem;margin-bottom:12px;
+  display:flex;align-items:center;gap:8px}
+.doc-formula{background:#f5f7ff;border-left:3px solid var(--az);border-radius:0 8px 8px 0;
+  padding:10px 14px;font-family:monospace;font-size:.83rem;color:#2d3a6b;margin:8px 0;line-height:1.6}
+.doc-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:10px}
+.doc-table th{text-align:left;font-weight:700;color:#4a5568;padding:6px 10px;
+  border-bottom:2px solid #e8ecf0;white-space:nowrap}
+.doc-table td{padding:7px 10px;border-bottom:1px solid #f0f2f5;color:#2d3748;vertical-align:top}
+.doc-table tr:last-child td{border-bottom:none}
+.doc-chip{display:inline-block;font-size:.72rem;font-weight:700;padding:2px 8px;
+  border-radius:4px;margin-left:6px}
+.doc-chip-blue{background:#eef2ff;color:#4a7cf7}
+.doc-chip-green{background:#eef9ee;color:#2d7d32}
+.doc-chip-orange{background:#fff3e0;color:#e65100}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .form-grid.full{grid-template-columns:1fr}
 .f-group{display:flex;flex-direction:column;gap:6px}
@@ -1367,19 +1395,6 @@ tr:hover td{background:#f8f9fa}
                 </tbody>
               </table>
             </div>
-            <p style="font-size:.72rem;color:#8a94a6;margin-top:8px">
-              💵 Costo Meta = enviados × USD $<span id="met-tarifa">0.0165</span> (conversación de marketing).
-              Meta cobra al iniciar la conversación, no por entrega ni lectura.
-              <span class="met-col-roi"> | 🛒 Ventas = órdenes Shopify de destinatarios en los 7 días siguientes al envío.</span>
-            </p>
-          </div>
-
-          <!-- Nota informativa -->
-          <div style="margin-top:20px;padding:12px 16px;background:#f0f4ff;border-radius:10px;border-left:3px solid #4a7cf7;font-size:.78rem;color:#3a4a6b;line-height:1.6">
-            ℹ️ <strong>Métricas propias de Equora.</strong>
-            Entrega y lectura: tracking via webhook de Meta.
-            Costo: tarifa oficial Meta conversaciones de marketing (Colombia).
-            Ventas atribuidas: órdenes Shopify cruzadas por teléfono del destinatario en ventana de 7 días.
           </div>
 
         </div>
@@ -1483,39 +1498,250 @@ tr:hover td{background:#f8f9fa}
         <div class="sec-hdr">
           <div>
             <h1>⚙️ Configuración</h1>
-            <p>Estado de las integraciones y variables del sistema</p>
+            <p>Integraciones, estado del sistema y documentación</p>
           </div>
         </div>
         <div class="sec-body">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
 
-            <div class="form-card">
-              <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🔑 Credenciales Meta</div>
-              <div id="cfg-meta" class="loading-txt">Cargando...</div>
+          <!-- Tabs -->
+          <div class="cfg-tabs">
+            <div class="cfg-tab active" onclick="cfgTab('integraciones',this)">⚙️ Integraciones</div>
+            <div class="cfg-tab" onclick="cfgTab('documentacion',this)">📋 Documentación</div>
+          </div>
+
+          <!-- ── Pane: Integraciones ── -->
+          <div class="cfg-pane active" id="cfg-pane-integraciones">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+
+              <div class="form-card">
+                <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🔑 Credenciales Meta</div>
+                <div id="cfg-meta" class="loading-txt">Cargando...</div>
+              </div>
+
+              <div class="form-card">
+                <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🤖 Anthropic / IA</div>
+                <div id="cfg-ai" class="loading-txt">Cargando...</div>
+              </div>
+
+              <div class="form-card">
+                <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🛒 Shopify</div>
+                <div id="cfg-shopify" class="loading-txt">Cargando...</div>
+              </div>
+
+              <div class="form-card">
+                <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🚀 Próximas integraciones</div>
+                <div style="color:#6b7a8d;font-size:.85rem;line-height:1.7">
+                  Las siguientes integraciones estarán disponibles próximamente:<br><br>
+                  • 📧 Email (SendGrid / Resend)<br>
+                  • 📅 Calendly / Google Calendar<br>
+                  • 🗃️ CRM (HubSpot / Pipedrive)<br>
+                  • 💳 Pagos en línea (Stripe / PSE)
+                </div>
+              </div>
+
             </div>
+          </div><!-- /pane integraciones -->
 
-            <div class="form-card">
-              <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🤖 Anthropic / IA</div>
-              <div id="cfg-ai" class="loading-txt">Cargando...</div>
-            </div>
+          <!-- ── Pane: Documentación ── -->
+          <div class="cfg-pane" id="cfg-pane-documentacion">
 
-            <div class="form-card">
-              <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🛒 Shopify</div>
-              <div id="cfg-shopify" class="loading-txt">Cargando...</div>
-            </div>
+            <!-- Métricas y fórmulas -->
+            <div class="doc-section">
+              <p class="doc-section-title">📊 Métricas y fórmulas de cálculo</p>
+              <div class="doc-grid">
 
-            <div class="form-card">
-              <div style="font-weight:700;color:#1a2332;margin-bottom:16px">🚀 Próximas integraciones</div>
-              <div style="color:#6b7a8d;font-size:.85rem;line-height:1.7">
-                Las siguientes integraciones estarán disponibles próximamente:<br><br>
-                • 📧 Email (SendGrid / Resend)<br>
-                • 📅 Calendly / Google Calendar<br>
-                • 🗃️ CRM (HubSpot / Pipedrive)<br>
-                • 💳 Pagos en línea (Stripe / PSE)
+                <div class="doc-card">
+                  <div class="doc-card-title">💵 Costo Meta</div>
+                  <div class="doc-formula">Costo = Enviados × USD $0.0165 × TRM</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                    Meta cobra <strong>por conversación de 24 horas iniciada</strong>, no por mensaje individual ni por entrega o lectura.
+                    La tarifa <b>$0.0165 USD</b> aplica a conversaciones de marketing en Colombia (vigente 2024–2025).
+                    El valor en COP depende de la TRM del día.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">📈 ROAS (Retorno sobre inversión)</div>
+                  <div class="doc-formula">ROAS = Ventas atribuidas COP / Costo Meta COP</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                    ROAS &gt; 1 = la campaña es rentable. Ejemplo: ROAS 3.5 significa que por cada $1 invertido en Meta, se generaron $3.50 en ventas.
+                    Un ROAS &lt; 1 indica que el costo supera las ventas atribuidas en la ventana de 7 días.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">📦 Tasa de entrega</div>
+                  <div class="doc-formula">Entrega % = Entregados / Enviados × 100</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                    Requiere <strong>tracking activo</strong> via webhook de Meta (campo <code>statuses</code>).
+                    Un mensaje no entregado puede deberse a: número inválido, WhatsApp desinstalado, teléfono apagado &gt;30 días, o bloqueo del usuario.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">👁 Tasa de lectura</div>
+                  <div class="doc-formula">Lectura % = Leídos / Entregados × 100</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                    Solo se registra si el destinatario tiene activados los <strong>recibos de lectura</strong> en WhatsApp.
+                    Una tasa de lectura baja puede indicar que el horario de envío o el asunto de la plantilla no es atractivo.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🛒 Ventas atribuidas</div>
+                  <div class="doc-formula">Ventana de atribución: 7 días post-envío</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                    Se cruzan las órdenes de Shopify con el número de teléfono de cada destinatario.
+                    Si el cliente recibió la difusión y realizó una compra en los <strong>7 días siguientes</strong>, la venta se atribuye a esa campaña.
+                    Atribución por <em>último toque</em>.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🤖 Conversaciones IA</div>
+                  <div class="doc-formula">Interacciones = Mensajes recibidos + Respuestas IA</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                    Cada mensaje de un cliente genera una respuesta de Andrea (Claude Haiku 4.5).
+                    El costo de la IA depende de los tokens usados (incluido el catálogo de Shopify y el perfil del cliente en el contexto).
+                    No tiene costo adicional de Meta — Andrea solo responde dentro de la ventana de 24h abierta por el cliente.
+                  </p>
+                </div>
+
               </div>
             </div>
 
-          </div>
+            <!-- Tarifas Meta -->
+            <div class="doc-section">
+              <p class="doc-section-title">💰 Tarifas Meta — Colombia (2025)</p>
+              <div class="doc-card" style="max-width:600px">
+                <table class="doc-table">
+                  <thead>
+                    <tr>
+                      <th>Tipo de conversación</th>
+                      <th>Tarifa USD</th>
+                      <th>Aprox. COP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>📣 Marketing <span class="doc-chip doc-chip-orange">difusiones</span></td>
+                      <td><strong>$0.0165</strong></td>
+                      <td>~$67 COP</td>
+                    </tr>
+                    <tr>
+                      <td>🛎️ Utilidad <span class="doc-chip doc-chip-blue">transaccional</span></td>
+                      <td><strong>$0.0042</strong></td>
+                      <td>~$17 COP</td>
+                    </tr>
+                    <tr>
+                      <td>🔐 Autenticación <span class="doc-chip doc-chip-green">OTP</span></td>
+                      <td><strong>$0.0190</strong></td>
+                      <td>~$77 COP</td>
+                    </tr>
+                    <tr>
+                      <td>💬 Servicio (cliente inicia)</td>
+                      <td><strong>Gratis</strong></td>
+                      <td>$0</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p style="font-size:.76rem;color:#8a94a6;margin-top:10px;line-height:1.5">
+                  TRM referencia: ~$4.100 COP/USD. Las tarifas pueden cambiar — consultar siempre la
+                  <a href="https://developers.facebook.com/docs/whatsapp/pricing" target="_blank" style="color:var(--az)">tabla oficial de Meta</a>.
+                  Conversación de 24h: un solo cargo sin importar cuántos mensajes se envíen en esa ventana.
+                </p>
+              </div>
+            </div>
+
+            <!-- Difusiones y límites -->
+            <div class="doc-section">
+              <p class="doc-section-title">📤 Difusiones — límites y buenas prácticas</p>
+              <div class="doc-grid">
+
+                <div class="doc-card">
+                  <div class="doc-card-title">⚡ Límites de envío</div>
+                  <table class="doc-table">
+                    <tr><td>Nivel 1 (nuevo número)</td><td><strong>1.000/día</strong></td></tr>
+                    <tr><td>Nivel 2</td><td><strong>10.000/día</strong></td></tr>
+                    <tr><td>Nivel 3</td><td><strong>100.000/día</strong></td></tr>
+                    <tr><td>Ilimitado</td><td><strong>Sin límite</strong></td></tr>
+                  </table>
+                  <p style="font-size:.78rem;color:#6b7a8d;margin-top:8px">
+                    El nivel sube automáticamente cuando la tasa de mensajes enviados vs. bloqueados es buena.
+                    Una calidad <em>alta</em> o <em>media</em> del número es necesaria para subir de nivel.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🛡️ Anti-spam y opt-out</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0 0 8px">
+                    Si un cliente responde palabras de baja (<b>STOP, BAJA, NO MÁS, CANCELAR…</b>), Andrea lo marca automáticamente y queda excluido de futuras difusiones.
+                  </p>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                    Meta penaliza números con alta tasa de bloqueos. Mantener calidad alta:
+                  </p>
+                  <ul style="font-size:.82rem;color:#4a5568;line-height:1.8;margin:6px 0 0 16px;padding:0">
+                    <li>Incluir botón "Dar de baja" en cada plantilla</li>
+                    <li>Enviar solo a contactos que dieron consentimiento</li>
+                    <li>Espaciar difusiones (no todos los días al mismo segmento)</li>
+                    <li>Personalizar el contenido con variables {{nombre}}</li>
+                  </ul>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Sistema técnico -->
+            <div class="doc-section">
+              <p class="doc-section-title">🔧 Sistema técnico</p>
+              <div class="doc-grid">
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🔗 Webhook Meta</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0 0 8px">
+                    Meta envía todos los eventos (mensajes, entregas, lecturas, estados) a:
+                  </p>
+                  <div class="doc-formula">POST /webhook</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:8px 0 0">
+                    La verificación inicial usa un GET con <code>hub.verify_token</code>.
+                    Si el webhook deja de responder, Meta auto-deshabilita la suscripción — el endpoint debe estar siempre activo.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🤖 Modelo de IA — Andrea</div>
+                  <table class="doc-table">
+                    <tr><td>Modelo</td><td><strong>Claude Haiku 4.5</strong></td></tr>
+                    <tr><td>Tokens máx. respuesta</td><td>1.024</td></tr>
+                    <tr><td>Contexto inyectado</td><td>System prompt + catálogo Shopify + perfil cliente + carrito activo + últimos 20 mensajes</td></tr>
+                    <tr><td>Opt-out automático</td><td>STOP, BAJA, CANCELAR, DARME DE BAJA…</td></tr>
+                  </table>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🛒 Integración Shopify</div>
+                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                    El catálogo de productos se carga via <strong>Shopify Admin API</strong> y se cachea en memoria (actualización cada 5 min).
+                    El perfil del cliente y el historial de pedidos se obtienen por número de teléfono.
+                    Los checkouts se crean via la API de Shopify — el cliente recibe un link directo para completar el pago.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🗄️ Base de datos</div>
+                  <table class="doc-table">
+                    <tr><td>Motor local</td><td>SQLite + aiosqlite</td></tr>
+                    <tr><td>Motor producción</td><td>PostgreSQL (Railway)</td></tr>
+                    <tr><td>Tablas principales</td><td>mensajes, clientes, estado_conversaciones, opt_outs, difusiones, difusion_destinatarios</td></tr>
+                    <tr><td>Historial por cliente</td><td>Últimos 20 mensajes (configurable)</td></tr>
+                  </table>
+                </div>
+
+              </div>
+            </div>
+
+          </div><!-- /pane documentacion -->
+
         </div>
       </div><!-- /sec-configuracion -->
 
@@ -3642,8 +3868,16 @@ function mkCard(ic, lbl, val, sub) {
 }
 
 /* ══════════════════════════════════════════════════════
-   CONFIGURACIÓN
+   CONFIGURACIÓN — tabs
    ══════════════════════════════════════════════════════ */
+function cfgTab(id, el) {
+  document.querySelectorAll('.cfg-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.cfg-pane').forEach(function(p) { p.classList.remove('active'); });
+  el.classList.add('active');
+  var pane = document.getElementById('cfg-pane-' + id);
+  if (pane) pane.classList.add('active');
+}
+
 async function cargarConfiguracion() {
   // Inferimos estado de config desde los endpoints que ya tenemos
   // (sin exponer las keys reales)
