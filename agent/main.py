@@ -139,11 +139,10 @@ async def lifespan(app: FastAPI):
 
     # Pre-cargar defaults de tools.py en os.environ para que el panel de configuración
     # muestre el estado real aunque los valores vengan del código y no de Railway env vars
-    from agent.tools import SHOPIFY_STORE, SHOPIFY_STOREFRONT_TOKEN, SHOPIFY_ADMIN_TOKEN
+    from agent.tools import SHOPIFY_STORE, SHOPIFY_STOREFRONT_TOKEN
     _defaults = {
         "SHOPIFY_STORE":            SHOPIFY_STORE,
         "SHOPIFY_STOREFRONT_TOKEN": SHOPIFY_STOREFRONT_TOKEN,
-        "SHOPIFY_ADMIN_TOKEN":      SHOPIFY_ADMIN_TOKEN,
     }
     for _k, _v in _defaults.items():
         if _v and not os.environ.get(_k):
@@ -1968,7 +1967,7 @@ async def inbox_revertir_opt_out(
 _CONFIG_KEYS_ALLOWED = {
     "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
     "ANTHROPIC_API_KEY", "AI_MODEL",
-    "SHOPIFY_STORE", "SHOPIFY_STOREFRONT_TOKEN", "SHOPIFY_ADMIN_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
+    "SHOPIFY_STORE", "SHOPIFY_STOREFRONT_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
 }
 
 _CONFIG_META = {
@@ -1978,10 +1977,9 @@ _CONFIG_META = {
     "META_VERIFY_TOKEN":       {"label": "Verify Token",       "tipo": "plain"},
     "ANTHROPIC_API_KEY":       {"label": "API Key",            "tipo": "secret"},
     "AI_MODEL":                {"label": "Modelo IA",          "tipo": "plain"},
-    "SHOPIFY_STORE":           {"label": "Dominio tienda",     "tipo": "plain"},
-    "SHOPIFY_STOREFRONT_TOKEN":{"label": "Storefront Token",   "tipo": "secret"},
-    "SHOPIFY_ADMIN_TOKEN":     {"label": "Admin Token",        "tipo": "secret"},
-    "SHOPIFY_WEBHOOK_SECRET":  {"label": "Webhook Secret",     "tipo": "secret"},
+    "SHOPIFY_STORE":           {"label": "Dominio tienda",   "tipo": "plain"},
+    "SHOPIFY_STOREFRONT_TOKEN":{"label": "Storefront Token", "tipo": "secret"},
+    "SHOPIFY_WEBHOOK_SECRET":  {"label": "Webhook Secret",   "tipo": "secret"},
 }
 
 

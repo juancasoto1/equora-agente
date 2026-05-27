@@ -1790,14 +1790,14 @@ tr:hover td{background:#f8f9fa}
                   </div>
                   <div class="cfg-help-box" id="help-sh-sftoken">
                     Andrea usa la <b>Storefront API</b> para leer el catálogo y crear checkouts.<br>
-                    El token se obtiene instalando la app <b>Headless</b> de Shopify:<br><br>
-                    1. Shopify Admin → <b>Apps</b> → busca <b>"Headless"</b> → instálala si no la tienes<br>
-                    2. Abre la app Headless → <b>"Add Storefront"</b> (o selecciona tu storefront existente)<br>
-                    3. En la sección <b>"Storefront API"</b> verás dos tokens:<br>
-                    &nbsp;&nbsp;• <b>Token de acceso público</b> — cadena hex de 32 chars, sin prefijo → <em>usa este</em><br>
-                    &nbsp;&nbsp;• Token de acceso privado — empieza con <code>shpat_…</code> (también funciona, pero mantenlo privado)<br>
+                    Para obtener el token debes tener instalada la app <b>Headless</b> en tu tienda:<br><br>
+                    1. Shopify Admin → <b>Apps</b> → busca <b>"Headless"</b> e instálala<br>
+                    2. Abre la app Headless → <b>"Add Storefront"</b> (o selecciona el existente)<br>
+                    3. Verás dos tokens en la sección <b>"Storefront API"</b>:<br>
+                    &nbsp;&nbsp;• <b>Token de acceso público</b> — cadena de <b>32 caracteres hex</b> sin prefijo → <em>usa este</em><br>
+                    &nbsp;&nbsp;• Token de acceso privado — empieza con <code>shpat_…</code> (también funciona)<br>
                     4. Copia el <b>Token de acceso público</b> y pégalo aquí<br>
-                    <small style="color:#6b7a8d">Ejemplo: <code>d6fe89f265fed1b5f9572f19fc0ba3a7</code> &nbsp;·&nbsp; <a href="https://shopify.dev/docs/api/usage/authentication#access-tokens-for-the-storefront-api" target="_blank">Documentación oficial →</a></small>
+                    <small style="color:#6b7a8d">Ejemplo: <code>d6fe89xxxxxxxxxxxxxxxxxxxxxx</code> (32 chars) &nbsp;·&nbsp; <a href="https://shopify.dev/docs/api/usage/authentication#access-tokens-for-the-storefront-api" target="_blank">Documentación oficial →</a></small>
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
@@ -1811,34 +1811,6 @@ tr:hover td{background:#f8f9fa}
 
               <div class="cfg-step">
                 <div class="cfg-step-num">3</div>
-                <div class="cfg-step-body">
-                  <div class="cfg-field-lbl">
-                    Token Admin API
-                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-admintoken')" type="button" aria-label="Ayuda">?</button>
-                    <span class="opt-badge">Opcional</span>
-                  </div>
-                  <div class="cfg-help-box" id="help-sh-admintoken">
-                    Solo se usa para leer las <b>zonas y tarifas de envío</b> directamente de tu configuración de Shopify.<br>
-                    Si no lo configuras, el sistema usa los valores de envío fijos — <em>la tienda sigue funcionando igual</em>.<br><br>
-                    ⚠️ Este token viene de una <b>app personalizada</b> distinta a la app Headless del paso 2:<br>
-                    1. Shopify Admin → <b>Configuración → Apps y canales de ventas → Desarrollar apps</b><br>
-                    2. Clic en <b>"Crear una app"</b> → ponle un nombre (ej: "Andrea Admin")<br>
-                    3. Pestaña <b>"Configuración de la API de Admin"</b> → activa el permiso <code>read_shipping</code><br>
-                    4. Clic en <b>"Instalar app"</b> → copia el <b>"Token de acceso del Admin API"</b><br>
-                    <small style="color:#6b7a8d">El token empieza con <code>shpat_…</code> &nbsp;·&nbsp; <a href="https://shopify.dev/docs/apps/build/authentication-authorization/access-token-types/generate-app-access-tokens-admin" target="_blank">Documentación oficial →</a></small>
-                  </div>
-                  <div class="cfg-field-row">
-                    <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-admintoken" class="f-inp" placeholder="shpat_..." autocomplete="off">
-                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-admintoken',this)" type="button">👁</button>
-                    </div>
-                    <span class="cfg-field-status" id="st-SHOPIFY_ADMIN_TOKEN"></span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="cfg-step">
-                <div class="cfg-step-num">4</div>
                 <div class="cfg-step-body">
                   <div class="cfg-field-lbl">
                     Webhook Secret
@@ -4286,7 +4258,6 @@ async function cargarConfiguracion() {
     AI_MODEL:                'cfg-ant-model',
     SHOPIFY_STORE:           'cfg-sh-domain',
     SHOPIFY_STOREFRONT_TOKEN:'cfg-sh-sftoken',
-    SHOPIFY_ADMIN_TOKEN:     'cfg-sh-admintoken',
     SHOPIFY_WEBHOOK_SECRET:  'cfg-sh-whsec',
   };
 
@@ -4357,14 +4328,12 @@ async function guardarConfig(service) {
     if (k) payload.ANTHROPIC_API_KEY = k;
     if (m) payload.AI_MODEL          = m;
   } else if (service === 'shopify') {
-    var sd  = (document.getElementById('cfg-sh-domain').value     || '').trim();
-    var sf  = (document.getElementById('cfg-sh-sftoken').value    || '').trim();
-    var sad = (document.getElementById('cfg-sh-admintoken').value || '').trim();
-    var sw  = (document.getElementById('cfg-sh-whsec').value      || '').trim();
-    if (sd)  payload.SHOPIFY_STORE            = sd;
-    if (sf)  payload.SHOPIFY_STOREFRONT_TOKEN = sf;
-    if (sad) payload.SHOPIFY_ADMIN_TOKEN      = sad;
-    if (sw)  payload.SHOPIFY_WEBHOOK_SECRET   = sw;
+    var sd = (document.getElementById('cfg-sh-domain').value  || '').trim();
+    var sf = (document.getElementById('cfg-sh-sftoken').value || '').trim();
+    var sw = (document.getElementById('cfg-sh-whsec').value   || '').trim();
+    if (sd) payload.SHOPIFY_STORE            = sd;
+    if (sf) payload.SHOPIFY_STOREFRONT_TOKEN = sf;
+    if (sw) payload.SHOPIFY_WEBHOOK_SECRET   = sw;
   }
 
   if (!Object.keys(payload).length) {
