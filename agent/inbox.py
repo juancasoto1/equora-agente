@@ -394,6 +394,28 @@ tr:hover td{background:#f8f9fa}
 .qr-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .cta-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap}
 .cta-row .f-inp,.cta-row .f-sel{margin:0}
+/* Unified button builder */
+.btn-add-wrap{position:relative;display:inline-block}
+.btn-type-menu{display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;
+  border:1px solid #dde1e7;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.13);
+  z-index:300;min-width:230px;overflow:hidden}
+.btn-type-menu.open{display:block}
+.btn-menu-item{padding:10px 16px;font-size:.84rem;color:#1a2332;cursor:pointer;
+  border-bottom:1px solid #f0f2f5;display:flex;align-items:center;gap:8px;transition:background .1s}
+.btn-menu-item:last-child{border-bottom:none}
+.btn-menu-item:hover{background:#f5f7ff}
+.ubn-row{background:#fafbfc;border:1px solid #e0e4e8;border-radius:8px;
+  padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:6px}
+.ubn-hdr{display:flex;align-items:center;gap:8px}
+.ubn-type-badge{font-size:.71rem;font-weight:700;padding:2px 7px;border-radius:4px;
+  flex-shrink:0;white-space:nowrap}
+.ubn-badge-qr{background:#eef9ee;color:#2d7d32}
+.ubn-badge-url{background:#eef2ff;color:#4a7cf7}
+.ubn-badge-phone{background:#fff3e0;color:#e65100}
+.ubn-badge-wacall{background:#e8f5e9;color:#1b5e20}
+.ubn-badge-flow{background:#f3e5f5;color:#6a1b9a}
+.ubn-badge-code{background:#fff8e1;color:#f57f17}
+.ubn-cnt{font-size:.7rem;color:#6b7a8d;white-space:nowrap;flex-shrink:0}
 .progress-upload{display:none;align-items:center;gap:8px;font-size:.8rem;color:var(--az);
   background:#f0f9f6;border-radius:8px;padding:8px 14px;margin-top:8px}
 .progress-upload .pu-spinner{animation:spin 1s linear infinite;font-size:1rem}
@@ -1078,10 +1100,13 @@ tr:hover td{background:#f8f9fa}
                 <div class="f-group" style="margin-bottom:4px">
                   <textarea id="tpl-body" class="f-ta" maxlength="1024"
                     placeholder="Hola {{nombre}}, tenemos una oferta especial para ti en Equora Distribuciones 🌿"
-                    oninput="updateCounter('tpl-body','body-cnt',1024)"></textarea>
+                    oninput="updateBodyCounter()"></textarea>
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
                     <span class="f-hint">Campo requerido</span>
                     <span class="char-counter"><span id="body-cnt">0</span>/1024</span>
+                  </div>
+                  <div id="body-emoji-warn" style="display:none;font-size:.78rem;color:#e53935;margin-top:5px;font-weight:500">
+                    ⚠️ La plantilla de marketing no debe tener más de 10 emojis
                   </div>
                 </div>
                 <div class="info-box" style="margin-bottom:10px">
@@ -1170,40 +1195,23 @@ tr:hover td{background:#f8f9fa}
 
                 <div id="btn-controls">
                 <div class="sep-label">🔘 Botones <span class="opt-badge">Opcional</span></div>
-                <div class="f-group" style="margin-bottom:10px">
-                  <span class="f-label">Tipo de botones</span>
-                  <div class="radio-group" id="btn-radio-group">
-                    <label class="radio-opt chk"><input type="radio" name="btn-type" value="NONE" checked onchange="toggleBtnType('NONE')"> Ninguno</label>
-                    <label class="radio-opt"><input type="radio" name="btn-type" value="QUICK_REPLY" onchange="toggleBtnType('QUICK_REPLY')"> ↩️ Respuesta rápida</label>
-                    <label class="radio-opt"><input type="radio" name="btn-type" value="CTA" onchange="toggleBtnType('CTA')"> 🔗 Llamada a la acción</label>
-                  </div>
+                <div class="info-box" style="margin-bottom:10px;font-size:.8rem">
+                  <b>↩️ Personalizado:</b> max 3 · <b>🔗 Sitio web:</b> max 2 · <b>📞 Teléfono:</b> max 1 · <b>🏷️ Código:</b> max 1 · <b>Total:</b> max 10
                 </div>
-
-                <!-- Quick reply -->
-                <div id="btns-qr-wrap" style="display:none;margin-bottom:14px">
-                  <div class="info-box">
-                    <b>↩️ Respuesta rápida:</b> el cliente toca el botón y envía ese texto como mensaje<br>
-                    • Hasta <b>3 botones</b> · Máx <b>25 caracteres</b> por botón · Sin URLs<br>
-                    • Ideales para: Sí/No, opciones de menú, confirmaciones
-                  </div>
-                  <div id="qr-list"></div>
-                  <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="agregarBotonQR()" type="button">
-                    + Agregar botón
+                <div id="btn-list" style="margin-bottom:8px"></div>
+                <div class="btn-add-wrap">
+                  <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem"
+                          onclick="_toggleBtnMenu(event)" type="button" id="agregar-btn-trigger">
+                    + Agregar botón ▾
                   </button>
-                </div>
-
-                <!-- CTA -->
-                <div id="btns-cta-wrap" style="display:none;margin-bottom:14px">
-                  <div class="info-box">
-                    <b>🔗 Llamada a la acción:</b> hasta <b>2 botones</b> (1 URL + 1 teléfono)<br>
-                    • <b>URL:</b> texto máx 20 chars · La URL puede tener <code>{{1}}</code> al final<br>
-                    • <b>Teléfono:</b> texto máx 20 chars · Número con código de país (ej: +573001234567)<br>
-                    • El botón abre el navegador o el marcador del teléfono del cliente
+                  <div id="btn-type-menu" class="btn-type-menu">
+                    <div class="btn-menu-item" onclick="_agregarBoton('QUICK_REPLY')">↩️ Personalizado <span style="font-size:.72rem;color:#6b7a8d">(respuesta rápida)</span></div>
+                    <div class="btn-menu-item" onclick="_agregarBoton('URL')">🔗 Ir al sitio web</div>
+                    <div class="btn-menu-item" onclick="_agregarBoton('WHATSAPP_VOICE_CALL')">📲 Llamar en WhatsApp</div>
+                    <div class="btn-menu-item" onclick="_agregarBoton('PHONE_NUMBER')">📞 Llamar a número de teléfono</div>
+                    <div class="btn-menu-item" onclick="_agregarBoton('FLOW')">🔄 Flow completo</div>
+                    <div class="btn-menu-item" onclick="_agregarBoton('COPY_CODE')">🏷️ Copiar código de oferta</div>
                   </div>
-                  <div id="cta-list"></div>
-                  <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="agregarBotonCTA()" type="button">
-                    + Agregar botón
-                  </button>
                 </div>
                 </div><!-- /btn-controls -->
 
@@ -2596,8 +2604,7 @@ async function guardarBorrador() {
   var footer = document.getElementById('tpl-footer').value.trim();
   var hdrTipo  = document.querySelector('input[name="hdr-type"]:checked').value;
   var hdrTexto = hdrTipo === 'TEXT' ? document.getElementById('tpl-hdr-text').value.trim() : '';
-  var btnTipo  = document.querySelector('input[name="btn-type"]:checked').value;
-  var buttons  = _recolectarBotones(btnTipo);
+  var buttons  = _recolectarBotones();
   var payload  = {
     name: nombre, category: cat, language: lang,
     header_type: hdrTipo !== 'NONE' ? hdrTipo : null,
@@ -2726,7 +2733,7 @@ function _poblarFormulario(datos) {
   actualizarSubcat();
   document.getElementById('tpl-body').value   = datos.body || '';
   document.getElementById('tpl-footer').value = datos.footer || '';
-  updateCounter('tpl-body','body-cnt',1024);
+  updateBodyCounter();
   updateCounter('tpl-footer','footer-cnt',60);
   // Header
   var hdrTipo = datos.header_type || 'NONE';
@@ -2734,42 +2741,26 @@ function _poblarFormulario(datos) {
   radios.forEach(function(r) { if (r.value === hdrTipo) r.checked = true; });
   toggleHdrType(hdrTipo);
   if (hdrTipo === 'TEXT') document.getElementById('tpl-hdr-text').value = datos.header_text || '';
-  // Botones
+  // Botones — restaurar en lista unificada
+  var btnList = document.getElementById('btn-list');
+  if (btnList) btnList.innerHTML = '';
   var buttons = datos.buttons || [];
-  document.getElementById('qr-list').innerHTML  = '';
-  document.getElementById('cta-list').innerHTML = '';
-  if (buttons.length) {
-    var hasQR  = buttons.some(function(b) { return b.type === 'QUICK_REPLY'; });
-    var hasCTA = buttons.some(function(b) { return b.type === 'URL' || b.type === 'PHONE_NUMBER'; });
-    if (hasQR) {
-      document.querySelector('input[name="btn-type"][value="QUICK_REPLY"]').checked = true;
-      toggleBtnType('QUICK_REPLY');
-      document.getElementById('qr-list').innerHTML = '';
-      buttons.filter(function(b) { return b.type === 'QUICK_REPLY'; }).forEach(function(b) {
-        agregarBotonQR();
-        var rows = document.querySelectorAll('#qr-list .qr-text');
-        if (rows.length) rows[rows.length-1].value = b.text || '';
-      });
-    } else if (hasCTA) {
-      document.querySelector('input[name="btn-type"][value="CTA"]').checked = true;
-      toggleBtnType('CTA');
-      document.getElementById('cta-list').innerHTML = '';
-      buttons.filter(function(b) { return b.type !== 'QUICK_REPLY'; }).forEach(function(b) {
-        agregarBotonCTA();
-        var rows = document.querySelectorAll('#cta-list .cta-row');
-        var row  = rows[rows.length-1];
-        if (!row) return;
-        row.querySelector('.cta-tipo').value   = b.type;
-        row.querySelector('.cta-texto').value  = b.text || '';
-        if (b.type === 'URL')          { row.querySelector('.cta-valor-url').value = b.url || ''; }
-        else if (b.type === 'PHONE_NUMBER') { row.querySelector('.cta-valor-tel').value = b.phone_number || ''; }
-        toggleCtaTipo(row.querySelector('.cta-tipo'));
-      });
+  buttons.forEach(function(b) {
+    var tipo = b.type || 'QUICK_REPLY';
+    if (tipo === 'VOICE_CALL') tipo = 'WHATSAPP_VOICE_CALL';
+    _agregarBoton(tipo);
+    var rows = document.querySelectorAll('#btn-list .ubn-row');
+    var row = rows[rows.length - 1];
+    if (!row) return;
+    if (tipo === 'COPY_CODE') {
+      var ci = row.querySelector('.ubn-code'); if (ci) ci.value = b.example_code || b.text || '';
+    } else {
+      var ti = row.querySelector('.ubn-text'); if (ti) ti.value = b.text || '';
+      if (tipo === 'URL')          { var ui = row.querySelector('.ubn-url');     if (ui) ui.value = b.url || ''; }
+      if (tipo === 'PHONE_NUMBER') { var pi = row.querySelector('.ubn-phone');   if (pi) pi.value = b.phone_number || ''; }
+      if (tipo === 'FLOW')         { var fi = row.querySelector('.ubn-flow-id'); if (fi) fi.value = b.flow_id || ''; }
     }
-  } else {
-    document.querySelector('input[name="btn-type"][value="NONE"]').checked = true;
-    toggleBtnType('NONE');
-  }
+  });
 }
 
 function _limpiarFormulario() {
@@ -2779,13 +2770,12 @@ function _limpiarFormulario() {
   document.getElementById('tpl-hdr-text').value = '';
   document.querySelector('input[name="hdr-type"][value="NONE"]').checked = true;
   toggleHdrType('NONE');
-  document.querySelector('input[name="btn-type"][value="NONE"]').checked = true;
-  toggleBtnType('NONE');
-  document.getElementById('qr-list').innerHTML  = '';
-  document.getElementById('cta-list').innerHTML = '';
+  var btnList = document.getElementById('btn-list'); if (btnList) btnList.innerHTML = '';
   ['img','vid','doc'].forEach(limpiarArchivo);
-  updateCounter('tpl-body','body-cnt',1024);
+  updateBodyCounter();
   updateCounter('tpl-footer','footer-cnt',60);
+  var emojiWarn = document.getElementById('body-emoji-warn'); if (emojiWarn) emojiWarn.style.display = 'none';
+  var prevBody = document.getElementById('prev-body'); if (prevBody) prevBody.style.color = '';
   // Resetear campos nuevos
   document.querySelector('input[name="var-type"][value="NUMERO"]').checked = true;
   actualizarTipoVar('NUMERO');
@@ -2798,27 +2788,35 @@ function _limpiarFormulario() {
 }
 
 /* ── Helper compartido: recolectar botones del form ── */
-function _recolectarBotones(btnTipo) {
+function _recolectarBotones() {
   var buttons = [];
-  if (btnTipo === 'QUICK_REPLY') {
-    document.querySelectorAll('#qr-list .qr-text').forEach(function(inp) {
-      var txt = inp.value.trim();
+  var list = document.getElementById('btn-list');
+  if (!list) return buttons;
+  list.querySelectorAll('.ubn-row').forEach(function(row) {
+    var tipo = row.dataset.btype;
+    if (tipo === 'QUICK_REPLY') {
+      var txt = ((row.querySelector('.ubn-text') || {}).value || '').trim();
       if (txt) buttons.push({type:'QUICK_REPLY', text: txt});
-    });
-  } else if (btnTipo === 'CTA') {
-    document.querySelectorAll('#cta-list .cta-row').forEach(function(row) {
-      var tipo2  = row.querySelector('.cta-tipo').value;
-      var texto2 = row.querySelector('.cta-texto').value.trim();
-      if (!texto2) return;
-      if (tipo2 === 'URL') {
-        var url = row.querySelector('.cta-valor-url').value.trim();
-        if (url) buttons.push({type:'URL', text: texto2, url: url});
-      } else {
-        var tel = row.querySelector('.cta-valor-tel').value.trim();
-        if (tel) buttons.push({type:'PHONE_NUMBER', text: texto2, phone_number: tel});
-      }
-    });
-  }
+    } else if (tipo === 'URL') {
+      var texto = ((row.querySelector('.ubn-text') || {}).value || '').trim();
+      var url   = ((row.querySelector('.ubn-url')  || {}).value || '').trim();
+      if (texto && url) buttons.push({type:'URL', text: texto, url: url});
+    } else if (tipo === 'PHONE_NUMBER') {
+      var texto2 = ((row.querySelector('.ubn-text')  || {}).value || '').trim();
+      var tel    = ((row.querySelector('.ubn-phone') || {}).value || '').trim();
+      if (texto2 && tel) buttons.push({type:'PHONE_NUMBER', text: texto2, phone_number: tel});
+    } else if (tipo === 'WHATSAPP_VOICE_CALL') {
+      var texto3 = ((row.querySelector('.ubn-text') || {}).value || '').trim();
+      if (texto3) buttons.push({type:'VOICE_CALL', text: texto3});
+    } else if (tipo === 'FLOW') {
+      var texto4 = ((row.querySelector('.ubn-text')    || {}).value || '').trim();
+      var flowId = ((row.querySelector('.ubn-flow-id') || {}).value || '').trim();
+      if (texto4) buttons.push({type:'FLOW', text: texto4, flow_id: flowId || null});
+    } else if (tipo === 'COPY_CODE') {
+      var code = ((row.querySelector('.ubn-code') || {}).value || '').trim();
+      if (code) buttons.push({type:'COPY_CODE', example_code: code});
+    }
+  });
   return buttons;
 }
 
@@ -2836,6 +2834,32 @@ function updateCounter(inputId, counterId, max) {
   if (!el) return;
   el.textContent = val;
   el.parentElement.className = 'char-counter' + (val > max * .85 ? ' warn' : '');
+}
+
+function updateBodyCounter() {
+  var inp = document.getElementById('tpl-body');
+  if (!inp) return;
+  var val = inp.value;
+  var charLen = val.length;
+  var el = document.getElementById('body-cnt');
+  if (el) {
+    el.textContent = charLen;
+    el.parentElement.className = 'char-counter' + (charLen > 1024 * .85 ? ' warn' : '');
+  }
+  // Count emojis (Extended_Pictographic covers all actual emoji glyphs, excludes 0-9/#/*)
+  var emojiCount = 0;
+  try {
+    emojiCount = (val.match(/\p{Extended_Pictographic}/gu) || []).length;
+  } catch(e) {
+    // fallback for older browsers
+    emojiCount = (val.match(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu) || []).length;
+  }
+  var tooMany = emojiCount > 10;
+  var warnEl = document.getElementById('body-emoji-warn');
+  if (warnEl) warnEl.style.display = tooMany ? '' : 'none';
+  var prevBody = document.getElementById('prev-body');
+  if (prevBody) prevBody.style.color = tooMany ? '#e53935' : '';
+  actualizarPreview();
 }
 
 /* ── Subcategoría según categoría ── */
@@ -2965,18 +2989,89 @@ function toggleTTL() {
   document.getElementById('ttl-sel-wrap').style.display = activo ? '' : 'none';
 }
 
-/* ── Tipo de botones ── */
-function toggleBtnType(tipo) {
-  document.getElementById('btns-qr-wrap').style.display  = tipo === 'QUICK_REPLY' ? 'block' : 'none';
-  document.getElementById('btns-cta-wrap').style.display = tipo === 'CTA'         ? 'block' : 'none';
-  document.querySelectorAll('#btn-radio-group .radio-opt').forEach(function(lbl) {
-    var inp = lbl.querySelector('input');
-    lbl.classList.toggle('chk', inp && inp.value === tipo);
-  });
-  // Inicializar lista si está vacía
-  if (tipo === 'QUICK_REPLY' && !document.getElementById('qr-list').children.length) agregarBotonQR();
-  if (tipo === 'CTA'         && !document.getElementById('cta-list').children.length) agregarBotonCTA();
+/* ── Dropdown de tipo de botón ── */
+function _toggleBtnMenu(e) {
+  e.stopPropagation();
+  var menu = document.getElementById('btn-type-menu');
+  if (!menu) return;
+  menu.classList.toggle('open');
 }
+// Cerrar menú al hacer clic fuera
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('btn-type-menu');
+  if (menu && !menu.closest('.btn-add-wrap').contains(e.target)) menu.classList.remove('open');
+});
+
+/* ── Agregar botón unificado ── */
+function _agregarBoton(tipo) {
+  var menu = document.getElementById('btn-type-menu');
+  if (menu) menu.classList.remove('open');
+  var list = document.getElementById('btn-list');
+  if (!list) return;
+  // Límites
+  var total = list.querySelectorAll('.ubn-row').length;
+  if (total >= 10) { alert('Máximo 10 botones en total'); return; }
+  var typeCnt = list.querySelectorAll('.ubn-row[data-btype="' + tipo + '"]').length;
+  var maxPerType = {QUICK_REPLY:3, URL:2, PHONE_NUMBER:1, WHATSAPP_VOICE_CALL:1, FLOW:1, COPY_CODE:1};
+  var lim = maxPerType[tipo];
+  if (lim && typeCnt >= lim) { alert('Máximo ' + lim + ' botón(es) de este tipo'); return; }
+
+  var badges = {
+    QUICK_REPLY:'<span class="ubn-type-badge ubn-badge-qr">↩️ Personalizado</span>',
+    URL:'<span class="ubn-type-badge ubn-badge-url">🔗 Sitio web</span>',
+    PHONE_NUMBER:'<span class="ubn-type-badge ubn-badge-phone">📞 Teléfono</span>',
+    WHATSAPP_VOICE_CALL:'<span class="ubn-type-badge ubn-badge-wacall">📲 WhatsApp Call</span>',
+    FLOW:'<span class="ubn-type-badge ubn-badge-flow">🔄 Flow</span>',
+    COPY_CODE:'<span class="ubn-type-badge ubn-badge-code">🏷️ Código de oferta</span>',
+  };
+  var row = document.createElement('div');
+  row.className = 'ubn-row';
+  row.dataset.btype = tipo;
+  var removeBtn = '<button class="btn-remove" onclick="_eliminarBoton(this)" type="button">✕</button>';
+  var hdr = '<div class="ubn-hdr">' + (badges[tipo]||tipo) + '{FIELD}' + removeBtn + '</div>';
+  var html = '';
+  if (tipo === 'QUICK_REPLY') {
+    html = hdr.replace('{FIELD}','<input class="f-inp ubn-text" maxlength="25" placeholder="Ej: Sí, me interesa" style="flex:1" oninput="actualizarPreview()">'
+      + '<span class="ubn-cnt">0/25</span>');
+  } else if (tipo === 'URL') {
+    html = hdr.replace('{FIELD}','<input class="f-inp ubn-text" maxlength="25" placeholder="Texto del botón" style="flex:1" oninput="actualizarPreview()">')
+      + '<input class="f-inp ubn-url" placeholder="https://equoradistribuciones.com/{{1}}" oninput="actualizarPreview()" style="margin-top:2px">'
+      + '<span class="f-hint">La URL puede incluir <code>{{1}}</code> para personalizar por destinatario</span>';
+  } else if (tipo === 'PHONE_NUMBER') {
+    html = hdr.replace('{FIELD}','<input class="f-inp ubn-text" maxlength="25" placeholder="Texto del botón" style="flex:1" oninput="actualizarPreview()">')
+      + '<input class="f-inp ubn-phone" placeholder="+573001234567" oninput="actualizarPreview()" style="margin-top:2px">'
+      + '<span class="f-hint">Número con código de país — el cliente inicia la llamada al tocarlo</span>';
+  } else if (tipo === 'WHATSAPP_VOICE_CALL') {
+    html = hdr.replace('{FIELD}','<input class="f-inp ubn-text" maxlength="25" placeholder="Texto del botón" style="flex:1" oninput="actualizarPreview()">')
+      + '<span class="f-hint">Permite al cliente llamarte directamente por WhatsApp</span>';
+  } else if (tipo === 'FLOW') {
+    html = hdr.replace('{FIELD}','<input class="f-inp ubn-text" maxlength="25" placeholder="Texto del botón" style="flex:1" oninput="actualizarPreview()">')
+      + '<input class="f-inp ubn-flow-id" placeholder="ID del Flow de WhatsApp" oninput="actualizarPreview()" style="margin-top:2px">'
+      + '<span class="f-hint">Requiere un Flow publicado en tu cuenta de WhatsApp Business</span>';
+  } else if (tipo === 'COPY_CODE') {
+    html = '<div class="ubn-hdr">' + (badges[tipo]||tipo)
+      + '<input class="f-inp ubn-code" placeholder="Código de oferta (ej: EQUORA20)" style="flex:1" oninput="actualizarPreview()">'
+      + removeBtn + '</div>'
+      + '<span class="f-hint">El cliente toca el botón para copiar el código al portapapeles</span>';
+  }
+  row.innerHTML = html;
+  // Contador de caracteres para QR
+  if (tipo === 'QUICK_REPLY') {
+    var inp = row.querySelector('.ubn-text');
+    var cnt = row.querySelector('.ubn-cnt');
+    if (inp && cnt) { inp.addEventListener('input', function() { cnt.textContent = this.value.length + '/25'; }); }
+  }
+  list.appendChild(row);
+  actualizarPreview();
+}
+
+function _eliminarBoton(btn) {
+  btn.closest('.ubn-row').remove();
+  actualizarPreview();
+}
+
+/* ── Tipo de botones (legacy — no-op para compatibilidad) ── */
+function toggleBtnType(tipo) { /* replaced by _agregarBoton */ }
 
 /* ── Upload zona ── */
 function seleccionarArchivo(input, tipo, maxMB) {
@@ -3018,57 +3113,10 @@ function limpiarArchivo(tipo) {
   actualizarPreview();
 }
 
-/* ── Botones Quick Reply ── */
-function agregarBotonQR() {
-  var list = document.getElementById('qr-list');
-  if (list.children.length >= 3) { alert('Máximo 3 botones de respuesta rápida'); return; }
-  var row = document.createElement('div');
-  row.className = 'qr-row';
-  row.innerHTML = '<input class="f-inp qr-text" maxlength="25" placeholder="Ej: Sí, me interesa" style="flex:1">' +
-    '<span style="font-size:.7rem;color:#6b7a8d;white-space:nowrap;flex-shrink:0" id="qr-cnt-' + list.children.length + '">0/25</span>' +
-    '<button class="btn-remove" onclick="this.parentElement.remove()" type="button">✕</button>';
-  var inp = row.querySelector('.qr-text');
-  var cntId = 'qr-cnt-' + list.children.length;
-  inp.addEventListener('input', function() {
-    var c = document.getElementById(cntId);
-    if (c) c.textContent = this.value.length + '/25';
-  });
-  list.appendChild(row);
-}
-
-/* ── Botones CTA ── */
-function agregarBotonCTA() {
-  var list = document.getElementById('cta-list');
-  if (list.children.length >= 2) { alert('Máximo 2 botones de llamada a la acción'); return; }
-  var idx = list.children.length;
-  var row = document.createElement('div');
-  row.className = 'cta-row';
-  row.innerHTML =
-    '<div style="display:flex;flex-direction:column;gap:6px;width:100%">' +
-      '<div style="display:flex;gap:8px;align-items:center">' +
-        '<select class="f-sel cta-tipo" style="width:160px" onchange="toggleCtaTipo(this)">' +
-          '<option value="URL">🔗 URL</option>' +
-          '<option value="PHONE_NUMBER">📞 Teléfono</option>' +
-        '</select>' +
-        '<input class="f-inp cta-texto" maxlength="20" placeholder="Texto del botón" style="flex:1">' +
-        '<button class="btn-remove" onclick="this.closest(\'.cta-row\').remove()" type="button">✕</button>' +
-      '</div>' +
-      '<input class="f-inp cta-valor-url" placeholder="https://equoradistribuciones.com/{{1}}" style="width:100%">' +
-      '<span class="f-hint cta-hint-url">La URL puede incluir <code>{{1}}</code> para personalizar por destinatario</span>' +
-      '<input class="f-inp cta-valor-tel" placeholder="+573001234567" style="width:100%;display:none">' +
-      '<span class="f-hint cta-hint-tel" style="display:none">Número con código de país. El cliente iniciará la llamada al tocarlo</span>' +
-    '</div>';
-  list.appendChild(row);
-}
-
-function toggleCtaTipo(sel) {
-  var row = sel.closest('.cta-row');
-  var esURL = sel.value === 'URL';
-  row.querySelector('.cta-valor-url').style.display = esURL ? '' : 'none';
-  row.querySelector('.cta-hint-url').style.display  = esURL ? '' : 'none';
-  row.querySelector('.cta-valor-tel').style.display = esURL ? 'none' : '';
-  row.querySelector('.cta-hint-tel').style.display  = esURL ? 'none' : '';
-}
+/* ── agregarBotonQR / agregarBotonCTA — legacy stubs (usar _agregarBoton) ── */
+function agregarBotonQR()  { _agregarBoton('QUICK_REPLY'); }
+function agregarBotonCTA() { _agregarBoton('URL'); }
+function toggleCtaTipo(sel) { /* no-op legacy */ }
 
 /* ── Subir media a Meta antes de crear la plantilla ── */
 async function subirHeaderMedia(tipo) {
@@ -3126,7 +3174,6 @@ async function crearPlantilla() {
   // Tipo header activo
   var hdrTipo  = document.querySelector('input[name="hdr-type"]:checked').value;
   var hdrTexto = hdrTipo === 'TEXT' ? document.getElementById('tpl-hdr-text').value.trim() : '';
-  var btnTipo  = document.querySelector('input[name="btn-type"]:checked').value;
 
   // Validaciones
   if (!nombre) { showTplResult('err','⚠️ El nombre es obligatorio.'); return; }
@@ -3148,7 +3195,7 @@ async function crearPlantilla() {
     }
   }
 
-  var buttons  = _recolectarBotones(btnTipo);
+  var buttons  = _recolectarBotones();
   var subcat   = document.querySelector('input[name="tpl-subcat"]:checked');
   subcat = subcat ? subcat.value : 'DEFAULT';
   var catalogFmt = (document.querySelector('input[name="catalog-format"]:checked') || {}).value || 'FULL';
@@ -3206,7 +3253,6 @@ async function _editarPlantilla(metaId) {
   var footer   = document.getElementById('tpl-footer').value.trim();
   var hdrTipo  = document.querySelector('input[name="hdr-type"]:checked').value;
   var hdrTexto = hdrTipo === 'TEXT' ? document.getElementById('tpl-hdr-text').value.trim() : '';
-  var btnTipo  = document.querySelector('input[name="btn-type"]:checked').value;
   var btn      = document.getElementById('tpl-crear-btn');
 
   if (!body) { showTplResult('err','⚠️ El cuerpo del mensaje es obligatorio.'); return; }
@@ -3226,7 +3272,7 @@ async function _editarPlantilla(metaId) {
     }
   }
 
-  var buttons = _recolectarBotones(btnTipo);
+  var buttons = _recolectarBotones();
 
   try {
     var payload = {
@@ -3359,26 +3405,21 @@ function actualizarPreview() {
   footerEl.textContent   = footer;
 
   // ── Botones ──
-  var btnTipo = document.querySelector('input[name="btn-type"]:checked');
-  btnTipo = btnTipo ? btnTipo.value : 'NONE';
-  var btnsEl  = document.getElementById('prev-btns');
+  var btnsEl   = document.getElementById('prev-btns');
   var btnsHtml = '';
-
-  if (btnTipo === 'QUICK_REPLY') {
-    document.querySelectorAll('#qr-list .qr-text').forEach(function(inp) {
-      var txt = inp.value.trim();
-      if (txt) btnsHtml += '<div class="wa-btn"><span class="wa-btn-ic">↩️</span>' + he(txt) + '</div>';
-    });
-  } else if (btnTipo === 'CTA') {
-    document.querySelectorAll('#cta-list .cta-row').forEach(function(row) {
-      var tipo2  = row.querySelector('.cta-tipo') ? row.querySelector('.cta-tipo').value : 'URL';
-      var texto2 = row.querySelector('.cta-texto') ? row.querySelector('.cta-texto').value.trim() : '';
-      if (!texto2) return;
-      var ic = tipo2 === 'URL' ? '🔗' : '📞';
-      btnsHtml += '<div class="wa-btn"><span class="wa-btn-ic">' + ic + '</span>' + he(texto2) + '</div>';
+  var btnList  = document.getElementById('btn-list');
+  var btnIcons = {QUICK_REPLY:'↩️', URL:'🔗', PHONE_NUMBER:'📞',
+                  WHATSAPP_VOICE_CALL:'📲', FLOW:'🔄', COPY_CODE:'🏷️'};
+  if (btnList) {
+    btnList.querySelectorAll('.ubn-row').forEach(function(row) {
+      var tipo = row.dataset.btype;
+      var ic   = btnIcons[tipo] || '🔘';
+      var txt  = tipo === 'COPY_CODE'
+        ? ((row.querySelector('.ubn-code') || {}).value || 'Código').trim()
+        : ((row.querySelector('.ubn-text') || {}).value || '').trim();
+      if (txt) btnsHtml += '<div class="wa-btn"><span class="wa-btn-ic">' + ic + '</span>' + he(txt) + '</div>';
     });
   }
-
   btnsEl.style.display = btnsHtml ? '' : 'none';
   btnsEl.innerHTML     = btnsHtml;
 }
@@ -3407,30 +3448,24 @@ function _hookPreview() {
     var el = document.getElementById(id);
     if (el) el.addEventListener('input', actualizarPreview);
   });
-  // Radios header y botones
-  document.querySelectorAll('input[name="hdr-type"], input[name="btn-type"]').forEach(function(r) {
+  // Radio header
+  document.querySelectorAll('input[name="hdr-type"]').forEach(function(r) {
     r.addEventListener('change', actualizarPreview);
   });
-  // Botones QR y CTA: usar MutationObserver para detectar cuando se agregan
+  // btn-list: MutationObserver para re-hookear inputs cuando se agregan botones
   var observer = new MutationObserver(function() {
-    // Re-hookear los inputs nuevos dentro de qr-list y cta-list
-    ['#qr-list','#cta-list'].forEach(function(sel) {
-      var el = document.querySelector(sel);
-      if (!el) return;
-      el.querySelectorAll('input').forEach(function(inp) {
-        if (!inp._previewHooked) {
-          inp._previewHooked = true;
-          inp.addEventListener('input', actualizarPreview);
-          inp.addEventListener('change', actualizarPreview);
-        }
-      });
+    var bl = document.getElementById('btn-list');
+    if (!bl) return;
+    bl.querySelectorAll('input').forEach(function(inp) {
+      if (!inp._previewHooked) {
+        inp._previewHooked = true;
+        inp.addEventListener('input', actualizarPreview);
+      }
     });
     actualizarPreview();
   });
-  var qrEl  = document.getElementById('qr-list');
-  var ctaEl = document.getElementById('cta-list');
-  if (qrEl)  observer.observe(qrEl,  {childList:true, subtree:true});
-  if (ctaEl) observer.observe(ctaEl, {childList:true, subtree:true});
+  var btnListEl = document.getElementById('btn-list');
+  if (btnListEl) observer.observe(btnListEl, {childList:true, subtree:true});
   // Disparo inicial
   actualizarPreview();
 }
