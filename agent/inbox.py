@@ -1790,19 +1790,20 @@ tr:hover td{background:#f8f9fa}
                   </div>
                   <div class="cfg-help-box" id="help-sh-sftoken">
                     Andrea usa la <b>Storefront API</b> para leer el catálogo de productos y crear checkouts.<br>
-                    <b>Cómo obtener el token:</b><br>
+                    Hay dos tipos de token — usa el <b>Token de acceso público</b> (es suficiente para Andrea):<br>
+                    <b>Cómo obtenerlo:</b><br>
                     1. Shopify Admin → <b>Configuración → Apps y canales de ventas → Desarrollar apps</b><br>
-                    2. Selecciona tu app (o crea una) → pestaña <b>"Credenciales de la API"</b><br>
-                    3. En la sección <b>"Storefront API"</b> → activa los permisos:<br>
+                    2. Selecciona tu app → pestaña <b>"Credenciales de la API"</b><br>
+                    3. Busca la sección <b>"API Storefront"</b> → activa los permisos:<br>
                     &nbsp;&nbsp;✅ <code>unauthenticated_read_product_listings</code><br>
                     &nbsp;&nbsp;✅ <code>unauthenticated_write_checkouts</code><br>
                     &nbsp;&nbsp;✅ <code>unauthenticated_read_checkouts</code><br>
-                    4. Copia el <b>"Token de acceso de Storefront API"</b><br>
-                    Formato nuevo: empieza con <code>atkn_…</code> &nbsp;|&nbsp; Formato anterior: cadena de 32 caracteres hex
+                    4. Copia el <b>"Token de acceso público"</b> — es una cadena de <b>32 caracteres hexadecimales</b> sin prefijo<br>
+                    <small style="color:#6b7a8d">Ejemplo: <code>d6fe89f265fed1b5f9572f19fc0ba3a7</code> &nbsp;·&nbsp; El token privado (<code>shpat_…</code>) también funciona</small>
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-sftoken" class="f-inp" placeholder="atkn_xxxx... o hex de 32 chars" autocomplete="off">
+                      <input type="password" id="cfg-sh-sftoken" class="f-inp" placeholder="Token público hex de 32 chars (o shpat_...)" autocomplete="off">
                       <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-sftoken',this)" type="button">👁</button>
                     </div>
                     <span class="cfg-field-status" id="st-SHOPIFY_STOREFRONT_TOKEN"></span>

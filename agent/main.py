@@ -136,6 +136,20 @@ PRODUCTOS_ESTRELLA = [
 async def lifespan(app: FastAPI):
     await inicializar_db()
     await cargar_config_en_env()   # carga credenciales guardadas en BD → os.environ
+
+    # Pre-cargar defaults de tools.py en os.environ para que el panel de configuración
+    # muestre el estado real aunque los valores vengan del código y no de Railway env vars
+    from agent.tools import SHOPIFY_STORE, SHOPIFY_STOREFRONT_TOKEN, SHOPIFY_ADMIN_TOKEN
+    _defaults = {
+        "SHOPIFY_STORE":            SHOPIFY_STORE,
+        "SHOPIFY_STOREFRONT_TOKEN": SHOPIFY_STOREFRONT_TOKEN,
+        "SHOPIFY_ADMIN_TOKEN":      SHOPIFY_ADMIN_TOKEN,
+    }
+    for _k, _v in _defaults.items():
+        if _v and not os.environ.get(_k):
+            os.environ[_k] = _v
+            logger.debug(f"[config] {_k} pre-cargado desde defaults de tools.py")
+
     logger.info("Base de datos inicializada y configuración cargada")
     # Pre-calentar catálogo Shopify al arrancar para que _variant_map esté listo
     # antes de que llegue cualquier petición a /tienda/confirmar
