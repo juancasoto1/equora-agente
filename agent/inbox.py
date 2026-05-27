@@ -1818,15 +1818,18 @@ tr:hover td{background:#f8f9fa}
                     <span class="opt-badge">Opcional</span>
                   </div>
                   <div class="cfg-help-box" id="help-sh-admintoken">
-                    Solo se usa para leer las <b>zonas y tarifas de envío</b> directamente de tu configuración en Shopify.<br>
-                    Si no lo configuras, el sistema usa los valores de envío fijos definidos en las variables de entorno.<br>
-                    <b>Cómo obtenerlo:</b> misma app del paso 2 → pestaña <b>"Credenciales de la API"</b> → sección <b>"Admin API"</b> →<br>
-                    activa <code>read_shipping</code> → copia el token de Admin API.<br>
-                    Empieza con <code>shpat_…</code> (formato anterior) o <code>atkn_…</code> (formato nuevo)
+                    Solo se usa para leer las <b>zonas y tarifas de envío</b> directamente de tu configuración de Shopify.<br>
+                    Si no lo configuras, el sistema usa los valores de envío fijos — <em>la tienda sigue funcionando igual</em>.<br><br>
+                    ⚠️ Este token viene de una <b>app personalizada</b> distinta a la app Headless del paso 2:<br>
+                    1. Shopify Admin → <b>Configuración → Apps y canales de ventas → Desarrollar apps</b><br>
+                    2. Clic en <b>"Crear una app"</b> → ponle un nombre (ej: "Andrea Admin")<br>
+                    3. Pestaña <b>"Configuración de la API de Admin"</b> → activa el permiso <code>read_shipping</code><br>
+                    4. Clic en <b>"Instalar app"</b> → copia el <b>"Token de acceso del Admin API"</b><br>
+                    <small style="color:#6b7a8d">El token empieza con <code>shpat_…</code> &nbsp;·&nbsp; <a href="https://shopify.dev/docs/apps/build/authentication-authorization/access-token-types/generate-app-access-tokens-admin" target="_blank">Documentación oficial →</a></small>
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-admintoken" class="f-inp" placeholder="shpat_... o atkn_..." autocomplete="off">
+                      <input type="password" id="cfg-sh-admintoken" class="f-inp" placeholder="shpat_..." autocomplete="off">
                       <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-admintoken',this)" type="button">👁</button>
                     </div>
                     <span class="cfg-field-status" id="st-SHOPIFY_ADMIN_TOKEN"></span>
