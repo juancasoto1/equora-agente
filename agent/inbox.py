@@ -1789,17 +1789,15 @@ tr:hover td{background:#f8f9fa}
                     <span class="req">*</span>
                   </div>
                   <div class="cfg-help-box" id="help-sh-sftoken">
-                    Andrea usa la <b>Storefront API</b> para leer el catálogo de productos y crear checkouts.<br>
-                    Hay dos tipos de token — usa el <b>Token de acceso público</b> (es suficiente para Andrea):<br>
-                    <b>Cómo obtenerlo:</b><br>
-                    1. Shopify Admin → <b>Configuración → Apps y canales de ventas → Desarrollar apps</b><br>
-                    2. Selecciona tu app → pestaña <b>"Credenciales de la API"</b><br>
-                    3. Busca la sección <b>"API Storefront"</b> → activa los permisos:<br>
-                    &nbsp;&nbsp;✅ <code>unauthenticated_read_product_listings</code><br>
-                    &nbsp;&nbsp;✅ <code>unauthenticated_write_checkouts</code><br>
-                    &nbsp;&nbsp;✅ <code>unauthenticated_read_checkouts</code><br>
-                    4. Copia el <b>"Token de acceso público"</b> — es una cadena de <b>32 caracteres hexadecimales</b> sin prefijo<br>
-                    <small style="color:#6b7a8d">Ejemplo: <code>d6fe89f265fed1b5f9572f19fc0ba3a7</code> &nbsp;·&nbsp; El token privado (<code>shpat_…</code>) también funciona</small>
+                    Andrea usa la <b>Storefront API</b> para leer el catálogo y crear checkouts.<br>
+                    El token se obtiene instalando la app <b>Headless</b> de Shopify:<br><br>
+                    1. Shopify Admin → <b>Apps</b> → busca <b>"Headless"</b> → instálala si no la tienes<br>
+                    2. Abre la app Headless → <b>"Add Storefront"</b> (o selecciona tu storefront existente)<br>
+                    3. En la sección <b>"Storefront API"</b> verás dos tokens:<br>
+                    &nbsp;&nbsp;• <b>Token de acceso público</b> — cadena hex de 32 chars, sin prefijo → <em>usa este</em><br>
+                    &nbsp;&nbsp;• Token de acceso privado — empieza con <code>shpat_…</code> (también funciona, pero mantenlo privado)<br>
+                    4. Copia el <b>Token de acceso público</b> y pégalo aquí<br>
+                    <small style="color:#6b7a8d">Ejemplo: <code>d6fe89f265fed1b5f9572f19fc0ba3a7</code> &nbsp;·&nbsp; <a href="https://shopify.dev/docs/api/usage/authentication#access-tokens-for-the-storefront-api" target="_blank">Documentación oficial →</a></small>
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
