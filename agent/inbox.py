@@ -532,6 +532,43 @@ tr:hover td{background:#f8f9fa}
 .cfg-test-err{background:#fce4e4;color:#b71c1c;border:1px solid #ef9a9a}
 .cfg-separator{border:none;border-top:1px solid #f0f2f5;margin:8px 0}
 
+/* ── Prompt editor ─────────────────────────────────────────── */
+.prompt-editor-wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media(max-width:900px){.prompt-editor-wrap{grid-template-columns:1fr}}
+.prompt-left,.prompt-right{background:#fff;border:1px solid #e0e4e8;border-radius:14px;padding:20px}
+.prompt-ta{width:100%;height:420px;font-family:monospace;font-size:.8rem;line-height:1.6;
+  border:1px solid #dde1e8;border-radius:8px;padding:12px;resize:vertical;
+  color:#1a2332;background:#fafbfc;outline:none;box-sizing:border-box}
+.prompt-ta:focus{border-color:var(--az);background:#fff}
+.prompt-instruccion-ta{width:100%;height:110px;font-size:.83rem;line-height:1.6;
+  border:1px solid #dde1e8;border-radius:8px;padding:10px;resize:vertical;
+  color:#1a2332;outline:none;box-sizing:border-box;margin-bottom:10px}
+.prompt-instruccion-ta:focus{border-color:var(--az)}
+.btn-improve{width:100%;padding:11px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
+  color:#fff;border:none;border-radius:8px;font-weight:700;font-size:.88rem;cursor:pointer;
+  transition:opacity .15s}
+.btn-improve:hover{opacity:.88}
+.btn-improve:disabled{opacity:.5;cursor:not-allowed}
+/* Variables table */
+.vars-table{width:100%;border-collapse:collapse;font-size:.83rem}
+.vars-table th{text-align:left;padding:8px 10px;color:#6b7a8d;font-weight:600;
+  border-bottom:2px solid #e8ecf0;background:#f8fafc}
+.vars-table td{padding:6px 6px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+.vars-key-inp{font-family:monospace;font-size:.8rem;font-weight:700;color:#4f46e5;
+  border:1px solid #e0e4e8;border-radius:6px;padding:5px 8px;width:100%;background:#f5f3ff}
+.vars-val-inp{font-size:.82rem;border:1px solid #e0e4e8;border-radius:6px;
+  padding:5px 8px;width:100%;background:#fff}
+.vars-key-inp:focus,.vars-val-inp:focus{outline:none;border-color:var(--az)}
+.vars-del-btn{background:none;border:none;color:#e53935;font-size:1rem;cursor:pointer;
+  padding:4px 8px;border-radius:4px}
+.vars-del-btn:hover{background:#fce4e4}
+/* Diff */
+.prompt-diff{font-family:monospace;font-size:.76rem;line-height:1.7;
+  background:#fafbfc;border:1px solid #e0e4e8;border-radius:8px;padding:12px;
+  max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+.diff-add{background:#e8f5e9;color:#1b5e20}
+.diff-del{background:#fce4e4;color:#b71c1c;text-decoration:line-through}
+
 /* ── loading spinner ── */
 .loading-txt{color:#6b7a8d;font-size:.85rem;padding:32px;text-align:center}
 
@@ -1554,6 +1591,7 @@ tr:hover td{background:#f8f9fa}
           <!-- Tabs -->
           <div class="cfg-tabs">
             <div class="cfg-tab active" onclick="cfgTab('integraciones',this)">⚙️ Integraciones</div>
+            <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()">🧠 Prompt</div>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)">📋 Documentación</div>
           </div>
 
@@ -1852,6 +1890,97 @@ tr:hover td{background:#f8f9fa}
             </div>
 
           </div><!-- /pane integraciones -->
+
+          <!-- ── Pane: Prompt ── -->
+          <div class="cfg-pane" id="cfg-pane-prompt">
+
+            <!-- Intro -->
+            <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:.85rem;color:#3730a3;line-height:1.6">
+              🧠 <b>Editor de prompt</b> — Define quién es tu agente, qué sabe y cómo habla.
+              Usa <code style="background:#e0e7ff;padding:1px 5px;border-radius:4px">{VARIABLES}</code> en el texto y defínelas abajo.
+              El asistente de IA te ayuda a mejorar las instrucciones en lenguaje natural.
+            </div>
+
+            <!-- ── Sección 1: Variables del negocio ── -->
+            <div class="cfg-card" style="margin-bottom:20px">
+              <div class="cfg-card-hdr" style="margin-bottom:16px">
+                <div class="cfg-card-title">📋 Variables del negocio</div>
+                <span style="font-size:.78rem;color:#6b7a8d">Úsalas en el prompt como <code>{NOMBRE_NEGOCIO}</code>, <code>{HORARIO}</code>…</span>
+              </div>
+
+              <table class="vars-table" id="vars-table">
+                <thead>
+                  <tr>
+                    <th style="width:200px">Variable</th>
+                    <th>Valor</th>
+                    <th style="width:36px"></th>
+                  </tr>
+                </thead>
+                <tbody id="vars-tbody">
+                  <!-- filas generadas por JS -->
+                </tbody>
+              </table>
+              <button class="btn-secondary" style="margin-top:12px;font-size:.8rem;padding:6px 14px" onclick="agregarVar()" type="button">+ Agregar variable</button>
+              <p style="font-size:.76rem;color:#8a94a6;margin-top:10px">
+                💡 Variables de sistema (no editables aquí): <code>{COSTO_ENVIO}</code> <code>{ENVIO_GRATIS}</code> — vienen de la configuración de Shopify
+              </p>
+            </div>
+
+            <!-- ── Sección 2: Editor + Asistente ── -->
+            <div class="prompt-editor-wrap">
+
+              <!-- Editor izquierdo -->
+              <div class="prompt-left">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+                  <div style="font-weight:700;color:#1a2332;font-size:.9rem">✍️ Prompt actual</div>
+                  <span id="prompt-fuente" style="font-size:.73rem;color:#8a94a6"></span>
+                </div>
+                <textarea id="prompt-textarea" class="prompt-ta" placeholder="Escribe aquí las instrucciones de tu agente…" spellcheck="false"></textarea>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+                  <span id="prompt-chars" style="font-size:.74rem;color:#8a94a6">0 caracteres</span>
+                  <button class="btn-primary" onclick="guardarPrompt()" type="button" id="btn-save-prompt">💾 Guardar</button>
+                </div>
+              </div>
+
+              <!-- Panel IA derecho -->
+              <div class="prompt-right">
+                <div style="font-weight:700;color:#1a2332;font-size:.9rem;margin-bottom:10px">✨ Asistente de mejora</div>
+
+                <label style="font-size:.8rem;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">
+                  ¿Qué quieres mejorar o agregar?
+                </label>
+                <textarea id="prompt-instruccion" class="prompt-instruccion-ta" placeholder="Ej: &quot;Quiero que sea más empática cuando el cliente menciona un problema&quot;&#10;Ej: &quot;Agrega que el envío gratis aplica desde $80.000&quot;&#10;Ej: &quot;Haz que responda más corto y directo&quot;"></textarea>
+
+                <button class="btn-improve" onclick="mejorarPrompt()" type="button" id="btn-improve">
+                  ✨ Mejorar con IA
+                </button>
+
+                <!-- Propuesta -->
+                <div id="prompt-propuesta-wrap" style="display:none;margin-top:16px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <span style="font-size:.82rem;font-weight:700;color:#1a2332">Propuesta de Claude</span>
+                    <button class="btn-secondary" style="font-size:.76rem;padding:4px 10px" onclick="verDiff()" type="button" id="btn-diff">👁 Ver cambios</button>
+                  </div>
+                  <textarea id="prompt-propuesta" class="prompt-ta" style="height:220px;background:#f8fafc;border-color:#c7d2fe" readonly></textarea>
+                  <div style="display:flex;gap:8px;margin-top:8px">
+                    <button class="btn-secondary" style="flex:1" onclick="descartarPropuesta()" type="button">✕ Descartar</button>
+                    <button class="btn-primary" style="flex:1" onclick="aplicarPropuesta()" type="button">✅ Aplicar al editor</button>
+                  </div>
+                </div>
+
+                <!-- Diff -->
+                <div id="prompt-diff-wrap" style="display:none;margin-top:16px">
+                  <div style="font-size:.82rem;font-weight:700;color:#1a2332;margin-bottom:8px">Cambios detectados</div>
+                  <div id="prompt-diff-content" class="prompt-diff"></div>
+                  <button class="btn-secondary" style="margin-top:8px;font-size:.78rem" onclick="cerrarDiff()" type="button">← Volver</button>
+                </div>
+
+                <!-- Resultado de guardado -->
+                <div id="prompt-save-result" class="cfg-test-result" style="display:none;margin-top:12px"></div>
+              </div>
+            </div>
+
+          </div><!-- /pane prompt -->
 
           <!-- ── Pane: Documentación ── -->
           <div class="cfg-pane" id="cfg-pane-documentacion">
@@ -4423,6 +4552,198 @@ async function testConexion(service) {
   } finally {
     if (btnTest) { btnTest.disabled = false; btnTest.textContent = '🔌 Probar conexión'; }
   }
+}
+
+/* ══════════════════════════════════════════════════════
+   PROMPT EDITOR
+   ══════════════════════════════════════════════════════ */
+
+var _promptPropuesta = '';   // guarda la propuesta pendiente de Claude
+
+/* ── cargarPrompt: llamado cuando el usuario abre la pestaña Prompt ── */
+async function cargarPrompt() {
+  try {
+    var r = await fetch('/inbox/api/prompt', {credentials:'include'});
+    var d = await r.json();
+
+    // Rellenar textarea con el prompt actual
+    var ta = document.getElementById('prompt-textarea');
+    if (ta) {
+      ta.value = d.prompt || '';
+      _actualizarContadorPrompt();
+    }
+
+    // Indicar fuente
+    var fuente = document.getElementById('prompt-fuente');
+    if (fuente) fuente.textContent = d.fuente === 'db' ? '🗄 Guardado en BD' : '📄 Desde archivo';
+
+    // Rellenar tabla de variables
+    _renderVarsTable(d.business_vars || {});
+
+  } catch(e) {
+    console.error('Error cargando prompt:', e);
+  }
+}
+
+/* ── Contador de caracteres ── */
+function _actualizarContadorPrompt() {
+  var ta = document.getElementById('prompt-textarea');
+  var el = document.getElementById('prompt-chars');
+  if (ta && el) el.textContent = ta.value.length.toLocaleString('es-CO') + ' caracteres';
+}
+document.addEventListener('DOMContentLoaded', function() {
+  var ta = document.getElementById('prompt-textarea');
+  if (ta) ta.addEventListener('input', _actualizarContadorPrompt);
+});
+
+/* ── Tabla de variables ── */
+function _renderVarsTable(vars) {
+  var tbody = document.getElementById('vars-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  Object.keys(vars).forEach(function(k) {
+    _agregarFilaVar(k, vars[k]);
+  });
+}
+
+function _agregarFilaVar(key, val) {
+  var tbody = document.getElementById('vars-tbody');
+  if (!tbody) return;
+  var tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td><input class="vars-key-inp" value="' + he(key) + '" placeholder="NOMBRE_VAR" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase().replace(/\\s/g,\'_\')"></td>' +
+    '<td><input class="vars-val-inp" value="' + he(val) + '" placeholder="Valor de la variable"></td>' +
+    '<td><button class="vars-del-btn" onclick="this.closest(\'tr\').remove()" type="button" title="Eliminar">✕</button></td>';
+  tbody.appendChild(tr);
+}
+
+function agregarVar() {
+  _agregarFilaVar('', '');
+  // Enfocar el nuevo campo
+  var inputs = document.querySelectorAll('#vars-tbody .vars-key-inp');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+
+function _recolectarVars() {
+  var vars = {};
+  document.querySelectorAll('#vars-tbody tr').forEach(function(tr) {
+    var key = (tr.querySelector('.vars-key-inp').value || '').trim().toUpperCase().replace(/\s/g,'_');
+    var val = (tr.querySelector('.vars-val-inp').value || '').trim();
+    if (key && val) vars[key] = val;
+  });
+  return vars;
+}
+
+/* ── Guardar prompt + variables ── */
+async function guardarPrompt() {
+  var prompt = (document.getElementById('prompt-textarea').value || '').trim();
+  var vars   = _recolectarVars();
+  var btn    = document.getElementById('btn-save-prompt');
+  var result = document.getElementById('prompt-save-result');
+
+  if (!prompt) { _showCfgResult('prompt-save-result', false, 'El prompt no puede estar vacío'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  try {
+    var r = await fetch('/inbox/api/prompt/save', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({prompt: prompt, business_vars: vars})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      _showCfgResult('prompt-save-result', true, '✅ Guardado. El agente usará este prompt desde ahora.');
+      document.getElementById('prompt-fuente').textContent = '🗄 Guardado en BD';
+    } else {
+      _showCfgResult('prompt-save-result', false, 'Error al guardar');
+    }
+  } catch(e) {
+    _showCfgResult('prompt-save-result', false, 'Error de red: ' + String(e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar'; }
+  }
+}
+
+/* ── Mejorar con IA ── */
+async function mejorarPrompt() {
+  var prompt      = (document.getElementById('prompt-textarea').value || '').trim();
+  var instruccion = (document.getElementById('prompt-instruccion').value || '').trim();
+  var vars        = _recolectarVars();
+  var btn         = document.getElementById('btn-improve');
+
+  if (!prompt)      { alert('El prompt está vacío. Escribe o carga el prompt primero.'); return; }
+  if (!instruccion) { alert('Cuéntame qué quieres mejorar.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Mejorando…';
+  document.getElementById('prompt-propuesta-wrap').style.display = 'none';
+  document.getElementById('prompt-diff-wrap').style.display = 'none';
+
+  try {
+    var r = await fetch('/inbox/api/prompt/improve', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({prompt: prompt, instruccion: instruccion, business_vars: vars})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      _promptPropuesta = d.improved_prompt;
+      document.getElementById('prompt-propuesta').value = _promptPropuesta;
+      document.getElementById('prompt-propuesta-wrap').style.display = '';
+    } else {
+      alert('Error: ' + (d.error || 'No se pudo generar'));
+    }
+  } catch(e) {
+    alert('Error de red: ' + String(e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✨ Mejorar con IA';
+  }
+}
+
+/* ── Aplicar propuesta al editor ── */
+function aplicarPropuesta() {
+  if (!_promptPropuesta) return;
+  document.getElementById('prompt-textarea').value = _promptPropuesta;
+  _actualizarContadorPrompt();
+  document.getElementById('prompt-propuesta-wrap').style.display = 'none';
+  document.getElementById('prompt-diff-wrap').style.display = 'none';
+  document.getElementById('prompt-instruccion').value = '';
+  _promptPropuesta = '';
+}
+
+function descartarPropuesta() {
+  document.getElementById('prompt-propuesta-wrap').style.display = 'none';
+  document.getElementById('prompt-diff-wrap').style.display = 'none';
+  _promptPropuesta = '';
+}
+
+/* ── Ver diferencias (diff simple línea a línea) ── */
+function verDiff() {
+  var original = (document.getElementById('prompt-textarea').value || '').split('\n');
+  var propuesta = (_promptPropuesta || '').split('\n');
+  var maxLen = Math.max(original.length, propuesta.length);
+  var html = '';
+
+  for (var i = 0; i < maxLen; i++) {
+    var lineO = original[i] !== undefined ? original[i] : null;
+    var lineP = propuesta[i] !== undefined ? propuesta[i] : null;
+    if (lineO === lineP) {
+      html += '<span>' + he(lineO || '') + '\n</span>';
+    } else {
+      if (lineO !== null) html += '<span class="diff-del">- ' + he(lineO) + '\n</span>';
+      if (lineP !== null) html += '<span class="diff-add">+ ' + he(lineP) + '\n</span>';
+    }
+  }
+
+  document.getElementById('prompt-diff-content').innerHTML = html;
+  document.getElementById('prompt-propuesta-wrap').style.display = 'none';
+  document.getElementById('prompt-diff-wrap').style.display = '';
+}
+
+function cerrarDiff() {
+  document.getElementById('prompt-diff-wrap').style.display = 'none';
+  document.getElementById('prompt-propuesta-wrap').style.display = _promptPropuesta ? '' : 'none';
 }
 </script>
 </body>

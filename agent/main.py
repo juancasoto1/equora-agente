@@ -2112,6 +2112,135 @@ async def inbox_test_config(
     return JSONResponse(content={"ok": False, "error": "Servicio no reconocido"})
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# PROMPT EDITOR — leer, guardar y mejorar el system prompt con IA
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/inbox/api/prompt")
+async def inbox_get_prompt(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Devuelve el prompt actual (BD → archivo) y las variables del negocio."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    import yaml as _yaml
+
+    # Prompt: BD primero, luego archivo
+    db_prompt = await get_config_value("SYSTEM_PROMPT")
+    if db_prompt:
+        prompt  = db_prompt
+        fuente  = "db"
+    else:
+        try:
+            with open("config/prompts.yaml", "r", encoding="utf-8") as f:
+                cfg = _yaml.safe_load(f) or {}
+            prompt = cfg.get("system_prompt", "")
+        except FileNotFoundError:
+            prompt = ""
+        fuente = "file"
+
+    # Variables del negocio (JSON guardado en BD)
+    vars_json = await get_config_value("BUSINESS_VARS")
+    try:
+        business_vars = json.loads(vars_json) if vars_json else {}
+    except Exception:
+        business_vars = {}
+
+    return JSONResponse(content={
+        "prompt":        prompt,
+        "business_vars": business_vars,
+        "fuente":        fuente,
+    })
+
+
+@app.post("/inbox/api/prompt/save")
+async def inbox_save_prompt(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Guarda el prompt y las variables del negocio en la BD."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    body = await request.json()
+    prompt       = (body.get("prompt") or "").strip()
+    business_vars = body.get("business_vars") or {}
+
+    if prompt:
+        await set_config_value("SYSTEM_PROMPT", prompt)
+    if isinstance(business_vars, dict):
+        await set_config_value("BUSINESS_VARS", json.dumps(business_vars, ensure_ascii=False))
+
+    return JSONResponse(content={"ok": True})
+
+
+@app.post("/inbox/api/prompt/improve")
+async def inbox_improve_prompt(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """
+    Recibe el prompt actual + una instrucción del usuario en lenguaje natural
+    y devuelve una versión mejorada generada por Claude.
+    """
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    body        = await request.json()
+    prompt      = (body.get("prompt") or "").strip()
+    instruccion = (body.get("instruccion") or "").strip()
+    vars_dict   = body.get("business_vars") or {}
+
+    if not prompt:
+        return JSONResponse(content={"ok": False, "error": "Prompt vacío"})
+    if not instruccion:
+        return JSONResponse(content={"ok": False, "error": "Escribe qué quieres mejorar"})
+
+    # Contexto de variables para que Claude las conserve
+    vars_context = ""
+    if vars_dict:
+        vars_lines = "\n".join(f"  {{{k}}} = {v}" for k, v in vars_dict.items())
+        vars_context = f"\n\nVariables del negocio definidas (CONSERVARLAS intactas en el prompt):\n{vars_lines}"
+
+    system_meta = (
+        "Eres un experto en diseño de system prompts para agentes de IA conversacionales "
+        "que operan por WhatsApp. Tu tarea es mejorar el prompt de acuerdo a la instrucción "
+        "del usuario.\n\n"
+        "REGLAS ABSOLUTAS:\n"
+        "- Conserva TODA la información existente; solo mejora, agrega o ajusta lo indicado\n"
+        "- Conserva todas las variables {EN_MAYUSCULAS} exactamente como aparecen\n"
+        "- Responde ÚNICAMENTE con el prompt mejorado — sin explicaciones, sin markdown extra, "
+        "sin texto antes o después\n"
+        "- Mantén el idioma español\n"
+        "- El prompt debe ser claro, específico y directamente accionable"
+    )
+
+    user_msg = (
+        f"PROMPT ACTUAL:\n{prompt}"
+        f"{vars_context}\n\n"
+        f"INSTRUCCIÓN DEL USUARIO: {instruccion}"
+    )
+
+    from anthropic import AsyncAnthropic as _Anthropic
+    _client = _Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    try:
+        resp = await _client.messages.create(
+            model=os.getenv("AI_MODEL", "claude-haiku-4-5"),
+            max_tokens=4096,
+            system=system_meta,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        improved = resp.content[0].text.strip()
+        return JSONResponse(content={"ok": True, "improved_prompt": improved})
+    except Exception as e:
+        logger.error(f"Error mejorando prompt: {e}")
+        return JSONResponse(content={"ok": False, "error": str(e)[:200]})
+
+
 @app.post("/inbox/plantillas/subir-header")
 async def inbox_subir_header_media(
     file: UploadFile = File(...),

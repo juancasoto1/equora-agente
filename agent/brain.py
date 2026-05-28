@@ -1,26 +1,26 @@
 import os
+import json
 import yaml
 import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from agent.tools import obtener_catalogo_shopify, obtener_costo_envio, obtener_umbral_envio_gratis
-from agent.memory import obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo
+from agent.memory import obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo, get_config_value
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
 
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-# ── Cache del system prompt (se recarga solo si cambia el archivo) ────────────
-_prompt_cache: str = ""
-_prompt_mtime: float = 0.0
+# ── Cache del system prompt desde archivo (se recarga si cambia el archivo) ───
 _prompt_config_cache: dict = {}
+_prompt_mtime: float = 0.0
 _PROMPTS_FILE = "config/prompts.yaml"
 
 
 def _cargar_config() -> dict:
     """Lee prompts.yaml con cache basado en mtime del archivo."""
-    global _prompt_cache, _prompt_mtime, _prompt_config_cache
+    global _prompt_mtime, _prompt_config_cache
     try:
         mtime = os.path.getmtime(_PROMPTS_FILE)
         if mtime == _prompt_mtime and _prompt_config_cache:
@@ -28,10 +28,6 @@ def _cargar_config() -> dict:
         with open(_PROMPTS_FILE, "r", encoding="utf-8") as f:
             _prompt_config_cache = yaml.safe_load(f) or {}
         _prompt_mtime = mtime
-        _prompt_cache = _prompt_config_cache.get(
-            "system_prompt",
-            "Eres Andrea, asistente de Equora Distribuciones. Responde en español."
-        )
         logger.info("prompts.yaml recargado desde disco")
         return _prompt_config_cache
     except FileNotFoundError:
@@ -39,16 +35,41 @@ def _cargar_config() -> dict:
         return {}
 
 
-def cargar_system_prompt() -> str:
-    prompt = _cargar_config().get(
-        "system_prompt",
-        "Eres Andrea, asistente de Equora Distribuciones. Responde en español."
-    )
-    # Inyectar tarifas de envío (vienen de Shopify Admin API o env vars)
+async def cargar_system_prompt() -> str:
+    """
+    Carga el system prompt con esta prioridad:
+    1. BD (SYSTEM_PROMPT) — editado desde el panel de configuración
+    2. config/prompts.yaml — archivo base del repositorio
+    Luego reemplaza {VARIABLES} del negocio y las tarifas de envío.
+    """
+    # ── 1. BD primero ──────────────────────────────────────────────────────────
+    db_prompt = await get_config_value("SYSTEM_PROMPT")
+    if db_prompt:
+        prompt = db_prompt
+        logger.debug("System prompt cargado desde BD")
+    else:
+        prompt = _cargar_config().get(
+            "system_prompt",
+            "Eres un asistente virtual. Responde en español."
+        )
+        logger.debug("System prompt cargado desde prompts.yaml")
+
+    # ── 2. Reemplazar variables del negocio {KEY} ───────────────────────────
+    db_vars_json = await get_config_value("BUSINESS_VARS")
+    if db_vars_json:
+        try:
+            business_vars = json.loads(db_vars_json)
+            for key, val in business_vars.items():
+                prompt = prompt.replace("{" + key + "}", str(val))
+        except Exception as e:
+            logger.warning(f"Error al procesar BUSINESS_VARS: {e}")
+
+    # ── 3. Reemplazar tarifas de envío (variables de sistema) ──────────────
     costo_fmt = f"{obtener_costo_envio():,}".replace(",", ".")
     gratis_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
     prompt = prompt.replace("{COSTO_ENVIO}", costo_fmt)
     prompt = prompt.replace("{ENVIO_GRATIS}", gratis_fmt)
+
     return prompt
 
 
@@ -75,7 +96,7 @@ async def generar_respuesta(
     if not mensaje or len(mensaje.strip()) < 2:
         return obtener_mensaje_fallback()
 
-    system_prompt = cargar_system_prompt()
+    system_prompt = await cargar_system_prompt()
 
     # ── Contexto de campaña de difusión ───────────────────────────────────────
     # Si el cliente responde a una difusión reciente, Andrea sabe de qué campaña
