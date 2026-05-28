@@ -13,11 +13,17 @@ logger = logging.getLogger("agentkit")
 class ProveedorMeta(ProveedorWhatsApp):
     """Proveedor de WhatsApp usando Meta Cloud API."""
 
-    def __init__(self):
-        self.access_token = os.getenv("META_ACCESS_TOKEN")
-        self.phone_number_id = os.getenv("META_PHONE_NUMBER_ID")
-        self.verify_token = os.getenv("META_VERIFY_TOKEN", "equora-andrea-2024")
-        self.catalog_id = os.getenv("META_CATALOG_ID", "")
+    def __init__(
+        self,
+        access_token: str = "",
+        phone_number_id: str = "",
+        verify_token: str = "",
+        catalog_id: str = "",
+    ):
+        self.access_token = access_token or os.getenv("META_ACCESS_TOKEN", "")
+        self.phone_number_id = phone_number_id or os.getenv("META_PHONE_NUMBER_ID", "")
+        self.verify_token = verify_token or os.getenv("META_VERIFY_TOKEN", "equora-andrea-2024")
+        self.catalog_id = catalog_id or os.getenv("META_CATALOG_ID", "")
         self.api_version = "v21.0"
 
     async def validar_webhook(self, request: Request):

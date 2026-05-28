@@ -5111,5 +5111,15 @@ async function limpiarChatTest() {
 </html>"""
 
 
-def obtener_inbox_html() -> str:
-    return _HTML
+def obtener_inbox_html(agent: dict | None = None) -> str:
+    """Devuelve el HTML del inbox. Si se pasa `agent`, inyecta su contexto en la página
+    como variable global VOCO_AGENT para que el JS pueda filtrar conversaciones y
+    mostrar el nombre/color del agente correcto."""
+    import json as _json
+    if agent:
+        agent_json = _json.dumps(agent, ensure_ascii=False)
+        inject = f"<script>var VOCO_AGENT={agent_json};</script>"
+    else:
+        inject = "<script>var VOCO_AGENT=null;</script>"
+    # Insertar el script justo después de <head> para que esté disponible cuanto antes
+    return _HTML.replace("<head>", f"<head>\n{inject}", 1)

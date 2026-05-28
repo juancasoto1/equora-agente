@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, Integer, func, text
+from sqlalchemy import String, Text, DateTime, select, Integer, func, text, PrimaryKeyConstraint
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,10 +21,28 @@ class Base(DeclarativeBase):
     pass
 
 
+class Agent(Base):
+    """Agentes de la plataforma Voco — cada uno es un número de WhatsApp independiente."""
+    __tablename__ = "agents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), default="")          # nombre del negocio
+    agent_name: Mapped[str] = mapped_column(String(100), default="Agente")
+    business_type: Mapped[str] = mapped_column(String(50), default="productos")
+    status: Mapped[str] = mapped_column(String(20), default="draft")    # draft|active|paused
+    phone_number_id: Mapped[str] = mapped_column(String(100), default="")
+    waba_id: Mapped[str] = mapped_column(String(100), default="")
+    color: Mapped[str] = mapped_column(String(20), default="#6366f1")
+    emoji: Mapped[str] = mapped_column(String(10), default="🤖")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Mensaje(Base):
     __tablename__ = "mensajes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
     telefono: Mapped[str] = mapped_column(String(50), index=True)
     role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text)
@@ -33,8 +51,10 @@ class Mensaje(Base):
 
 class Cliente(Base):
     __tablename__ = "clientes"
+    __table_args__ = (PrimaryKeyConstraint("agent_id", "telefono"),)
 
-    telefono: Mapped[str] = mapped_column(String(50), primary_key=True)
+    agent_id: Mapped[int] = mapped_column(Integer, default=1)
+    telefono: Mapped[str] = mapped_column(String(50))
     nombres: Mapped[str] = mapped_column(String(100), default="")
     apellidos: Mapped[str] = mapped_column(String(100), default="")
     razon_social: Mapped[str] = mapped_column(String(200), default="")
@@ -65,6 +85,7 @@ class PlantillaBorrador(Base):
     __tablename__ = "plantillas_borradores"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
     nombre: Mapped[str] = mapped_column(String(512), default="")
     categoria: Mapped[str] = mapped_column(String(50), default="MARKETING")
     idioma: Mapped[str] = mapped_column(String(20), default="es_CO")
@@ -78,6 +99,7 @@ class Difusion(Base):
     __tablename__ = "difusiones"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
     campaign_name: Mapped[str] = mapped_column(String(200), default="")   # nombre que da el usuario
     campaign_id: Mapped[str] = mapped_column(String(100), default="")     # ID único por acción de envío
     template_name: Mapped[str] = mapped_column(String(100), default="")
@@ -121,6 +143,7 @@ class DifusionMensaje(Base):
     __tablename__ = "difusion_mensajes"
 
     id:            Mapped[int]            = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:      Mapped[int]            = mapped_column(Integer, default=1, index=True)
     wamid:         Mapped[str]            = mapped_column(String(200), unique=True, index=True)
     campaign_id:   Mapped[str]            = mapped_column(String(100), index=True, default="")
     campaign_name: Mapped[str]            = mapped_column(String(200), default="")
@@ -137,8 +160,10 @@ class DifusionMensaje(Base):
 class EstadoConversacion(Base):
     """Timestamps por conversación para gestionar seguimientos automáticos."""
     __tablename__ = "estado_conversacion"
+    __table_args__ = (PrimaryKeyConstraint("agent_id", "telefono"),)
 
-    telefono: Mapped[str] = mapped_column(String(50), primary_key=True)
+    agent_id: Mapped[int] = mapped_column(Integer, default=1)
+    telefono: Mapped[str] = mapped_column(String(50))
     last_user_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_assistant_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     follow_up_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -150,8 +175,10 @@ class EstadoConversacion(Base):
 class OptOut(Base):
     """Números que pidieron ser dados de baja de las difusiones masivas."""
     __tablename__ = "opt_outs"
+    __table_args__ = (PrimaryKeyConstraint("agent_id", "telefono"),)
 
-    telefono:  Mapped[str]      = mapped_column(String(50), primary_key=True)
+    agent_id:  Mapped[int]      = mapped_column(Integer, default=1)
+    telefono:  Mapped[str]      = mapped_column(String(50))
     motivo:    Mapped[str]      = mapped_column(String(200), default="")  # "STOP", "DAR DE BAJA", etc.
     creado_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -159,9 +186,11 @@ class OptOut(Base):
 class ConfigValue(Base):
     """Valores de configuración dinámica guardados en BD (sobrescriben variables de entorno)."""
     __tablename__ = "config_values"
+    __table_args__ = (PrimaryKeyConstraint("agent_id", "clave"),)
 
-    clave:         Mapped[str]      = mapped_column(String(100), primary_key=True)
-    valor:         Mapped[str]      = mapped_column(Text, default="")
+    agent_id:       Mapped[int]      = mapped_column(Integer, default=1)
+    clave:          Mapped[str]      = mapped_column(String(100))
+    valor:          Mapped[str]      = mapped_column(Text, default="")
     actualizado_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -169,32 +198,64 @@ async def inicializar_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Migración: agregar columnas nuevas si la tabla ya existía sin ellas
-        # La tabla difusiones se crea automáticamente por create_all arriba
+        # PostgreSQL soporta IF NOT EXISTS en ALTER TABLE ADD COLUMN
         for sql in (
-            "ALTER TABLE clientes ADD COLUMN pedido_pendiente TEXT DEFAULT ''",
-            "ALTER TABLE clientes ADD COLUMN pedido_pendiente_at DATETIME",
-            "ALTER TABLE clientes ADD COLUMN carrito_activo TEXT DEFAULT ''",
-            "ALTER TABLE clientes ADD COLUMN carrito_activo_at DATETIME",
-            "ALTER TABLE clientes ADD COLUMN pedido_checkout_url TEXT DEFAULT ''",
-            "ALTER TABLE estado_conversacion ADD COLUMN modo_humano INTEGER DEFAULT 0",
-            "ALTER TABLE difusiones ADD COLUMN campaign_name TEXT DEFAULT ''",
-            "ALTER TABLE difusiones ADD COLUMN campaign_id TEXT DEFAULT ''",
-            # difusion_mensajes se crea via create_all, pero por si acaso:
+            "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_pendiente TEXT DEFAULT ''",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_pendiente_at TIMESTAMP",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS carrito_activo TEXT DEFAULT ''",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS carrito_activo_at TIMESTAMP",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_checkout_url TEXT DEFAULT ''",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            "ALTER TABLE estado_conversacion ADD COLUMN IF NOT EXISTS modo_humano INTEGER DEFAULT 0",
+            "ALTER TABLE estado_conversacion ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS campaign_name TEXT DEFAULT ''",
+            "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS campaign_id TEXT DEFAULT ''",
+            "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            "ALTER TABLE difusion_mensajes ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            "ALTER TABLE opt_outs ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            "ALTER TABLE plantillas_borradores ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            # Índices útiles
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
-            # opt_outs se crea via create_all, índice por si acaso:
-            "CREATE INDEX IF NOT EXISTS ix_opt_outs_telefono ON opt_outs (telefono)",
-            # config_values: índice (la tabla se crea via create_all)
-            "CREATE INDEX IF NOT EXISTS ix_config_values_clave ON config_values (clave)",
+            "CREATE INDEX IF NOT EXISTS ix_mensajes_agent ON mensajes (agent_id)",
         ):
             try:
                 await conn.exec_driver_sql(sql)
             except Exception:
                 pass  # ya existe o no aplica
 
+    # Auto-crear agente Equora (agent_id=1) si no existe
+    equora_name = os.getenv("EQUORA_NAME", "Equora Distribuciones")
+    equora_phone_id = os.getenv("META_PHONE_NUMBER_ID", "")
+    equora_waba_id = os.getenv("META_WABA_ID", "")
+    async with async_session() as session:
+        try:
+            result = await session.execute(select(Agent).where(Agent.id == 1))
+            existing = result.scalar_one_or_none()
+            if not existing:
+                equora = Agent(
+                    id=1,
+                    slug="equora",
+                    name=equora_name,
+                    agent_name="Andrea",
+                    business_type="productos",
+                    status="active",
+                    phone_number_id=equora_phone_id,
+                    waba_id=equora_waba_id,
+                    color="#22c55e",
+                    emoji="🌿",
+                    created_at=datetime.utcnow(),
+                )
+                session.add(equora)
+                await session.commit()
+        except Exception:
+            pass  # puede fallar en primera migración; la tabla se creará igual
 
-async def guardar_mensaje(telefono: str, role: str, content: str):
+
+async def guardar_mensaje(telefono: str, role: str, content: str, agent_id: int = 1):
     async with async_session() as session:
         mensaje = Mensaje(
+            agent_id=agent_id,
             telefono=telefono,
             role=role,
             content=content,
@@ -204,11 +265,11 @@ async def guardar_mensaje(telefono: str, role: str, content: str):
         await session.commit()
 
 
-async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
+async def obtener_historial(telefono: str, limite: int = 20, agent_id: int = 1) -> list[dict]:
     async with async_session() as session:
         query = (
             select(Mensaje)
-            .where(Mensaje.telefono == telefono)
+            .where(Mensaje.telefono == telefono, Mensaje.agent_id == agent_id)
             .order_by(Mensaje.timestamp.desc())
             .limit(limite)
         )
@@ -221,9 +282,9 @@ async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
         ]
 
 
-async def limpiar_historial(telefono: str):
+async def limpiar_historial(telefono: str, agent_id: int = 1):
     async with async_session() as session:
-        query = select(Mensaje).where(Mensaje.telefono == telefono)
+        query = select(Mensaje).where(Mensaje.telefono == telefono, Mensaje.agent_id == agent_id)
         result = await session.execute(query)
         mensajes = result.scalars().all()
         for msg in mensajes:
@@ -231,10 +292,18 @@ async def limpiar_historial(telefono: str):
         await session.commit()
 
 
-async def guardar_cliente(telefono: str, datos: dict):
+async def _get_cliente(session: AsyncSession, telefono: str, agent_id: int) -> "Cliente | None":
+    """Helper interno para buscar cliente por PK compuesta (agent_id, telefono)."""
+    result = await session.execute(
+        select(Cliente).where(Cliente.agent_id == agent_id, Cliente.telefono == telefono)
+    )
+    return result.scalar_one_or_none()
+
+
+async def guardar_cliente(telefono: str, datos: dict, agent_id: int = 1):
     """Crea o actualiza el perfil del cliente. Solo guarda campos no vacíos."""
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         if cliente:
             for campo in CAMPOS_CLIENTE:
                 valor = datos.get(campo)
@@ -244,15 +313,15 @@ async def guardar_cliente(telefono: str, datos: dict):
             cliente.actualizado = datetime.utcnow()
         else:
             valores = {c: str(datos.get(c, "")) for c in CAMPOS_CLIENTE}
-            cliente = Cliente(telefono=telefono, pedidos_realizados=1, **valores)
+            cliente = Cliente(agent_id=agent_id, telefono=telefono, pedidos_realizados=1, **valores)
             session.add(cliente)
         await session.commit()
 
 
-async def obtener_cliente(telefono: str) -> dict | None:
+async def obtener_cliente(telefono: str, agent_id: int = 1) -> dict | None:
     """Devuelve los datos guardados del cliente o None si no existe."""
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         if not cliente:
             return None
         return {
@@ -273,16 +342,16 @@ async def obtener_cliente(telefono: str) -> dict | None:
 PEDIDO_PENDIENTE_TTL_HORAS = 48
 
 
-async def guardar_pedido_pendiente(telefono: str, productos: list[dict]):
+async def guardar_pedido_pendiente(telefono: str, productos: list[dict], agent_id: int = 1):
     """Guarda el carrito que el cliente confirmó pero aún no completó en Shopify.
     Sirve para retomarlo si vuelve a escribir antes de finalizar el checkout."""
     if not productos:
         return
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         ahora = datetime.utcnow()
         if not cliente:
-            cliente = Cliente(telefono=telefono)
+            cliente = Cliente(agent_id=agent_id, telefono=telefono)
             session.add(cliente)
         cliente.pedido_pendiente = json.dumps(productos, ensure_ascii=False)
         cliente.pedido_pendiente_at = ahora
@@ -290,10 +359,10 @@ async def guardar_pedido_pendiente(telefono: str, productos: list[dict]):
         await session.commit()
 
 
-async def obtener_pedido_pendiente(telefono: str) -> list[dict] | None:
+async def obtener_pedido_pendiente(telefono: str, agent_id: int = 1) -> list[dict] | None:
     """Devuelve el carrito pendiente si existe y no ha expirado."""
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         if not cliente or not cliente.pedido_pendiente or not cliente.pedido_pendiente_at:
             return None
         if datetime.utcnow() - cliente.pedido_pendiente_at > timedelta(hours=PEDIDO_PENDIENTE_TTL_HORAS):
@@ -304,10 +373,10 @@ async def obtener_pedido_pendiente(telefono: str) -> list[dict] | None:
             return None
 
 
-async def limpiar_pedido_pendiente(telefono: str):
+async def limpiar_pedido_pendiente(telefono: str, agent_id: int = 1):
     """Borra el carrito pendiente y el checkout URL — cliente completó el pedido en Shopify."""
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         if cliente:
             cliente.pedido_pendiente = ""
             cliente.pedido_pendiente_at = None
@@ -316,14 +385,14 @@ async def limpiar_pedido_pendiente(telefono: str):
             await session.commit()
 
 
-async def guardar_checkout_url(telefono: str, checkout_url: str):
+async def guardar_checkout_url(telefono: str, checkout_url: str, agent_id: int = 1):
     """Guarda la URL del checkout de Shopify para poder reenviarla si el cliente no termina."""
     if not telefono or not checkout_url:
         return
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         if not cliente:
-            cliente = Cliente(telefono=telefono)
+            cliente = Cliente(agent_id=agent_id, telefono=telefono)
             session.add(cliente)
         cliente.pedido_checkout_url = checkout_url
         cliente.actualizado = datetime.utcnow()
@@ -333,6 +402,7 @@ async def guardar_checkout_url(telefono: str, checkout_url: str):
 async def clientes_con_checkout_abandonado(
     min_min: int = 20,
     max_min: int = 120,
+    agent_id: int = 1,
 ) -> list[tuple[str, str]]:
     """
     Devuelve (telefono, checkout_url) de clientes que iniciaron checkout
@@ -344,6 +414,7 @@ async def clientes_con_checkout_abandonado(
     cutoff_viejo = ahora - timedelta(minutes=max_min)      # no más de max_min min
     async with async_session() as session:
         q = select(Cliente).where(
+            Cliente.agent_id == agent_id,
             Cliente.pedido_pendiente != "",
             Cliente.pedido_pendiente_at.is_not(None),
             Cliente.pedido_pendiente_at <= cutoff_reciente,
@@ -364,14 +435,14 @@ async def clientes_con_checkout_abandonado(
 CARRITO_TTL_HORAS = 24  # El carrito expira si el cliente no vuelve en 24 h
 
 
-async def guardar_carrito_activo(telefono: str, items: list[dict]):
+async def guardar_carrito_activo(telefono: str, items: list[dict], agent_id: int = 1):
     """Guarda el estado actual del carrito en BD.
     Se llama cada vez que Andrea agrega/quita un producto."""
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         ahora = datetime.utcnow()
         if not cliente:
-            cliente = Cliente(telefono=telefono)
+            cliente = Cliente(agent_id=agent_id, telefono=telefono)
             session.add(cliente)
         cliente.carrito_activo = json.dumps(items, ensure_ascii=False)
         cliente.carrito_activo_at = ahora
@@ -379,10 +450,10 @@ async def guardar_carrito_activo(telefono: str, items: list[dict]):
         await session.commit()
 
 
-async def obtener_carrito_activo(telefono: str) -> list[dict]:
+async def obtener_carrito_activo(telefono: str, agent_id: int = 1) -> list[dict]:
     """Devuelve el carrito en curso. Lista vacía si no existe o expiró."""
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         if not cliente or not cliente.carrito_activo or not cliente.carrito_activo_at:
             return []
         if datetime.utcnow() - cliente.carrito_activo_at > timedelta(hours=CARRITO_TTL_HORAS):
@@ -393,10 +464,10 @@ async def obtener_carrito_activo(telefono: str) -> list[dict]:
             return []
 
 
-async def limpiar_carrito_activo(telefono: str):
+async def limpiar_carrito_activo(telefono: str, agent_id: int = 1):
     """Borra el carrito activo — se llama cuando el pedido se confirma o se vacía."""
     async with async_session() as session:
-        cliente = await session.get(Cliente, telefono)
+        cliente = await _get_cliente(session, telefono, agent_id)
         if cliente:
             cliente.carrito_activo = ""
             cliente.carrito_activo_at = None
@@ -407,6 +478,7 @@ async def limpiar_carrito_activo(telefono: str):
 async def _clientes_carrito_en_ventana(
     min_min: int,
     max_min: int,
+    agent_id: int = 1,
 ) -> list[tuple[str, list[dict]]]:
     """Helper interno: clientes con carrito activo guardado hace entre min_min y max_min minutos."""
     ahora = datetime.utcnow()
@@ -416,6 +488,7 @@ async def _clientes_carrito_en_ventana(
     cutoff_viejo = ahora - timedelta(minutes=max_min)
     async with async_session() as session:
         q = select(Cliente).where(
+            Cliente.agent_id == agent_id,
             Cliente.carrito_activo != "",
             Cliente.carrito_activo_at.is_not(None),
             Cliente.carrito_activo_at <= cutoff_reciente,   # al menos min_min minutos de antigüedad
@@ -437,33 +510,41 @@ async def _clientes_carrito_en_ventana(
 async def clientes_con_carrito_abandonado(
     min_inactivo: int = 10,
     max_inactivo: int = 30,
+    agent_id: int = 1,
 ) -> list[tuple[str, list[dict]]]:
     """Carritos sin finalizar entre min_inactivo y max_inactivo minutos de antigüedad."""
-    return await _clientes_carrito_en_ventana(min_inactivo, max_inactivo)
+    return await _clientes_carrito_en_ventana(min_inactivo, max_inactivo, agent_id)
 
 
 async def clientes_para_crosssell(
     min_min: int = 2,
     max_min: int = 8,
+    agent_id: int = 1,
 ) -> list[tuple[str, list[dict]]]:
     """Carritos recientes (2-8 min de antigüedad) para enviar cross-sell si total < $60k."""
-    return await _clientes_carrito_en_ventana(min_min, max_min)
+    return await _clientes_carrito_en_ventana(min_min, max_min, agent_id)
 
 
 # ── Estado de conversación / seguimientos automáticos ───────────────────────
 
-async def _get_or_create_estado(session: AsyncSession, telefono: str) -> "EstadoConversacion":
-    estado = await session.get(EstadoConversacion, telefono)
+async def _get_or_create_estado(session: AsyncSession, telefono: str, agent_id: int = 1) -> "EstadoConversacion":
+    result = await session.execute(
+        select(EstadoConversacion).where(
+            EstadoConversacion.agent_id == agent_id,
+            EstadoConversacion.telefono == telefono,
+        )
+    )
+    estado = result.scalar_one_or_none()
     if not estado:
-        estado = EstadoConversacion(telefono=telefono)
+        estado = EstadoConversacion(agent_id=agent_id, telefono=telefono)
         session.add(estado)
     return estado
 
 
-async def registrar_mensaje_usuario(telefono: str):
+async def registrar_mensaje_usuario(telefono: str, agent_id: int = 1):
     """Cliente acaba de escribir → resetea timers de seguimiento."""
     async with async_session() as session:
-        estado = await _get_or_create_estado(session, telefono)
+        estado = await _get_or_create_estado(session, telefono, agent_id)
         ahora = datetime.utcnow()
         estado.last_user_at = ahora
         estado.follow_up_at = None
@@ -472,27 +553,27 @@ async def registrar_mensaje_usuario(telefono: str):
         await session.commit()
 
 
-async def registrar_mensaje_asistente(telefono: str):
+async def registrar_mensaje_asistente(telefono: str, agent_id: int = 1):
     """Andrea acaba de responder → marca el último mensaje del bot."""
     async with async_session() as session:
-        estado = await _get_or_create_estado(session, telefono)
+        estado = await _get_or_create_estado(session, telefono, agent_id)
         ahora = datetime.utcnow()
         estado.last_assistant_at = ahora
         estado.actualizado = ahora
         await session.commit()
 
 
-async def marcar_followup_enviado(telefono: str):
+async def marcar_followup_enviado(telefono: str, agent_id: int = 1):
     async with async_session() as session:
-        estado = await _get_or_create_estado(session, telefono)
+        estado = await _get_or_create_estado(session, telefono, agent_id)
         estado.follow_up_at = datetime.utcnow()
         estado.actualizado = estado.follow_up_at
         await session.commit()
 
 
-async def marcar_cierre_enviado(telefono: str):
+async def marcar_cierre_enviado(telefono: str, agent_id: int = 1):
     async with async_session() as session:
-        estado = await _get_or_create_estado(session, telefono)
+        estado = await _get_or_create_estado(session, telefono, agent_id)
         estado.cierre_at = datetime.utcnow()
         estado.actualizado = estado.cierre_at
         await session.commit()
@@ -501,6 +582,7 @@ async def marcar_cierre_enviado(telefono: str):
 async def conversaciones_para_followup(
     inactividad_minutos: int = 2,
     max_edad_horas: int = 12,
+    agent_id: int = 1,
 ) -> list[str]:
     """Conversaciones donde:
     - El último mensaje fue del asistente (last_assistant_at > last_user_at o user nulo)
@@ -516,6 +598,7 @@ async def conversaciones_para_followup(
     cutoff_max_edad = ahora - timedelta(hours=max_edad_horas)
     async with async_session() as session:
         query = select(EstadoConversacion).where(
+            EstadoConversacion.agent_id == agent_id,
             EstadoConversacion.last_assistant_at.is_not(None),
             EstadoConversacion.last_assistant_at <= cutoff_inactividad,
             EstadoConversacion.last_assistant_at >= cutoff_max_edad,
@@ -531,20 +614,20 @@ async def conversaciones_para_followup(
             if e.last_user_at is not None and e.last_assistant_at <= e.last_user_at:
                 continue
             # No molestar si tiene carrito activo o está en checkout
-            # (esos estados tienen su propio seguimiento más específico)
-            cliente = await session.get(Cliente, e.telefono)
+            cliente = await _get_cliente(session, e.telefono, agent_id)
             if cliente and (cliente.pedido_checkout_url or cliente.carrito_activo):
                 continue
             telefonos.append(e.telefono)
         return telefonos
 
 
-async def conversaciones_para_cierre(min_despues_followup: int = 5) -> list[str]:
+async def conversaciones_para_cierre(min_despues_followup: int = 5, agent_id: int = 1) -> list[str]:
     """Conversaciones que ya recibieron follow-up genérico y siguen sin respuesta.
     Solo aplica a estado 6 (sin carrito, sin checkout)."""
     cutoff = datetime.utcnow() - timedelta(minutes=min_despues_followup)
     async with async_session() as session:
         query = select(EstadoConversacion).where(
+            EstadoConversacion.agent_id == agent_id,
             EstadoConversacion.follow_up_at.is_not(None),
             EstadoConversacion.follow_up_at <= cutoff,
             EstadoConversacion.cierre_at.is_(None),
@@ -556,29 +639,38 @@ async def conversaciones_para_cierre(min_despues_followup: int = 5) -> list[str]
             if e.last_user_at is not None and e.follow_up_at <= e.last_user_at:
                 continue
             # Solo cierre si no tiene carrito ni checkout activo
-            async with async_session() as s2:
-                cliente = await s2.get(Cliente, e.telefono)
+            cliente = await _get_cliente(session, e.telefono, agent_id)
             if cliente and (cliente.pedido_checkout_url or cliente.carrito_activo):
                 continue
             telefonos.append(e.telefono)
         return telefonos
 
 
-async def verificar_cierre_enviado(telefono: str) -> bool:
+async def verificar_cierre_enviado(telefono: str, agent_id: int = 1) -> bool:
     """Retorna True si la conversación fue cerrada explícitamente (cierre_at set)."""
     async with async_session() as session:
-        estado = await session.get(EstadoConversacion, telefono)
+        result = await session.execute(
+            select(EstadoConversacion).where(
+                EstadoConversacion.agent_id == agent_id,
+                EstadoConversacion.telefono == telefono,
+            )
+        )
+        estado = result.scalar_one_or_none()
         return bool(estado and estado.cierre_at)
 
 
 # ── Opt-out — gestión de bajas de difusiones ─────────────────────────────────
 
-async def marcar_opt_out(telefono: str, motivo: str = "") -> None:
+async def marcar_opt_out(telefono: str, motivo: str = "", agent_id: int = 1) -> None:
     """Registra que este número no quiere recibir más difusiones masivas."""
     async with async_session() as session:
-        existente = await session.get(OptOut, telefono)
+        result = await session.execute(
+            select(OptOut).where(OptOut.agent_id == agent_id, OptOut.telefono == telefono)
+        )
+        existente = result.scalar_one_or_none()
         if not existente:
             session.add(OptOut(
+                agent_id=agent_id,
                 telefono=telefono,
                 motivo=motivo[:200],
                 creado_at=datetime.utcnow(),
@@ -586,27 +678,32 @@ async def marcar_opt_out(telefono: str, motivo: str = "") -> None:
             await session.commit()
 
 
-async def verificar_opt_out(telefono: str) -> bool:
+async def verificar_opt_out(telefono: str, agent_id: int = 1) -> bool:
     """Retorna True si el número está dado de baja de las difusiones."""
     async with async_session() as session:
-        registro = await session.get(OptOut, telefono)
-        return registro is not None
+        result = await session.execute(
+            select(OptOut).where(OptOut.agent_id == agent_id, OptOut.telefono == telefono)
+        )
+        return result.scalar_one_or_none() is not None
 
 
-async def revertir_opt_out(telefono: str) -> None:
+async def revertir_opt_out(telefono: str, agent_id: int = 1) -> None:
     """Reactiva el número para recibir difusiones (el cliente cambió de opinión)."""
     async with async_session() as session:
-        registro = await session.get(OptOut, telefono)
+        result = await session.execute(
+            select(OptOut).where(OptOut.agent_id == agent_id, OptOut.telefono == telefono)
+        )
+        registro = result.scalar_one_or_none()
         if registro:
             await session.delete(registro)
             await session.commit()
 
 
-async def obtener_opt_outs() -> list[dict]:
+async def obtener_opt_outs(agent_id: int = 1) -> list[dict]:
     """Devuelve la lista completa de números dados de baja."""
     async with async_session() as session:
         result = await session.execute(
-            select(OptOut).order_by(OptOut.creado_at.desc())
+            select(OptOut).where(OptOut.agent_id == agent_id).order_by(OptOut.creado_at.desc())
         )
         rows = result.scalars().all()
         return [
@@ -619,7 +716,7 @@ async def obtener_opt_outs() -> list[dict]:
         ]
 
 
-async def obtener_clientes_con_estado(limite: int = 500) -> list[dict]:
+async def obtener_clientes_con_estado(limite: int = 500, agent_id: int = 1) -> list[dict]:
     """
     Devuelve la base de clientes con su estado de engagement:
       activo  — último mensaje hace < 30 días
@@ -629,21 +726,21 @@ async def obtener_clientes_con_estado(limite: int = 500) -> list[dict]:
     """
     ahora = datetime.utcnow()
     async with async_session() as session:
-        # Subconsulta: último mensaje por teléfono y su timestamp
+        # Subconsulta: último mensaje por teléfono y su timestamp (filtrado por agente)
         sub = (
             select(
                 Mensaje.telefono,
                 func.max(Mensaje.timestamp).label("last_msg"),
                 func.count(Mensaje.id).label("total_msgs"),
             )
-            .where(~Mensaje.telefono.like("test-%"))
+            .where(Mensaje.agent_id == agent_id, ~Mensaje.telefono.like("test-%"))
             .group_by(Mensaje.telefono)
             .subquery()
         )
         query = (
             select(sub, Cliente, OptOut)
-            .outerjoin(Cliente, sub.c.telefono == Cliente.telefono)
-            .outerjoin(OptOut,  sub.c.telefono == OptOut.telefono)
+            .outerjoin(Cliente, (sub.c.telefono == Cliente.telefono) & (Cliente.agent_id == agent_id))
+            .outerjoin(OptOut,  (sub.c.telefono == OptOut.telefono) & (OptOut.agent_id == agent_id))
             .order_by(sub.c.last_msg.desc())
             .limit(limite)
         )
@@ -702,39 +799,46 @@ async def obtener_clientes_con_estado(limite: int = 500) -> list[dict]:
 
 # ── Inbox / panel de administración ─────────────────────────────────────────
 
-async def get_modo_humano(telefono: str) -> bool:
+async def get_modo_humano(telefono: str, agent_id: int = 1) -> bool:
     """Retorna True si el modo humano está activo para esta conversación."""
     async with async_session() as session:
-        estado = await session.get(EstadoConversacion, telefono)
+        result = await session.execute(
+            select(EstadoConversacion).where(
+                EstadoConversacion.agent_id == agent_id,
+                EstadoConversacion.telefono == telefono,
+            )
+        )
+        estado = result.scalar_one_or_none()
         if not estado:
             return False
         return bool(estado.modo_humano)
 
 
-async def set_modo_humano(telefono: str, activo: bool):
+async def set_modo_humano(telefono: str, activo: bool, agent_id: int = 1):
     """Activa o desactiva el modo humano para una conversación."""
     async with async_session() as session:
-        estado = await _get_or_create_estado(session, telefono)
+        estado = await _get_or_create_estado(session, telefono, agent_id)
         estado.modo_humano = 1 if activo else 0
         estado.actualizado = datetime.utcnow()
         await session.commit()
 
 
-async def obtener_todas_conversaciones() -> list[dict]:
+async def obtener_todas_conversaciones(agent_id: int = 1) -> list[dict]:
     """Lista de conversaciones con el último mensaje de cada una, ordenadas por recientes."""
     async with async_session() as session:
-        # Subconsulta: id del último mensaje por teléfono
+        # Subconsulta: id del último mensaje por teléfono (filtrado por agente)
         sub = (
             select(Mensaje.telefono, func.max(Mensaje.id).label("max_id"))
+            .where(Mensaje.agent_id == agent_id)
             .group_by(Mensaje.telefono)
             .subquery()
         )
         query = (
             select(Mensaje, EstadoConversacion, Cliente, OptOut)
             .join(sub, Mensaje.id == sub.c.max_id)
-            .outerjoin(EstadoConversacion, Mensaje.telefono == EstadoConversacion.telefono)
-            .outerjoin(Cliente, Mensaje.telefono == Cliente.telefono)
-            .outerjoin(OptOut, Mensaje.telefono == OptOut.telefono)
+            .outerjoin(EstadoConversacion, (Mensaje.telefono == EstadoConversacion.telefono) & (EstadoConversacion.agent_id == agent_id))
+            .outerjoin(Cliente, (Mensaje.telefono == Cliente.telefono) & (Cliente.agent_id == agent_id))
+            .outerjoin(OptOut, (Mensaje.telefono == OptOut.telefono) & (OptOut.agent_id == agent_id))
             .where(~Mensaje.telefono.like("test-%"))
             .order_by(Mensaje.timestamp.desc())
             .limit(300)
@@ -958,7 +1062,7 @@ async def registrar_difusion(
         await session.commit()
 
 
-async def obtener_difusiones(limite: int = 100) -> list[dict]:
+async def obtener_difusiones(limite: int = 100, agent_id: int = 1) -> list[dict]:
     """Campañas de difusión agrupadas por campaign_id, con stats en vivo de delivery/lectura."""
     from sqlalchemy import text
     async with async_session() as session:
@@ -974,11 +1078,12 @@ async def obtener_difusiones(limite: int = 100) -> list[dict]:
                 MIN(created_at)                                     AS created_at,
                 MAX(CASE WHEN campaign_id != '' THEN campaign_id ELSE NULL END) AS campaign_id
             FROM difusiones
+            WHERE agent_id = :agent_id
             GROUP BY COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))
             ORDER BY MIN(created_at) DESC
             LIMIT :lim
         """)
-        r1 = await session.execute(sql_base, {"lim": limite})
+        r1 = await session.execute(sql_base, {"lim": limite, "agent_id": agent_id})
         rows = r1.fetchall()
 
         # ── Query 2: stats en vivo de difusion_mensajes ──────────────────────
@@ -989,9 +1094,10 @@ async def obtener_difusiones(limite: int = 100) -> list[dict]:
                 COUNT(CASE WHEN status = 'read'                THEN 1 END) AS leidos,
                 COUNT(CASE WHEN status = 'failed'              THEN 1 END) AS fallidos_wh
             FROM difusion_mensajes
+            WHERE agent_id = :agent_id
             GROUP BY campaign_id
         """)
-        r2 = await session.execute(sql_stats)
+        r2 = await session.execute(sql_stats, {"agent_id": agent_id})
         stats_map = {row.campaign_id: row for row in r2.fetchall()}
 
     resultado = []
@@ -1091,6 +1197,7 @@ async def _atribuir_ventas_shopify(
 async def obtener_campana_reciente_para_telefono(
     telefono: str,
     max_horas: int = 72,
+    agent_id: int = 1,
 ) -> dict | None:
     """
     Retorna la campaña más reciente enviada a este teléfono (dentro de max_horas).
@@ -1108,11 +1215,12 @@ async def obtener_campana_reciente_para_telefono(
                 LEFT JOIN difusiones d ON d.campaign_id = dm.campaign_id
                 WHERE dm.telefono = :tel
                   AND dm.sent_at  >= :desde
+                  AND dm.agent_id = :agent_id
                 ORDER BY dm.sent_at DESC
                 LIMIT 1
                 """
             ),
-            {"tel": telefono, "desde": desde},
+            {"tel": telefono, "desde": desde, "agent_id": agent_id},
         )
         row = r.fetchone()
         if not row:
@@ -1146,7 +1254,7 @@ async def obtener_campana_reciente_para_telefono(
         }
 
 
-async def obtener_metricas_internas(dias: int = 30) -> dict:
+async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
     """
     Métricas calculadas íntegramente desde la base de datos local.
     Incluye costo Meta (conversaciones iniciadas × tarifa) y
@@ -1164,10 +1272,10 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
                   COALESCE(SUM(enviados), 0)      AS total_enviados,
                   COALESCE(SUM(destinatarios), 0) AS total_destinatarios
                 FROM difusiones
-                WHERE created_at >= :desde
+                WHERE created_at >= :desde AND agent_id = :agent_id
                 """
             ),
-            {"desde": desde},
+            {"desde": desde, "agent_id": agent_id},
         )
         row_dif = r_dif.fetchone()
         total_campanas    = int(row_dif[0] or 0)
@@ -1183,10 +1291,10 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
                   SUM(CASE WHEN status = 'read'  THEN 1 ELSE 0 END)              AS leidos,
                   SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)             AS fallidos
                 FROM difusion_mensajes
-                WHERE sent_at >= :desde
+                WHERE sent_at >= :desde AND agent_id = :agent_id
                 """
             ),
-            {"desde": desde},
+            {"desde": desde, "agent_id": agent_id},
         )
         row_tr = r_tr.fetchone()
         rastreados  = int(row_tr[0] or 0)
@@ -1206,10 +1314,10 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
                   SUM(CASE WHEN role = 'user'      THEN 1 ELSE 0 END)             AS mensajes_recibidos,
                   SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END)             AS mensajes_enviados_ai
                 FROM mensajes
-                WHERE timestamp >= :desde
+                WHERE timestamp >= :desde AND agent_id = :agent_id
                 """
             ),
-            {"desde": desde},
+            {"desde": desde, "agent_id": agent_id},
         )
         row_conv = r_conv.fetchone()
         chats_activos      = int(row_conv[0] or 0)
@@ -1236,7 +1344,7 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
                     MAX(created_at) AS created_at,
                     SUM(enviados)   AS enviados
                   FROM difusiones
-                  WHERE created_at >= :desde
+                  WHERE created_at >= :desde AND agent_id = :agent_id
                   GROUP BY COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))
                 ) d
                 LEFT JOIN (
@@ -1247,14 +1355,14 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
                     SUM(CASE WHEN status = 'read'   THEN 1 ELSE 0 END)            AS leidos,
                     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)            AS fallidos
                   FROM difusion_mensajes
-                  WHERE sent_at >= :desde
+                  WHERE sent_at >= :desde AND agent_id = :agent_id
                   GROUP BY campaign_id
                 ) tr ON d.campaign_id = tr.campaign_id
                 ORDER BY d.created_at DESC
                 LIMIT 15
                 """
             ),
-            {"desde": desde},
+            {"desde": desde, "agent_id": agent_id},
         )
         # Recopilar filas de campañas primero
         camp_rows = r_camp.fetchall()
@@ -1270,6 +1378,7 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
                     SELECT campaign_id, telefono
                     FROM difusion_mensajes
                     WHERE campaign_id IN ({placeholders})
+                      AND agent_id = {agent_id}
                     """
                 )
             )
@@ -1356,12 +1465,12 @@ async def obtener_metricas_internas(dias: int = 30) -> dict:
     }
 
 
-async def obtener_historial_con_timestamps(telefono: str, limite: int = 150) -> list[dict]:
+async def obtener_historial_con_timestamps(telefono: str, limite: int = 150, agent_id: int = 1) -> list[dict]:
     """Historial completo con timestamps para el inbox."""
     async with async_session() as session:
         query = (
             select(Mensaje)
-            .where(Mensaje.telefono == telefono)
+            .where(Mensaje.telefono == telefono, Mensaje.agent_id == agent_id)
             .order_by(Mensaje.timestamp.asc())
             .limit(limite)
         )
@@ -1379,49 +1488,157 @@ async def obtener_historial_con_timestamps(telefono: str, limite: int = 150) -> 
 
 # ── Configuración dinámica ──────────────────────────────────────────────────
 
-async def get_config_value(clave: str) -> str | None:
+async def get_config_value(clave: str, agent_id: int = 1) -> str | None:
     """Lee un valor de configuración desde la BD. Retorna None si no existe."""
     async with async_session() as session:
-        row = await session.get(ConfigValue, clave)
+        result = await session.execute(
+            select(ConfigValue).where(ConfigValue.agent_id == agent_id, ConfigValue.clave == clave)
+        )
+        row = result.scalar_one_or_none()
         return row.valor if row and row.valor else None
 
 
-async def set_config_value(clave: str, valor: str) -> None:
+async def set_config_value(clave: str, valor: str, agent_id: int = 1) -> None:
     """Guarda o actualiza un valor de configuración en la BD."""
     async with async_session() as session:
-        row = await session.get(ConfigValue, clave)
+        result = await session.execute(
+            select(ConfigValue).where(ConfigValue.agent_id == agent_id, ConfigValue.clave == clave)
+        )
+        row = result.scalar_one_or_none()
         ahora = datetime.utcnow()
         if row:
             row.valor = valor
             row.actualizado_at = ahora
         else:
-            session.add(ConfigValue(clave=clave, valor=valor, actualizado_at=ahora))
+            session.add(ConfigValue(agent_id=agent_id, clave=clave, valor=valor, actualizado_at=ahora))
         await session.commit()
 
 
-async def get_all_config_values() -> dict[str, str]:
+async def get_all_config_values(agent_id: int = 1) -> dict[str, str]:
     """Devuelve todos los valores de configuración como dict {clave: valor}."""
     async with async_session() as session:
-        result = await session.execute(select(ConfigValue))
+        result = await session.execute(select(ConfigValue).where(ConfigValue.agent_id == agent_id))
         return {row.clave: row.valor for row in result.scalars().all() if row.valor}
 
 
-async def resolve_setting(clave: str, default: str = "") -> str:
+async def resolve_setting(clave: str, default: str = "", agent_id: int = 1) -> str:
     """Lee el valor de BD primero; si no existe, usa la variable de entorno."""
-    db_val = await get_config_value(clave)
+    db_val = await get_config_value(clave, agent_id)
     if db_val:
         return db_val
     return os.getenv(clave, default)
 
 
-async def cargar_config_en_env() -> None:
+async def cargar_config_en_env(agent_id: int = 1) -> None:
     """Al iniciar, carga los valores de config_values de la BD en os.environ.
+    Solo carga el agente indicado (default: Equora, agent_id=1).
     Así todas las partes del sistema que leen os.getenv() reciben los valores
     guardados por el usuario sin necesidad de reiniciar."""
     try:
-        valores = await get_all_config_values()
+        valores = await get_all_config_values(agent_id)
         for clave, valor in valores.items():
             if valor:
                 os.environ[clave] = valor
     except Exception:
         pass  # La tabla puede no existir aún en el primer arranque
+
+
+# ── CRUD de agentes ─────────────────────────────────────────────────────────
+
+def _agent_to_dict(a: Agent) -> dict:
+    return {
+        "id": a.id,
+        "slug": a.slug,
+        "name": a.name,
+        "agent_name": a.agent_name,
+        "business_type": a.business_type,
+        "status": a.status,
+        "phone_number_id": a.phone_number_id,
+        "waba_id": a.waba_id,
+        "color": a.color,
+        "emoji": a.emoji,
+        "created_at": a.created_at.isoformat() if a.created_at else "",
+    }
+
+
+async def crear_agente(
+    name: str,
+    slug: str,
+    agent_name: str = "Agente",
+    business_type: str = "productos",
+    phone_number_id: str = "",
+    waba_id: str = "",
+    color: str = "#6366f1",
+    emoji: str = "🤖",
+) -> dict:
+    """Crea un nuevo agente en la plataforma Voco. Retorna el dict del agente creado."""
+    async with async_session() as session:
+        agente = Agent(
+            slug=slug,
+            name=name,
+            agent_name=agent_name,
+            business_type=business_type,
+            status="draft",
+            phone_number_id=phone_number_id,
+            waba_id=waba_id,
+            color=color,
+            emoji=emoji,
+            created_at=datetime.utcnow(),
+        )
+        session.add(agente)
+        await session.commit()
+        await session.refresh(agente)
+        return _agent_to_dict(agente)
+
+
+async def obtener_agente(agent_id: int) -> dict | None:
+    """Retorna el dict de un agente por su ID, o None si no existe."""
+    async with async_session() as session:
+        result = await session.execute(select(Agent).where(Agent.id == agent_id))
+        agente = result.scalar_one_or_none()
+        return _agent_to_dict(agente) if agente else None
+
+
+async def obtener_agente_por_slug(slug: str) -> dict | None:
+    """Retorna el dict de un agente por su slug, o None si no existe."""
+    async with async_session() as session:
+        result = await session.execute(select(Agent).where(Agent.slug == slug))
+        agente = result.scalar_one_or_none()
+        return _agent_to_dict(agente) if agente else None
+
+
+async def obtener_agente_por_phone_id(phone_number_id: str) -> dict | None:
+    """Retorna el agente asociado a un phone_number_id de Meta, o None."""
+    if not phone_number_id:
+        return None
+    async with async_session() as session:
+        result = await session.execute(
+            select(Agent).where(Agent.phone_number_id == phone_number_id)
+        )
+        agente = result.scalar_one_or_none()
+        return _agent_to_dict(agente) if agente else None
+
+
+async def obtener_todos_agentes() -> list[dict]:
+    """Retorna la lista de todos los agentes registrados."""
+    async with async_session() as session:
+        result = await session.execute(select(Agent).order_by(Agent.id))
+        return [_agent_to_dict(a) for a in result.scalars().all()]
+
+
+async def actualizar_agente(agent_id: int, **kwargs) -> bool:
+    """Actualiza campos de un agente. Retorna True si el agente existe."""
+    campos_permitidos = {
+        "name", "slug", "agent_name", "business_type", "status",
+        "phone_number_id", "waba_id", "color", "emoji",
+    }
+    async with async_session() as session:
+        result = await session.execute(select(Agent).where(Agent.id == agent_id))
+        agente = result.scalar_one_or_none()
+        if not agente:
+            return False
+        for campo, valor in kwargs.items():
+            if campo in campos_permitidos:
+                setattr(agente, campo, valor)
+        await session.commit()
+        return True

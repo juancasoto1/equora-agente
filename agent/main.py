@@ -62,6 +62,42 @@ logger = logging.getLogger("agentkit")
 proveedor = obtener_proveedor()
 PORT = int(os.getenv("PORT", 8000))
 
+# ── Cache de agentes por phone_number_id ─────────────────────────────────────
+# Evita consultar la BD en cada mensaje entrante para resolver el agente
+_phone_agent_cache: dict[str, dict] = {}
+
+
+async def _resolver_agente(phone_number_id: str) -> dict:
+    """Retorna el agente para este phone_number_id. Fallback: agent_id=1 (Equora)."""
+    from agent.memory import obtener_agente_por_phone_id, obtener_agente
+    if phone_number_id and phone_number_id in _phone_agent_cache:
+        return _phone_agent_cache[phone_number_id]
+    agent = None
+    if phone_number_id:
+        agent = await obtener_agente_por_phone_id(phone_number_id)
+        if agent:
+            _phone_agent_cache[phone_number_id] = agent
+    if not agent:
+        agent = await obtener_agente(1)  # fallback Equora
+    return agent or {"id": 1, "slug": "equora", "agent_name": "Andrea", "status": "active"}
+
+
+async def _get_meta_para_agente(agent: dict) -> "ProveedorMeta":
+    """Instancia ProveedorMeta con credenciales del agente (BD) o env vars (fallback)."""
+    from agent.memory import get_config_value
+    from agent.providers.meta import ProveedorMeta
+    agent_id = agent.get("id", 1)
+    access_token    = await get_config_value("META_ACCESS_TOKEN",    agent_id) or os.getenv("META_ACCESS_TOKEN", "")
+    phone_number_id = await get_config_value("META_PHONE_NUMBER_ID", agent_id) or os.getenv("META_PHONE_NUMBER_ID", "")
+    verify_token    = await get_config_value("META_VERIFY_TOKEN",    agent_id) or os.getenv("META_VERIFY_TOKEN", "equora-andrea-2024")
+    catalog_id      = await get_config_value("META_CATALOG_ID",      agent_id) or os.getenv("META_CATALOG_ID", "")
+    return ProveedorMeta(
+        access_token=access_token,
+        phone_number_id=phone_number_id,
+        verify_token=verify_token,
+        catalog_id=catalog_id,
+    )
+
 # URL pública del servidor (se usa para el link de la mini-tienda)
 _railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
 APP_URL = os.getenv("APP_URL") or (f"https://{_railway_domain}" if _railway_domain else f"http://localhost:{PORT}")
@@ -149,6 +185,11 @@ async def lifespan(app: FastAPI):
             os.environ[_k] = _v
             logger.debug(f"[config] {_k} pre-cargado desde defaults de tools.py")
 
+    # Verificar que agente Equora (agent_id=1) existe
+    from agent.memory import obtener_agente
+    equora = await obtener_agente(1)
+    if equora:
+        logger.info(f"Agente Equora activo: {equora['agent_name']} ({equora['status']})")
     logger.info("Base de datos inicializada y configuración cargada")
     # Pre-calentar catálogo Shopify al arrancar para que _variant_map esté listo
     # antes de que llegue cualquier petición a /tienda/confirmar
@@ -825,11 +866,32 @@ def _es_respuesta_automatica(texto: str) -> bool:
 
 @app.post("/webhook")
 async def webhook_handler(request: Request):
+    # ── Extraer phone_number_id para routing multi-agente ─────────────────────
+    _body_raw = {}
+    try:
+        _body_raw = await request.json()
+    except Exception:
+        pass
+
+    _phone_id = ""
+    try:
+        _phone_id = _body_raw["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"]
+    except Exception:
+        pass
+    _agente_actual = await _resolver_agente(_phone_id)
+    _agent_id = _agente_actual.get("id", 1)
+
+    # Si el agente está pausado o en draft, ignorar el webhook
+    if _agente_actual.get("status") in ("paused", "draft"):
+        return {"status": "ok", "agente": "inactivo"}
+
+    # Proveedor Meta específico para este agente (credenciales desde BD o env)
+    _proveedor_agente = await _get_meta_para_agente(_agente_actual)
+
     # ── Status updates de Meta (delivery/read/failed) ─────────────────────────
     # Llegan en el mismo POST que los mensajes, en el campo "statuses"
     try:
-        raw_body = await request.json()
-        for entry in raw_body.get("entry", []):
+        for entry in _body_raw.get("entry", []):
             for change in entry.get("changes", []):
                 for status in change.get("value", {}).get("statuses", []):
                     asyncio.create_task(_procesar_status_difusion(status))
@@ -837,7 +899,7 @@ async def webhook_handler(request: Request):
         pass  # no interferir con el flujo normal de mensajes
 
     try:
-        mensajes = await proveedor.parsear_webhook(request)
+        mensajes = await _proveedor_agente.parsear_webhook(request)
 
         for msg in mensajes:
             if msg.es_propio or not msg.texto:
@@ -852,16 +914,16 @@ async def webhook_handler(request: Request):
 
             # ── Opt-out: el cliente pide darse de baja de las difusiones ──────
             if _es_solicitud_opt_out(msg.texto):
-                await marcar_opt_out(msg.telefono, motivo=msg.texto.strip()[:200])
-                await guardar_mensaje(msg.telefono, "user", msg.texto)
+                await marcar_opt_out(msg.telefono, motivo=msg.texto.strip()[:200], agent_id=_agent_id)
+                await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
                 respuesta_baja = (
                     "Listo ✅ Te quitamos de nuestra lista de difusiones. "
                     "No volverás a recibir mensajes masivos de nuestra parte.\n\n"
                     "Si en algún momento cambias de opinión y quieres volver a recibir "
                     "nuestras ofertas y novedades, solo escríbenos. 🌿"
                 )
-                await proveedor.enviar_mensaje(msg.telefono, respuesta_baja)
-                await guardar_mensaje(msg.telefono, "assistant", respuesta_baja)
+                await _proveedor_agente.enviar_mensaje(msg.telefono, respuesta_baja)
+                await guardar_mensaje(msg.telefono, "assistant", respuesta_baja, agent_id=_agent_id)
                 logger.info(f"[opt-out] {msg.telefono} dado de baja — motivo: {msg.texto[:50]}")
                 continue  # no pasar por Claude
 
@@ -869,7 +931,7 @@ async def webhook_handler(request: Request):
             # El cliente armó su carrito en WhatsApp y confirmó — bypaseamos Claude
             # y creamos el checkout de Shopify directamente.
             if msg.texto.startswith("__ORDEN_CATALOGO__:"):
-                await registrar_mensaje_usuario(msg.telefono)
+                await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
                 try:
                     items_raw = json.loads(msg.texto[len("__ORDEN_CATALOGO__:"):])
                     productos = []
@@ -903,37 +965,37 @@ async def webhook_handler(request: Request):
                         datos_pedido = {"productos": productos, "total": total}
                         checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
                         if checkout_url:
-                            await guardar_pedido_pendiente(msg.telefono, productos)
-                            await limpiar_carrito_activo(msg.telefono)
+                            await guardar_pedido_pendiente(msg.telefono, productos, agent_id=_agent_id)
+                            await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
                             texto_checkout = (
                                 "🎉 *¡Pedido recibido!*\n\n"
                                 "Toca el botón para confirmar tu dirección de entrega. "
                                 "El pago es *contra entrega*. 🌿"
                             )
-                            if hasattr(proveedor, "enviar_cta_url"):
-                                await proveedor.enviar_cta_url(
+                            if hasattr(_proveedor_agente, "enviar_cta_url"):
+                                await _proveedor_agente.enviar_cta_url(
                                     msg.telefono, texto_checkout,
                                     "Confirmar entrega", checkout_url
                                 )
                             else:
-                                await proveedor.enviar_mensaje(
+                                await _proveedor_agente.enviar_mensaje(
                                     msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
                                 )
                         else:
-                            await proveedor.enviar_mensaje(
+                            await _proveedor_agente.enviar_mensaje(
                                 msg.telefono,
                                 "😔 No pude procesar tu pedido. Algunos productos "
                                 "pueden haberse agotado. ¿Quieres que lo revisemos juntos?"
                             )
                     else:
-                        await proveedor.enviar_mensaje(
+                        await _proveedor_agente.enviar_mensaje(
                             msg.telefono,
                             "😔 No reconocí los productos de tu pedido. "
                             "¿Puedes escribirme qué quieres y te ayudo?"
                         )
                 except Exception as e:
                     logger.error(f"Error procesando orden catálogo: {e}")
-                    await proveedor.enviar_mensaje(
+                    await _proveedor_agente.enviar_mensaje(
                         msg.telefono,
                         "😔 Tuve un problema procesando tu pedido. "
                         "¿Me puedes decir qué quieres y te ayudo enseguida?"
@@ -941,15 +1003,15 @@ async def webhook_handler(request: Request):
                 continue  # No pasa por Claude
 
             # Cliente respondió → resetea timers de seguimiento
-            await registrar_mensaje_usuario(msg.telefono)
+            await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
 
             # Modo humano: guardar mensaje pero no responder con Andrea
-            if await get_modo_humano(msg.telefono):
-                await guardar_mensaje(msg.telefono, "user", msg.texto)
+            if await get_modo_humano(msg.telefono, agent_id=_agent_id):
+                await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
                 logger.info(f"Modo humano activo — {msg.telefono} — Andrea no responde")
                 continue
 
-            historial = await obtener_historial(msg.telefono)
+            historial = await obtener_historial(msg.telefono, agent_id=_agent_id)
 
             # CAPI: Lead — primera vez que este número escribe a Andrea
             if not historial:
@@ -958,7 +1020,7 @@ async def webhook_handler(request: Request):
             # ── Contexto de campaña ───────────────────────────────────────────
             # Si el cliente responde dentro de las 72 h de recibir una difusión,
             # Andrea sabe de qué producto/campaña viene y no lo pregunta de nuevo.
-            contexto_campana = await obtener_campana_reciente_para_telefono(msg.telefono)
+            contexto_campana = await obtener_campana_reciente_para_telefono(msg.telefono, agent_id=_agent_id)
             if contexto_campana:
                 logger.warning(
                     f"[campaña✅] {msg.telefono} respondió a campaña "
@@ -971,18 +1033,18 @@ async def webhook_handler(request: Request):
                 )
 
             respuesta = await generar_respuesta(
-                msg.texto, historial, msg.telefono, contexto_campana
+                msg.texto, historial, msg.telefono, contexto_campana, agent_id=_agent_id
             )
 
-            await guardar_mensaje(msg.telefono, "user", msg.texto)
-            await guardar_mensaje(msg.telefono, "assistant", respuesta)
-            await registrar_mensaje_asistente(msg.telefono)
+            await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
+            await guardar_mensaje(msg.telefono, "assistant", respuesta, agent_id=_agent_id)
+            await registrar_mensaje_asistente(msg.telefono, agent_id=_agent_id)
 
             # Procesar marcador de carrito → persistir estado en BD
             respuesta, items_carrito = extraer_marcador_carrito(respuesta)
             if items_carrito is not None:
                 try:
-                    await guardar_carrito_activo(msg.telefono, items_carrito)
+                    await guardar_carrito_activo(msg.telefono, items_carrito, agent_id=_agent_id)
                     logger.info(f"Carrito actualizado para {msg.telefono}: {len(items_carrito)} items")
                 except Exception as e:
                     logger.error(f"Error guardando carrito: {e}")
@@ -996,13 +1058,13 @@ async def webhook_handler(request: Request):
                     datos_pedido = json.loads(match_pedido.group(1))
                     checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
                     if checkout_url:
-                        await guardar_cliente(msg.telefono, datos_pedido)
+                        await guardar_cliente(msg.telefono, datos_pedido, agent_id=_agent_id)
                         # Guardamos el carrito como pendiente: lo limpia el webhook de Shopify
                         await guardar_pedido_pendiente(
-                            msg.telefono, datos_pedido.get("productos", [])
+                            msg.telefono, datos_pedido.get("productos", []), agent_id=_agent_id
                         )
                         # El carrito activo se vacía: el pedido ya fue generado
-                        await limpiar_carrito_activo(msg.telefono)
+                        await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
                         logger.info(f"Checkout Shopify creado para {msg.telefono}")
                     else:
                         checkout_fallo = True
@@ -1026,7 +1088,7 @@ async def webhook_handler(request: Request):
             if '[[CIERRE_CONV:]]' in respuesta:
                 respuesta = respuesta.replace('[[CIERRE_CONV:]]', '').strip()
                 try:
-                    await marcar_cierre_enviado(msg.telefono)
+                    await marcar_cierre_enviado(msg.telefono, agent_id=_agent_id)
                     logger.info(f"Conversación cerrada para {msg.telefono} — seguimientos suprimidos")
                 except Exception as e:
                     logger.error(f"Error marcando cierre: {e}")
@@ -1042,17 +1104,17 @@ async def webhook_handler(request: Request):
             # se fusiona como cuerpo del CTA para que quede un único mensaje de bienvenida.
             _texto_absorbido_por_cta = abrir_tienda and not tienda_query and respuesta.strip()
             if respuesta and not _texto_absorbido_por_cta:
-                await proveedor.enviar_mensaje(msg.telefono, respuesta)
+                await _proveedor_agente.enviar_mensaje(msg.telefono, respuesta)
 
             # Catálogo nativo WhatsApp (product_list con fotos reales)
-            if datos_catalogo_cat and hasattr(proveedor, "enviar_catalogo_productos"):
+            if datos_catalogo_cat and hasattr(_proveedor_agente, "enviar_catalogo_productos"):
                 categoria = datos_catalogo_cat.get("categoria")
                 secciones = obtener_secciones_catalogo(categoria)
                 cat_enviado = False
                 if secciones:
                     header = categoria or "Catálogo Biotú 🌿"
                     cuerpo = "Selecciona los productos que quieres, ajusta las cantidades y confirma tu pedido."
-                    cat_enviado = await proveedor.enviar_catalogo_productos(
+                    cat_enviado = await _proveedor_agente.enviar_catalogo_productos(
                         msg.telefono, header, cuerpo, secciones
                     )
                     if cat_enviado:
@@ -1075,12 +1137,12 @@ async def webhook_handler(request: Request):
                             lineas.append(f"  • {prod_title} — desde ${precio_min:,}")
                         lineas.append("")
                     if lineas:
-                        await proveedor.enviar_mensaje(msg.telefono, "\n".join(lineas).strip())
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, "\n".join(lineas).strip())
 
             # Luego enviar mensajes interactivos
-            if datos_botones and hasattr(proveedor, "enviar_botones"):
+            if datos_botones and hasattr(_proveedor_agente, "enviar_botones"):
                 try:
-                    await proveedor.enviar_botones(
+                    await _proveedor_agente.enviar_botones(
                         msg.telefono,
                         datos_botones.get("texto", ""),
                         datos_botones.get("botones", [])
@@ -1089,10 +1151,10 @@ async def webhook_handler(request: Request):
                 except Exception as e:
                     logger.error(f"Error enviando botones: {e}")
 
-            if datos_lista and hasattr(proveedor, "enviar_lista"):
+            if datos_lista and hasattr(_proveedor_agente, "enviar_lista"):
                 lista_enviada = False
                 try:
-                    lista_enviada = await proveedor.enviar_lista(
+                    lista_enviada = await _proveedor_agente.enviar_lista(
                         msg.telefono,
                         datos_lista.get("texto", ""),
                         datos_lista.get("boton", "Ver opciones"),
@@ -1119,7 +1181,7 @@ async def webhook_handler(request: Request):
                                 lineas.append(f"• {t}")
                     fallback_text = "\n".join(l for l in lineas if l)
                     if fallback_text.strip():
-                        await proveedor.enviar_mensaje(msg.telefono, fallback_text[:4000])
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, fallback_text[:4000])
                         logger.info(f"Fallback texto de lista enviado a {msg.telefono}")
 
             # Enviar link de la tienda web si Andrea lo solicitó
@@ -1151,15 +1213,15 @@ async def webhook_handler(request: Request):
                         )
                     boton_label = "Ver catálogo 🌿"
                 enviado_tienda = False
-                if hasattr(proveedor, "enviar_cta_url"):
+                if hasattr(_proveedor_agente, "enviar_cta_url"):
                     try:
-                        enviado_tienda = await proveedor.enviar_cta_url(
+                        enviado_tienda = await _proveedor_agente.enviar_cta_url(
                             msg.telefono, texto_tienda, boton_label, tienda_url
                         )
                     except Exception as e:
                         logger.error(f"Error enviando link tienda: {e}")
                 if not enviado_tienda:
-                    await proveedor.enviar_mensaje(
+                    await _proveedor_agente.enviar_mensaje(
                         msg.telefono, f"{texto_tienda}\n\n👉 {tienda_url}"
                     )
                 logger.info(f"Link tienda enviado a {msg.telefono}: {tienda_url}")
@@ -1179,22 +1241,22 @@ async def webhook_handler(request: Request):
                     "te confirmo aquí mismo el número de tu pedido. 🌿"
                 )
                 enviado_cta = False
-                if hasattr(proveedor, "enviar_cta_url"):
+                if hasattr(_proveedor_agente, "enviar_cta_url"):
                     try:
-                        enviado_cta = await proveedor.enviar_cta_url(
+                        enviado_cta = await _proveedor_agente.enviar_cta_url(
                             msg.telefono, texto_checkout, "Confirmar entrega", checkout_url
                         )
                     except Exception as e:
                         logger.error(f"Error enviando cta_url: {e}")
                 if not enviado_cta:
-                    await proveedor.enviar_mensaje(
+                    await _proveedor_agente.enviar_mensaje(
                         msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
                     )
 
             # Si la creación del checkout falló (stock agotado, producto no
             # mapeado, etc.) avísale al cliente en vez de quedarnos mudos
             if checkout_fallo:
-                await proveedor.enviar_mensaje(
+                await _proveedor_agente.enviar_mensaje(
                     msg.telefono,
                     "😔 Disculpa, no pude generar tu pedido en este momento. "
                     "Es posible que algún producto del carrito se haya agotado "
@@ -1332,6 +1394,176 @@ async def inbox_logout():
     return response
 
 
+# ── Gestión de agentes (Voco platform) ────────────────────────────────────
+
+@app.get("/inbox/api/agents")
+async def inbox_listar_agentes(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Lista todos los agentes registrados en la plataforma."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_todos_agentes
+    agentes = await obtener_todos_agentes()
+    return JSONResponse(content={"agents": agentes})
+
+
+@app.post("/inbox/api/agents")
+async def inbox_crear_agente(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Crea un nuevo agente en la plataforma."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import crear_agente
+    body = await request.json()
+    slug         = (body.get("slug") or "").strip().lower().replace(" ", "-")
+    name         = (body.get("name") or "").strip()
+    agent_name   = (body.get("agent_name") or "Agente").strip()
+    business_type = (body.get("business_type") or "productos").strip()
+    phone_number_id = (body.get("phone_number_id") or "").strip()
+    waba_id      = (body.get("waba_id") or "").strip()
+    color        = (body.get("color") or "#6366f1").strip()
+    emoji        = (body.get("emoji") or "🤖").strip()
+
+    if not slug or not name:
+        return JSONResponse(status_code=400, content={"error": "slug y name son requeridos"})
+
+    try:
+        agente = await crear_agente(
+            slug=slug, name=name, agent_name=agent_name,
+            business_type=business_type, phone_number_id=phone_number_id,
+            waba_id=waba_id, color=color, emoji=emoji,
+        )
+        return JSONResponse(content={"ok": True, "agent": agente})
+    except Exception as e:
+        logger.error(f"[agents] Error creando agente: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.patch("/inbox/api/agents/{agent_id_param}")
+async def inbox_actualizar_agente(
+    agent_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Actualiza campos de un agente existente."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import actualizar_agente, obtener_agente
+    body = await request.json()
+    try:
+        ok = await actualizar_agente(agent_id_param, **body)
+        if not ok:
+            return JSONResponse(status_code=404, content={"error": "Agente no encontrado"})
+        # Invalidar cache de phone_number_id para que el webhook lo recargue
+        if "phone_number_id" in body:
+            for key in list(_phone_agent_cache.keys()):
+                if _phone_agent_cache[key].get("id") == agent_id_param:
+                    del _phone_agent_cache[key]
+        agente_actualizado = await obtener_agente(agent_id_param)
+        return JSONResponse(content={"ok": True, "agent": agente_actualizado})
+    except Exception as e:
+        logger.error(f"[agents] Error actualizando agente {agent_id_param}: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.post("/inbox/api/agents/{agent_id_param}/activate")
+async def inbox_activar_agente(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Activa un agente (status → active)."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import actualizar_agente
+    await actualizar_agente(agent_id_param, status="active")
+    return JSONResponse(content={"ok": True})
+
+
+@app.post("/inbox/api/agents/{agent_id_param}/pause")
+async def inbox_pausar_agente(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Pausa un agente (status → paused). No afecta al agente Equora (id=1)."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if agent_id_param == 1:
+        return JSONResponse(status_code=400, content={"error": "El agente Equora no puede pausarse desde la API"})
+    from agent.memory import actualizar_agente
+    await actualizar_agente(agent_id_param, status="paused")
+    return JSONResponse(content={"ok": True})
+
+
+@app.post("/inbox/api/agents/{agent_id_param}/clone")
+async def inbox_clonar_agente(
+    agent_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Clona un agente existente con un nuevo slug."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_agente, crear_agente, get_config_value, set_config_value
+    body = await request.json()
+    nuevo_slug = (body.get("slug") or "").strip().lower().replace(" ", "-")
+    nuevo_name = (body.get("name") or "").strip()
+    if not nuevo_slug:
+        return JSONResponse(status_code=400, content={"error": "slug requerido"})
+
+    original = await obtener_agente(agent_id_param)
+    if not original:
+        return JSONResponse(status_code=404, content={"error": "Agente no encontrado"})
+
+    try:
+        nuevo = await crear_agente(
+            slug=nuevo_slug,
+            name=nuevo_name or f"{original.get('name', '')} (copia)",
+            agent_name=original.get("agent_name", "Agente"),
+            business_type=original.get("business_type", "productos"),
+            phone_number_id="",  # El nuevo agente empieza sin número asignado
+            waba_id="",
+            color=original.get("color", "#6366f1"),
+            emoji=original.get("emoji", "🤖"),
+        )
+        # Clonar config_values del agente original (prompt, vars, etc.)
+        nuevo_id = nuevo.get("id")
+        for clave in ("SYSTEM_PROMPT", "BUSINESS_VARS", "BUSINESS_TYPE", "ACTIVE_MODULES"):
+            valor = await get_config_value(clave, agent_id_param)
+            if valor:
+                await set_config_value(clave, valor, nuevo_id)
+        return JSONResponse(content={"ok": True, "agent": nuevo})
+    except Exception as e:
+        logger.error(f"[agents] Error clonando agente {agent_id_param}: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@app.get("/inbox/api/agents/{agent_id_param}/stats")
+async def inbox_stats_agente(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Estadísticas básicas de un agente: conversaciones, mensajes."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_metricas_internas
+    try:
+        data = await obtener_metricas_internas(dias=30, agent_id=agent_id_param)
+        return JSONResponse(content=data)
+    except Exception as e:
+        logger.error(f"[agents] Error obteniendo stats del agente {agent_id_param}: {e}")
+        return JSONResponse(content={"error": str(e)})
+
+
 # ── Panel principal ────────────────────────────────────────────────────────
 
 @app.get("/inbox", response_class=HTMLResponse)
@@ -1386,15 +1618,20 @@ async def inbox_responder(
     if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
-    telefono = (body.get("telefono") or "").strip()
-    mensaje = (body.get("mensaje") or "").strip()
+    telefono  = (body.get("telefono") or "").strip()
+    mensaje   = (body.get("mensaje") or "").strip()
+    agent_id  = int(body.get("agent_id") or 1)
     if not telefono or not mensaje:
         return JSONResponse(status_code=400, content={"error": "Faltan datos"})
     try:
-        await proveedor.enviar_mensaje(telefono, mensaje)
-        await guardar_mensaje(telefono, "assistant", mensaje)
+        # Usar el proveedor del agente correcto
+        from agent.memory import obtener_agente
+        _agente = await obtener_agente(agent_id) or {"id": 1}
+        _prov = await _get_meta_para_agente(_agente)
+        await _prov.enviar_mensaje(telefono, mensaje)
+        await guardar_mensaje(telefono, "assistant", mensaje, agent_id=agent_id)
         await registrar_mensaje_asistente(telefono)
-        logger.info(f"Mensaje manual enviado a {telefono} desde inbox")
+        logger.info(f"Mensaje manual enviado a {telefono} desde inbox (agent_id={agent_id})")
         return JSONResponse(content={"ok": True})
     except Exception as e:
         logger.error(f"Error enviando desde inbox a {telefono}: {e}")
@@ -2118,6 +2355,7 @@ async def inbox_test_config(
 
 @app.get("/inbox/api/prompt")
 async def inbox_get_prompt(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
 ):
@@ -2128,7 +2366,7 @@ async def inbox_get_prompt(
     import yaml as _yaml
 
     # Prompt: BD primero, luego archivo
-    db_prompt = await get_config_value("SYSTEM_PROMPT")
+    db_prompt = await get_config_value("SYSTEM_PROMPT", agent_id)
     if db_prompt:
         prompt  = db_prompt
         fuente  = "db"
@@ -2142,17 +2380,17 @@ async def inbox_get_prompt(
         fuente = "file"
 
     # Variables del negocio (JSON guardado en BD)
-    vars_json = await get_config_value("BUSINESS_VARS")
+    vars_json = await get_config_value("BUSINESS_VARS", agent_id)
     try:
         business_vars = json.loads(vars_json) if vars_json else {}
     except Exception:
         business_vars = {}
 
     # Tipo de negocio
-    business_type = await get_config_value("BUSINESS_TYPE") or "productos"
+    business_type = await get_config_value("BUSINESS_TYPE", agent_id) or "productos"
 
     # Módulos activos
-    modules_json = await get_config_value("ACTIVE_MODULES")
+    modules_json = await get_config_value("ACTIVE_MODULES", agent_id)
     try:
         active_modules = json.loads(modules_json) if modules_json else {}
     except Exception:
@@ -2170,6 +2408,7 @@ async def inbox_get_prompt(
 @app.post("/inbox/api/prompt/save")
 async def inbox_save_prompt(
     request: Request,
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
 ):
@@ -2184,13 +2423,13 @@ async def inbox_save_prompt(
     active_modules = body.get("active_modules")
 
     if prompt:
-        await set_config_value("SYSTEM_PROMPT", prompt)
+        await set_config_value("SYSTEM_PROMPT", prompt, agent_id)
     if isinstance(business_vars, dict):
-        await set_config_value("BUSINESS_VARS", json.dumps(business_vars, ensure_ascii=False))
+        await set_config_value("BUSINESS_VARS", json.dumps(business_vars, ensure_ascii=False), agent_id)
     if business_type:
-        await set_config_value("BUSINESS_TYPE", business_type)
+        await set_config_value("BUSINESS_TYPE", business_type, agent_id)
     if isinstance(active_modules, dict):
-        await set_config_value("ACTIVE_MODULES", json.dumps(active_modules))
+        await set_config_value("ACTIVE_MODULES", json.dumps(active_modules), agent_id)
 
     return JSONResponse(content={"ok": True})
 
@@ -2727,6 +2966,32 @@ async def inbox_plantillas_editar(
     except Exception as e:
         logger.error(f"[plantillas] Excepción editando: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+# ── Panel por slug (ruta comodín — DEBE ser la última ruta de /inbox/*) ────
+# FastAPI evalúa rutas en orden de definición: al estar aquí al final, las rutas
+# específicas (/inbox/api/*, /inbox/broadcast/*, etc.) ya fueron registradas primero.
+
+@app.get("/inbox/{slug}", response_class=HTMLResponse)
+async def inbox_agente_por_slug(
+    slug: str,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Panel de inbox para un agente específico por su slug (ej: /inbox/equora)."""
+    if not _verificar_admin(inbox_session or token):
+        return RedirectResponse("/inbox/login", status_code=302)
+    from agent.memory import obtener_agente_por_slug
+    agente = await obtener_agente_por_slug(slug)
+    if not agente:
+        raise HTTPException(status_code=404, detail=f"Agente '{slug}' no encontrado")
+    response = HTMLResponse(content=obtener_inbox_html(agente))
+    if token and _verificar_admin(token):
+        response.set_cookie(
+            INBOX_COOKIE, ADMIN_TOKEN,
+            httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
+        )
+    return response
 
 
 SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")

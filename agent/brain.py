@@ -35,7 +35,7 @@ def _cargar_config() -> dict:
         return {}
 
 
-async def cargar_system_prompt() -> str:
+async def cargar_system_prompt(agent_id: int = 1) -> str:
     """
     Carga el system prompt con esta prioridad:
     1. BD (SYSTEM_PROMPT) — editado desde el panel de configuración
@@ -43,7 +43,7 @@ async def cargar_system_prompt() -> str:
     Luego reemplaza {VARIABLES} del negocio y las tarifas de envío.
     """
     # ── 1. BD primero ──────────────────────────────────────────────────────────
-    db_prompt = await get_config_value("SYSTEM_PROMPT")
+    db_prompt = await get_config_value("SYSTEM_PROMPT", agent_id)
     if db_prompt:
         prompt = db_prompt
         logger.debug("System prompt cargado desde BD")
@@ -55,7 +55,7 @@ async def cargar_system_prompt() -> str:
         logger.debug("System prompt cargado desde prompts.yaml")
 
     # ── 2. Reemplazar variables del negocio {KEY} ───────────────────────────
-    db_vars_json = await get_config_value("BUSINESS_VARS")
+    db_vars_json = await get_config_value("BUSINESS_VARS", agent_id)
     if db_vars_json:
         try:
             business_vars = json.loads(db_vars_json)
@@ -87,9 +87,9 @@ def obtener_mensaje_fallback() -> str:
     )
 
 
-async def _cargar_modulos() -> dict:
+async def _cargar_modulos(agent_id: int = 1) -> dict:
     """Devuelve los módulos activos desde BD. Si no hay config, todos activos por defecto."""
-    raw = await get_config_value("ACTIVE_MODULES")
+    raw = await get_config_value("ACTIVE_MODULES", agent_id)
     try:
         return json.loads(raw) if raw else {}
     except Exception:
@@ -106,12 +106,13 @@ async def generar_respuesta(
     historial: list[dict],
     telefono: str | None = None,
     contexto_campana: dict | None = None,
+    agent_id: int = 1,
 ) -> str:
     if not mensaje or len(mensaje.strip()) < 2:
         return obtener_mensaje_fallback()
 
-    system_prompt = await cargar_system_prompt()
-    modules       = await _cargar_modulos()
+    system_prompt = await cargar_system_prompt(agent_id)
+    modules       = await _cargar_modulos(agent_id)
 
     # ── Contexto de campaña de difusión ───────────────────────────────────────
     if contexto_campana and _mod(modules, "campaign_context"):
@@ -146,7 +147,7 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
     if telefono:
         # ── Perfil del cliente (toggle: client_memory) ────────────────────────
         if _mod(modules, "client_memory"):
-            cliente = await obtener_cliente(telefono)
+            cliente = await obtener_cliente(telefono, agent_id)
             if cliente and cliente.get("nombres"):
                 bloque = ["\n\n## Cliente conocido (ya compró antes)"]
                 bloque.append(f"Pedidos previos: {cliente.get('pedidos_realizados', 0)}")
@@ -165,7 +166,7 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
 
         # ── Carrito + pedido pendiente (toggle: cart_orders) ──────────────────
         if _mod(modules, "cart_orders"):
-            carrito = await obtener_carrito_activo(telefono)
+            carrito = await obtener_carrito_activo(telefono, agent_id)
             if carrito:
                 bloque_c = ["\n\n## Carrito actual del cliente (persistido en sistema)"]
                 bloque_c.append(
@@ -183,7 +184,7 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
                 bloque_c.append(f"Total acumulado: ${total_carrito:,}")
                 system_prompt += "\n".join(bloque_c)
 
-            pendiente = await obtener_pedido_pendiente(telefono)
+            pendiente = await obtener_pedido_pendiente(telefono, agent_id)
             if pendiente:
                 bloque_p = ["\n\n## Pedido pendiente sin completar"]
                 bloque_p.append("Este cliente confirmó hace poco un pedido pero NO completó el "
