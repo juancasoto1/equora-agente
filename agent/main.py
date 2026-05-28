@@ -2893,6 +2893,7 @@ async def inbox_get_prompt(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
     """Devuelve el prompt actual (BD → archivo) y las variables del negocio."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2900,7 +2901,7 @@ async def inbox_get_prompt(
 
     import yaml as _yaml
 
-    # Prompt: BD primero, luego archivo
+    # Prompt: BD primero, luego archivo, luego brain.py (fallback final para agentes existentes)
     db_prompt = await get_config_value("SYSTEM_PROMPT", agent_id)
     if db_prompt:
         prompt  = db_prompt
@@ -2913,6 +2914,18 @@ async def inbox_get_prompt(
         except FileNotFoundError:
             prompt = ""
         fuente = "file"
+
+    # Si sigue vacío, intentar cargar desde brain.py (captura prompts.yaml con cache y fallback)
+    if not prompt:
+        try:
+            from agent.brain import cargar_system_prompt as _csp
+            raw = await _csp(agent_id)
+            # Solo usar si no es el prompt genérico por defecto
+            if raw and raw != "Eres un asistente virtual. Responde en español.":
+                prompt = raw
+                fuente = "brain"
+        except Exception:
+            pass
 
     # Variables del negocio (JSON guardado en BD)
     vars_json = await get_config_value("BUSINESS_VARS", agent_id)
@@ -2946,6 +2959,7 @@ async def inbox_save_prompt(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
     """Guarda el prompt y las variables del negocio en la BD."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2974,6 +2988,7 @@ async def inbox_improve_prompt(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
     """
     Recibe el prompt actual + una instrucción del usuario en lenguaje natural
