@@ -284,7 +284,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 /* sidebar conversaciones */
 #sidebar{width:350px;min-width:350px;display:flex;flex-direction:column;
   background:var(--sb);border-right:1px solid var(--bd)}
-#chat-area{flex:1;display:flex;flex-direction:column;background:#0b141a;min-width:0}
+#chat-area{flex:1;display:flex;flex-direction:column;background:#0b141a;min-width:0;min-height:0;overflow:hidden}
 
 @media(max-width:720px){
   #sidebar{width:100%;min-width:unset}
@@ -322,7 +322,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 #empty p{font-size:.88rem}
 
 /* chat activo */
-#cv{display:none;flex-direction:column;height:100%}
+#cv{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden}
 #ch{background:var(--hd);padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0}
 #ch .av2{width:40px;height:40px;border-radius:50%;background:#1f6b58;display:flex;
   align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
