@@ -224,7 +224,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 /* ══════════════════════════════════════════════
    SHELL EXTERIOR: topbar + cuerpo
    ══════════════════════════════════════════════ */
-#shell{display:flex;flex-direction:column;height:100vh;overflow:hidden;background:#0f1923}
+#shell{display:flex;flex-direction:column;height:100vh;max-height:100vh;overflow:hidden;background:#0f1923}
 
 /* ── TOPBAR ── */
 #topbar{
@@ -246,13 +246,15 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 #logout-top:hover{border-color:#8696a0;color:#e9edef}
 
 /* ── BODY: nav + main ── */
-#body{display:flex;flex:1;overflow:hidden}
+/* min-height:0 es CRÍTICO en flex column: sin él los hijos no encogen aunque
+   el padre tenga overflow:hidden, porque min-height:auto (default) lo impide */
+#body{display:flex;flex:1;overflow:hidden;min-height:0}
 
 /* ── LEFT NAV ── */
 #nav{
   width:220px;min-width:220px;background:#162030;display:flex;
   flex-direction:column;flex-shrink:0;border-right:1px solid #0e1921;
-  padding-top:8px;
+  padding-top:8px;overflow:hidden;
 }
 .nav-section{padding:14px 16px 6px;font-size:.65rem;color:#4a6078;
   text-transform:uppercase;letter-spacing:.08em;font-weight:600}
@@ -270,10 +272,10 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .nav-footer small{font-size:.7rem;color:#4a6078}
 
 /* ── MAIN: contenedor de secciones ── */
-#main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+#main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
 
 /* Secciones (display:none por defecto) */
-.sec{display:none;flex:1;overflow:hidden}
+.sec{display:none;flex:1;overflow:hidden;min-height:0}
 .sec.active{display:flex}
 
 /* ══════════════════════════════════════════════
@@ -283,7 +285,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 
 /* sidebar conversaciones */
 #sidebar{width:350px;min-width:350px;display:flex;flex-direction:column;
-  background:var(--sb);border-right:1px solid var(--bd)}
+  background:var(--sb);border-right:1px solid var(--bd);min-height:0;overflow:hidden}
 #chat-area{flex:1;display:flex;flex-direction:column;background:#0b141a;min-width:0;min-height:0;overflow:hidden}
 
 @media(max-width:720px){
@@ -342,7 +344,7 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 .tog input:checked+.sl::before{transform:translateX(18px)}
 #mlbl{font-size:.76rem;color:var(--red);font-weight:600;display:none}
 
-#msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+#msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-height:0}
 #msgs::-webkit-scrollbar{width:4px}
 #msgs::-webkit-scrollbar-thumb{background:var(--bd)}
 .msg{max-width:72%;display:flex;flex-direction:column;gap:2px}
