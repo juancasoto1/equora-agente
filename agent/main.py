@@ -1425,7 +1425,12 @@ async def inbox_login(request: Request):
                     VOCO_COOKIE, token,
                     httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
                 )
-                # Mantener inbox_session legacy vacía para no confundir
+                # Compatibilidad con endpoints legacy que leen inbox_session
+                if ADMIN_TOKEN:
+                    response.set_cookie(
+                        INBOX_COOKIE, ADMIN_TOKEN,
+                        httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
+                    )
                 return response
         return HTMLResponse(content=obtener_login_html(error=True))
 
@@ -1572,6 +1577,8 @@ async def auth_google_callback(code: str = "", error: str = ""):
         token = await crear_sesion(user_data["id"])
         response = RedirectResponse("/inbox", status_code=302)
         response.set_cookie(VOCO_COOKIE, token, httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax")
+        if ADMIN_TOKEN:
+            response.set_cookie(INBOX_COOKIE, ADMIN_TOKEN, httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax")
         return response
     except Exception as e:
         logger.error(f"[OAuth Google] {e}")
@@ -1628,6 +1635,8 @@ async def auth_facebook_callback(code: str = "", error: str = ""):
         token = await crear_sesion(user_data["id"])
         response = RedirectResponse("/inbox", status_code=302)
         response.set_cookie(VOCO_COOKIE, token, httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax")
+        if ADMIN_TOKEN:
+            response.set_cookie(INBOX_COOKIE, ADMIN_TOKEN, httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax")
         return response
     except Exception as e:
         logger.error(f"[OAuth Facebook] {e}")
@@ -1707,7 +1716,7 @@ async def inbox_actualizar_agente(
     inbox_session: str = Cookie(default=""),
 ):
     """Actualiza campos de un agente existente."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     from agent.memory import actualizar_agente, obtener_agente
     body = await request.json()
@@ -1734,7 +1743,7 @@ async def inbox_activar_agente(
     inbox_session: str = Cookie(default=""),
 ):
     """Activa un agente (status → active)."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     from agent.memory import actualizar_agente
     await actualizar_agente(agent_id_param, status="active")
@@ -1748,7 +1757,7 @@ async def inbox_pausar_agente(
     inbox_session: str = Cookie(default=""),
 ):
     """Pausa un agente (status → paused). No afecta al agente Equora (id=1)."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     if agent_id_param == 1:
         return JSONResponse(status_code=400, content={"error": "El agente Equora no puede pausarse desde la API"})
@@ -1765,7 +1774,7 @@ async def inbox_clonar_agente(
     inbox_session: str = Cookie(default=""),
 ):
     """Clona un agente existente con un nuevo slug."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     from agent.memory import obtener_agente, crear_agente, get_config_value, set_config_value
     body = await request.json()
@@ -1808,7 +1817,7 @@ async def inbox_stats_agente(
     inbox_session: str = Cookie(default=""),
 ):
     """Estadísticas básicas de un agente: conversaciones, mensajes."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     from agent.memory import obtener_metricas_internas
     try:
@@ -1898,8 +1907,9 @@ async def admin_actualizar_usuario(
 async def inbox_conversaciones(
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     convs = await obtener_todas_conversaciones()
     return JSONResponse(content=convs)
@@ -1910,8 +1920,9 @@ async def inbox_mensajes(
     telefono: str,
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     mensajes = await obtener_historial_con_timestamps(telefono, 150)
     modo = await get_modo_humano(telefono)
@@ -1923,8 +1934,9 @@ async def inbox_responder(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
     telefono  = (body.get("telefono") or "").strip()
@@ -1953,8 +1965,9 @@ async def inbox_modo(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
     activo = bool(body.get("activo", False))
@@ -2021,7 +2034,7 @@ async def inbox_broadcast_templates_raw(
     inbox_session: str = Cookie(default=""),
 ):
     """Debug: devuelve el JSON crudo de Meta para ver cómo están registradas las variables."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     access_token = os.getenv("META_ACCESS_TOKEN", "")
     waba_id      = os.getenv("META_WABA_ID", "")
@@ -2041,7 +2054,7 @@ async def inbox_broadcast_templates(
     inbox_session: str = Cookie(default=""),
 ):
     """Lista las plantillas aprobadas en Meta para usar en difusiones."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     access_token = os.getenv("META_ACCESS_TOKEN", "")
@@ -2158,7 +2171,7 @@ async def inbox_broadcast_send(
         ]
       }
     """
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body          = await request.json()
@@ -2328,7 +2341,7 @@ async def inbox_difusiones_historial(
     inbox_session: str = Cookie(default=""),
 ):
     """Devuelve el historial de difusiones enviadas desde el inbox."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     rows = await obtener_difusiones(100)
     return JSONResponse(content={"difusiones": rows})
@@ -2341,7 +2354,7 @@ async def inbox_difusion_detalle(
     inbox_session: str = Cookie(default=""),
 ):
     """Detalle de una campaña: breakdown de entregados, leídos, fallidos con motivo de error."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     data = await obtener_detalle_campana(campaign_id)
     return JSONResponse(content=data)
@@ -2353,7 +2366,7 @@ async def inbox_metricas_resumen(
     inbox_session: str = Cookie(default=""),
 ):
     """Métricas de WhatsApp Business: mensajes enviados, entregados, leídos (últimos 30 días)."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     access_token = os.getenv("META_ACCESS_TOKEN", "")
@@ -2417,7 +2430,7 @@ async def inbox_metricas_plantillas(
     inbox_session: str = Cookie(default=""),
 ):
     """Analíticas por plantilla: enviados, entregados, leídos, clics en botón."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     access_token = os.getenv("META_ACCESS_TOKEN", "")
@@ -2455,7 +2468,7 @@ async def inbox_metricas_interno(
     inbox_session: str = Cookie(default=""),
 ):
     """Métricas calculadas desde la base de datos interna (sin depender de Meta Analytics API)."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     try:
         data = await obtener_metricas_internas(dias=dias)
@@ -2471,7 +2484,7 @@ async def inbox_opt_outs(
     inbox_session: str = Cookie(default=""),
 ):
     """Lista de números dados de baja de difusiones masivas."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     rows = await obtener_opt_outs()
     return JSONResponse(content={"opt_outs": rows, "total": len(rows)})
@@ -2483,7 +2496,7 @@ async def inbox_clientes(
     inbox_session: str = Cookie(default=""),
 ):
     """Base de clientes con estado de engagement (activo/tibio/frío/baja)."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     clientes = await obtener_clientes_con_estado()
     resumen = {"total": len(clientes), "activo": 0, "tibio": 0, "frio": 0, "baja": 0}
@@ -2514,7 +2527,7 @@ async def inbox_plantilla_csv(
     inbox_session: str = Cookie(default=""),
 ):
     """Descarga la plantilla CSV con las columnas correctas y ejemplos."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     from fastapi.responses import Response
     contenido = (
@@ -2540,7 +2553,7 @@ async def inbox_importar_clientes(
 ):
     """Importa clientes masivamente desde un archivo CSV (campo 'file' en multipart/form-data).
     Columnas requeridas: telefono, nombres, apellidos. Opcionales: ciudad, departamento, email, cc_nit."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     contenido = await file.read()
@@ -2609,7 +2622,7 @@ async def inbox_listar_templates_clientes(
     inbox_session: str = Cookie(default=""),
 ):
     """Lista plantillas aprobadas de Meta para enviar a clientes individuales."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     access_token = await get_config_value("META_ACCESS_TOKEN", agent_id) or os.getenv("META_ACCESS_TOKEN", "")
@@ -2663,7 +2676,7 @@ async def inbox_enviar_mensaje_cliente(
 ):
     """Envía una plantilla aprobada de Meta a un cliente específico.
     Body JSON: {telefono, template_name, language_code, components?}"""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body          = await request.json()
@@ -2712,7 +2725,7 @@ async def inbox_revertir_opt_out(
     inbox_session: str = Cookie(default=""),
 ):
     """Reactiva un número para recibir difusiones (el cliente cambió de opinión)."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     await revertir_opt_out(telefono)
     logger.info(f"[opt-out] {telefono} reactivado desde inbox")
@@ -2748,7 +2761,7 @@ async def inbox_get_config(
     inbox_session: str = Cookie(default=""),
 ):
     """Devuelve el estado de cada clave de configuración (sin exponer valores secretos)."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     resultado = {}
@@ -2773,7 +2786,7 @@ async def inbox_save_config(
     inbox_session: str = Cookie(default=""),
 ):
     """Guarda credenciales en la BD y las inyecta en el entorno actual."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body = await request.json()
@@ -2796,7 +2809,7 @@ async def inbox_test_config(
     inbox_session: str = Cookie(default=""),
 ):
     """Prueba la conexión a Meta, Shopify o Anthropic con las credenciales proporcionadas."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body = await request.json()
@@ -2882,7 +2895,7 @@ async def inbox_get_prompt(
     inbox_session: str = Cookie(default=""),
 ):
     """Devuelve el prompt actual (BD → archivo) y las variables del negocio."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     import yaml as _yaml
@@ -2935,7 +2948,7 @@ async def inbox_save_prompt(
     inbox_session: str = Cookie(default=""),
 ):
     """Guarda el prompt y las variables del negocio en la BD."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body = await request.json()
@@ -2966,7 +2979,7 @@ async def inbox_improve_prompt(
     Recibe el prompt actual + una instrucción del usuario en lenguaje natural
     y devuelve una versión mejorada generada por Claude.
     """
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body        = await request.json()
@@ -3034,7 +3047,7 @@ async def inbox_chat_test(
     inbox_session: str = Cookie(default=""),
 ):
     """Envía un mensaje al agente y devuelve su respuesta (sin WhatsApp real)."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body    = await request.json()
@@ -3061,7 +3074,7 @@ async def inbox_chat_test_history(
     inbox_session: str = Cookie(default=""),
 ):
     """Devuelve el historial de la conversación de prueba."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     mensajes = await obtener_historial_con_timestamps(_TEST_PHONE, 100)
@@ -3074,7 +3087,7 @@ async def inbox_chat_test_clear(
     inbox_session: str = Cookie(default=""),
 ):
     """Borra el historial de la conversación de prueba."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     await limpiar_historial(_TEST_PHONE)
@@ -3098,7 +3111,7 @@ async def inbox_subir_header_media(
       2. POST /upload:{session_id}  (body = bytes del archivo, header file_offset: 0)
          → {"h": "handle_string"}
     """
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     access_token = os.getenv("META_ACCESS_TOKEN", "")
@@ -3172,7 +3185,7 @@ async def inbox_plantillas_crear(
     """Crea una nueva plantilla en Meta y la envía a revisión.
     Body JSON: { name, category, language, header_text?, body, footer?, buttons? }
     """
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     access_token = os.getenv("META_ACCESS_TOKEN", "")
@@ -3341,7 +3354,7 @@ async def inbox_plantillas_borradores_list(
     inbox_session: str = Cookie(default=""),
 ):
     """Lista todos los borradores de plantillas guardados localmente."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     borradores = await obtener_borradores_plantillas()
     return JSONResponse(content={"borradores": borradores})
@@ -3357,7 +3370,7 @@ async def inbox_plantillas_borrador_guardar(
     Body JSON: los mismos campos del formulario de creación.
     Si ya existe un borrador con el mismo nombre, lo sobreescribe.
     """
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
     nombre    = (body.get("name") or "").strip()
@@ -3377,7 +3390,7 @@ async def inbox_plantillas_borrador_eliminar(
     inbox_session: str = Cookie(default=""),
 ):
     """Elimina un borrador local por ID."""
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     eliminado = await eliminar_borrador_plantilla(bid)
     if not eliminado:
@@ -3396,7 +3409,7 @@ async def inbox_plantillas_editar(
     Body JSON: { template_id, header_type?, header_text?, header_handle?,
                  body, footer?, buttons? }
     """
-    if not _verificar_admin(inbox_session or token):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
     access_token = os.getenv("META_ACCESS_TOKEN", "")
