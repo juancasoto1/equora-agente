@@ -1643,7 +1643,14 @@ tr:hover td{background:#f8f9fa}
           <div class="modal-hdr">
             <div>
               <div class="modal-title">📥 Importar clientes desde CSV</div>
-              <div class="modal-sub">Columnas requeridas: <strong>telefono</strong> · Opcionales: nombres, apellidos, ciudad, departamento, email, cc_nit</div>
+              <div class="modal-sub">
+                Requeridas: <strong>telefono · nombres · apellidos</strong> · Opcionales: ciudad, departamento, email, cc_nit
+                &nbsp;·&nbsp;
+                <a href="/inbox/api/clientes/import/template" download="plantilla_clientes.csv"
+                   style="color:#2563eb;font-weight:600;text-decoration:none">
+                  ⬇ Descargar plantilla
+                </a>
+              </div>
             </div>
             <button class="modal-close" onclick="cerrarImportarCSV()" aria-label="Cerrar modal">✕</button>
           </div>

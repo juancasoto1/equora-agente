@@ -2204,6 +2204,28 @@ def _normalizar_telefono(raw: str) -> str | None:
     return None
 
 
+@app.get("/inbox/api/clientes/import/template")
+async def inbox_plantilla_csv(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Descarga la plantilla CSV con las columnas correctas y ejemplos."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from fastapi.responses import Response
+    contenido = (
+        "telefono,nombres,apellidos,ciudad,departamento,email,cc_nit\n"
+        "3001234567,Juan,Pérez,Bogotá,Cundinamarca,juan@email.com,12345678\n"
+        "3159876543,María,López,Medellín,Antioquia,maria@email.com,87654321\n"
+        "573201112233,Carlos,García,Cali,Valle del Cauca,,\n"
+    )
+    return Response(
+        content=contenido.encode("utf-8-sig"),  # BOM para Excel en español
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=plantilla_clientes.csv"},
+    )
+
+
 @app.post("/inbox/api/clientes/import")
 async def inbox_importar_clientes(
     request: Request,
@@ -2213,7 +2235,7 @@ async def inbox_importar_clientes(
     inbox_session: str = Cookie(default=""),
 ):
     """Importa clientes masivamente desde un archivo CSV (campo 'file' en multipart/form-data).
-    Columnas requeridas: telefono. Opcionales: nombres, apellidos, ciudad, departamento, email, cc_nit."""
+    Columnas requeridas: telefono, nombres, apellidos. Opcionales: ciudad, departamento, email, cc_nit."""
     if not _verificar_admin(inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
@@ -2225,7 +2247,6 @@ async def inbox_importar_clientes(
 
     reader = csv.DictReader(io.StringIO(texto))
 
-    # Normalizar nombres de columnas (minúsculas, sin espacios)
     CAMPOS_OPCIONALES = {"nombres", "apellidos", "ciudad", "departamento", "email", "cc_nit"}
 
     total = 0
@@ -2236,7 +2257,6 @@ async def inbox_importar_clientes(
 
     for i, fila in enumerate(reader, start=2):  # start=2: fila 1 es cabecera
         total += 1
-        # Normalizar keys
         fila_norm = {k.strip().lower(): (v or "").strip() for k, v in fila.items()}
         raw_tel = fila_norm.get("telefono", "")
         if not raw_tel:
@@ -2248,6 +2268,12 @@ async def inbox_importar_clientes(
         if not tel:
             errores += 1
             filas_error.append({"fila": i, "razon": f"número inválido: {raw_tel}", "datos": fila_norm})
+            continue
+
+        # nombres y apellidos son obligatorios
+        if not fila_norm.get("nombres") or not fila_norm.get("apellidos"):
+            errores += 1
+            filas_error.append({"fila": i, "razon": "nombres y apellidos son obligatorios", "datos": fila_norm})
             continue
 
         datos = {campo: fila_norm[campo] for campo in CAMPOS_OPCIONALES if fila_norm.get(campo)}
