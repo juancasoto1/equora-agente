@@ -36,7 +36,7 @@ from agent.memory import (
     obtener_clientes_con_estado,
     get_config_value, set_config_value, get_all_config_values, cargar_config_en_env,
 )
-from agent.inbox import obtener_inbox_html, obtener_login_html
+from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html
 from agent.providers import obtener_proveedor
 from agent.capi import capi_lead, capi_view_content, capi_add_to_cart, capi_initiate_checkout
 from agent.tools import (
@@ -1573,7 +1573,9 @@ async def inbox_panel(
 ):
     if not _verificar_admin(inbox_session or token):
         return RedirectResponse("/inbox/login", status_code=302)
-    response = HTMLResponse(content=obtener_inbox_html())
+    from agent.memory import obtener_todos_agentes
+    agentes = await obtener_todos_agentes()
+    response = HTMLResponse(content=obtener_global_html(agentes))
     # Si llegó por query param, guardar en cookie
     if token and _verificar_admin(token):
         response.set_cookie(

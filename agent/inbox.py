@@ -5112,14 +5112,698 @@ async function limpiarChatTest() {
 
 
 def obtener_inbox_html(agent: dict | None = None) -> str:
-    """Devuelve el HTML del inbox. Si se pasa `agent`, inyecta su contexto en la página
-    como variable global VOCO_AGENT para que el JS pueda filtrar conversaciones y
-    mostrar el nombre/color del agente correcto."""
+    """Devuelve el HTML del inbox scoped al agente indicado."""
     import json as _json
-    if agent:
-        agent_json = _json.dumps(agent, ensure_ascii=False)
-        inject = f"<script>var VOCO_AGENT={agent_json};</script>"
+    _agent = agent or {"id": 1, "slug": "equora", "name": "Equora Distribuciones",
+                       "agent_name": "Andrea", "color": "#22c55e", "emoji": "🌿", "status": "active"}
+    agent_json = _json.dumps(_agent, ensure_ascii=False)
+    inject_head = f"<script>var VOCO_AGENT={agent_json};</script>"
+
+    # Barra superior mini con nombre del agente y link al panel global
+    color  = _agent.get("color", "#6366f1")
+    emoji  = _agent.get("emoji", "🤖")
+    name   = _agent.get("name", "Mi Agente")
+    aname  = _agent.get("agent_name", "Agente")
+    status = _agent.get("status", "active")
+    status_label = {"active": "● Activo", "paused": "⏸ Pausado", "draft": "✎ Borrador"}.get(status, status)
+    status_color = {"active": "#22c55e", "paused": "#f59e0b", "draft": "#94a3b8"}.get(status, "#94a3b8")
+
+    agent_bar = f"""<div style="background:#0f172a;padding:7px 20px;display:flex;align-items:center;
+justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
+  <div style="display:flex;align-items:center;gap:10px">
+    <span style="font-size:1.3rem">{emoji}</span>
+    <div>
+      <div style="color:#fff;font-weight:700;font-size:.85rem;line-height:1.2">{name}</div>
+      <div style="color:#94a3b8;font-size:.72rem">{aname} &nbsp;·&nbsp;
+        <span style="color:{status_color}">{status_label}</span></div>
+    </div>
+  </div>
+  <a href="/inbox" style="color:#64748b;font-size:.76rem;text-decoration:none;
+    padding:4px 12px;border:1px solid #1e293b;border-radius:6px;
+    transition:.15s;white-space:nowrap"
+    onmouseover="this.style.color='#e2e8f0';this.style.borderColor='#334155'"
+    onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+    ← Voco
+  </a>
+</div>"""
+
+    html = _HTML.replace("<head>", f"<head>\n{inject_head}", 1)
+    html = html.replace("<body>\n<div id=\"shell\">", f"<body>\n{agent_bar}\n<div id=\"shell\">", 1)
+    return html
+
+
+def obtener_global_html(agents: list[dict]) -> str:
+    """Panel global de Voco — lista de todos los agentes + wizard de creación."""
+    import json as _json
+
+    _PROMPT_TEMPLATES = {
+        "productos": """Eres {NOMBRE_AGENTE}, el asistente virtual de {NOMBRE_NEGOCIO}.
+
+## Tu identidad
+Representas a {NOMBRE_NEGOCIO} en WhatsApp. Eres amable, útil y conoces bien los productos.
+
+## Sobre el negocio
+{DESCRIPCION_NEGOCIO}
+
+## Tus capacidades
+- Presentar el catálogo de productos con precios y presentaciones
+- Ayudar al cliente a armar su pedido
+- Calcular totales y verificar disponibilidad
+- Informar sobre envíos, tiempos de entrega y formas de pago
+- Generar el link de checkout cuando el cliente confirma su pedido
+
+## Horario de atención
+{HORARIO}
+
+## Reglas
+- Responde siempre en español de forma cálida y cercana
+- Nunca inventes precios ni productos que no estén en tu catálogo
+- Si no sabes algo, ofrece conectar con el equipo humano
+- Mantén respuestas concisas (máximo 3-4 párrafos)""",
+
+        "servicios": """Eres {NOMBRE_AGENTE}, asistente virtual de {NOMBRE_NEGOCIO}.
+
+## Tu identidad
+Ayudas a los clientes a conocer los servicios, resolver dudas y agendar citas.
+
+## Sobre el negocio
+{DESCRIPCION_NEGOCIO}
+
+## Tus capacidades
+- Presentar el portafolio de servicios con precios y duraciones
+- Verificar disponibilidad de agenda
+- Agendar, confirmar y recordar citas
+- Calificar leads: preguntar presupuesto, urgencia y necesidad
+- Escalar a un asesor humano cuando el cliente está listo para contratar
+
+## Horario de atención
+{HORARIO}
+
+## Reglas
+- Sé profesional y empático — los clientes de servicios buscan confianza
+- Siempre confirma los datos de la cita antes de registrarla
+- No des precios exactos sin conocer el alcance del proyecto""",
+
+        "restaurante": """Eres {NOMBRE_AGENTE}, asistente de {NOMBRE_NEGOCIO}.
+
+## Tu identidad
+Atiendes pedidos, informas el menú y gestionas reservas con rapidez y simpatía.
+
+## Sobre el negocio
+{DESCRIPCION_NEGOCIO}
+
+## Tus capacidades
+- Compartir el menú del día con precios
+- Tomar pedidos para domicilio o para llevar
+- Informar tiempos de entrega y cobertura de domicilios
+- Gestionar reservas de mesa
+- Informar sobre alérgenos o ingredientes a petición
+
+## Horario de atención
+{HORARIO}
+
+## Reglas
+- Confirma siempre la dirección de entrega y el método de pago
+- Si hay demora, comunícala proactivamente
+- Usa emojis de comida con moderación 🍕🥗""",
+
+        "salud": """Eres {NOMBRE_AGENTE}, asistente de {NOMBRE_NEGOCIO}.
+
+## Tu identidad
+Asistes a pacientes y clientes con información sobre servicios de salud y belleza.
+
+## Sobre el negocio
+{DESCRIPCION_NEGOCIO}
+
+## Tus capacidades
+- Informar sobre tratamientos, servicios y precios
+- Agendar citas con el especialista correcto
+- Recordar preparación previa a los procedimientos
+- Responder preguntas frecuentes sobre tratamientos
+
+## Horario de atención
+{HORARIO}
+
+## Reglas
+- Nunca des diagnósticos médicos ni reemplaces la consulta profesional
+- Mantén la privacidad: no solicites información médica sensible por chat
+- Ante emergencias, indica llamar al número de emergencias local""",
+
+        "personalizado": """Eres {NOMBRE_AGENTE}, asistente virtual de {NOMBRE_NEGOCIO}.
+
+## Tu identidad
+Representas a {NOMBRE_NEGOCIO} y ayudas a los clientes según las instrucciones de tu configuración.
+
+## Sobre el negocio
+{DESCRIPCION_NEGOCIO}
+
+## Horario de atención
+{HORARIO}
+
+## Reglas
+- Responde siempre en español
+- Sé amable y profesional
+- Si no sabes algo, ofrece conectar con el equipo humano"""
+    }
+
+    templates_js = _json.dumps(_PROMPT_TEMPLATES, ensure_ascii=False)
+
+    cards_html = ""
+    if not agents:
+        cards_html = """<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:#64748b">
+          <div style="font-size:3rem;margin-bottom:12px">🤖</div>
+          <div style="font-size:1rem;font-weight:600;color:#94a3b8;margin-bottom:6px">No hay agentes aún</div>
+          <div style="font-size:.84rem">Crea tu primer agente con el botón de arriba</div>
+        </div>"""
     else:
-        inject = "<script>var VOCO_AGENT=null;</script>"
-    # Insertar el script justo después de <head> para que esté disponible cuanto antes
-    return _HTML.replace("<head>", f"<head>\n{inject}", 1)
+        for ag in agents:
+            color   = ag.get("color", "#6366f1")
+            emoji   = ag.get("emoji", "🤖")
+            name    = ag.get("name", "Mi Agente")
+            aname   = ag.get("agent_name", "Agente")
+            slug    = ag.get("slug", "")
+            status  = ag.get("status", "draft")
+            btype   = ag.get("business_type", "personalizado")
+            pill_c  = {"active": "#22c55e", "paused": "#f59e0b", "draft": "#94a3b8"}.get(status, "#94a3b8")
+            pill_bg = {"active": "#052e16", "paused": "#422006", "draft": "#1e293b"}.get(status, "#1e293b")
+            pill_lbl = {"active": "● Activo", "paused": "⏸ Pausado", "draft": "✎ Borrador"}.get(status, status)
+            btype_lbl = {"productos": "🛍 Productos", "servicios": "🔧 Servicios",
+                         "restaurante": "🍽 Restaurante", "salud": "💊 Salud",
+                         "personalizado": "⚙ Personalizado"}.get(btype, btype)
+            agent_id = ag.get("id", 1)
+            cards_html += f"""
+        <div class="agent-card" style="border-top:3px solid {color}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:44px;height:44px;border-radius:12px;background:{color}22;
+                display:flex;align-items:center;justify-content:center;font-size:1.5rem">{emoji}</div>
+              <div>
+                <div style="font-weight:700;color:#f1f5f9;font-size:.95rem">{name}</div>
+                <div style="font-size:.77rem;color:#64748b">{aname} · {btype_lbl}</div>
+              </div>
+            </div>
+            <span style="background:{pill_bg};color:{pill_c};padding:3px 10px;
+              border-radius:20px;font-size:.72rem;font-weight:600">{pill_lbl}</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:auto">
+            <a href="/inbox/{slug}" class="btn-card-primary" style="background:{color}">
+              Abrir panel →
+            </a>
+            <button class="btn-card-sec" onclick="editarAgente({agent_id})" type="button">
+              ⚙
+            </button>
+          </div>
+        </div>"""
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voco — Plataforma de Agentes IA</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{font-family:'Inter',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}}
+.topbar{{background:#0f172a;border-bottom:1px solid #1e293b;padding:0 28px;
+  display:flex;align-items:center;justify-content:space-between;height:58px}}
+.voco-logo{{display:flex;align-items:center;gap:10px;text-decoration:none}}
+.voco-logo-ic{{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 2px 8px #6366f144}}
+.voco-logo-txt{{font-weight:800;font-size:1.15rem;color:#f1f5f9;letter-spacing:-.5px}}
+.voco-logo-txt span{{color:#818cf8}}
+.topbar-right{{display:flex;align-items:center;gap:12px}}
+.topbar-user{{font-size:.78rem;color:#475569;padding:4px 10px;
+  border:1px solid #1e293b;border-radius:6px}}
+.content{{max-width:1100px;margin:0 auto;padding:36px 24px}}
+.page-hdr{{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}}
+.page-title{{font-size:1.5rem;font-weight:800;color:#f1f5f9}}
+.page-sub{{font-size:.84rem;color:#64748b;margin-top:3px}}
+.btn-new-agent{{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;
+  border:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:.87rem;
+  cursor:pointer;display:flex;align-items:center;gap:8px;transition:.18s;white-space:nowrap}}
+.btn-new-agent:hover{{filter:brightness(1.12);transform:translateY(-1px)}}
+.agents-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}}
+.agent-card{{background:#1e293b;border-radius:14px;padding:20px;
+  display:flex;flex-direction:column;transition:.2s;border:1px solid #334155}}
+.agent-card:hover{{border-color:#475569;transform:translateY(-2px);box-shadow:0 8px 24px #00000044}}
+.btn-card-primary{{flex:1;background:#6366f1;color:#fff;text-decoration:none;
+  padding:8px 14px;border-radius:8px;font-size:.82rem;font-weight:700;text-align:center;
+  transition:.15s;display:block}}
+.btn-card-primary:hover{{filter:brightness(1.1)}}
+.btn-card-sec{{background:#0f172a;color:#94a3b8;border:1px solid #334155;
+  padding:8px 12px;border-radius:8px;font-size:.85rem;cursor:pointer;transition:.15s}}
+.btn-card-sec:hover{{background:#1e293b;color:#e2e8f0}}
+/* Wizard modal */
+.modal-overlay{{position:fixed;inset:0;background:#00000088;z-index:1000;
+  display:flex;align-items:center;justify-content:center;padding:20px}}
+.modal{{background:#1e293b;border-radius:16px;width:100%;max-width:620px;
+  max-height:90vh;overflow-y:auto;border:1px solid #334155}}
+.modal-hdr{{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid #334155;padding-bottom:16px}}
+.modal-title{{font-weight:800;font-size:1.05rem;color:#f1f5f9}}
+.modal-close{{background:none;border:none;color:#64748b;font-size:1.3rem;cursor:pointer;
+  padding:4px 8px;border-radius:6px;transition:.15s}}
+.modal-close:hover{{background:#0f172a;color:#e2e8f0}}
+.modal-body{{padding:24px}}
+.step-indicator{{display:flex;gap:6px;margin-bottom:20px}}
+.step-dot{{width:28px;height:4px;border-radius:2px;background:#334155;transition:.3s}}
+.step-dot.done{{background:#22c55e}}.step-dot.active{{background:#6366f1}}
+.step-label{{font-size:.75rem;color:#64748b;margin-bottom:16px}}
+.wiz-field{{margin-bottom:16px}}
+.wiz-label{{font-size:.8rem;font-weight:600;color:#94a3b8;margin-bottom:6px;display:block}}
+.wiz-inp{{width:100%;background:#0f172a;border:1.5px solid #334155;border-radius:8px;
+  color:#e2e8f0;padding:9px 12px;font-size:.87rem;font-family:inherit;outline:none;transition:.15s}}
+.wiz-inp:focus{{border-color:#6366f1}}
+.wiz-inp::placeholder{{color:#475569}}
+textarea.wiz-inp{{resize:vertical;min-height:120px}}
+.wiz-type-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}
+.wiz-type-btn{{border:2px solid #334155;border-radius:10px;padding:10px 8px;text-align:center;
+  cursor:pointer;background:#0f172a;color:#94a3b8;font-size:.78rem;line-height:1.4;
+  transition:.18s;user-select:none}}
+.wiz-type-btn:hover{{border-color:#6366f1;background:#1e1b4b}}
+.wiz-type-btn.selected{{border-color:#6366f1;background:#1e1b4b;color:#818cf8;font-weight:700}}
+.wiz-type-icon{{font-size:1.4rem;margin-bottom:4px}}
+.wiz-emoji-grid{{display:flex;flex-wrap:wrap;gap:8px}}
+.wiz-emoji-btn{{width:38px;height:38px;border:2px solid #334155;border-radius:8px;
+  background:#0f172a;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;transition:.15s}}
+.wiz-emoji-btn.selected,.wiz-emoji-btn:hover{{border-color:#6366f1}}
+.color-swatches{{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}}
+.color-swatch{{width:28px;height:28px;border-radius:50%;cursor:pointer;
+  border:3px solid transparent;transition:.15s}}
+.color-swatch.selected{{border-color:#fff;transform:scale(1.15)}}
+.modal-footer{{display:flex;justify-content:space-between;padding:0 24px 20px;gap:10px}}
+.btn-wiz-prev{{background:#0f172a;color:#94a3b8;border:1px solid #334155;
+  padding:9px 18px;border-radius:8px;font-size:.85rem;cursor:pointer;transition:.15s}}
+.btn-wiz-prev:hover{{background:#1e293b;color:#e2e8f0}}
+.btn-wiz-next{{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;
+  border:none;padding:9px 20px;border-radius:8px;font-size:.85rem;font-weight:700;
+  cursor:pointer;transition:.15s;flex:1}}
+.btn-wiz-next:hover{{filter:brightness(1.1)}}
+.btn-wiz-next:disabled{{opacity:.5;cursor:not-allowed}}
+.wiz-result{{padding:10px 14px;border-radius:8px;font-size:.83rem;margin-top:10px;display:none}}
+.wiz-result.ok{{background:#052e16;color:#4ade80;border:1px solid #15803d}}
+.wiz-result.err{{background:#1a0a0a;color:#f87171;border:1px solid #991b1b}}
+/* Toggle */
+.tog-sw{{position:relative;width:38px;height:22px;flex-shrink:0}}
+.tog-sw input{{opacity:0;width:0;height:0;position:absolute}}
+.tog-slider{{position:absolute;inset:0;border-radius:22px;background:#334155;cursor:pointer;transition:.2s}}
+.tog-slider:before{{content:'';position:absolute;width:16px;height:16px;border-radius:50%;
+  left:3px;bottom:3px;background:#fff;transition:.2s}}
+.tog-sw input:checked+.tog-slider{{background:#22c55e}}
+.tog-sw input:checked+.tog-slider:before{{transform:translateX(16px)}}
+.toggle-row{{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 0;border-bottom:1px solid #1e293b}}
+.toggle-row:last-child{{border:none}}
+.toggle-lbl{{font-size:.84rem;color:#cbd5e1;font-weight:600}}
+.toggle-desc{{font-size:.74rem;color:#475569;margin-top:2px}}
+/* Vars table */
+.vars-tbl{{width:100%;border-collapse:collapse;font-size:.82rem}}
+.vars-tbl td{{padding:5px 4px;border-bottom:1px solid #1e293b;vertical-align:middle}}
+.var-key-inp{{font-family:monospace;font-size:.78rem;font-weight:700;color:#818cf8;
+  border:1px solid #334155;border-radius:6px;padding:5px 8px;width:100%;background:#0f172a;color:#818cf8}}
+.var-val-inp{{border:1px solid #334155;border-radius:6px;padding:5px 8px;width:100%;
+  background:#0f172a;color:#e2e8f0;font-size:.82rem}}
+.var-key-inp:focus,.var-val-inp:focus{{outline:none;border-color:#6366f1}}
+.var-del-btn{{background:none;border:none;color:#ef4444;cursor:pointer;font-size:.95rem;padding:4px 7px}}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <a href="/inbox" class="voco-logo">
+    <div class="voco-logo-ic">🔊</div>
+    <div class="voco-logo-txt">Vo<span>co</span></div>
+  </a>
+  <div class="topbar-right">
+    <span class="topbar-user">🔐 Admin</span>
+    <a href="/inbox/logout" style="color:#475569;font-size:.76rem;text-decoration:none;
+      padding:4px 10px;border:1px solid #1e293b;border-radius:6px">Salir</a>
+  </div>
+</div>
+
+<div class="content">
+  <div class="page-hdr">
+    <div>
+      <div class="page-title">Mis agentes</div>
+      <div class="page-sub">{len(agents)} agente{'s' if len(agents) != 1 else ''} configurado{'s' if len(agents) != 1 else ''}</div>
+    </div>
+    <button class="btn-new-agent" onclick="abrirWizard()">
+      ＋ Nuevo agente
+    </button>
+  </div>
+
+  <div class="agents-grid">
+    {cards_html}
+  </div>
+</div>
+
+<!-- WIZARD MODAL -->
+<div class="modal-overlay" id="wizard-overlay" style="display:none" onclick="if(event.target===this)cerrarWizard()">
+  <div class="modal" id="wizard-modal">
+    <div class="modal-hdr">
+      <div class="modal-title" id="wiz-title">Paso 1 de 6 — Identidad</div>
+      <button class="modal-close" onclick="cerrarWizard()">✕</button>
+    </div>
+    <div class="modal-body" id="wiz-body">
+      <!-- contenido inyectado por JS -->
+    </div>
+    <div class="modal-footer">
+      <button class="btn-wiz-prev" id="wiz-prev" onclick="wizPrev()">← Atrás</button>
+      <button class="btn-wiz-next" id="wiz-next" onclick="wizNext()">Siguiente →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var _PROMPT_TEMPLATES = {templates_js};
+var _wizStep = 1;
+var _wizData = {{}};
+var _wizPropTypes = ['productos','servicios','restaurante','salud','personalizado'];
+
+/* ── Wizard ── */
+function abrirWizard() {{
+  _wizStep = 1;
+  _wizData = {{business_type:'productos',emoji:'🤖',color:'#6366f1',
+    modules:{{shopify_catalog:true,cart_orders:true,client_memory:true,campaign_context:true}}}};
+  renderWizStep();
+  document.getElementById('wizard-overlay').style.display = 'flex';
+}}
+
+function cerrarWizard() {{
+  document.getElementById('wizard-overlay').style.display = 'none';
+}}
+
+function wizDots() {{
+  var dots = '';
+  for(var i=1;i<=6;i++) {{
+    var cls = i < _wizStep ? 'done' : (i === _wizStep ? 'active' : '');
+    dots += '<div class="step-dot '+cls+'"></div>';
+  }}
+  return dots;
+}}
+
+var _WIZ_TITLES = ['','Identidad del negocio','WhatsApp (Meta)','Prompt del agente',
+  'Variables del negocio','Integraciones','Activar agente'];
+
+function renderWizStep() {{
+  document.getElementById('wiz-title').textContent = 'Paso '+_wizStep+' de 6 — '+_WIZ_TITLES[_wizStep];
+  document.getElementById('wiz-prev').style.display = _wizStep === 1 ? 'none' : '';
+  document.getElementById('wiz-next').textContent = _wizStep === 6 ? '🚀 Crear agente' : 'Siguiente →';
+  var body = document.getElementById('wiz-body');
+  var dots = '<div class="step-indicator">'+wizDots()+'</div>';
+
+  if (_wizStep === 1) {{
+    var types = [['productos','🛍','Productos físicos'],['servicios','🔧','Servicios'],
+                 ['restaurante','🍽','Restaurante'],['salud','💊','Salud/Belleza'],
+                 ['personalizado','⚙','Personalizado']];
+    var typeBtns = types.map(function(t) {{
+      var sel = (_wizData.business_type===t[0]) ? ' selected' : '';
+      return '<div class="wiz-type-btn'+sel+'" data-type="'+t[0]+'" onclick="selType(this)"><div class="wiz-type-icon">'+t[1]+'</div>'+t[2]+'</div>';
+    }}).join('');
+    var emojis = ['🤖','🌿','🔧','🛍','🍽','💊','✨','🚀','💼','🎯','🌟','🔊'];
+    var emojiGrid = emojis.map(function(e) {{
+      var sel = (_wizData.emoji===e) ? ' selected' : '';
+      return '<button class="wiz-emoji-btn'+sel+'" onclick="selEmoji(this,\''+e+'\')" type="button">'+e+'</button>';
+    }}).join('');
+    var swatches = ['#22c55e','#6366f1','#f59e0b','#ef4444','#ec4899','#06b6d4','#8b5cf6','#14b8a6','#f97316'];
+    var swatchHtml = swatches.map(function(c) {{
+      var sel = (_wizData.color===c) ? ' selected' : '';
+      return '<div class="color-swatch'+sel+'" style="background:'+c+'" onclick="selColor(this,\''+c+'\')"></div>';
+    }}).join('');
+    body.innerHTML = dots +
+      '<div class="wiz-field"><label class="wiz-label">Nombre del negocio *</label>'+
+      '<input class="wiz-inp" id="wiz-name" placeholder="Ej: Salon Bella, TallerMec, Pizzería Luna" value="'+((_wizData.name)||'')+'"></div>'+
+      '<div class="wiz-field"><label class="wiz-label">Tipo de negocio *</label>'+
+      '<div class="wiz-type-grid">'+typeBtns+'</div></div>'+
+      '<div class="wiz-field"><label class="wiz-label">Nombre del agente *</label>'+
+      '<input class="wiz-inp" id="wiz-aname" placeholder="Ej: Sofía, Carlos, Max" value="'+((_wizData.agent_name)||'')+'"></div>'+
+      '<div style="display:flex;gap:16px">'+
+      '<div class="wiz-field" style="flex:1"><label class="wiz-label">Emoji del agente</label>'+
+      '<div class="wiz-emoji-grid">'+emojiGrid+'</div></div>'+
+      '<div class="wiz-field" style="flex:1"><label class="wiz-label">Color</label>'+
+      '<div class="color-swatches">'+swatchHtml+'</div></div></div>';
+  }} else if (_wizStep === 2) {{
+    body.innerHTML = dots +
+      '<div class="wiz-field"><label class="wiz-label">Access Token de Meta *</label>'+
+      '<input class="wiz-inp" id="wiz-mat" type="password" placeholder="EAAxxxxx..." value="'+((_wizData.meta_access_token)||'')+'"></div>'+
+      '<div class="wiz-field"><label class="wiz-label">Phone Number ID *</label>'+
+      '<input class="wiz-inp" id="wiz-mpid" placeholder="1234567890" value="'+((_wizData.phone_number_id)||'')+'"></div>'+
+      '<div class="wiz-field"><label class="wiz-label">WABA ID</label>'+
+      '<input class="wiz-inp" id="wiz-waba" placeholder="WhatsApp Business Account ID" value="'+((_wizData.waba_id)||'')+'"></div>'+
+      '<div class="wiz-field"><label class="wiz-label">Verify Token (puedes inventar uno)</label>'+
+      '<input class="wiz-inp" id="wiz-vt" placeholder="mi-agente-2024" value="'+((_wizData.verify_token)||'voco-verify-'+Math.random().toString(36).slice(2,8))+'"></div>'+
+      '<button class="btn-wiz-next" style="width:100%;margin-top:4px" onclick="probarMetaWiz()" type="button">🔌 Probar conexión</button>'+
+      '<div class="wiz-result" id="wiz-conn-result"></div>';
+  }} else if (_wizStep === 3) {{
+    var tmpl = _PROMPT_TEMPLATES[_wizData.business_type] || _PROMPT_TEMPLATES['personalizado'];
+    var name = _wizData.name || 'Mi Negocio';
+    var aname = _wizData.agent_name || 'Agente';
+    tmpl = tmpl.replace(/\{{NOMBRE_AGENTE\}}/g,aname).replace(/\{{NOMBRE_NEGOCIO\}}/g,name);
+    body.innerHTML = dots +
+      '<p style="font-size:.78rem;color:#64748b;margin-bottom:12px">'+
+      'Prompt generado según el tipo de negocio. Puedes editarlo ahora o ajustarlo después en la pestaña Prompt.</p>'+
+      '<div class="wiz-field"><label class="wiz-label">Descripción del negocio (se incluirá en el prompt)</label>'+
+      '<textarea class="wiz-inp" id="wiz-desc" style="height:80px" placeholder="Ej: Ofrecemos servicios de corte, coloración y tratamientos capilares...">'+((_wizData.descripcion)||'')+'</textarea></div>'+
+      '<div class="wiz-field"><label class="wiz-label">Horario de atención</label>'+
+      '<input class="wiz-inp" id="wiz-horario" placeholder="Ej: Lunes a Sábado 9am-7pm" value="'+((_wizData.horario)||'')+'"></div>'+
+      '<div class="wiz-field"><label class="wiz-label">Prompt del agente</label>'+
+      '<textarea class="wiz-inp" id="wiz-prompt" style="height:200px;font-family:monospace;font-size:.78rem">'+he(tmpl)+'</textarea></div>';
+  }} else if (_wizStep === 4) {{
+    var filas = '';
+    var varsObj = _wizData.business_vars || {{}};
+    Object.keys(varsObj).forEach(function(k) {{
+      filas += varRow(k, varsObj[k]);
+    }});
+    body.innerHTML = dots +
+      '<p style="font-size:.78rem;color:#64748b;margin-bottom:12px">'+
+      'Define variables que puedes usar en el prompt como <code style="color:#818cf8">{{HORARIO}}</code></p>'+
+      '<table class="vars-tbl"><thead><tr><th style="color:#64748b;padding:6px 4px;text-align:left">Variable</th>'+
+      '<th style="color:#64748b;padding:6px 4px;text-align:left">Valor</th><th></th></tr></thead>'+
+      '<tbody id="wiz-vars-body">'+filas+'</tbody></table>'+
+      '<button onclick="agregarVarWiz()" type="button" style="margin-top:10px;background:#0f172a;'+
+      'border:1px solid #334155;color:#94a3b8;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem">+ Agregar variable</button>';
+  }} else if (_wizStep === 5) {{
+    var mods = _wizData.modules || {{}};
+    function togRow(key, label, desc) {{
+      var chk = (key in mods) ? mods[key] : true;
+      return '<div class="toggle-row"><div><div class="toggle-lbl">'+label+'</div>'+
+        '<div class="toggle-desc">'+desc+'</div></div>'+
+        '<label class="tog-sw"><input type="checkbox" id="wtog-'+key+'"'+(chk?' checked':'')+'>'+
+        '<span class="tog-slider"></span></label></div>';
+    }}
+    body.innerHTML = dots +
+      '<p style="font-size:.78rem;color:#64748b;margin-bottom:14px">Activa los módulos que apliquen a tu tipo de negocio.</p>'+
+      togRow('shopify_catalog','🛒 Catálogo Shopify','Inyecta el catálogo en el contexto del agente')+
+      togRow('cart_orders','🛍 Carrito y pedidos','Muestra carrito activo y pedidos pendientes')+
+      togRow('client_memory','🧠 Memoria de clientes','Recuerda datos y pedidos previos')+
+      togRow('campaign_context','📣 Contexto de campaña','Sabe a qué difusión responde el cliente');
+  }} else if (_wizStep === 6) {{
+    var name = _wizData.name || '—';
+    var aname = _wizData.agent_name || '—';
+    var btype = _wizData.business_type || '—';
+    body.innerHTML = dots +
+      '<div style="background:#052e16;border:1px solid #15803d;border-radius:10px;padding:16px;margin-bottom:16px">'+
+      '<div style="font-size:.84rem;font-weight:700;color:#4ade80;margin-bottom:10px">✅ Resumen del agente</div>'+
+      '<div style="font-size:.82rem;color:#cbd5e1;line-height:2">'+
+      '<b>Negocio:</b> '+he(name)+'<br>'+
+      '<b>Agente:</b> '+he(aname)+' &nbsp; <b>Tipo:</b> '+he(btype)+'<br>'+
+      '<b>Phone Number ID:</b> '+he(_wizData.phone_number_id||'(no configurado)')+'<br>'+
+      '</div></div>'+
+      '<div style="font-size:.8rem;color:#64748b;line-height:1.7">'+
+      'Una vez creado el agente:<br>'+
+      '1. Configura el webhook de Meta apuntando a <code style="color:#818cf8">https://tu-app.railway.app/webhook</code><br>'+
+      '2. Suscríbete al campo <code style="color:#818cf8">messages</code><br>'+
+      '3. El agente comenzará a responder cuando reciba el primer mensaje.</div>'+
+      '<div class="wiz-result" id="wiz-create-result"></div>';
+  }}
+}}
+
+function selType(el) {{
+  document.querySelectorAll('.wiz-type-btn').forEach(function(b){{b.classList.remove('selected')}});
+  el.classList.add('selected');
+  _wizData.business_type = el.getAttribute('data-type');
+}}
+
+function selEmoji(el, e) {{
+  document.querySelectorAll('.wiz-emoji-btn').forEach(function(b){{b.classList.remove('selected')}});
+  el.classList.add('selected');
+  _wizData.emoji = e;
+}}
+
+function selColor(el, c) {{
+  document.querySelectorAll('.color-swatch').forEach(function(b){{b.classList.remove('selected')}});
+  el.classList.add('selected');
+  _wizData.color = c;
+}}
+
+function he(s) {{
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}}
+
+function varRow(k, v) {{
+  return '<tr><td><input class="var-key-inp" value="'+he(k)+'" placeholder="CLAVE" '+
+    'oninput="this.value=this.value.toUpperCase().replace(/\\\\s/g,\\'_\\')"></td>'+
+    '<td><input class="var-val-inp" value="'+he(v)+'" placeholder="Valor"></td>'+
+    '<td><button class="var-del-btn" onclick="this.closest(\\'tr\\').remove()" type="button">✕</button></td></tr>';
+}}
+
+function agregarVarWiz() {{
+  var tbody = document.getElementById('wiz-vars-body');
+  if(tbody) {{
+    var tr = document.createElement('tr');
+    tr.innerHTML = varRow('','');
+    tbody.appendChild(tr);
+  }}
+}}
+
+function _recogerVarsWiz() {{
+  var vars = {{}};
+  document.querySelectorAll('#wiz-vars-body tr').forEach(function(tr) {{
+    var k = (tr.querySelector('.var-key-inp').value||'').trim().toUpperCase().replace(/\\s/g,'_');
+    var v = (tr.querySelector('.var-val-inp').value||'').trim();
+    if(k && v) vars[k] = v;
+  }});
+  return vars;
+}}
+
+function _generarSlug(name) {{
+  return name.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,30);
+}}
+
+async function probarMetaWiz() {{
+  var at = (document.getElementById('wiz-mat').value||'').trim();
+  var pid = (document.getElementById('wiz-mpid').value||'').trim();
+  var res = document.getElementById('wiz-conn-result');
+  if(!at||!pid){{ res.className='wiz-result err'; res.textContent='Completa el Token y el Phone Number ID'; res.style.display=''; return; }}
+  res.className='wiz-result'; res.textContent='🔄 Probando...'; res.style.display='';
+  try {{
+    var r = await fetch('/inbox/api/config/test/meta', {{
+      method:'POST', credentials:'include',
+      headers:{{'Content-Type':'application/json'}},
+      body: JSON.stringify({{META_ACCESS_TOKEN:at, META_PHONE_NUMBER_ID:pid}})
+    }});
+    var d = await r.json();
+    if(d.ok){{ res.className='wiz-result ok'; res.textContent='✅ '+( d.msg||'Conexión exitosa'); }}
+    else {{ res.className='wiz-result err'; res.textContent='⚠️ '+(d.error||'No se pudo conectar'); }}
+  }} catch(e) {{ res.className='wiz-result err'; res.textContent='Error de red: '+e; }}
+}}
+
+async function wizNext() {{
+  // Guardar datos del paso actual antes de avanzar
+  if(_wizStep===1) {{
+    var name = (document.getElementById('wiz-name').value||'').trim();
+    var aname = (document.getElementById('wiz-aname').value||'').trim();
+    if(!name||!aname){{ alert('Completa el nombre del negocio y del agente'); return; }}
+    _wizData.name = name;
+    _wizData.agent_name = aname;
+    _wizData.slug = _generarSlug(name);
+  }} else if(_wizStep===2) {{
+    var at = (document.getElementById('wiz-mat').value||'').trim();
+    var pid = (document.getElementById('wiz-mpid').value||'').trim();
+    _wizData.meta_access_token = at;
+    _wizData.phone_number_id = pid;
+    _wizData.waba_id = (document.getElementById('wiz-waba').value||'').trim();
+    _wizData.verify_token = (document.getElementById('wiz-vt').value||'').trim();
+  }} else if(_wizStep===3) {{
+    _wizData.prompt = (document.getElementById('wiz-prompt').value||'').trim();
+    _wizData.descripcion = (document.getElementById('wiz-desc').value||'').trim();
+    _wizData.horario = (document.getElementById('wiz-horario').value||'').trim();
+  }} else if(_wizStep===4) {{
+    _wizData.business_vars = _recogerVarsWiz();
+  }} else if(_wizStep===5) {{
+    _wizData.modules = {{
+      shopify_catalog: document.getElementById('wtog-shopify_catalog').checked,
+      cart_orders:     document.getElementById('wtog-cart_orders').checked,
+      client_memory:   document.getElementById('wtog-client_memory').checked,
+      campaign_context:document.getElementById('wtog-campaign_context').checked,
+    }};
+  }} else if(_wizStep===6) {{
+    // Crear el agente
+    await crearAgente();
+    return;
+  }}
+  if(_wizStep < 6) {{ _wizStep++; renderWizStep(); }}
+}}
+
+function wizPrev() {{
+  if(_wizStep > 1) {{ _wizStep--; renderWizStep(); }}
+}}
+
+async function crearAgente() {{
+  var btn = document.getElementById('wiz-next');
+  var res = document.getElementById('wiz-create-result');
+  btn.disabled = true; btn.textContent = '⏳ Creando...';
+  try {{
+    // 1. Crear agente base
+    var r1 = await fetch('/inbox/api/agents', {{
+      method:'POST', credentials:'include',
+      headers:{{'Content-Type':'application/json'}},
+      body: JSON.stringify({{
+        name: _wizData.name,
+        slug: _wizData.slug,
+        agent_name: _wizData.agent_name,
+        business_type: _wizData.business_type,
+        phone_number_id: _wizData.phone_number_id || '',
+        waba_id: _wizData.waba_id || '',
+        color: _wizData.color || '#6366f1',
+        emoji: _wizData.emoji || '🤖',
+      }})
+    }});
+    var d1 = await r1.json();
+    if(!d1.ok) throw new Error(d1.error || 'No se pudo crear el agente');
+    var newId = d1.agent.id;
+    var newSlug = d1.agent.slug;
+
+    // 2. Guardar prompt + vars + módulos + meta credentials
+    await fetch('/inbox/api/prompt/save?agent_id='+newId, {{
+      method:'POST', credentials:'include',
+      headers:{{'Content-Type':'application/json'}},
+      body: JSON.stringify({{
+        prompt: _wizData.prompt || '',
+        business_vars: _wizData.business_vars || {{}},
+        business_type: _wizData.business_type,
+        active_modules: _wizData.modules || {{}},
+      }})
+    }});
+
+    // 3. Guardar credenciales Meta para este agente
+    if(_wizData.meta_access_token || _wizData.phone_number_id) {{
+      await fetch('/inbox/api/config/save?agent_id='+newId, {{
+        method:'POST', credentials:'include',
+        headers:{{'Content-Type':'application/json'}},
+        body: JSON.stringify({{
+          META_ACCESS_TOKEN:    _wizData.meta_access_token || '',
+          META_PHONE_NUMBER_ID: _wizData.phone_number_id  || '',
+          META_WABA_ID:         _wizData.waba_id          || '',
+          META_VERIFY_TOKEN:    _wizData.verify_token      || '',
+        }})
+      }});
+    }}
+
+    // 4. Activar el agente
+    await fetch('/inbox/api/agents/'+newId+'/activate', {{
+      method:'POST', credentials:'include'
+    }});
+
+    res.className='wiz-result ok';
+    res.textContent = '✅ ¡Agente creado! Redirigiendo al panel...';
+    res.style.display='';
+    setTimeout(function(){{ window.location.href = '/inbox/'+newSlug; }}, 1500);
+  }} catch(e) {{
+    res.className='wiz-result err';
+    res.textContent = '⚠️ Error: '+String(e);
+    res.style.display='';
+    btn.disabled=false; btn.textContent='🚀 Crear agente';
+  }}
+}}
+
+async function editarAgente(agentId) {{
+  window.location.href = '/inbox/' + agentId;
+}}
+
+</script>
+</body>
+</html>"""
