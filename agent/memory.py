@@ -318,6 +318,27 @@ async def guardar_cliente(telefono: str, datos: dict, agent_id: int = 1):
         await session.commit()
 
 
+async def guardar_cliente_import(telefono: str, datos: dict, agent_id: int = 1) -> str:
+    """Importa un cliente desde CSV sin incrementar pedidos_realizados.
+    Retorna 'inserted' si es nuevo o 'updated' si ya existía."""
+    async with async_session() as session:
+        cliente = await _get_cliente(session, telefono, agent_id)
+        if cliente:
+            for campo in CAMPOS_CLIENTE:
+                valor = datos.get(campo)
+                if valor:
+                    setattr(cliente, campo, str(valor))
+            cliente.actualizado = datetime.utcnow()
+            await session.commit()
+            return "updated"
+        else:
+            valores = {c: str(datos.get(c, "")) for c in CAMPOS_CLIENTE}
+            cliente = Cliente(agent_id=agent_id, telefono=telefono, pedidos_realizados=0, **valores)
+            session.add(cliente)
+            await session.commit()
+            return "inserted"
+
+
 async def obtener_cliente(telefono: str, agent_id: int = 1) -> dict | None:
     """Devuelve los datos guardados del cliente o None si no existe."""
     async with async_session() as session:

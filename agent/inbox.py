@@ -703,6 +703,8 @@ tr:hover td{background:#f8f9fa}
 .cli-act-btn{background:none;border:1px solid #e0e4e8;border-radius:7px;padding:4px 10px;
   font-size:.75rem;color:#4a5568;cursor:pointer;transition:all .12s;white-space:nowrap}
 .cli-act-btn:hover{border-color:var(--az);color:var(--az)}
+.cli-write-btn{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
+.cli-write-btn:hover{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}
 .cli-empty{padding:64px 20px;text-align:center;color:#94a3b8}
 .cli-empty-ic{font-size:3rem;margin-bottom:12px;opacity:.5}
 .cli-empty-txt{font-size:.9rem;font-weight:500;color:#64748b}
@@ -1547,8 +1549,12 @@ tr:hover td{background:#f8f9fa}
             <h1>👥 Clientes</h1>
             <p>Base de clientes segmentada por nivel de engagement</p>
           </div>
-          <button class="btn-secondary" style="padding:7px 16px;font-size:.82rem"
-                  onclick="cargarClientes()" aria-label="Actualizar lista de clientes">↺ Actualizar</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn-secondary" style="padding:7px 16px;font-size:.82rem"
+                    onclick="abrirImportarCSV()" aria-label="Importar clientes desde CSV">📥 Importar CSV</button>
+            <button class="btn-secondary" style="padding:7px 16px;font-size:.82rem"
+                    onclick="cargarClientes()" aria-label="Actualizar lista de clientes">↺ Actualizar</button>
+          </div>
         </div>
         <div class="sec-body">
 
@@ -1628,6 +1634,95 @@ tr:hover td{background:#f8f9fa}
 
         </div>
       </div><!-- /sec-clientes -->
+
+      <!-- ══════════════════════════════════════════════════════
+           MODAL: Importar CSV de clientes
+           ══════════════════════════════════════════════════════ -->
+      <div id="modal-importar-csv" class="modal-overlay" style="display:none" onclick="cerrarImportarCSV(event)">
+        <div class="modal-box" style="max-width:520px" onclick="event.stopPropagation()">
+          <div class="modal-hdr">
+            <div>
+              <div class="modal-title">📥 Importar clientes desde CSV</div>
+              <div class="modal-sub">Columnas requeridas: <strong>telefono</strong> · Opcionales: nombres, apellidos, ciudad, departamento, email, cc_nit</div>
+            </div>
+            <button class="modal-close" onclick="cerrarImportarCSV()" aria-label="Cerrar modal">✕</button>
+          </div>
+
+          <!-- Drop zone -->
+          <div id="csv-dropzone" style="border:2px dashed #cbd5e1;border-radius:10px;padding:40px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px"
+               onclick="document.getElementById('csv-file-input').click()"
+               ondragover="event.preventDefault();this.style.borderColor='#3b82f6'"
+               ondragleave="this.style.borderColor='#cbd5e1'"
+               ondrop="event.preventDefault();this.style.borderColor='#cbd5e1';procesarCSV(event.dataTransfer.files[0])">
+            <div style="font-size:2.5rem;margin-bottom:8px">📄</div>
+            <div style="font-weight:600;color:#374151;margin-bottom:4px">Arrastra tu archivo CSV aquí</div>
+            <div style="font-size:.8rem;color:#6b7a8d">o haz clic para seleccionar · Formatos: CSV, XLSX</div>
+            <input id="csv-file-input" type="file" accept=".csv,.xlsx" style="display:none"
+                   onchange="procesarCSV(this.files[0])">
+          </div>
+
+          <!-- Nombre del archivo seleccionado -->
+          <div id="csv-file-name" style="font-size:.82rem;color:#6b7a8d;margin-bottom:12px;display:none"></div>
+
+          <!-- Botón importar -->
+          <button id="csv-import-btn" class="btn-secondary" style="width:100%;padding:10px;font-size:.9rem;display:none"
+                  onclick="importarClientes()">Importar clientes</button>
+
+          <!-- Spinner -->
+          <div id="csv-loading" style="display:none;text-align:center;padding:16px;color:#6b7a8d;font-size:.85rem">
+            ⏳ Procesando importación…
+          </div>
+
+          <!-- Resultados -->
+          <div id="csv-resultados" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border-radius:10px;font-size:.84rem">
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════════════════════════════════════════════════
+           MODAL: Escribir a cliente
+           ══════════════════════════════════════════════════════ -->
+      <div id="modal-escribir" class="modal-overlay" style="display:none" onclick="cerrarEscribir(event)">
+        <div class="modal-box" style="max-width:500px" onclick="event.stopPropagation()">
+          <div class="modal-hdr">
+            <div>
+              <div class="modal-title">✍ Escribir a cliente</div>
+              <div class="modal-sub" id="escribir-sub">—</div>
+            </div>
+            <button class="modal-close" onclick="cerrarEscribir()" aria-label="Cerrar modal">✕</button>
+          </div>
+
+          <!-- Tabs -->
+          <div style="display:flex;gap:0;border-bottom:1.5px solid #e5e7eb;margin-bottom:20px">
+            <button id="tab-wa" class="escribir-tab active-tab" onclick="mostrarTabEscribir('wa')" style="flex:1;padding:9px;border:none;background:none;cursor:pointer;font-size:.84rem;font-weight:600;color:#2563eb;border-bottom:2px solid #2563eb">📱 WhatsApp Web</button>
+            <button id="tab-tpl" class="escribir-tab" onclick="mostrarTabEscribir('tpl')" style="flex:1;padding:9px;border:none;background:none;cursor:pointer;font-size:.84rem;font-weight:600;color:#6b7a8d;border-bottom:2px solid transparent">📋 Plantilla API</button>
+          </div>
+
+          <!-- Tab: WhatsApp Web -->
+          <div id="tab-wa-body">
+            <label style="font-size:.8rem;color:#6b7a8d;display:block;margin-bottom:6px">Mensaje</label>
+            <textarea id="wa-mensaje" rows="4" style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:10px;font-size:.85rem;resize:vertical;box-sizing:border-box" placeholder="Escribe tu mensaje…"></textarea>
+            <button onclick="enviarPorWhatsApp()" style="margin-top:12px;width:100%;padding:10px;background:#25d366;color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer">
+              Abrir en WhatsApp →
+            </button>
+          </div>
+
+          <!-- Tab: Plantilla API -->
+          <div id="tab-tpl-body" style="display:none">
+            <label style="font-size:.8rem;color:#6b7a8d;display:block;margin-bottom:6px">Plantilla aprobada</label>
+            <select id="escribir-tpl-sel" style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px;font-size:.84rem;margin-bottom:12px;box-sizing:border-box"
+                    onchange="previewPlantilla()">
+              <option value="">Cargando plantillas…</option>
+            </select>
+            <div id="escribir-tpl-preview" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;font-size:.83rem;color:#374151;margin-bottom:12px;min-height:48px;white-space:pre-wrap;display:none"></div>
+            <div id="escribir-tpl-error" style="color:#dc2626;font-size:.8rem;display:none;margin-bottom:8px"></div>
+            <button onclick="enviarPlantilla()" style="width:100%;padding:10px;background:var(--az,#2563eb);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer">
+              Enviar por API →
+            </button>
+            <div id="escribir-tpl-result" style="margin-top:10px;font-size:.82rem;display:none"></div>
+          </div>
+        </div>
+      </div>
 
       <!-- ═══════════════════════════════════════
            SECCIÓN: CONFIGURACIÓN
@@ -2756,8 +2851,12 @@ function renderClientes() {
        + '<td><span class="est-pill ' + cf.cls + '">' + cf.lbl + '</span></td>'
        + '<td style="text-align:center;font-weight:700;color:#2d3748">' + (c.pedidos || 0) + '</td>'
        + '<td style="text-align:center;color:#6b7a8d">' + (c.total_msgs || 0) + '</td>'
-       + '<td><button class="cli-act-btn" onclick="verChatCliente(' + JSON.stringify(c.telefono) + ')"'
-       +    ' aria-label="Ver chat de ' + he(disp) + '">Ver chat</button></td>'
+       + '<td style="display:flex;gap:6px">'
+       + '<button class="cli-act-btn" onclick="verChatCliente(' + JSON.stringify(c.telefono) + ')"'
+       +    ' aria-label="Ver chat de ' + he(disp) + '">Ver chat</button>'
+       + '<button class="cli-act-btn cli-write-btn" onclick="abrirEscribir(' + JSON.stringify(c.telefono) + ',' + JSON.stringify(nm) + ')"'
+       +    ' aria-label="Escribir a ' + he(disp) + '" data-tel="' + he(c.telefono) + '" data-nombre="' + he(nm) + '">✍ Escribir</button>'
+       + '</td>'
        + '</tr>';
   }
   document.getElementById('cli-tbody').innerHTML = h;
@@ -2782,6 +2881,207 @@ function fmtRelativo(ts) {
 function verChatCliente(tel) {
   showSec('conversaciones');
   setTimeout(function() { abrirConv(tel); }, 100);
+}
+
+/* ══════════════════════════════════════════════════════
+   IMPORTAR CSV DE CLIENTES
+   ══════════════════════════════════════════════════════ */
+var _csvFile = null;
+
+function abrirImportarCSV() {
+  _csvFile = null;
+  document.getElementById('csv-file-name').style.display = 'none';
+  document.getElementById('csv-import-btn').style.display = 'none';
+  document.getElementById('csv-loading').style.display = 'none';
+  document.getElementById('csv-resultados').style.display = 'none';
+  document.getElementById('csv-file-input').value = '';
+  document.getElementById('modal-importar-csv').style.display = 'flex';
+}
+
+function cerrarImportarCSV(e) {
+  if (e && e.target !== document.getElementById('modal-importar-csv')) return;
+  document.getElementById('modal-importar-csv').style.display = 'none';
+  _csvFile = null;
+}
+
+function procesarCSV(file) {
+  if (!file) return;
+  _csvFile = file;
+  var nameEl = document.getElementById('csv-file-name');
+  nameEl.textContent = '📄 ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+  nameEl.style.display = 'block';
+  document.getElementById('csv-import-btn').style.display = 'block';
+  document.getElementById('csv-resultados').style.display = 'none';
+}
+
+async function importarClientes() {
+  if (!_csvFile) return;
+  document.getElementById('csv-import-btn').style.display = 'none';
+  document.getElementById('csv-loading').style.display = 'block';
+  document.getElementById('csv-resultados').style.display = 'none';
+  try {
+    var fd = new FormData();
+    fd.append('file', _csvFile);
+    var r = await fetch('/inbox/api/clientes/import', {method:'POST', body:fd, credentials:'include'});
+    var d = await r.json();
+    document.getElementById('csv-loading').style.display = 'none';
+    var res = document.getElementById('csv-resultados');
+    res.style.display = 'block';
+    if (d.ok) {
+      var html = '<div style="font-weight:700;font-size:.9rem;color:#1a2332;margin-bottom:10px">Resultado de la importación</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+      html += '<div style="background:#f0fdf4;border-radius:8px;padding:10px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:#15803d">' + (d.inserted || 0) + '</div><div style="font-size:.75rem;color:#15803d">✅ Insertados</div></div>';
+      html += '<div style="background:#eff6ff;border-radius:8px;padding:10px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:#1d4ed8">' + (d.updated || 0) + '</div><div style="font-size:.75rem;color:#1d4ed8">🔄 Actualizados</div></div>';
+      html += '</div>';
+      if (d.errors > 0) {
+        html += '<div style="margin-top:10px;padding:8px 10px;background:#fef2f2;border-radius:8px;color:#991b1b">❌ ' + d.errors + ' error(es)';
+        if (d.error_rows && d.error_rows.length) {
+          html += '<ul style="margin:6px 0 0 16px;font-size:.78rem">';
+          d.error_rows.slice(0, 5).forEach(function(er) {
+            html += '<li>Fila ' + er.fila + ': ' + he(er.razon) + '</li>';
+          });
+          html += '</ul>';
+        }
+        html += '</div>';
+      }
+      html += '<div style="margin-top:10px;font-size:.78rem;color:#6b7a8d">Total filas procesadas: ' + (d.total || 0) + '</div>';
+      res.innerHTML = html;
+      cargarClientes(); // refrescar tabla
+    } else {
+      res.innerHTML = '<div style="color:#dc2626;font-size:.85rem">Error: ' + he(d.detail || d.error || 'Error desconocido') + '</div>';
+    }
+  } catch(err) {
+    document.getElementById('csv-loading').style.display = 'none';
+    var res = document.getElementById('csv-resultados');
+    res.style.display = 'block';
+    res.innerHTML = '<div style="color:#dc2626;font-size:.85rem">Error de red: ' + he(String(err)) + '</div>';
+  }
+  document.getElementById('csv-import-btn').style.display = 'block';
+}
+
+
+/* ══════════════════════════════════════════════════════
+   ESCRIBIR A CLIENTE
+   ══════════════════════════════════════════════════════ */
+var _escribirTel = '';
+var _escribirNombre = '';
+var _escribirTemplates = null;  // null = no cargado aún
+
+function abrirEscribir(telefono, nombre) {
+  _escribirTel    = telefono;
+  _escribirNombre = nombre || '';
+  document.getElementById('escribir-sub').textContent = (nombre ? nombre + ' · ' : '') + '+' + telefono;
+  // Precargar mensaje WhatsApp con saludo
+  var saludo = nombre ? ('Hola ' + nombre + '! 👋') : 'Hola! 👋';
+  document.getElementById('wa-mensaje').value = saludo;
+  // Reset estado tab
+  mostrarTabEscribir('wa');
+  document.getElementById('escribir-tpl-result').style.display = 'none';
+  document.getElementById('escribir-tpl-error').style.display = 'none';
+  document.getElementById('modal-escribir').style.display = 'flex';
+  // Cargar plantillas en background
+  if (_escribirTemplates === null) cargarTemplatesEscribir();
+}
+
+function cerrarEscribir(e) {
+  if (e && e.target !== document.getElementById('modal-escribir')) return;
+  document.getElementById('modal-escribir').style.display = 'none';
+}
+
+function mostrarTabEscribir(tab) {
+  document.getElementById('tab-wa-body').style.display  = tab === 'wa'  ? 'block' : 'none';
+  document.getElementById('tab-tpl-body').style.display = tab === 'tpl' ? 'block' : 'none';
+  ['wa','tpl'].forEach(function(t) {
+    var btn = document.getElementById('tab-' + t);
+    if (t === tab) {
+      btn.style.color       = '#2563eb';
+      btn.style.borderBottom = '2px solid #2563eb';
+    } else {
+      btn.style.color       = '#6b7a8d';
+      btn.style.borderBottom = '2px solid transparent';
+    }
+  });
+}
+
+function enviarPorWhatsApp() {
+  var msg = document.getElementById('wa-mensaje').value.trim();
+  var tel = _escribirTel;
+  var url = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+}
+
+async function cargarTemplatesEscribir() {
+  var sel = document.getElementById('escribir-tpl-sel');
+  sel.innerHTML = '<option value="">Cargando plantillas…</option>';
+  try {
+    var r = await fetch('/inbox/api/clientes/templates', {credentials:'include'});
+    var d = await r.json();
+    if (d.error || !d.templates || !d.templates.length) {
+      sel.innerHTML = '<option value="">' + he(d.error || 'No hay plantillas aprobadas') + '</option>';
+      _escribirTemplates = [];
+      return;
+    }
+    _escribirTemplates = d.templates;
+    sel.innerHTML = '<option value="">Selecciona una plantilla…</option>';
+    d.templates.forEach(function(t) {
+      var opt = document.createElement('option');
+      opt.value = t.name + '|' + t.language;
+      opt.textContent = t.name + ' (' + t.language + ')';
+      sel.appendChild(opt);
+    });
+  } catch(err) {
+    sel.innerHTML = '<option value="">Error cargando plantillas</option>';
+    _escribirTemplates = [];
+  }
+}
+
+function previewPlantilla() {
+  var sel = document.getElementById('escribir-tpl-sel');
+  var val = sel.value;
+  var prev = document.getElementById('escribir-tpl-preview');
+  prev.style.display = 'none';
+  if (!val || !_escribirTemplates) return;
+  var parts = val.split('|');
+  var name  = parts[0];
+  var tpl   = (_escribirTemplates || []).find(function(t) { return t.name === name; });
+  if (tpl && tpl.preview) {
+    prev.textContent = tpl.preview;
+    prev.style.display = 'block';
+  }
+}
+
+async function enviarPlantilla() {
+  var sel  = document.getElementById('escribir-tpl-sel');
+  var val  = sel.value;
+  var resEl = document.getElementById('escribir-tpl-result');
+  var errEl = document.getElementById('escribir-tpl-error');
+  errEl.style.display = 'none';
+  resEl.style.display = 'none';
+  if (!val) { errEl.textContent = 'Selecciona una plantilla'; errEl.style.display = 'block'; return; }
+  var parts = val.split('|');
+  var template_name = parts[0];
+  var language_code = parts[1] || 'es_CO';
+  try {
+    var r = await fetch('/inbox/api/clientes/message', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      credentials: 'include',
+      body: JSON.stringify({telefono: _escribirTel, template_name: template_name, language_code: language_code})
+    });
+    var d = await r.json();
+    resEl.style.display = 'block';
+    if (d.ok) {
+      resEl.style.color = '#15803d';
+      resEl.textContent = '✅ Plantilla enviada correctamente' + (d.message_id ? ' · ID: ' + d.message_id.slice(0,20) + '…' : '');
+    } else {
+      resEl.style.color = '#dc2626';
+      resEl.textContent = '❌ Error: ' + he(d.error || 'Error desconocido');
+    }
+  } catch(err) {
+    resEl.style.display = 'block';
+    resEl.style.color = '#dc2626';
+    resEl.textContent = '❌ Error de red: ' + he(String(err));
+  }
 }
 
 /* ── INIT conversaciones ── */

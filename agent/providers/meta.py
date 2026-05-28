@@ -258,6 +258,50 @@ class ProveedorMeta(ProveedorWhatsApp):
                 logger.error(f"Error Meta API lista: {r.status_code} — {r.text}")
             return r.status_code == 200
 
+    async def enviar_plantilla(
+        self,
+        telefono: str,
+        template_name: str,
+        language_code: str,
+        components: list[dict] | None = None,
+    ) -> dict:
+        """Envía una plantilla aprobada de Meta a un número.
+        Retorna {"ok": True, "message_id": "..."} o {"ok": False, "error": "..."}."""
+        if not self.access_token or not self.phone_number_id:
+            return {"ok": False, "error": "META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados"}
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        template_obj: dict = {
+            "name": template_name,
+            "language": {"code": language_code},
+        }
+        if components:
+            template_obj["components"] = components
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "template",
+            "template": template_obj,
+        }
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code == 200:
+                try:
+                    message_id = r.json().get("messages", [{}])[0].get("id", "")
+                except Exception:
+                    message_id = ""
+                return {"ok": True, "message_id": message_id}
+            else:
+                try:
+                    err = r.json().get("error", {}).get("message", r.text[:200])
+                except Exception:
+                    err = r.text[:200]
+                logger.error(f"Error Meta API enviar_plantilla: {r.status_code} — {err}")
+                return {"ok": False, "error": err}
+
     async def enviar_catalogo_productos(
         self,
         telefono: str,

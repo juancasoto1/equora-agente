@@ -1,5 +1,7 @@
 import os
 import re
+import io
+import csv
 import json
 import hmac
 import hashlib
@@ -35,6 +37,7 @@ from agent.memory import (
     marcar_opt_out, verificar_opt_out, revertir_opt_out, obtener_opt_outs,
     obtener_clientes_con_estado,
     get_config_value, set_config_value, get_all_config_values, cargar_config_en_env,
+    guardar_cliente_import,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html
 from agent.providers import obtener_proveedor
@@ -2183,6 +2186,193 @@ async def inbox_clientes(
     for c in clientes:
         resumen[c["estado"]] = resumen.get(c["estado"], 0) + 1
     return JSONResponse(content={"clientes": clientes, "resumen": resumen})
+
+
+def _normalizar_telefono(raw: str) -> str | None:
+    """Normaliza un número de teléfono para WhatsApp.
+    Acepta formatos con espacios, guiones, signos +.
+    Si comienza con 3 y tiene 10 dígitos, antepone código país 57 (Colombia)."""
+    digits = re.sub(r'[^0-9]', '', str(raw))
+    if not digits:
+        return None
+    if digits.startswith('57') and len(digits) == 12:
+        return digits
+    if digits.startswith('3') and len(digits) == 10:
+        return '57' + digits
+    if len(digits) >= 7:
+        return digits  # aceptar tal cual para internacionales
+    return None
+
+
+@app.post("/inbox/api/clientes/import")
+async def inbox_importar_clientes(
+    request: Request,
+    file: UploadFile = File(...),
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Importa clientes masivamente desde un archivo CSV (campo 'file' en multipart/form-data).
+    Columnas requeridas: telefono. Opcionales: nombres, apellidos, ciudad, departamento, email, cc_nit."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    contenido = await file.read()
+    try:
+        texto = contenido.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        texto = contenido.decode("latin-1", errors="replace")
+
+    reader = csv.DictReader(io.StringIO(texto))
+
+    # Normalizar nombres de columnas (minúsculas, sin espacios)
+    CAMPOS_OPCIONALES = {"nombres", "apellidos", "ciudad", "departamento", "email", "cc_nit"}
+
+    total = 0
+    insertados = 0
+    actualizados = 0
+    errores = 0
+    filas_error: list[dict] = []
+
+    for i, fila in enumerate(reader, start=2):  # start=2: fila 1 es cabecera
+        total += 1
+        # Normalizar keys
+        fila_norm = {k.strip().lower(): (v or "").strip() for k, v in fila.items()}
+        raw_tel = fila_norm.get("telefono", "")
+        if not raw_tel:
+            errores += 1
+            filas_error.append({"fila": i, "razon": "columna 'telefono' vacía", "datos": fila_norm})
+            continue
+
+        tel = _normalizar_telefono(raw_tel)
+        if not tel:
+            errores += 1
+            filas_error.append({"fila": i, "razon": f"número inválido: {raw_tel}", "datos": fila_norm})
+            continue
+
+        datos = {campo: fila_norm[campo] for campo in CAMPOS_OPCIONALES if fila_norm.get(campo)}
+        try:
+            resultado = await guardar_cliente_import(tel, datos, agent_id)
+            if resultado == "inserted":
+                insertados += 1
+            else:
+                actualizados += 1
+        except Exception as e:
+            errores += 1
+            filas_error.append({"fila": i, "razon": str(e), "datos": fila_norm})
+
+    logger.info(f"[import-clientes] total={total} insertados={insertados} actualizados={actualizados} errores={errores}")
+    return JSONResponse(content={
+        "ok": True,
+        "total": total,
+        "inserted": insertados,
+        "updated": actualizados,
+        "errors": errores,
+        "error_rows": filas_error[:20],  # máximo 20 ejemplos de errores
+    })
+
+
+@app.get("/inbox/api/clientes/templates")
+async def inbox_listar_templates_clientes(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Lista plantillas aprobadas de Meta para enviar a clientes individuales."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    access_token = await get_config_value("META_ACCESS_TOKEN", agent_id) or os.getenv("META_ACCESS_TOKEN", "")
+    waba_id      = await get_config_value("META_WABA_ID", agent_id)      or os.getenv("META_WABA_ID", "")
+
+    if not access_token or not waba_id:
+        return JSONResponse(content={"templates": [], "error": "META_ACCESS_TOKEN o META_WABA_ID no configurados"})
+
+    api_ver = "v21.0"
+    url = (
+        f"https://graph.facebook.com/{api_ver}/{waba_id}"
+        f"/message_templates?fields=id,name,status,components,language&limit=100"
+        f"&access_token={access_token}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(url)
+        if r.status_code != 200:
+            return JSONResponse(content={"templates": [], "error": f"Meta API {r.status_code}: {r.text[:200]}"})
+        data = r.json()
+        if "error" in data:
+            return JSONResponse(content={"templates": [], "error": data["error"].get("message", str(data["error"]))})
+
+        templates = []
+        for t in data.get("data", []):
+            if (t.get("status", "")).upper() != "APPROVED":
+                continue
+            body_text = next(
+                (c.get("text", "") for c in t.get("components", []) if c.get("type", "").upper() == "BODY"),
+                ""
+            )
+            templates.append({
+                "name":     t.get("name", ""),
+                "language": t.get("language", "es_CO"),
+                "category": t.get("category", ""),
+                "preview":  body_text,
+                "components": t.get("components", []),
+            })
+        return JSONResponse(content={"templates": templates})
+    except Exception as e:
+        logger.error(f"[clientes/templates] Error: {e}", exc_info=True)
+        return JSONResponse(content={"templates": [], "error": str(e)})
+
+
+@app.post("/inbox/api/clientes/message")
+async def inbox_enviar_mensaje_cliente(
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Envía una plantilla aprobada de Meta a un cliente específico.
+    Body JSON: {telefono, template_name, language_code, components?}"""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    body          = await request.json()
+    telefono      = str(body.get("telefono", "")).strip()
+    template_name = str(body.get("template_name", "")).strip()
+    language_code = str(body.get("language_code", "es_CO")).strip()
+    components    = body.get("components")  # lista de componentes, puede ser None
+
+    tel = _normalizar_telefono(telefono)
+    if not tel:
+        return JSONResponse(content={"ok": False, "error": f"Número inválido: {telefono}"}, status_code=400)
+    if not template_name:
+        return JSONResponse(content={"ok": False, "error": "template_name es requerido"}, status_code=400)
+
+    access_token    = await get_config_value("META_ACCESS_TOKEN", agent_id)    or os.getenv("META_ACCESS_TOKEN", "")
+    phone_number_id = await get_config_value("META_PHONE_NUMBER_ID", agent_id) or os.getenv("META_PHONE_NUMBER_ID", "")
+
+    from agent.providers.meta import ProveedorMeta
+    meta = ProveedorMeta(
+        access_token=access_token,
+        phone_number_id=phone_number_id,
+    )
+    resultado = await meta.enviar_plantilla(
+        telefono=tel,
+        template_name=template_name,
+        language_code=language_code,
+        components=components,
+    )
+    if resultado.get("ok"):
+        # Registrar en historial
+        try:
+            await guardar_mensaje(tel, "assistant", f"[Plantilla: {template_name}]", agent_id=agent_id)
+        except Exception:
+            pass
+        logger.info(f"[clientes/message] Plantilla '{template_name}' enviada a {tel[-4:]}**** message_id={resultado.get('message_id','?')}")
+    else:
+        logger.warning(f"[clientes/message] Fallo enviando plantilla a {tel[-4:]}****: {resultado.get('error')}")
+
+    return JSONResponse(content=resultado)
 
 
 @app.delete("/inbox/api/opt-outs/{telefono}")
