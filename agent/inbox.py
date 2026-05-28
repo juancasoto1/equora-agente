@@ -3,47 +3,112 @@ agent/inbox.py — Panel de administración SaaS: inbox de conversaciones de And
 Login: POST /inbox/login  |  Acceso: /inbox  |  Logout: /inbox/logout
 """
 
+_AUTH_STYLES = """
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;background:#0f172a;display:flex;align-items:center;
+     justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+.box{background:#1e293b;border-radius:16px;padding:40px 36px;width:360px;text-align:center;
+      box-shadow:0 8px 40px rgba(0,0,0,.5);border:1px solid #334155}
+.ic{font-size:2.8rem;margin-bottom:10px}
+h2{color:#f1f5f9;font-size:1.15rem;font-weight:800;margin-bottom:4px}
+.sub{color:#64748b;font-size:.82rem;margin-bottom:28px}
+.err{color:#f87171;font-size:.82rem;display:block;margin-bottom:12px;
+     background:#1a0a0a;border:1px solid #991b1b;border-radius:8px;padding:8px 12px;text-align:left}
+.field{text-align:left;margin-bottom:14px}
+.field label{display:block;font-size:.78rem;font-weight:600;color:#94a3b8;margin-bottom:5px}
+input{width:100%;padding:11px 14px;border-radius:9px;border:1.5px solid #334155;
+       background:#0f172a;color:#f1f5f9;font-size:.9rem;outline:none}
+input:focus{border-color:#6366f1}
+input::placeholder{color:#475569}
+button{width:100%;padding:12px;border-radius:9px;border:none;
+       background:linear-gradient(135deg,#6366f1,#8b5cf6);
+       color:#fff;font-size:.93rem;font-weight:700;cursor:pointer;transition:opacity .2s;margin-top:4px}
+button:hover{opacity:.88}
+.alt-link{display:block;margin-top:18px;font-size:.8rem;color:#64748b;text-decoration:none}
+.alt-link a{color:#818cf8;text-decoration:none}
+.alt-link a:hover{text-decoration:underline}
+"""
+
+
 # ── Página de login ──────────────────────────────────────────────────────────
 def obtener_login_html(error: bool = False) -> str:
-    err = '<span class="err">Contraseña incorrecta. Intenta de nuevo.</span>' if error else ''
+    err = '<div class="err">Credenciales incorrectas. Intenta de nuevo.</div>' if error else ''
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
-<title>Inbox — Equora</title>
-<style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{min-height:100vh;background:#0f1923;display:flex;align-items:center;
-     justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}}
-.box{{background:#1b2631;border-radius:16px;padding:40px 36px;width:340px;text-align:center;
-      box-shadow:0 8px 40px rgba(0,0,0,.5);border:1px solid #243342}}
-.ic{{font-size:2.8rem;margin-bottom:10px}}
-h2{{color:#e9edef;font-size:1.15rem;font-weight:700;margin-bottom:4px}}
-.sub{{color:#8696a0;font-size:.82rem;margin-bottom:28px}}
-.err{{color:#ef5350;font-size:.82rem;display:block;margin-bottom:12px}}
-input{{width:100%;padding:12px 16px;border-radius:10px;border:1.5px solid #2c3e50;
-       background:#243342;color:#e9edef;font-size:.92rem;outline:none;margin-bottom:14px}}
-input:focus{{border-color:#00a884}}
-input::placeholder{{color:#8696a0}}
-button{{width:100%;padding:13px;border-radius:10px;border:none;background:#00a884;
-        color:#fff;font-size:.95rem;font-weight:700;cursor:pointer;transition:opacity .2s}}
-button:hover{{opacity:.88}}
-</style>
+<title>Voco — Iniciar sesion</title>
+<style>{_AUTH_STYLES}</style>
 </head>
 <body>
 <div class="box">
-  <div class="ic">🤖</div>
-  <h2>Andrea — Panel de Control</h2>
-  <p class="sub">Equora Distribuciones</p>
+  <div class="ic">🔊</div>
+  <h2>Voco</h2>
+  <p class="sub">Panel de Agentes IA para WhatsApp</p>
   {err}
   <form method="POST" action="/inbox/login">
-    <label for="pwd" style="display:none">Contraseña</label>
-    <input type="password" id="pwd" name="password" placeholder="Contraseña de acceso"
-           autocomplete="current-password" autofocus required>
-    <button type="submit">Entrar →</button>
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="tu@email.com"
+             autocomplete="email" autofocus required>
+    </div>
+    <div class="field">
+      <label for="pwd">Contrasena</label>
+      <input type="password" id="pwd" name="password" placeholder="••••••••"
+             autocomplete="current-password" required>
+    </div>
+    <button type="submit">Entrar &rarr;</button>
   </form>
+  <span class="alt-link">¿No tienes cuenta? <a href="/auth/register">Registrate</a></span>
+</div>
+</body>
+</html>"""
+
+
+# ── Página de registro ───────────────────────────────────────────────────────
+def obtener_register_html(error: str = "") -> str:
+    err_html = f'<div class="err">{error}</div>' if error else ''
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Voco — Crear cuenta</title>
+<style>{_AUTH_STYLES}</style>
+</head>
+<body>
+<div class="box">
+  <div class="ic">🔊</div>
+  <h2>Crear cuenta</h2>
+  <p class="sub">Empieza gratis con Voco</p>
+  {err_html}
+  <form method="POST" action="/auth/register">
+    <div class="field">
+      <label for="nombre">Nombre completo</label>
+      <input type="text" id="nombre" name="nombre" placeholder="Tu nombre"
+             autocomplete="name" autofocus required>
+    </div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="tu@email.com"
+             autocomplete="email" required>
+    </div>
+    <div class="field">
+      <label for="pwd">Contrasena</label>
+      <input type="password" id="pwd" name="password" placeholder="Minimo 8 caracteres"
+             autocomplete="new-password" required minlength="8">
+    </div>
+    <div class="field">
+      <label for="confirm">Confirmar contrasena</label>
+      <input type="password" id="confirm" name="confirm_password" placeholder="Repite la contrasena"
+             autocomplete="new-password" required>
+    </div>
+    <button type="submit">Crear cuenta &rarr;</button>
+  </form>
+  <span class="alt-link">¿Ya tienes cuenta? <a href="/inbox/login">Inicia sesion</a></span>
 </div>
 </body>
 </html>"""
@@ -5418,7 +5483,7 @@ async function limpiarChatTest() {
 </html>"""
 
 
-def obtener_inbox_html(agent: dict | None = None) -> str:
+def obtener_inbox_html(agent: dict | None = None, user: dict | None = None) -> str:
     """Devuelve el HTML del inbox scoped al agente indicado."""
     import json as _json
     _agent = agent or {"id": 1, "slug": "equora", "name": "Equora Distribuciones",
@@ -5435,6 +5500,23 @@ def obtener_inbox_html(agent: dict | None = None) -> str:
     status_label = {"active": "● Activo", "paused": "⏸ Pausado", "draft": "✎ Borrador"}.get(status, status)
     status_color = {"active": "#22c55e", "paused": "#f59e0b", "draft": "#94a3b8"}.get(status, "#94a3b8")
 
+    # Info del usuario autenticado en la barra
+    if user:
+        rol = user.get("rol", "user")
+        plan = user.get("plan", "trial")
+        nombre_u = user.get("nombre") or user.get("email", "")
+        if rol == "admin":
+            user_badge = '<span style="background:#4f46e5;color:#c7d2fe;font-size:.68rem;padding:2px 8px;border-radius:10px;font-weight:700">Administrador</span>'
+        else:
+            plan_colors = {"trial": "#64748b", "starter": "#0891b2", "growth": "#059669", "pro": "#7c3aed"}
+            plan_bg = {"trial": "#1e293b", "starter": "#0c4a6e", "growth": "#064e3b", "pro": "#2e1065"}
+            pc = plan_colors.get(plan, "#64748b")
+            pb = plan_bg.get(plan, "#1e293b")
+            user_badge = f'<span style="background:{pb};color:{pc};font-size:.68rem;padding:2px 8px;border-radius:10px;font-weight:700;text-transform:capitalize">{plan}</span>'
+        user_info = f'<span style="color:#94a3b8;font-size:.76rem;margin-right:6px">{nombre_u}</span>{user_badge}'
+    else:
+        user_info = ""
+
     agent_bar = f"""<div style="background:#0f172a;padding:7px 20px;display:flex;align-items:center;
 justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
   <div style="display:flex;align-items:center;gap:10px">
@@ -5445,13 +5527,18 @@ justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
         <span style="color:{status_color}">{status_label}</span></div>
     </div>
   </div>
-  <a href="/inbox" style="color:#64748b;font-size:.76rem;text-decoration:none;
-    padding:4px 12px;border:1px solid #1e293b;border-radius:6px;
-    transition:.15s;white-space:nowrap"
-    onmouseover="this.style.color='#e2e8f0';this.style.borderColor='#334155'"
-    onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
-    ← Voco
-  </a>
+  <div style="display:flex;align-items:center;gap:10px">
+    {user_info}
+    <a href="/inbox" style="color:#64748b;font-size:.76rem;text-decoration:none;
+      padding:4px 12px;border:1px solid #1e293b;border-radius:6px;
+      transition:.15s;white-space:nowrap"
+      onmouseover="this.style.color='#e2e8f0';this.style.borderColor='#334155'"
+      onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+      ← Voco
+    </a>
+    <a href="/inbox/logout" style="color:#475569;font-size:.72rem;text-decoration:none;
+      padding:4px 10px;border:1px solid #1e293b;border-radius:6px">Salir</a>
+  </div>
 </div>"""
 
     html = _HTML.replace("<head>", f"<head>\n{inject_head}", 1)
@@ -5459,7 +5546,25 @@ justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
     return html
 
 
-def obtener_global_html(agents: list[dict]) -> str:
+def _build_user_topbar(user: dict | None) -> str:
+    """Genera el HTML del badge de usuario en la topbar del panel global."""
+    if not user:
+        return '<span class="topbar-user">🔐 Admin</span>'
+    rol = user.get("rol", "user")
+    plan = user.get("plan", "trial")
+    nombre = user.get("nombre") or user.get("email", "Usuario")
+    if rol == "admin":
+        badge = '<span style="background:#4f46e5;color:#c7d2fe;font-size:.68rem;padding:2px 8px;border-radius:10px;font-weight:700;margin-left:6px">Administrador</span>'
+    else:
+        plan_colors = {"trial": "#64748b", "starter": "#0891b2", "growth": "#059669", "pro": "#7c3aed"}
+        plan_bg    = {"trial": "#1e293b",  "starter": "#0c4a6e",  "growth": "#064e3b",  "pro": "#2e1065"}
+        pc = plan_colors.get(plan, "#64748b")
+        pb = plan_bg.get(plan, "#1e293b")
+        badge = f'<span style="background:{pb};color:{pc};font-size:.68rem;padding:2px 8px;border-radius:10px;font-weight:700;text-transform:capitalize;margin-left:6px">{plan}</span>'
+    return f'<span class="topbar-user">{nombre}{badge}</span>'
+
+
+def obtener_global_html(agents: list[dict], user: dict | None = None) -> str:
     """Panel global de Voco — lista de todos los agentes + wizard de creación."""
     import json as _json
 
@@ -5739,12 +5844,12 @@ textarea.wiz-inp{{resize:vertical;min-height:120px}}
 
 <!-- TOPBAR -->
 <div class="topbar">
-  <a href="/inbox" class="voco-logo">
+  <div class="voco-logo">
     <div class="voco-logo-ic">🔊</div>
     <div class="voco-logo-txt">Vo<span>co</span></div>
-  </a>
+  </div>
   <div class="topbar-right">
-    <span class="topbar-user">🔐 Admin</span>
+    {_build_user_topbar(user)}
     <a href="/inbox/logout" style="color:#475569;font-size:.76rem;text-decoration:none;
       padding:4px 10px;border:1px solid #1e293b;border-radius:6px">Salir</a>
   </div>

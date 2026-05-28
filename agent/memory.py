@@ -1,9 +1,10 @@
 import os
 import json
+import secrets
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, Integer, func, text, PrimaryKeyConstraint
+from sqlalchemy import String, Text, DateTime, select, Integer, Boolean, func, text, PrimaryKeyConstraint
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,6 +22,30 @@ class Base(DeclarativeBase):
     pass
 
 
+class Usuario(Base):
+    """Usuarios del sistema SaaS multi-tenant de Voco."""
+    __tablename__ = "usuarios"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    nombre: Mapped[str] = mapped_column(String(200), default="")
+    rol: Mapped[str] = mapped_column(String(20), default="user")        # "admin" | "user"
+    plan: Mapped[str] = mapped_column(String(20), default="trial")      # "trial"|"starter"|"growth"|"pro"
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SesionUsuario(Base):
+    """Sesiones activas de usuarios en el sistema SaaS."""
+    __tablename__ = "sesiones_usuario"
+
+    token: Mapped[str] = mapped_column(String(100), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Agent(Base):
     """Agentes de la plataforma Voco — cada uno es un número de WhatsApp independiente."""
     __tablename__ = "agents"
@@ -36,6 +61,7 @@ class Agent(Base):
     color: Mapped[str] = mapped_column(String(20), default="#6366f1")
     emoji: Mapped[str] = mapped_column(String(10), default="🤖")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)  # None = admin-owned
 
 
 class Mensaje(Base):
@@ -215,6 +241,8 @@ async def inicializar_db():
             "ALTER TABLE difusion_mensajes ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             "ALTER TABLE opt_outs ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             "ALTER TABLE plantillas_borradores ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            # Sprint 1 — multi-tenant
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS owner_id INTEGER",
             # Índices útiles
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
             "CREATE INDEX IF NOT EXISTS ix_mensajes_agent ON mensajes (agent_id)",
@@ -250,6 +278,34 @@ async def inicializar_db():
                 await session.commit()
         except Exception:
             pass  # puede fallar en primera migración; la tabla se creará igual
+
+    # Auto-crear usuario admin si ADMIN_EMAIL está configurado
+    admin_email = os.getenv("ADMIN_EMAIL", "")
+    admin_password = os.getenv("ADMIN_PASSWORD", "")
+    if admin_email:
+        import bcrypt as _bcrypt
+        async with async_session() as session:
+            try:
+                result = await session.execute(
+                    select(Usuario).where(Usuario.email == admin_email)
+                )
+                existing_admin = result.scalar_one_or_none()
+                if not existing_admin:
+                    pw = admin_password or secrets.token_urlsafe(16)
+                    pw_hash = _bcrypt.hashpw(pw.encode(), _bcrypt.gensalt()).decode()
+                    admin_user = Usuario(
+                        email=admin_email,
+                        password_hash=pw_hash,
+                        nombre="Admin",
+                        rol="admin",
+                        plan="admin",
+                        is_active=True,
+                        created_at=datetime.utcnow(),
+                    )
+                    session.add(admin_user)
+                    await session.commit()
+            except Exception:
+                pass  # tabla puede no existir aún
 
 
 async def guardar_mensaje(telefono: str, role: str, content: str, agent_id: int = 1):
@@ -1579,6 +1635,7 @@ def _agent_to_dict(a: Agent) -> dict:
         "color": a.color,
         "emoji": a.emoji,
         "created_at": a.created_at.isoformat() if a.created_at else "",
+        "owner_id": a.owner_id,
     }
 
 
@@ -1591,6 +1648,7 @@ async def crear_agente(
     waba_id: str = "",
     color: str = "#6366f1",
     emoji: str = "🤖",
+    owner_id: int | None = None,
 ) -> dict:
     """Crea un nuevo agente en la plataforma Voco. Retorna el dict del agente creado."""
     async with async_session() as session:
@@ -1605,6 +1663,7 @@ async def crear_agente(
             color=color,
             emoji=emoji,
             created_at=datetime.utcnow(),
+            owner_id=owner_id,
         )
         session.add(agente)
         await session.commit()
@@ -1651,7 +1710,7 @@ async def actualizar_agente(agent_id: int, **kwargs) -> bool:
     """Actualiza campos de un agente. Retorna True si el agente existe."""
     campos_permitidos = {
         "name", "slug", "agent_name", "business_type", "status",
-        "phone_number_id", "waba_id", "color", "emoji",
+        "phone_number_id", "waba_id", "color", "emoji", "owner_id",
     }
     async with async_session() as session:
         result = await session.execute(select(Agent).where(Agent.id == agent_id))
@@ -1663,3 +1722,149 @@ async def actualizar_agente(agent_id: int, **kwargs) -> bool:
                 setattr(agente, campo, valor)
         await session.commit()
         return True
+
+
+# ── Usuario / Sesiones (Sprint 1 — SaaS multi-tenant) ───────────────────────
+
+def _usuario_to_dict(u: Usuario) -> dict:
+    return {
+        "id": u.id,
+        "email": u.email,
+        "nombre": u.nombre,
+        "rol": u.rol,
+        "plan": u.plan,
+        "is_active": u.is_active,
+        "created_at": u.created_at.isoformat() if u.created_at else "",
+    }
+
+
+async def crear_usuario(
+    email: str,
+    password_hash: str,
+    nombre: str = "",
+    rol: str = "user",
+    plan: str = "trial",
+) -> dict:
+    """Crea un nuevo usuario. Retorna el dict del usuario creado."""
+    async with async_session() as session:
+        usuario = Usuario(
+            email=email.lower().strip(),
+            password_hash=password_hash,
+            nombre=nombre,
+            rol=rol,
+            plan=plan,
+            is_active=True,
+            created_at=datetime.utcnow(),
+        )
+        session.add(usuario)
+        await session.commit()
+        await session.refresh(usuario)
+        return _usuario_to_dict(usuario)
+
+
+async def obtener_usuario_por_email(email: str) -> dict | None:
+    """Retorna el dict del usuario por email (incluyendo password_hash), o None."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Usuario).where(Usuario.email == email.lower().strip())
+        )
+        u = result.scalar_one_or_none()
+        if not u:
+            return None
+        d = _usuario_to_dict(u)
+        d["password_hash"] = u.password_hash  # incluir para verificación
+        return d
+
+
+async def obtener_usuario_por_id(user_id: int) -> dict | None:
+    """Retorna el dict del usuario por ID, o None."""
+    async with async_session() as session:
+        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
+        u = result.scalar_one_or_none()
+        return _usuario_to_dict(u) if u else None
+
+
+async def crear_sesion(user_id: int) -> str:
+    """Crea una sesión para el usuario. Retorna el token (expira en 30 días)."""
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(days=30)
+    async with async_session() as session:
+        sesion = SesionUsuario(
+            token=token,
+            user_id=user_id,
+            expires_at=expires_at,
+            created_at=datetime.utcnow(),
+        )
+        session.add(sesion)
+        await session.commit()
+    return token
+
+
+async def verificar_sesion(token: str) -> dict | None:
+    """Verifica una sesión por token. Retorna el dict del usuario o None si expiró/inválido."""
+    if not token:
+        return None
+    async with async_session() as session:
+        result = await session.execute(
+            select(SesionUsuario).where(SesionUsuario.token == token)
+        )
+        sesion = result.scalar_one_or_none()
+        if not sesion:
+            return None
+        if sesion.expires_at < datetime.utcnow():
+            await session.delete(sesion)
+            await session.commit()
+            return None
+        # Cargar el usuario
+        u_result = await session.execute(
+            select(Usuario).where(Usuario.id == sesion.user_id)
+        )
+        u = u_result.scalar_one_or_none()
+        if not u or not u.is_active:
+            return None
+        return _usuario_to_dict(u)
+
+
+async def cerrar_sesion(token: str) -> None:
+    """Elimina la sesión por token (logout)."""
+    if not token:
+        return
+    async with async_session() as session:
+        result = await session.execute(
+            select(SesionUsuario).where(SesionUsuario.token == token)
+        )
+        sesion = result.scalar_one_or_none()
+        if sesion:
+            await session.delete(sesion)
+            await session.commit()
+
+
+async def listar_usuarios() -> list[dict]:
+    """Retorna todos los usuarios registrados (para vista de admin)."""
+    async with async_session() as session:
+        result = await session.execute(select(Usuario).order_by(Usuario.created_at.desc()))
+        return [_usuario_to_dict(u) for u in result.scalars().all()]
+
+
+async def actualizar_usuario(user_id: int, **kwargs) -> bool:
+    """Actualiza campos de un usuario (nombre, plan, is_active, rol). Retorna True si existe."""
+    campos_permitidos = {"nombre", "plan", "is_active", "rol", "password_hash"}
+    async with async_session() as session:
+        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
+        u = result.scalar_one_or_none()
+        if not u:
+            return False
+        for campo, valor in kwargs.items():
+            if campo in campos_permitidos:
+                setattr(u, campo, valor)
+        await session.commit()
+        return True
+
+
+async def obtener_agentes_de_usuario(user_id: int) -> list[dict]:
+    """Retorna los agentes cuyo owner_id == user_id."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Agent).where(Agent.owner_id == user_id).order_by(Agent.id)
+        )
+        return [_agent_to_dict(a) for a in result.scalars().all()]

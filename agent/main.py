@@ -10,7 +10,9 @@ import logging
 import asyncio
 import random
 import time
+import secrets
 import httpx
+import bcrypt
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Cookie, UploadFile, File, Form
 from fastapi.responses import PlainTextResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -38,8 +40,12 @@ from agent.memory import (
     obtener_clientes_con_estado,
     get_config_value, set_config_value, get_all_config_values, cargar_config_en_env,
     guardar_cliente_import,
+    # Sprint 1 — SaaS multi-tenant
+    crear_usuario, obtener_usuario_por_email, obtener_usuario_por_id,
+    crear_sesion, verificar_sesion, cerrar_sesion,
+    listar_usuarios, actualizar_usuario, obtener_agentes_de_usuario,
 )
-from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html
+from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html
 from agent.providers import obtener_proveedor
 from agent.capi import capi_lead, capi_view_content, capi_add_to_cart, capi_initiate_checkout
 from agent.tools import (
@@ -1351,14 +1357,30 @@ async def shopify_cart_update(request: Request):
 # ═══════════════════════════════════════════════════════════════
 
 INBOX_COOKIE = "inbox_session"
+VOCO_COOKIE = "voco_session"
 COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 días
 
 
 def _verificar_admin(token: str) -> bool:
-    """Valida el token de administrador."""
+    """Valida el token de administrador (legacy sync — mantiene compatibilidad con 47 call sites)."""
     if not ADMIN_TOKEN:
         return False
     return hmac.compare_digest(token or "", ADMIN_TOKEN)
+
+
+async def _obtener_sesion_usuario(token: str) -> dict | None:
+    """Retorna el dict del usuario autenticado por token de sesión, o None.
+    Prueba primero el nuevo sistema de sesiones; fallback al ADMIN_TOKEN legacy."""
+    if not token:
+        return None
+    # Nuevo sistema: sesión de usuario registrado en BD
+    user = await verificar_sesion(token)
+    if user:
+        return user
+    # Fallback legacy: ADMIN_TOKEN para compatibilidad con setup de Railway existente
+    if ADMIN_TOKEN and hmac.compare_digest(token, ADMIN_TOKEN):
+        return {"id": 0, "email": "admin@voco.local", "rol": "admin", "nombre": "Admin", "plan": "admin"}
+    return None
 
 
 def _token_de_request(
@@ -1380,6 +1402,28 @@ async def inbox_login_page():
 async def inbox_login(request: Request):
     form = await request.form()
     password = str(form.get("password", ""))
+    email = str(form.get("email", "")).strip().lower()
+
+    # Intento 1: login con email + contraseña (nuevo sistema)
+    if email:
+        user_data = await obtener_usuario_por_email(email)
+        if user_data and user_data.get("is_active"):
+            try:
+                pw_match = bcrypt.checkpw(password.encode(), user_data["password_hash"].encode())
+            except Exception:
+                pw_match = False
+            if pw_match:
+                token = await crear_sesion(user_data["id"])
+                response = RedirectResponse("/inbox", status_code=302)
+                response.set_cookie(
+                    VOCO_COOKIE, token,
+                    httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
+                )
+                # Mantener inbox_session legacy vacía para no confundir
+                return response
+        return HTMLResponse(content=obtener_login_html(error=True))
+
+    # Intento 2: login legacy con ADMIN_TOKEN (campo password)
     if _verificar_admin(password):
         response = RedirectResponse("/inbox", status_code=302)
         response.set_cookie(
@@ -1391,9 +1435,72 @@ async def inbox_login(request: Request):
 
 
 @app.get("/inbox/logout")
-async def inbox_logout():
+async def inbox_logout(
+    voco_session: str = Cookie(default=""),
+    inbox_session: str = Cookie(default=""),
+):
+    if voco_session:
+        await cerrar_sesion(voco_session)
     response = RedirectResponse("/inbox/login", status_code=302)
     response.delete_cookie(INBOX_COOKIE)
+    response.delete_cookie(VOCO_COOKIE)
+    return response
+
+
+# ── Registro de usuarios (Sprint 1) ─────────────────────────────────────────
+
+@app.get("/auth/register", response_class=HTMLResponse)
+async def auth_register_page():
+    return HTMLResponse(content=obtener_register_html())
+
+
+@app.post("/auth/register")
+async def auth_register(request: Request):
+    form = await request.form()
+    nombre   = str(form.get("nombre", "")).strip()
+    email    = str(form.get("email", "")).strip().lower()
+    password = str(form.get("password", ""))
+    confirm  = str(form.get("confirm_password", ""))
+
+    # Validaciones
+    if not nombre or not email or not password:
+        return HTMLResponse(content=obtener_register_html(error="Todos los campos son obligatorios"))
+    if len(password) < 8:
+        return HTMLResponse(content=obtener_register_html(error="La contraseña debe tener al menos 8 caracteres"))
+    if password != confirm:
+        return HTMLResponse(content=obtener_register_html(error="Las contraseñas no coinciden"))
+
+    # Verificar que el email no exista ya
+    existente = await obtener_usuario_por_email(email)
+    if existente:
+        return HTMLResponse(content=obtener_register_html(error="Este email ya está registrado"))
+
+    # Crear usuario
+    try:
+        pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        user = await crear_usuario(email=email, password_hash=pw_hash, nombre=nombre)
+        token = await crear_sesion(user["id"])
+        response = RedirectResponse("/inbox", status_code=302)
+        response.set_cookie(
+            VOCO_COOKIE, token,
+            httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
+        )
+        return response
+    except Exception as e:
+        logger.error(f"[auth/register] Error: {e}")
+        return HTMLResponse(content=obtener_register_html(error="Error al crear la cuenta. Intenta de nuevo."))
+
+
+@app.post("/auth/logout")
+async def auth_logout(
+    voco_session: str = Cookie(default=""),
+    inbox_session: str = Cookie(default=""),
+):
+    if voco_session:
+        await cerrar_sesion(voco_session)
+    response = RedirectResponse("/inbox/login", status_code=302)
+    response.delete_cookie(INBOX_COOKIE)
+    response.delete_cookie(VOCO_COOKIE)
     return response
 
 
@@ -1403,12 +1510,18 @@ async def inbox_logout():
 async def inbox_listar_agentes(
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
-    """Lista todos los agentes registrados en la plataforma."""
-    if not _verificar_admin(inbox_session or token):
+    """Lista agentes: admin ve todos, usuario solo los suyos."""
+    effective_token = voco_session or inbox_session or token
+    current_user = await _obtener_sesion_usuario(effective_token)
+    if not current_user:
         raise HTTPException(status_code=401, detail="No autorizado")
-    from agent.memory import obtener_todos_agentes
-    agentes = await obtener_todos_agentes()
+    from agent.memory import obtener_todos_agentes, obtener_agentes_de_usuario
+    if current_user.get("rol") == "admin":
+        agentes = await obtener_todos_agentes()
+    else:
+        agentes = await obtener_agentes_de_usuario(current_user["id"])
     return JSONResponse(content={"agents": agentes})
 
 
@@ -1417,9 +1530,12 @@ async def inbox_crear_agente(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
-    """Crea un nuevo agente en la plataforma."""
-    if not _verificar_admin(inbox_session or token):
+    """Crea un nuevo agente en la plataforma. Asigna owner_id al usuario actual."""
+    effective_token = voco_session or inbox_session or token
+    current_user = await _obtener_sesion_usuario(effective_token)
+    if not current_user:
         raise HTTPException(status_code=401, detail="No autorizado")
     from agent.memory import crear_agente
     body = await request.json()
@@ -1435,11 +1551,17 @@ async def inbox_crear_agente(
     if not slug or not name:
         return JSONResponse(status_code=400, content={"error": "slug y name son requeridos"})
 
+    # Admin (id=0 legacy o rol=admin) → owner_id=None (admin-owned)
+    # Usuario regular → owner_id = su id
+    user_id = current_user.get("id", 0)
+    owner_id = None if (current_user.get("rol") == "admin" or user_id == 0) else user_id
+
     try:
         agente = await crear_agente(
             slug=slug, name=name, agent_name=agent_name,
             business_type=business_type, phone_number_id=phone_number_id,
             waba_id=waba_id, color=color, emoji=emoji,
+            owner_id=owner_id,
         )
         return JSONResponse(content={"ok": True, "agent": agente})
     except Exception as e:
@@ -1573,19 +1695,71 @@ async def inbox_stats_agente(
 async def inbox_panel(
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
-    if not _verificar_admin(inbox_session or token):
+    # Resolver token efectivo: voco_session > inbox_session > query param
+    effective_token = voco_session or inbox_session or token
+
+    # Intentar autenticación con nuevo sistema de sesiones primero
+    current_user = await _obtener_sesion_usuario(effective_token)
+
+    if not current_user:
         return RedirectResponse("/inbox/login", status_code=302)
-    from agent.memory import obtener_todos_agentes
-    agentes = await obtener_todos_agentes()
-    response = HTMLResponse(content=obtener_global_html(agentes))
-    # Si llegó por query param, guardar en cookie
+
+    from agent.memory import obtener_todos_agentes, obtener_agentes_de_usuario
+    if current_user.get("rol") == "admin":
+        agentes = await obtener_todos_agentes()
+    else:
+        agentes = await obtener_agentes_de_usuario(current_user["id"])
+
+    response = HTMLResponse(content=obtener_global_html(agentes, user=current_user))
+
+    # Si llegó por query param con ADMIN_TOKEN legacy, persistir en cookie legacy
     if token and _verificar_admin(token):
         response.set_cookie(
             INBOX_COOKIE, ADMIN_TOKEN,
             httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
         )
     return response
+
+
+# ── Admin: gestión de usuarios (Sprint 1) ───────────────────────────────────
+
+@app.get("/inbox/api/admin/users")
+async def admin_listar_usuarios(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Lista todos los usuarios registrados. Solo accesible por administradores."""
+    effective_token = voco_session or inbox_session or token
+    current_user = await _obtener_sesion_usuario(effective_token)
+    if not current_user or current_user.get("rol") != "admin":
+        raise HTTPException(status_code=403, detail="Acceso restringido a administradores")
+    usuarios = await listar_usuarios()
+    return JSONResponse(content={"users": usuarios})
+
+
+@app.post("/inbox/api/admin/users/{user_id_param}")
+async def admin_actualizar_usuario(
+    user_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Actualiza datos de un usuario (plan, is_active, rol). Solo para administradores."""
+    effective_token = voco_session or inbox_session or token
+    current_user = await _obtener_sesion_usuario(effective_token)
+    if not current_user or current_user.get("rol") != "admin":
+        raise HTTPException(status_code=403, detail="Acceso restringido a administradores")
+    body = await request.json()
+    # Solo campos seguros
+    campos_seguros = {k: v for k, v in body.items() if k in ("plan", "is_active", "rol", "nombre")}
+    ok = await actualizar_usuario(user_id_param, **campos_seguros)
+    if not ok:
+        return JSONResponse(status_code=404, content={"error": "Usuario no encontrado"})
+    return JSONResponse(content={"ok": True})
 
 
 # ── API endpoints ──────────────────────────────────────────────────────────
@@ -3195,15 +3369,27 @@ async def inbox_agente_por_slug(
     slug: str,
     token: str = "",
     inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
 ):
     """Panel de inbox para un agente específico por su slug (ej: /inbox/equora)."""
-    if not _verificar_admin(inbox_session or token):
+    effective_token = voco_session or inbox_session or token
+    current_user = await _obtener_sesion_usuario(effective_token)
+
+    if not current_user:
         return RedirectResponse("/inbox/login", status_code=302)
+
     from agent.memory import obtener_agente_por_slug
     agente = await obtener_agente_por_slug(slug)
     if not agente:
         raise HTTPException(status_code=404, detail=f"Agente '{slug}' no encontrado")
-    response = HTMLResponse(content=obtener_inbox_html(agente))
+
+    # Verificar ownership: admin ve cualquier agente; usuario solo los suyos
+    if current_user.get("rol") != "admin":
+        owner = agente.get("owner_id")
+        if owner != current_user["id"]:
+            raise HTTPException(status_code=403, detail="No tienes acceso a este agente")
+
+    response = HTMLResponse(content=obtener_inbox_html(agente, user=current_user))
     if token and _verificar_admin(token):
         response.set_cookie(
             INBOX_COOKIE, ADMIN_TOKEN,
