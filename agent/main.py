@@ -1374,11 +1374,17 @@ async def _obtener_sesion_usuario(token: str) -> dict | None:
     if not token:
         return None
     # Nuevo sistema: sesión de usuario registrado en BD
-    user = await verificar_sesion(token)
-    if user:
-        return user
+    try:
+        user = await verificar_sesion(token)
+        if user:
+            return user
+    except Exception as e:
+        logger.warning(f"[sesion] Error verificando sesión DB: {e}")
     # Fallback legacy: ADMIN_TOKEN para compatibilidad con setup de Railway existente
     if ADMIN_TOKEN and hmac.compare_digest(token, ADMIN_TOKEN):
+        return {"id": 0, "email": "admin@voco.local", "rol": "admin", "nombre": "Admin", "plan": "admin"}
+    # Sin ADMIN_TOKEN configurado → cualquier acceso directo es admin (solo dev)
+    if not ADMIN_TOKEN:
         return {"id": 0, "email": "admin@voco.local", "rol": "admin", "nombre": "Admin", "plan": "admin"}
     return None
 
@@ -1502,6 +1508,130 @@ async def auth_logout(
     response.delete_cookie(INBOX_COOKIE)
     response.delete_cookie(VOCO_COOKIE)
     return response
+
+
+# ── OAuth Social Login ────────────────────────────────────────────────────
+
+GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+FACEBOOK_APP_ID      = os.getenv("FACEBOOK_APP_ID", "")
+FACEBOOK_APP_SECRET  = os.getenv("FACEBOOK_APP_SECRET", "")
+APP_BASE_URL         = os.getenv("APP_BASE_URL", "https://tienda.equoradistribuciones.com")
+
+
+@app.get("/auth/google")
+async def auth_google():
+    """Redirige al flujo OAuth de Google."""
+    if not GOOGLE_CLIENT_ID:
+        return RedirectResponse("/inbox/login?error=google_not_configured", status_code=302)
+    params = (
+        f"client_id={GOOGLE_CLIENT_ID}"
+        f"&redirect_uri={APP_BASE_URL}/auth/google/callback"
+        "&response_type=code"
+        "&scope=openid%20email%20profile"
+        "&access_type=offline"
+    )
+    return RedirectResponse(f"https://accounts.google.com/o/oauth2/v2/auth?{params}", status_code=302)
+
+
+@app.get("/auth/google/callback")
+async def auth_google_callback(code: str = "", error: str = ""):
+    """Callback OAuth de Google — intercambia code por token y crea sesión."""
+    if error or not code:
+        return RedirectResponse("/inbox/login?error=google_cancelled", status_code=302)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Intercambiar code por access_token
+            r = await client.post("https://oauth2.googleapis.com/token", data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": f"{APP_BASE_URL}/auth/google/callback",
+                "grant_type": "authorization_code",
+            })
+            tokens = r.json()
+            access_token = tokens.get("access_token")
+            if not access_token:
+                raise ValueError(f"No access_token: {tokens}")
+            # Obtener perfil del usuario
+            profile = (await client.get(
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )).json()
+        email  = (profile.get("email") or "").lower().strip()
+        nombre = profile.get("name") or profile.get("given_name") or email
+        if not email:
+            return RedirectResponse("/inbox/login?error=google_no_email", status_code=302)
+        # Buscar o crear usuario
+        user_data = await obtener_usuario_por_email(email)
+        if not user_data:
+            pw_hash = bcrypt.hashpw(secrets.token_urlsafe(24).encode(), bcrypt.gensalt()).decode()
+            user_data = await crear_usuario(email=email, password_hash=pw_hash, nombre=nombre)
+        if not user_data.get("is_active", True):
+            return RedirectResponse("/inbox/login?error=cuenta_inactiva", status_code=302)
+        token = await crear_sesion(user_data["id"])
+        response = RedirectResponse("/inbox", status_code=302)
+        response.set_cookie(VOCO_COOKIE, token, httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax")
+        return response
+    except Exception as e:
+        logger.error(f"[OAuth Google] {e}")
+        return RedirectResponse("/inbox/login?error=google_error", status_code=302)
+
+
+@app.get("/auth/facebook")
+async def auth_facebook():
+    """Redirige al flujo OAuth de Facebook."""
+    if not FACEBOOK_APP_ID:
+        return RedirectResponse("/inbox/login?error=facebook_not_configured", status_code=302)
+    params = (
+        f"client_id={FACEBOOK_APP_ID}"
+        f"&redirect_uri={APP_BASE_URL}/auth/facebook/callback"
+        "&scope=email,public_profile"
+        "&response_type=code"
+    )
+    return RedirectResponse(f"https://www.facebook.com/v21.0/dialog/oauth?{params}", status_code=302)
+
+
+@app.get("/auth/facebook/callback")
+async def auth_facebook_callback(code: str = "", error: str = ""):
+    """Callback OAuth de Facebook — intercambia code por token y crea sesión."""
+    if error or not code:
+        return RedirectResponse("/inbox/login?error=facebook_cancelled", status_code=302)
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # Intercambiar code por access_token
+            r = await client.get("https://graph.facebook.com/v21.0/oauth/access_token", params={
+                "client_id": FACEBOOK_APP_ID,
+                "client_secret": FACEBOOK_APP_SECRET,
+                "redirect_uri": f"{APP_BASE_URL}/auth/facebook/callback",
+                "code": code,
+            })
+            tokens = r.json()
+            access_token = tokens.get("access_token")
+            if not access_token:
+                raise ValueError(f"No access_token: {tokens}")
+            # Obtener perfil
+            profile = (await client.get(
+                "https://graph.facebook.com/me",
+                params={"fields": "id,name,email", "access_token": access_token},
+            )).json()
+        email  = (profile.get("email") or "").lower().strip()
+        nombre = profile.get("name") or email
+        if not email:
+            return RedirectResponse("/inbox/login?error=facebook_no_email", status_code=302)
+        user_data = await obtener_usuario_por_email(email)
+        if not user_data:
+            pw_hash = bcrypt.hashpw(secrets.token_urlsafe(24).encode(), bcrypt.gensalt()).decode()
+            user_data = await crear_usuario(email=email, password_hash=pw_hash, nombre=nombre)
+        if not user_data.get("is_active", True):
+            return RedirectResponse("/inbox/login?error=cuenta_inactiva", status_code=302)
+        token = await crear_sesion(user_data["id"])
+        response = RedirectResponse("/inbox", status_code=302)
+        response.set_cookie(VOCO_COOKIE, token, httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax")
+        return response
+    except Exception as e:
+        logger.error(f"[OAuth Facebook] {e}")
+        return RedirectResponse("/inbox/login?error=facebook_error", status_code=302)
 
 
 # ── Gestión de agentes (Voco platform) ────────────────────────────────────
