@@ -5634,7 +5634,11 @@ justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
 </div>"""
 
     html = _HTML.replace("<head>", f"<head>\n{inject_head}", 1)
-    html = html.replace("<body>\n<div id=\"shell\">", f"<body>\n{agent_bar}\n<div id=\"shell\">", 1)
+    # agent_bar va DENTRO de #shell (primer hijo) para no empujar el shell fuera del viewport.
+    # También ocultamos el #topbar interno que duplica información.
+    hide_topbar = '<style>#topbar{display:none!important}</style>'
+    html = html.replace("<body>\n<div id=\"shell\">\n", f"<body>\n<div id=\"shell\">\n{agent_bar}\n", 1)
+    html = html.replace("</head>", f"{hide_topbar}\n</head>", 1)
     return html
 
 
