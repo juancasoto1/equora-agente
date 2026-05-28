@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
 from agent.memory import (
-    inicializar_db, guardar_mensaje, obtener_historial,
+    inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial,
     guardar_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
     guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
     registrar_mensaje_usuario, registrar_mensaje_asistente,
@@ -2148,10 +2148,22 @@ async def inbox_get_prompt(
     except Exception:
         business_vars = {}
 
+    # Tipo de negocio
+    business_type = await get_config_value("BUSINESS_TYPE") or "productos"
+
+    # Módulos activos
+    modules_json = await get_config_value("ACTIVE_MODULES")
+    try:
+        active_modules = json.loads(modules_json) if modules_json else {}
+    except Exception:
+        active_modules = {}
+
     return JSONResponse(content={
-        "prompt":        prompt,
-        "business_vars": business_vars,
-        "fuente":        fuente,
+        "prompt":         prompt,
+        "business_vars":  business_vars,
+        "fuente":         fuente,
+        "business_type":  business_type,
+        "active_modules": active_modules,
     })
 
 
@@ -2166,13 +2178,19 @@ async def inbox_save_prompt(
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body = await request.json()
-    prompt       = (body.get("prompt") or "").strip()
+    prompt        = (body.get("prompt") or "").strip()
     business_vars = body.get("business_vars") or {}
+    business_type = (body.get("business_type") or "").strip()
+    active_modules = body.get("active_modules")
 
     if prompt:
         await set_config_value("SYSTEM_PROMPT", prompt)
     if isinstance(business_vars, dict):
         await set_config_value("BUSINESS_VARS", json.dumps(business_vars, ensure_ascii=False))
+    if business_type:
+        await set_config_value("BUSINESS_TYPE", business_type)
+    if isinstance(active_modules, dict):
+        await set_config_value("ACTIVE_MODULES", json.dumps(active_modules))
 
     return JSONResponse(content={"ok": True})
 
@@ -2239,6 +2257,67 @@ async def inbox_improve_prompt(
     except Exception as e:
         logger.error(f"Error mejorando prompt: {e}")
         return JSONResponse(content={"ok": False, "error": str(e)[:200]})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CHAT DE PRUEBA — simula conversación con el agente desde el panel
+# ══════════════════════════════════════════════════════════════════════════════
+
+_TEST_PHONE = "__test_inbox__"   # número ficticio para la sesión de prueba
+
+
+@app.post("/inbox/api/chat/test")
+async def inbox_chat_test(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Envía un mensaje al agente y devuelve su respuesta (sin WhatsApp real)."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    body    = await request.json()
+    mensaje = (body.get("mensaje") or "").strip()
+    if not mensaje:
+        return JSONResponse(status_code=400, content={"error": "Mensaje vacío"})
+
+    historial = await obtener_historial(_TEST_PHONE)
+    try:
+        respuesta = await generar_respuesta(mensaje, historial, telefono=None, contexto_campana=None)
+    except Exception as e:
+        logger.error(f"Error en chat de prueba: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)[:200]})
+
+    await guardar_mensaje(_TEST_PHONE, "user", mensaje)
+    await guardar_mensaje(_TEST_PHONE, "assistant", respuesta)
+
+    return JSONResponse(content={"ok": True, "respuesta": respuesta})
+
+
+@app.get("/inbox/api/chat/test/history")
+async def inbox_chat_test_history(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Devuelve el historial de la conversación de prueba."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    mensajes = await obtener_historial_con_timestamps(_TEST_PHONE, 100)
+    return JSONResponse(content={"mensajes": mensajes})
+
+
+@app.delete("/inbox/api/chat/test/clear")
+async def inbox_chat_test_clear(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+):
+    """Borra el historial de la conversación de prueba."""
+    if not _verificar_admin(inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    await limpiar_historial(_TEST_PHONE)
+    return JSONResponse(content={"ok": True})
 
 
 @app.post("/inbox/plantillas/subir-header")

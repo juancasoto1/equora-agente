@@ -569,6 +569,59 @@ tr:hover td{background:#f8f9fa}
 .diff-add{background:#e8f5e9;color:#1b5e20}
 .diff-del{background:#fce4e4;color:#b71c1c;text-decoration:line-through}
 
+/* ── Business type selector ── */
+.biz-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px}
+.biz-type-btn{border:2px solid #e0e4e8;border-radius:10px;padding:12px 10px;text-align:center;
+  cursor:pointer;background:#fff;transition:.18s;font-size:.82rem;color:#4a5568;line-height:1.4;
+  user-select:none}
+.biz-type-btn:hover{border-color:var(--az);background:#eef2ff}
+.biz-type-btn.selected{border-color:var(--az);background:#eef2ff;color:var(--az);font-weight:700}
+.biz-type-icon{font-size:1.6rem;margin-bottom:6px}
+/* ── Feature toggles ── */
+.toggle-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+@media(max-width:540px){.toggle-grid{grid-template-columns:1fr}}
+.toggle-card{border:1.5px solid #e0e4e8;border-radius:10px;padding:12px 14px;
+  display:flex;align-items:flex-start;gap:12px;background:#fff;transition:.18s}
+.toggle-card.active{border-color:#d1fae5;background:#f0fdf4}
+.toggle-card-text{flex:1;min-width:0}
+.toggle-card-label{font-size:.84rem;font-weight:700;color:#1a2332;margin-bottom:2px}
+.toggle-card-desc{font-size:.76rem;color:#6b7a8d;line-height:1.4}
+/* pill toggle switch */
+.tog-sw{position:relative;width:38px;height:22px;flex-shrink:0;margin-top:2px}
+.tog-sw input{opacity:0;width:0;height:0;position:absolute}
+.tog-slider{position:absolute;inset:0;border-radius:22px;background:#cbd5e1;
+  cursor:pointer;transition:.2s}
+.tog-slider:before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;
+  left:3px;bottom:3px;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.tog-sw input:checked + .tog-slider{background:#22c55e}
+.tog-sw input:checked + .tog-slider:before{transform:translateX(16px)}
+/* ── Test chat (Fase C) ── */
+.chat-wrap{display:flex;flex-direction:column;height:540px;max-height:70vh;
+  border:1.5px solid #e0e4e8;border-radius:12px;overflow:hidden;background:#ece5dd}
+.chat-messages{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:8px}
+.chat-msg{max-width:78%;padding:9px 13px;border-radius:14px;font-size:.87rem;line-height:1.5;
+  word-break:break-word;position:relative}
+.chat-msg.user{align-self:flex-end;background:#dcf8c6;border-radius:14px 14px 4px 14px;color:#1a2332}
+.chat-msg.assistant{align-self:flex-start;background:#fff;border-radius:14px 14px 14px 4px;
+  box-shadow:0 1px 2px rgba(0,0,0,.08);color:#1a2332}
+.chat-msg-time{font-size:.66rem;color:#94a3b8;margin-top:3px;text-align:right}
+.chat-typing{align-self:flex-start;background:#fff;border-radius:14px;padding:10px 14px;
+  display:flex;gap:4px;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chat-typing span{width:7px;height:7px;border-radius:50%;background:#94a3b8;
+  animation:typing-dot 1s ease-in-out infinite}
+.chat-typing span:nth-child(2){animation-delay:.2s}
+.chat-typing span:nth-child(3){animation-delay:.4s}
+@keyframes typing-dot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
+.chat-input-bar{display:flex;gap:8px;padding:10px 12px;background:#f0f0f0;
+  border-top:1px solid #e0e4e8;align-items:flex-end}
+.chat-inp{flex:1;border:none;border-radius:20px;padding:9px 14px;font-size:.87rem;
+  background:#fff;resize:none;max-height:100px;outline:none;line-height:1.4;
+  font-family:inherit;box-shadow:0 1px 2px rgba(0,0,0,.07)}
+.chat-send-btn{background:var(--az);border:none;border-radius:50%;width:40px;height:40px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+  color:#fff;font-size:1rem;transition:.18s}
+.chat-send-btn:hover{filter:brightness(1.1)}
+.chat-send-btn:disabled{opacity:.5;cursor:not-allowed}
 /* ── loading spinner ── */
 .loading-txt{color:#6b7a8d;font-size:.85rem;padding:32px;text-align:center}
 
@@ -1592,6 +1645,7 @@ tr:hover td{background:#f8f9fa}
           <div class="cfg-tabs">
             <div class="cfg-tab active" onclick="cfgTab('integraciones',this)">⚙️ Integraciones</div>
             <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()">🧠 Prompt</div>
+            <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()">🧪 Probar</div>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)">📋 Documentación</div>
           </div>
 
@@ -1901,6 +1955,86 @@ tr:hover td{background:#f8f9fa}
               El asistente de IA te ayuda a mejorar las instrucciones en lenguaje natural.
             </div>
 
+            <!-- ── Sección 0A: Tipo de negocio ── -->
+            <div class="cfg-card" style="margin-bottom:16px">
+              <div class="cfg-card-hdr" style="margin-bottom:4px">
+                <div class="cfg-card-title">🏪 Tipo de negocio</div>
+                <span style="font-size:.78rem;color:#6b7a8d">Optimiza las funciones del agente para tu modelo de negocio</span>
+              </div>
+              <div class="biz-type-grid" id="biz-type-grid">
+                <div class="biz-type-btn" data-type="productos" onclick="selBizType(this)">
+                  <div class="biz-type-icon">🛍️</div>
+                  <div>Productos físicos</div>
+                </div>
+                <div class="biz-type-btn" data-type="servicios" onclick="selBizType(this)">
+                  <div class="biz-type-icon">🔧</div>
+                  <div>Servicios</div>
+                </div>
+                <div class="biz-type-btn" data-type="restaurante" onclick="selBizType(this)">
+                  <div class="biz-type-icon">🍽️</div>
+                  <div>Restaurante / Food</div>
+                </div>
+                <div class="biz-type-btn" data-type="salud" onclick="selBizType(this)">
+                  <div class="biz-type-icon">💊</div>
+                  <div>Salud / Belleza</div>
+                </div>
+                <div class="biz-type-btn" data-type="personalizado" onclick="selBizType(this)">
+                  <div class="biz-type-icon">⚙️</div>
+                  <div>Personalizado</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── Sección 0B: Módulos activos ── -->
+            <div class="cfg-card" style="margin-bottom:20px">
+              <div class="cfg-card-hdr" style="margin-bottom:4px">
+                <div class="cfg-card-title">🔌 Módulos del agente</div>
+                <span style="font-size:.78rem;color:#6b7a8d">Activa o desactiva funciones según tu caso de uso</span>
+              </div>
+              <div class="toggle-grid">
+                <div class="toggle-card" id="togcard-shopify_catalog">
+                  <label class="tog-sw">
+                    <input type="checkbox" id="tog-shopify_catalog" checked onchange="onTogModule('shopify_catalog',this)">
+                    <span class="tog-slider"></span>
+                  </label>
+                  <div class="toggle-card-text">
+                    <div class="toggle-card-label">🛒 Catálogo Shopify</div>
+                    <div class="toggle-card-desc">Inyecta el catálogo de productos en el contexto del agente</div>
+                  </div>
+                </div>
+                <div class="toggle-card" id="togcard-cart_orders">
+                  <label class="tog-sw">
+                    <input type="checkbox" id="tog-cart_orders" checked onchange="onTogModule('cart_orders',this)">
+                    <span class="tog-slider"></span>
+                  </label>
+                  <div class="toggle-card-text">
+                    <div class="toggle-card-label">🛍️ Carrito y pedidos</div>
+                    <div class="toggle-card-desc">Muestra carrito activo y pedidos pendientes del cliente</div>
+                  </div>
+                </div>
+                <div class="toggle-card" id="togcard-client_memory">
+                  <label class="tog-sw">
+                    <input type="checkbox" id="tog-client_memory" checked onchange="onTogModule('client_memory',this)">
+                    <span class="tog-slider"></span>
+                  </label>
+                  <div class="toggle-card-text">
+                    <div class="toggle-card-label">🧠 Memoria de clientes</div>
+                    <div class="toggle-card-desc">Recuerda datos y pedidos previos de cada cliente</div>
+                  </div>
+                </div>
+                <div class="toggle-card" id="togcard-campaign_context">
+                  <label class="tog-sw">
+                    <input type="checkbox" id="tog-campaign_context" checked onchange="onTogModule('campaign_context',this)">
+                    <span class="tog-slider"></span>
+                  </label>
+                  <div class="toggle-card-text">
+                    <div class="toggle-card-label">📣 Contexto de campaña</div>
+                    <div class="toggle-card-desc">Sabe a qué difusión responde el cliente sin preguntarle</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- ── Sección 1: Variables del negocio ── -->
             <div class="cfg-card" style="margin-bottom:20px">
               <div class="cfg-card-hdr" style="margin-bottom:16px">
@@ -1981,6 +2115,43 @@ tr:hover td{background:#f8f9fa}
             </div>
 
           </div><!-- /pane prompt -->
+
+          <!-- ── Pane: Probar (Fase C) ── -->
+          <div class="cfg-pane" id="cfg-pane-probar">
+
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:.85rem;color:#166534;line-height:1.6">
+              🧪 <b>Chat de prueba</b> — Habla con el agente usando las instrucciones del prompt actual.
+              No envía mensajes reales por WhatsApp. El historial de prueba es independiente de las conversaciones reales.
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+              <div style="font-size:.85rem;color:#4a5568">
+                Escribe un mensaje como si fueras un cliente para probar cómo responde el agente.
+              </div>
+              <button class="btn-secondary" style="font-size:.78rem;padding:6px 14px;white-space:nowrap" onclick="limpiarChatTest()" type="button">🗑 Limpiar chat</button>
+            </div>
+
+            <!-- Ventana de chat estilo WhatsApp -->
+            <div class="chat-wrap">
+              <div class="chat-messages" id="chat-messages">
+                <div style="text-align:center;font-size:.76rem;color:#8a94a6;padding:8px 0">
+                  Inicio de la conversación de prueba
+                </div>
+              </div>
+              <div class="chat-input-bar">
+                <textarea class="chat-inp" id="chat-inp" rows="1"
+                  placeholder="Escribe tu mensaje…"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMsgTest()}"
+                  oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+                <button class="chat-send-btn" id="chat-send-btn" onclick="enviarMsgTest()" title="Enviar">
+                  ➤
+                </button>
+              </div>
+            </div>
+
+            <div id="chat-test-error" style="display:none;margin-top:10px"></div>
+
+          </div><!-- /pane probar -->
 
           <!-- ── Pane: Documentación ── -->
           <div class="cfg-pane" id="cfg-pane-documentacion">
@@ -4555,10 +4726,51 @@ async function testConexion(service) {
 }
 
 /* ══════════════════════════════════════════════════════
-   PROMPT EDITOR
+   PROMPT EDITOR  (Fase A + B)
    ══════════════════════════════════════════════════════ */
 
 var _promptPropuesta = '';   // guarda la propuesta pendiente de Claude
+var _activeModules   = {};   // estado actual de los módulos
+
+/* ── Tipo de negocio ── */
+function selBizType(el) {
+  document.querySelectorAll('.biz-type-btn').forEach(function(b){ b.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function _getBizType() {
+  var sel = document.querySelector('.biz-type-btn.selected');
+  return sel ? sel.getAttribute('data-type') : 'productos';
+}
+
+function _setBizType(type) {
+  document.querySelectorAll('.biz-type-btn').forEach(function(b){
+    b.classList.toggle('selected', b.getAttribute('data-type') === type);
+  });
+}
+
+/* ── Toggles de módulos ── */
+function onTogModule(key, chk) {
+  _activeModules[key] = chk.checked;
+  var card = document.getElementById('togcard-' + key);
+  if (card) card.classList.toggle('active', chk.checked);
+}
+
+function _setModules(mods) {
+  var keys = ['shopify_catalog', 'cart_orders', 'client_memory', 'campaign_context'];
+  keys.forEach(function(k) {
+    var val = (k in mods) ? mods[k] : true;  // default true
+    _activeModules[k] = val;
+    var chk  = document.getElementById('tog-' + k);
+    var card = document.getElementById('togcard-' + k);
+    if (chk)  chk.checked = val;
+    if (card) card.classList.toggle('active', val);
+  });
+}
+
+function _getModules() {
+  return Object.assign({}, _activeModules);
+}
 
 /* ── cargarPrompt: llamado cuando el usuario abre la pestaña Prompt ── */
 async function cargarPrompt() {
@@ -4579,6 +4791,12 @@ async function cargarPrompt() {
 
     // Rellenar tabla de variables
     _renderVarsTable(d.business_vars || {});
+
+    // Tipo de negocio
+    _setBizType(d.business_type || 'productos');
+
+    // Módulos activos
+    _setModules(d.active_modules || {});
 
   } catch(e) {
     console.error('Error cargando prompt:', e);
@@ -4634,12 +4852,13 @@ function _recolectarVars() {
   return vars;
 }
 
-/* ── Guardar prompt + variables ── */
+/* ── Guardar prompt + variables + tipo + módulos ── */
 async function guardarPrompt() {
-  var prompt = (document.getElementById('prompt-textarea').value || '').trim();
-  var vars   = _recolectarVars();
-  var btn    = document.getElementById('btn-save-prompt');
-  var result = document.getElementById('prompt-save-result');
+  var prompt   = (document.getElementById('prompt-textarea').value || '').trim();
+  var vars     = _recolectarVars();
+  var bizType  = _getBizType();
+  var modules  = _getModules();
+  var btn      = document.getElementById('btn-save-prompt');
 
   if (!prompt) { _showCfgResult('prompt-save-result', false, 'El prompt no puede estar vacío'); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
@@ -4648,7 +4867,12 @@ async function guardarPrompt() {
     var r = await fetch('/inbox/api/prompt/save', {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({prompt: prompt, business_vars: vars})
+      body: JSON.stringify({
+        prompt:         prompt,
+        business_vars:  vars,
+        business_type:  bizType,
+        active_modules: modules
+      })
     });
     var d = await r.json();
     if (d.ok) {
@@ -4744,6 +4968,143 @@ function verDiff() {
 function cerrarDiff() {
   document.getElementById('prompt-diff-wrap').style.display = 'none';
   document.getElementById('prompt-propuesta-wrap').style.display = _promptPropuesta ? '' : 'none';
+}
+
+/* ══════════════════════════════════════════════════════
+   CHAT DE PRUEBA  (Fase C)
+   ══════════════════════════════════════════════════════ */
+
+var _chatTestIniciado = false;
+
+/* ── iniciarChatTest: llamado al abrir la pestaña Probar ── */
+async function iniciarChatTest() {
+  if (_chatTestIniciado) return;
+  _chatTestIniciado = true;
+  await _cargarHistorialChat();
+}
+
+async function _cargarHistorialChat() {
+  try {
+    var r = await fetch('/inbox/api/chat/test/history', {credentials:'include'});
+    var d = await r.json();
+    var msgs = d.mensajes || [];
+    var box = document.getElementById('chat-messages');
+    if (!box) return;
+    // Limpiar (excepto el primer div de "Inicio")
+    while (box.children.length > 1) box.removeChild(box.lastChild);
+    msgs.forEach(function(m) {
+      _appendMsg(m.role, m.content, m.timestamp);
+    });
+    _scrollChatBottom();
+  } catch(e) {
+    console.error('Error cargando historial de prueba:', e);
+  }
+}
+
+function _appendMsg(role, text, ts) {
+  var box = document.getElementById('chat-messages');
+  if (!box) return;
+  var div = document.createElement('div');
+  div.className = 'chat-msg ' + (role === 'user' ? 'user' : 'assistant');
+  var time = '';
+  if (ts) {
+    try {
+      var d = new Date(ts);
+      time = d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
+    } catch(e) {}
+  }
+  div.innerHTML = _nl2br(he(text)) +
+    (time ? '<div class="chat-msg-time">' + time + '</div>' : '');
+  box.appendChild(div);
+}
+
+function _appendTyping() {
+  var box = document.getElementById('chat-messages');
+  if (!box) return null;
+  var div = document.createElement('div');
+  div.className = 'chat-typing';
+  div.id = 'chat-typing-indicator';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  box.appendChild(div);
+  _scrollChatBottom();
+  return div;
+}
+
+function _scrollChatBottom() {
+  var box = document.getElementById('chat-messages');
+  if (box) box.scrollTop = box.scrollHeight;
+}
+
+function _nl2br(str) {
+  return str.replace(/\n/g, '<br>');
+}
+
+async function enviarMsgTest() {
+  var inp  = document.getElementById('chat-inp');
+  var btn  = document.getElementById('chat-send-btn');
+  var texto = (inp ? inp.value : '').trim();
+  if (!texto) return;
+
+  inp.value = '';
+  inp.style.height = 'auto';
+
+  // Mostrar mensaje del usuario
+  var now = new Date().toISOString();
+  _appendMsg('user', texto, now);
+  _scrollChatBottom();
+
+  // Deshabilitar envío mientras espera
+  if (btn) btn.disabled = true;
+
+  // Mostrar indicador de typing
+  var typingEl = _appendTyping();
+
+  var errEl = document.getElementById('chat-test-error');
+  if (errEl) errEl.style.display = 'none';
+
+  try {
+    var r = await fetch('/inbox/api/chat/test', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({mensaje: texto})
+    });
+    var d = await r.json();
+
+    if (typingEl) typingEl.remove();
+
+    if (d.ok) {
+      _appendMsg('assistant', d.respuesta, new Date().toISOString());
+      _scrollChatBottom();
+    } else {
+      if (errEl) {
+        errEl.textContent = '⚠️ Error: ' + (d.error || 'No se pudo obtener respuesta');
+        errEl.style.display = '';
+      }
+    }
+  } catch(e) {
+    if (typingEl) typingEl.remove();
+    if (errEl) {
+      errEl.textContent = '⚠️ Error de red: ' + String(e);
+      errEl.style.display = '';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+    if (inp) inp.focus();
+  }
+}
+
+async function limpiarChatTest() {
+  if (!confirm('¿Borrar el historial del chat de prueba?')) return;
+  try {
+    await fetch('/inbox/api/chat/test/clear', {method:'DELETE', credentials:'include'});
+    var box = document.getElementById('chat-messages');
+    if (box) {
+      while (box.children.length > 1) box.removeChild(box.lastChild);
+    }
+    _chatTestIniciado = false;  // permite recargar historial si vuelve a abrir la pestaña
+  } catch(e) {
+    alert('Error al limpiar: ' + String(e));
+  }
 }
 </script>
 </body>

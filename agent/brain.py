@@ -87,6 +87,20 @@ def obtener_mensaje_fallback() -> str:
     )
 
 
+async def _cargar_modulos() -> dict:
+    """Devuelve los módulos activos desde BD. Si no hay config, todos activos por defecto."""
+    raw = await get_config_value("ACTIVE_MODULES")
+    try:
+        return json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
+
+def _mod(modules: dict, key: str) -> bool:
+    """True si el módulo está activo (default True para compatibilidad hacia atrás)."""
+    return modules.get(key, True)
+
+
 async def generar_respuesta(
     mensaje: str,
     historial: list[dict],
@@ -97,17 +111,15 @@ async def generar_respuesta(
         return obtener_mensaje_fallback()
 
     system_prompt = await cargar_system_prompt()
+    modules       = await _cargar_modulos()
 
     # ── Contexto de campaña de difusión ───────────────────────────────────────
-    # Si el cliente responde a una difusión reciente, Andrea sabe de qué campaña
-    # viene y no pregunta cosas que ya están claras por el contexto.
-    if contexto_campana:
+    if contexto_campana and _mod(modules, "campaign_context"):
         nombre        = contexto_campana.get("campaign_name", "")
         template_name = contexto_campana.get("template_name", "")
         horas         = contexto_campana.get("horas_ago", 0)
         tiempo_str    = f"hace {horas} hora{'s' if horas != 1 else ''}" if horas > 0 else "hace menos de una hora"
 
-        # Construir identificador del producto lo más claro posible
         id_campana = nombre
         if template_name and template_name != nombre:
             id_campana = f"{nombre} (plantilla: {template_name})"
@@ -125,69 +137,71 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
 4. Si preguntan presentaciones → lista las presentaciones de ese producto ya.
 5. Solo pide aclaración si el cliente menciona explícitamente un producto DIFERENTE al de la campaña."""
 
-    # Inyectar catálogo (desde cache — sin HTTP en cada mensaje)
-    catalogo = await obtener_catalogo_shopify()
-    if catalogo:
-        system_prompt = system_prompt + "\n\n" + catalogo
+    # ── Catálogo Shopify (toggle: shopify_catalog) ────────────────────────────
+    if _mod(modules, "shopify_catalog"):
+        catalogo = await obtener_catalogo_shopify()
+        if catalogo:
+            system_prompt = system_prompt + "\n\n" + catalogo
 
     if telefono:
-        # Inyectar perfil del cliente si ya compró antes
-        cliente = await obtener_cliente(telefono)
-        if cliente and cliente.get("nombres"):
-            bloque = ["\n\n## Cliente conocido (ya compró antes)"]
-            bloque.append(f"Pedidos previos: {cliente.get('pedidos_realizados', 0)}")
-            for campo in ("nombres", "apellidos", "razon_social", "cc_nit",
-                          "direccion", "barrio", "ciudad", "departamento", "email"):
-                valor = cliente.get(campo, "")
-                if valor:
-                    bloque.append(f"- {campo}: {valor}")
-            bloque.append(
-                "\nINSTRUCCIONES con cliente conocido:\n"
-                "- Salúdalo por su nombre.\n"
-                "- El flujo de pedido es el mismo: arma el carrito, muestra resumen, "
-                "confirma. Los datos de entrega los maneja Shopify."
-            )
-            system_prompt += "\n".join(bloque)
+        # ── Perfil del cliente (toggle: client_memory) ────────────────────────
+        if _mod(modules, "client_memory"):
+            cliente = await obtener_cliente(telefono)
+            if cliente and cliente.get("nombres"):
+                bloque = ["\n\n## Cliente conocido (ya compró antes)"]
+                bloque.append(f"Pedidos previos: {cliente.get('pedidos_realizados', 0)}")
+                for campo in ("nombres", "apellidos", "razon_social", "cc_nit",
+                              "direccion", "barrio", "ciudad", "departamento", "email"):
+                    valor = cliente.get(campo, "")
+                    if valor:
+                        bloque.append(f"- {campo}: {valor}")
+                bloque.append(
+                    "\nINSTRUCCIONES con cliente conocido:\n"
+                    "- Salúdalo por su nombre.\n"
+                    "- El flujo de pedido es el mismo: arma el carrito, muestra resumen, "
+                    "confirma. Los datos de entrega los maneja Shopify."
+                )
+                system_prompt += "\n".join(bloque)
 
-        # Inyectar carrito activo (persistido en BD — nunca se pierde por largo historial)
-        carrito = await obtener_carrito_activo(telefono)
-        if carrito:
-            bloque_c = ["\n\n## Carrito actual del cliente (persistido en sistema)"]
-            bloque_c.append(
-                "IMPORTANTE: este es el carrito REAL y COMPLETO del cliente. "
-                "Úsalo siempre como fuente de verdad — no lo reconstruyas desde el historial."
-            )
-            total_carrito = 0
-            for item in carrito:
-                subtotal = item.get("subtotal", 0)
-                total_carrito += subtotal
+        # ── Carrito + pedido pendiente (toggle: cart_orders) ──────────────────
+        if _mod(modules, "cart_orders"):
+            carrito = await obtener_carrito_activo(telefono)
+            if carrito:
+                bloque_c = ["\n\n## Carrito actual del cliente (persistido en sistema)"]
                 bloque_c.append(
-                    f"- {item.get('cantidad', 1)}x {item.get('producto', '')} "
-                    f"({item.get('presentacion', '')}) → ${subtotal:,}"
+                    "IMPORTANTE: este es el carrito REAL y COMPLETO del cliente. "
+                    "Úsalo siempre como fuente de verdad — no lo reconstruyas desde el historial."
                 )
-            bloque_c.append(f"Total acumulado: ${total_carrito:,}")
-            system_prompt += "\n".join(bloque_c)
+                total_carrito = 0
+                for item in carrito:
+                    subtotal = item.get("subtotal", 0)
+                    total_carrito += subtotal
+                    bloque_c.append(
+                        f"- {item.get('cantidad', 1)}x {item.get('producto', '')} "
+                        f"({item.get('presentacion', '')}) → ${subtotal:,}"
+                    )
+                bloque_c.append(f"Total acumulado: ${total_carrito:,}")
+                system_prompt += "\n".join(bloque_c)
 
-        # Inyectar pedido pendiente (checkout generado pero no completado)
-        pendiente = await obtener_pedido_pendiente(telefono)
-        if pendiente:
-            bloque_p = ["\n\n## Pedido pendiente sin completar"]
-            bloque_p.append("Este cliente confirmó hace poco un pedido pero NO completó el "
-                            "checkout en Shopify. Su carrito quedó así:")
-            for item in pendiente:
+            pendiente = await obtener_pedido_pendiente(telefono)
+            if pendiente:
+                bloque_p = ["\n\n## Pedido pendiente sin completar"]
+                bloque_p.append("Este cliente confirmó hace poco un pedido pero NO completó el "
+                                "checkout en Shopify. Su carrito quedó así:")
+                for item in pendiente:
+                    bloque_p.append(
+                        f"- {item.get('cantidad', 1)}x {item.get('producto', '')} "
+                        f"({item.get('presentacion', '')})"
+                    )
                 bloque_p.append(
-                    f"- {item.get('cantidad', 1)}x {item.get('producto', '')} "
-                    f"({item.get('presentacion', '')})"
+                    "\nINSTRUCCIONES:\n"
+                    "- En tu primer mensaje, pregúntale si quiere retomar este pedido o "
+                    "armar uno nuevo.\n"
+                    "- Si quiere retomarlo, salta directo al PASO 4 (resumen + botón "
+                    "Confirmar pedido) con esos productos.\n"
+                    "- Si quiere algo distinto, ignora el pendiente y arranca de cero."
                 )
-            bloque_p.append(
-                "\nINSTRUCCIONES:\n"
-                "- En tu primer mensaje, pregúntale si quiere retomar este pedido o "
-                "armar uno nuevo.\n"
-                "- Si quiere retomarlo, salta directo al PASO 4 (resumen + botón "
-                "Confirmar pedido) con esos productos.\n"
-                "- Si quiere algo distinto, ignora el pendiente y arranca de cero."
-            )
-            system_prompt += "\n".join(bloque_p)
+                system_prompt += "\n".join(bloque_p)
 
     mensajes = [{"role": m["role"], "content": m["content"]} for m in historial]
     mensajes.append({"role": "user", "content": mensaje})
