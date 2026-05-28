@@ -5525,12 +5525,12 @@ function renderWizStep() {{
     var emojis = ['🤖','🌿','🔧','🛍','🍽','💊','✨','🚀','💼','🎯','🌟','🔊'];
     var emojiGrid = emojis.map(function(e) {{
       var sel = (_wizData.emoji===e) ? ' selected' : '';
-      return '<button class="wiz-emoji-btn'+sel+'" onclick="selEmoji(this,\''+e+'\')" type="button">'+e+'</button>';
+      return '<button class="wiz-emoji-btn'+sel+'" data-emoji="'+e+'" onclick="selEmoji(this,this.dataset.emoji)" type="button">'+e+'</button>';
     }}).join('');
     var swatches = ['#22c55e','#6366f1','#f59e0b','#ef4444','#ec4899','#06b6d4','#8b5cf6','#14b8a6','#f97316'];
     var swatchHtml = swatches.map(function(c) {{
       var sel = (_wizData.color===c) ? ' selected' : '';
-      return '<div class="color-swatch'+sel+'" style="background:'+c+'" onclick="selColor(this,\''+c+'\')"></div>';
+      return '<div class="color-swatch'+sel+'" style="background:'+c+'" data-color="'+c+'" onclick="selColor(this,this.dataset.color)"></div>';
     }}).join('');
     body.innerHTML = dots +
       '<div class="wiz-field"><label class="wiz-label">Nombre del negocio *</label>'+
@@ -5560,7 +5560,7 @@ function renderWizStep() {{
     var tmpl = _PROMPT_TEMPLATES[_wizData.business_type] || _PROMPT_TEMPLATES['personalizado'];
     var name = _wizData.name || 'Mi Negocio';
     var aname = _wizData.agent_name || 'Agente';
-    tmpl = tmpl.replace(/\{{NOMBRE_AGENTE\}}/g,aname).replace(/\{{NOMBRE_NEGOCIO\}}/g,name);
+    tmpl = tmpl.replace(/\\{{NOMBRE_AGENTE\\}}/g,aname).replace(/\\{{NOMBRE_NEGOCIO\\}}/g,name);
     body.innerHTML = dots +
       '<p style="font-size:.78rem;color:#64748b;margin-bottom:12px">'+
       'Prompt generado según el tipo de negocio. Puedes editarlo ahora o ajustarlo después en la pestaña Prompt.</p>'+
