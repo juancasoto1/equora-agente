@@ -699,8 +699,25 @@ tr:hover td{background:#f8f9fa}
 .prompt-ta:focus{border-color:var(--az);background:#fff}
 .prompt-instruccion-ta{width:100%;height:110px;font-size:.83rem;line-height:1.6;
   border:1px solid #dde1e8;border-radius:8px;padding:10px;resize:vertical;
-  color:#1a2332;outline:none;box-sizing:border-box;margin-bottom:10px}
+  color:#1a2332;outline:none;box-sizing:border-box;margin-bottom:8px}
 .prompt-instruccion-ta:focus{border-color:var(--az)}
+/* Zona adjuntos */
+.img-attach-zone{border:1.5px dashed #c7d2fe;border-radius:8px;padding:8px 10px;
+  background:#f8f7ff;margin-bottom:10px;transition:border-color .15s}
+.img-attach-zone.drag-over{border-color:#4f46e5;background:#eef2ff}
+.img-thumbs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.img-thumb{position:relative;width:56px;height:56px;border-radius:6px;
+  overflow:hidden;border:1.5px solid #c7d2fe;cursor:default;flex-shrink:0}
+.img-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.img-thumb-del{position:absolute;top:1px;right:1px;width:16px;height:16px;
+  background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;
+  font-size:10px;line-height:16px;text-align:center;cursor:pointer;padding:0}
+.img-attach-bar{display:flex;align-items:center;gap:8px}
+.btn-attach{display:inline-flex;align-items:center;gap:5px;font-size:.77rem;
+  font-weight:600;color:#4f46e5;background:#eef2ff;border:1px solid #c7d2fe;
+  border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap;transition:background .15s}
+.btn-attach:hover{background:#e0e7ff}
+.img-paste-hint{font-size:.72rem;color:#94a3b8;line-height:1.3}
 .btn-improve{width:100%;padding:11px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
   color:#fff;border:none;border-radius:8px;font-weight:700;font-size:.88rem;cursor:pointer;
   transition:opacity .15s}
@@ -2343,6 +2360,18 @@ tr:hover td{background:#f8f9fa}
                   ¿Qué quieres mejorar o agregar?
                 </label>
                 <textarea id="prompt-instruccion" class="prompt-instruccion-ta" placeholder="Ej: &quot;Quiero que sea más empática cuando el cliente menciona un problema&quot;&#10;Ej: &quot;Agrega que el envío gratis aplica desde $80.000&quot;&#10;Ej: &quot;Haz que responda más corto y directo&quot;"></textarea>
+
+                <!-- Zona de imágenes adjuntas -->
+                <div class="img-attach-zone" id="img-attach-zone">
+                  <div class="img-thumbs" id="img-thumbs"></div>
+                  <div class="img-attach-bar">
+                    <button type="button" class="btn-attach" onclick="document.getElementById('img-file-input').click()">
+                      📎 Adjuntar imagen
+                    </button>
+                    <span class="img-paste-hint">o pega con Ctrl+V / arrastra aquí</span>
+                  </div>
+                  <input type="file" id="img-file-input" accept="image/*" multiple style="display:none">
+                </div>
 
                 <button class="btn-improve" onclick="mejorarPrompt()" type="button" id="btn-improve">
                   ✨ Mejorar con IA
@@ -5352,6 +5381,109 @@ async function guardarPrompt() {
   }
 }
 
+/* ══════════════════════════════════════════════════════
+   ADJUNTAR IMÁGENES — zona de adjuntos del asistente IA
+   ══════════════════════════════════════════════════════ */
+var _attachedImages = [];   // [{dataUrl, mediaType}]
+
+function _imgToBase64(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload  = function(e) { resolve(e.target.result); };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function _renderThumbs() {
+  var container = document.getElementById('img-thumbs');
+  if (!container) return;
+  container.innerHTML = '';
+  _attachedImages.forEach(function(img, idx) {
+    var wrap = document.createElement('div');
+    wrap.className = 'img-thumb';
+    var el = document.createElement('img');
+    el.src = img.dataUrl;
+    el.alt = 'imagen ' + (idx+1);
+    var del = document.createElement('button');
+    del.className = 'img-thumb-del';
+    del.type = 'button';
+    del.title = 'Eliminar';
+    del.textContent = '×';
+    del.onclick = function() { _attachedImages.splice(idx,1); _renderThumbs(); };
+    wrap.appendChild(el);
+    wrap.appendChild(del);
+    container.appendChild(wrap);
+  });
+}
+
+async function _addImageFiles(files) {
+  for (var i = 0; i < files.length; i++) {
+    var file = files[i];
+    if (!file.type.startsWith('image/')) continue;
+    if (_attachedImages.length >= 5) { alert('Máximo 5 imágenes por consulta.'); break; }
+    var dataUrl = await _imgToBase64(file);
+    _attachedImages.push({ dataUrl: dataUrl, mediaType: file.type });
+  }
+  _renderThumbs();
+}
+
+/* Inicializar listeners de adjuntos (llamado al cargar la sección de config) */
+function _initImgAttach() {
+  var fileInput = document.getElementById('img-file-input');
+  var zone      = document.getElementById('img-attach-zone');
+  var ta        = document.getElementById('prompt-instruccion');
+  if (!fileInput || !zone || !ta) return;
+  if (fileInput._initDone) return;
+  fileInput._initDone = true;
+
+  /* Selector de archivo */
+  fileInput.addEventListener('change', function() {
+    _addImageFiles(fileInput.files);
+    fileInput.value = '';
+  });
+
+  /* Pegar con Ctrl+V en el textarea de instrucción */
+  ta.addEventListener('paste', function(e) {
+    var items = (e.clipboardData || {}).items || [];
+    var hasImg = false;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        hasImg = true;
+        _addImageFiles([items[i].getAsFile()]);
+      }
+    }
+    if (hasImg) e.preventDefault();
+  });
+
+  /* Drag & drop sobre la zona */
+  zone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    zone.classList.add('drag-over');
+  });
+  zone.addEventListener('dragleave', function() {
+    zone.classList.remove('drag-over');
+  });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    _addImageFiles(e.dataTransfer.files);
+  });
+}
+
+/* Llamar _initImgAttach cuando la sección de configuración se active */
+document.addEventListener('DOMContentLoaded', function() {
+  /* Observar si la sección de config se hace visible */
+  var cfgSection = document.getElementById('sec-cfg');
+  if (!cfgSection) return;
+  var obs = new MutationObserver(function() {
+    if (cfgSection.classList.contains('active')) _initImgAttach();
+  });
+  obs.observe(cfgSection, { attributes: true, attributeFilter: ['class'] });
+  /* Si ya está activa al cargar */
+  if (cfgSection.classList.contains('active')) _initImgAttach();
+});
+
 /* ── Mejorar con IA ── */
 async function mejorarPrompt() {
   var prompt      = (document.getElementById('prompt-textarea').value || '').trim();
@@ -5363,21 +5495,35 @@ async function mejorarPrompt() {
   if (!instruccion) { alert('Cuéntame qué quieres mejorar.'); return; }
 
   btn.disabled = true;
-  btn.textContent = '⏳ Mejorando…';
+  btn.innerHTML = '⏳ Mejorando…';
   document.getElementById('prompt-propuesta-wrap').style.display = 'none';
   document.getElementById('prompt-diff-wrap').style.display = 'none';
+
+  /* Preparar imágenes para el payload (base64 sin el prefijo data:...) */
+  var imagenes = _attachedImages.map(function(img) {
+    var parts = img.dataUrl.split(',');
+    return { media_type: img.mediaType, data: parts[1] || '' };
+  });
 
   try {
     var r = await fetch('/inbox/api/prompt/improve', {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({prompt: prompt, instruccion: instruccion, business_vars: vars})
+      body: JSON.stringify({
+        prompt: prompt,
+        instruccion: instruccion,
+        business_vars: vars,
+        imagenes: imagenes
+      })
     });
     var d = await r.json();
     if (d.ok) {
       _promptPropuesta = d.improved_prompt;
       document.getElementById('prompt-propuesta').value = _promptPropuesta;
       document.getElementById('prompt-propuesta-wrap').style.display = '';
+      /* Limpiar imágenes tras enviar */
+      _attachedImages = [];
+      _renderThumbs();
     } else {
       alert('Error: ' + (d.error || 'No se pudo generar'));
     }
@@ -5385,7 +5531,7 @@ async function mejorarPrompt() {
     alert('Error de red: ' + String(e));
   } finally {
     btn.disabled = false;
-    btn.textContent = '✨ Mejorar con IA';
+    btn.innerHTML = '✨ Mejorar con IA';
   }
 }
 

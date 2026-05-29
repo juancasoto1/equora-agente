@@ -3001,6 +3001,7 @@ async def inbox_improve_prompt(
     prompt      = (body.get("prompt") or "").strip()
     instruccion = (body.get("instruccion") or "").strip()
     vars_dict   = body.get("business_vars") or {}
+    imagenes    = body.get("imagenes") or []   # [{media_type, data}]
 
     if not prompt:
         return JSONResponse(content={"ok": False, "error": "Prompt vacío"})
@@ -3026,20 +3027,41 @@ async def inbox_improve_prompt(
         "- El prompt debe ser claro, específico y directamente accionable"
     )
 
-    user_msg = (
+    texto_usuario = (
         f"PROMPT ACTUAL:\n{prompt}"
         f"{vars_context}\n\n"
         f"INSTRUCCIÓN DEL USUARIO: {instruccion}"
     )
 
+    # Construir content blocks — texto + imágenes opcionales
+    content_blocks: list = []
+    for img in imagenes[:5]:   # máximo 5 imágenes
+        media_type = img.get("media_type", "image/jpeg")
+        data       = img.get("data", "")
+        if not data:
+            continue
+        content_blocks.append({
+            "type": "image",
+            "source": {
+                "type":       "base64",
+                "media_type": media_type,
+                "data":       data,
+            }
+        })
+    content_blocks.append({"type": "text", "text": texto_usuario})
+
     from anthropic import AsyncAnthropic as _Anthropic
     _client = _Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    # Usar modelo con visión si hay imágenes; haiku no soporta visión en todas las versiones
+    modelo = os.getenv("AI_MODEL", "claude-haiku-4-5")
+    if imagenes:
+        modelo = "claude-sonnet-4-5"   # garantiza soporte de visión
     try:
         resp = await _client.messages.create(
-            model=os.getenv("AI_MODEL", "claude-haiku-4-5"),
+            model=modelo,
             max_tokens=4096,
             system=system_meta,
-            messages=[{"role": "user", "content": user_msg}],
+            messages=[{"role": "user", "content": content_blocks}],
         )
         improved = resp.content[0].text.strip()
         return JSONResponse(content={"ok": True, "improved_prompt": improved})
