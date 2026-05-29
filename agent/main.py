@@ -1402,7 +1402,6 @@ async def _obtener_sesion_usuario(token: str) -> dict | None:
 def _token_de_request(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ) -> str:
     """Extrae el token de la cookie o del query param."""
     return inbox_session or token
@@ -1661,7 +1660,6 @@ async def inbox_listar_agentes(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Lista agentes: admin ve todos, usuario solo los suyos."""
     effective_token = voco_session or inbox_session or token
@@ -1681,7 +1679,6 @@ async def inbox_crear_agente(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """Crea un nuevo agente en la plataforma. Asigna owner_id al usuario actual."""
@@ -1727,7 +1724,6 @@ async def inbox_actualizar_agente(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Actualiza campos de un agente existente."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -1755,7 +1751,6 @@ async def inbox_activar_agente(
     agent_id_param: int,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Activa un agente (status → active)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -1770,7 +1765,6 @@ async def inbox_pausar_agente(
     agent_id_param: int,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Pausa un agente (status → paused). No afecta al agente Equora (id=1)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -1788,7 +1782,6 @@ async def inbox_clonar_agente(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Clona un agente existente con un nuevo slug."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -1832,7 +1825,6 @@ async def inbox_stats_agente(
     agent_id_param: int,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Estadísticas básicas de un agente: conversaciones, mensajes."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -1852,7 +1844,6 @@ async def inbox_stats_agente(
 async def inbox_panel(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     # Resolver token efectivo: voco_session > inbox_session > query param
@@ -1888,7 +1879,6 @@ async def admin_listar_usuarios(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Lista todos los usuarios registrados. Solo accesible por administradores."""
     effective_token = voco_session or inbox_session or token
@@ -1905,7 +1895,6 @@ async def admin_actualizar_usuario(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """Actualiza datos de un usuario (plan, is_active, rol). Solo para administradores."""
@@ -1929,7 +1918,6 @@ async def inbox_conversaciones(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -1942,7 +1930,6 @@ async def inbox_mensajes(
     telefono: str,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -1957,7 +1944,6 @@ async def inbox_responder(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -1990,7 +1976,6 @@ async def inbox_modo(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -2012,7 +1997,6 @@ async def api_listar_tickets(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Lista tickets filtrados por estado (sin_asignar|activo|pendiente|resuelto|todos)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2026,7 +2010,6 @@ async def api_contar_tickets(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """Conteos por estado para los badges del panel."""
@@ -2042,7 +2025,6 @@ async def api_tomar_ticket(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """El agente humano toma un ticket (sin_asignar o pendiente → activo)."""
@@ -2063,7 +2045,6 @@ async def api_ticket_pendiente(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Marca el ticket como pendiente (agente necesita más info)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2081,7 +2062,6 @@ async def api_resolver_ticket(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """Resuelve el ticket y reactiva el bot automáticamente."""
@@ -2106,7 +2086,6 @@ async def api_historial_ticket(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """Historial completo de mensajes del ticket (Andrea + humano) para el panel."""
@@ -2133,7 +2112,6 @@ async def api_listar_equipo(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Lista los agentes humanos de soporte del negocio."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2148,7 +2126,6 @@ async def api_crear_agente_equipo(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """Crea un nuevo agente humano de soporte. Respeta límites por plan."""
@@ -2194,7 +2171,6 @@ async def api_actualizar_agente_equipo(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Actualiza nombre, rol, activo o password de un agente interno."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2211,7 +2187,6 @@ async def api_desactivar_agente_equipo(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Desactiva (soft-delete) un agente interno."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2225,7 +2200,6 @@ async def api_ping_agente(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """Heartbeat del agente para marcar que está online."""
@@ -2283,7 +2257,6 @@ async def api_eventos_sse(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """SSE stream de eventos de tickets para el panel de escalaciones."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2313,7 +2286,6 @@ async def api_transferir_ticket(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Transfiere un ticket a otro agente humano."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2337,7 +2309,6 @@ async def api_listar_notas(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -2351,7 +2322,6 @@ async def api_crear_nota(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2374,7 +2344,6 @@ async def api_listar_templates(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -2388,7 +2357,6 @@ async def api_crear_template(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2408,7 +2376,6 @@ async def api_eliminar_template(
     tpl_id: int,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2473,7 +2440,6 @@ async def _subir_imagen_whatsapp(image_url: str, access_token: str, phone_number
 async def inbox_broadcast_templates_raw(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Debug: devuelve el JSON crudo de Meta para ver cómo están registradas las variables."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2494,7 +2460,6 @@ async def inbox_broadcast_templates_raw(
 async def inbox_broadcast_templates(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Lista las plantillas aprobadas en Meta para usar en difusiones."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2602,7 +2567,6 @@ async def inbox_broadcast_send(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """
     Envía una plantilla aprobada a una lista de destinatarios personalizados.
@@ -2783,7 +2747,6 @@ async def inbox_broadcast_send(
 async def inbox_difusiones_historial(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Devuelve el historial de difusiones enviadas desde el inbox."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2797,7 +2760,6 @@ async def inbox_difusion_detalle(
     campaign_id: str,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Detalle de una campaña: breakdown de entregados, leídos, fallidos con motivo de error."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2810,7 +2772,6 @@ async def inbox_difusion_detalle(
 async def inbox_metricas_resumen(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Métricas de WhatsApp Business: mensajes enviados, entregados, leídos (últimos 30 días)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2875,7 +2836,6 @@ async def inbox_metricas_resumen(
 async def inbox_metricas_plantillas(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Analíticas por plantilla: enviados, entregados, leídos, clics en botón."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2914,7 +2874,6 @@ async def inbox_metricas_interno(
     dias: int = 30,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Métricas calculadas desde la base de datos interna (sin depender de Meta Analytics API)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2931,7 +2890,6 @@ async def inbox_metricas_interno(
 async def inbox_opt_outs(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Lista de números dados de baja de difusiones masivas."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2944,7 +2902,6 @@ async def inbox_opt_outs(
 async def inbox_clientes(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Base de clientes con estado de engagement (activo/tibio/frío/baja)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -2976,7 +2933,6 @@ def _normalizar_telefono(raw: str) -> str | None:
 async def inbox_plantilla_csv(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Descarga la plantilla CSV con las columnas correctas y ejemplos."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3002,7 +2958,6 @@ async def inbox_importar_clientes(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Importa clientes masivamente desde un archivo CSV (campo 'file' en multipart/form-data).
     Columnas requeridas: telefono, nombres, apellidos. Opcionales: ciudad, departamento, email, cc_nit."""
@@ -3073,7 +3028,6 @@ async def inbox_listar_templates_clientes(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Lista plantillas aprobadas de Meta para enviar a clientes individuales."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3127,7 +3081,6 @@ async def inbox_enviar_mensaje_cliente(
     agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Envía una plantilla aprobada de Meta a un cliente específico.
     Body JSON: {telefono, template_name, language_code, components?}"""
@@ -3178,7 +3131,6 @@ async def inbox_revertir_opt_out(
     telefono: str,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Reactiva un número para recibir difusiones (el cliente cambió de opinión)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3215,7 +3167,6 @@ _CONFIG_META = {
 async def inbox_get_config(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Devuelve el estado de cada clave de configuración (sin exponer valores secretos)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3241,7 +3192,6 @@ async def inbox_save_config(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Guarda credenciales en la BD y las inyecta en el entorno actual."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3265,7 +3215,6 @@ async def inbox_test_config(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Prueba la conexión a Meta, Shopify o Anthropic con las credenciales proporcionadas."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3353,7 +3302,6 @@ async def inbox_get_prompt(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Devuelve el prompt actual (BD → archivo) y las variables del negocio."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3420,7 +3368,6 @@ async def inbox_save_prompt(
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Guarda el prompt y las variables del negocio en la BD."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3449,7 +3396,6 @@ async def inbox_improve_prompt(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """
@@ -3544,7 +3490,6 @@ async def inbox_chat_test(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Envía un mensaje al agente y devuelve su respuesta (sin WhatsApp real)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3572,7 +3517,6 @@ async def inbox_chat_test(
 async def inbox_chat_test_history(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Devuelve el historial de la conversación de prueba."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3586,7 +3530,6 @@ async def inbox_chat_test_history(
 async def inbox_chat_test_clear(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Borra el historial de la conversación de prueba."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3602,7 +3545,6 @@ async def inbox_subir_header_media(
     file_type: str = Form(...),
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """
     Sube un archivo (imagen/video/doc) a Meta vía Resumable Upload API
@@ -3684,7 +3626,6 @@ async def inbox_plantillas_crear(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Crea una nueva plantilla en Meta y la envía a revisión.
     Body JSON: { name, category, language, header_text?, body, footer?, buttons? }
@@ -3856,7 +3797,6 @@ async def inbox_plantillas_crear(
 async def inbox_plantillas_borradores_list(
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Lista todos los borradores de plantillas guardados localmente."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3870,7 +3810,6 @@ async def inbox_plantillas_borrador_guardar(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Guarda (crea o actualiza) un borrador de plantilla localmente.
     Body JSON: los mismos campos del formulario de creación.
@@ -3894,7 +3833,6 @@ async def inbox_plantillas_borrador_eliminar(
     bid: int,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Elimina un borrador local por ID."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
@@ -3910,7 +3848,6 @@ async def inbox_plantillas_editar(
     request: Request,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
 ):
     """Edita una plantilla existente en Meta (solo se pueden cambiar los componentes).
     Meta devuelve la plantilla a estado PENDING tras la edición.
@@ -4020,7 +3957,6 @@ async def inbox_agente_por_slug(
     slug: str,
     token: str = "",
     inbox_session: str = Cookie(default=""),
-    voco_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     """Panel de inbox para un agente específico por su slug (ej: /inbox/equora)."""
