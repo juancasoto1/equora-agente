@@ -220,6 +220,45 @@ class ConfigValue(Base):
     actualizado_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 1 — Sistema de escalación multi-agente
+# ══════════════════════════════════════════════════════════════════════════════
+
+class UsuarioInterno(Base):
+    """Agentes humanos de soporte interno de cada negocio (distinto de usuarios SaaS)."""
+    __tablename__ = "usuarios_internos"
+
+    id:             Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:       Mapped[int]           = mapped_column(Integer, index=True)          # negocio al que pertenece
+    nombre:         Mapped[str]           = mapped_column(String(200), default="")
+    email:          Mapped[str]           = mapped_column(String(200), index=True)
+    password_hash:  Mapped[str]           = mapped_column(String(200), default="")
+    rol:            Mapped[str]           = mapped_column(String(20), default="agente")  # agente|supervisor|admin
+    activo:         Mapped[bool]          = mapped_column(Boolean, default=True)
+    ultimo_ping_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True)      # para "online"
+    created_at:     Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Ticket(Base):
+    """Ticket de escalación: una conversación que requiere atención humana."""
+    __tablename__ = "tickets"
+
+    id:                Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:          Mapped[int]           = mapped_column(Integer, index=True)
+    telefono_cliente:  Mapped[str]           = mapped_column(String(50), index=True)
+    nombre_cliente:    Mapped[str]           = mapped_column(String(200), default="")
+    # Estado: sin_asignar → activo → pendiente ↔ activo → resuelto
+    estado:            Mapped[str]           = mapped_column(String(20), default="sin_asignar", index=True)
+    urgencia:          Mapped[str]           = mapped_column(String(20), default="normal")  # alta|normal|baja
+    motivo:            Mapped[str]           = mapped_column(Text, default="")
+    contexto:          Mapped[str]           = mapped_column(Text, default="")
+    agente_humano_id:  Mapped[int|None]      = mapped_column(Integer, nullable=True)        # FK usuarios_internos
+    creado_at:         Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+    tomado_at:         Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
+    resuelto_at:       Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
+    actualizado_at:    Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+
+
 async def inicializar_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -243,6 +282,10 @@ async def inicializar_db():
             "ALTER TABLE plantillas_borradores ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             # Sprint 1 — multi-tenant
             "ALTER TABLE agents ADD COLUMN IF NOT EXISTS owner_id INTEGER",
+            # Sprint 1 — sistema de escalación multi-agente
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS max_agentes INTEGER DEFAULT 2",
+            "CREATE INDEX IF NOT EXISTS ix_tickets_agent_estado ON tickets (agent_id, estado)",
+            "CREATE INDEX IF NOT EXISTS ix_ui_agent ON usuarios_internos (agent_id)",
             # Índices útiles
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
             "CREATE INDEX IF NOT EXISTS ix_mensajes_agent ON mensajes (agent_id)",
@@ -1868,3 +1911,288 @@ async def obtener_agentes_de_usuario(user_id: int) -> list[dict]:
             select(Agent).where(Agent.owner_id == user_id).order_by(Agent.id)
         )
         return [_agent_to_dict(a) for a in result.scalars().all()]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 1 — Usuarios internos (agentes humanos de soporte)
+# ══════════════════════════════════════════════════════════════════════════════
+
+import hashlib as _hashlib
+
+
+def _hash_password(password: str) -> str:
+    """Hash simple SHA-256 para passwords de usuarios internos."""
+    return _hashlib.sha256(password.encode()).hexdigest()
+
+
+def _ui_to_dict(u: UsuarioInterno) -> dict:
+    return {
+        "id":             u.id,
+        "agent_id":       u.agent_id,
+        "nombre":         u.nombre,
+        "email":          u.email,
+        "rol":            u.rol,
+        "activo":         u.activo,
+        "ultimo_ping_at": u.ultimo_ping_at.isoformat() if u.ultimo_ping_at else None,
+        "created_at":     u.created_at.isoformat(),
+    }
+
+
+async def crear_usuario_interno(
+    agent_id: int, nombre: str, email: str, password: str, rol: str = "agente"
+) -> dict:
+    """Crea un nuevo agente humano de soporte para el negocio."""
+    async with async_session() as session:
+        ui = UsuarioInterno(
+            agent_id=agent_id,
+            nombre=nombre,
+            email=email.lower().strip(),
+            password_hash=_hash_password(password),
+            rol=rol,
+        )
+        session.add(ui)
+        await session.commit()
+        await session.refresh(ui)
+        return _ui_to_dict(ui)
+
+
+async def autenticar_usuario_interno(email: str, password: str) -> dict | None:
+    """Autentica un usuario interno por email+password. Retorna dict o None."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(UsuarioInterno).where(
+                UsuarioInterno.email == email.lower().strip(),
+                UsuarioInterno.activo == True,
+            )
+        )
+        ui = result.scalar_one_or_none()
+        if not ui:
+            return None
+        if ui.password_hash != _hash_password(password):
+            return None
+        return _ui_to_dict(ui)
+
+
+async def obtener_usuarios_internos(agent_id: int) -> list[dict]:
+    """Lista todos los usuarios internos de un negocio."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(UsuarioInterno)
+            .where(UsuarioInterno.agent_id == agent_id)
+            .order_by(UsuarioInterno.nombre)
+        )
+        return [_ui_to_dict(u) for u in result.scalars().all()]
+
+
+async def actualizar_usuario_interno(ui_id: int, **kwargs) -> bool:
+    """Actualiza campos de un usuario interno (nombre, rol, activo, password)."""
+    async with async_session() as session:
+        result = await session.execute(select(UsuarioInterno).where(UsuarioInterno.id == ui_id))
+        ui = result.scalar_one_or_none()
+        if not ui:
+            return False
+        for k, v in kwargs.items():
+            if k == "password":
+                ui.password_hash = _hash_password(v)
+            elif hasattr(ui, k):
+                setattr(ui, k, v)
+        await session.commit()
+        return True
+
+
+async def ping_usuario_interno(ui_id: int) -> None:
+    """Actualiza ultimo_ping_at — usado para detectar agentes online."""
+    async with async_session() as session:
+        result = await session.execute(select(UsuarioInterno).where(UsuarioInterno.id == ui_id))
+        ui = result.scalar_one_or_none()
+        if ui:
+            ui.ultimo_ping_at = datetime.utcnow()
+            await session.commit()
+
+
+async def obtener_usuario_interno_por_id(ui_id: int) -> dict | None:
+    async with async_session() as session:
+        result = await session.execute(select(UsuarioInterno).where(UsuarioInterno.id == ui_id))
+        ui = result.scalar_one_or_none()
+        return _ui_to_dict(ui) if ui else None
+
+
+async def contar_agentes_activos(agent_id: int) -> int:
+    """Cuenta agentes humanos activos del negocio (para verificar límite por plan)."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(func.count()).where(
+                UsuarioInterno.agent_id == agent_id,
+                UsuarioInterno.activo == True,
+            )
+        )
+        return result.scalar() or 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 1 — Tickets de escalación
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _ticket_to_dict(t: Ticket, agente_nombre: str = "") -> dict:
+    return {
+        "id":               t.id,
+        "agent_id":         t.agent_id,
+        "telefono_cliente": t.telefono_cliente,
+        "nombre_cliente":   t.nombre_cliente,
+        "estado":           t.estado,
+        "urgencia":         t.urgencia,
+        "motivo":           t.motivo,
+        "contexto":         t.contexto,
+        "agente_humano_id": t.agente_humano_id,
+        "agente_nombre":    agente_nombre,
+        "creado_at":        t.creado_at.isoformat(),
+        "tomado_at":        t.tomado_at.isoformat() if t.tomado_at else None,
+        "resuelto_at":      t.resuelto_at.isoformat() if t.resuelto_at else None,
+        "actualizado_at":   t.actualizado_at.isoformat(),
+    }
+
+
+async def crear_ticket(
+    agent_id: int,
+    telefono_cliente: str,
+    nombre_cliente: str,
+    motivo: str,
+    urgencia: str = "normal",
+    contexto: str = "",
+) -> dict:
+    """Crea un ticket de escalación y lo deja en estado sin_asignar."""
+    async with async_session() as session:
+        # Si ya hay un ticket activo/sin_asignar para este teléfono, reusar
+        result = await session.execute(
+            select(Ticket).where(
+                Ticket.agent_id == agent_id,
+                Ticket.telefono_cliente == telefono_cliente,
+                Ticket.estado.in_(["sin_asignar", "activo", "pendiente"]),
+            ).order_by(Ticket.creado_at.desc())
+        )
+        existente = result.scalar_one_or_none()
+        if existente:
+            # Actualizar con el nuevo motivo/contexto y refrescar timestamp
+            existente.motivo = motivo
+            existente.contexto = contexto
+            existente.urgencia = urgencia
+            existente.actualizado_at = datetime.utcnow()
+            await session.commit()
+            return _ticket_to_dict(existente)
+
+        ticket = Ticket(
+            agent_id=agent_id,
+            telefono_cliente=telefono_cliente,
+            nombre_cliente=nombre_cliente,
+            motivo=motivo,
+            urgencia=urgencia,
+            contexto=contexto,
+            estado="sin_asignar",
+            actualizado_at=datetime.utcnow(),
+        )
+        session.add(ticket)
+        await session.commit()
+        await session.refresh(ticket)
+        return _ticket_to_dict(ticket)
+
+
+async def obtener_tickets(agent_id: int, estado: str | None = None) -> list[dict]:
+    """Lista tickets de un negocio, opcionalmente filtrados por estado."""
+    async with async_session() as session:
+        q = select(Ticket).where(Ticket.agent_id == agent_id)
+        if estado:
+            q = q.where(Ticket.estado == estado)
+        q = q.order_by(Ticket.actualizado_at.desc())
+        result = await session.execute(q)
+        tickets = result.scalars().all()
+
+        # Enriquecer con nombre del agente humano asignado
+        ids_agente = {t.agente_humano_id for t in tickets if t.agente_humano_id}
+        nombres: dict[int, str] = {}
+        if ids_agente:
+            r2 = await session.execute(
+                select(UsuarioInterno).where(UsuarioInterno.id.in_(ids_agente))
+            )
+            for ui in r2.scalars().all():
+                nombres[ui.id] = ui.nombre
+
+        return [_ticket_to_dict(t, nombres.get(t.agente_humano_id, "")) for t in tickets]
+
+
+async def contar_tickets(agent_id: int) -> dict:
+    """Retorna conteo de tickets por estado para badges del panel."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Ticket.estado, func.count().label("n"))
+            .where(Ticket.agent_id == agent_id)
+            .where(Ticket.estado != "resuelto")   # resueltos no cuentan en badge
+            .group_by(Ticket.estado)
+        )
+        counts = {row.estado: row.n for row in result}
+        total_abiertos = sum(counts.values())
+        return {
+            "sin_asignar": counts.get("sin_asignar", 0),
+            "activo":      counts.get("activo", 0),
+            "pendiente":   counts.get("pendiente", 0),
+            "total":       total_abiertos,
+        }
+
+
+async def tomar_ticket(ticket_id: int, agente_humano_id: int) -> dict | None:
+    """Un agente humano toma un ticket sin_asignar o pendiente."""
+    async with async_session() as session:
+        result = await session.execute(select(Ticket).where(Ticket.id == ticket_id))
+        ticket = result.scalar_one_or_none()
+        if not ticket:
+            return None
+        ticket.estado = "activo"
+        ticket.agente_humano_id = agente_humano_id
+        ticket.tomado_at = datetime.utcnow()
+        ticket.actualizado_at = datetime.utcnow()
+        await session.commit()
+
+        # Nombre del agente
+        r2 = await session.execute(select(UsuarioInterno).where(UsuarioInterno.id == agente_humano_id))
+        ui = r2.scalar_one_or_none()
+        return _ticket_to_dict(ticket, ui.nombre if ui else "")
+
+
+async def marcar_ticket_pendiente(ticket_id: int) -> dict | None:
+    """Marca el ticket como pendiente (el agente necesita más info o pausó)."""
+    async with async_session() as session:
+        result = await session.execute(select(Ticket).where(Ticket.id == ticket_id))
+        ticket = result.scalar_one_or_none()
+        if not ticket:
+            return None
+        ticket.estado = "pendiente"
+        ticket.actualizado_at = datetime.utcnow()
+        await session.commit()
+        return _ticket_to_dict(ticket)
+
+
+async def resolver_ticket(ticket_id: int) -> dict | None:
+    """Resuelve el ticket y retorna el telefono_cliente para reactivar el bot."""
+    async with async_session() as session:
+        result = await session.execute(select(Ticket).where(Ticket.id == ticket_id))
+        ticket = result.scalar_one_or_none()
+        if not ticket:
+            return None
+        ticket.estado = "resuelto"
+        ticket.resuelto_at = datetime.utcnow()
+        ticket.actualizado_at = datetime.utcnow()
+        await session.commit()
+        return _ticket_to_dict(ticket)
+
+
+async def obtener_ticket_activo_por_telefono(agent_id: int, telefono: str) -> dict | None:
+    """Retorna el ticket abierto (sin_asignar/activo/pendiente) de un cliente."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Ticket).where(
+                Ticket.agent_id == agent_id,
+                Ticket.telefono_cliente == telefono,
+                Ticket.estado.in_(["sin_asignar", "activo", "pendiente"]),
+            ).order_by(Ticket.creado_at.desc())
+        )
+        ticket = result.scalar_one_or_none()
+        return _ticket_to_dict(ticket) if ticket else None

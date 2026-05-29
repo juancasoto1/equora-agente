@@ -701,6 +701,33 @@ tr:hover td{background:#f8f9fa}
   border:1px solid #dde1e8;border-radius:8px;padding:10px;resize:vertical;
   color:#1a2332;outline:none;box-sizing:border-box;margin-bottom:8px}
 .prompt-instruccion-ta:focus{border-color:var(--az)}
+/* ── Escalaciones ── */
+.esc-tab{flex:1;border:none;background:none;padding:10px 4px;font-size:.75rem;font-weight:600;
+  color:#64748b;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.esc-tab:hover{color:#4f46e5}
+.esc-tab.active{color:#4f46e5;border-bottom-color:#4f46e5}
+.esc-cnt{display:inline-block;background:#ef4444;color:#fff;border-radius:10px;
+  padding:1px 6px;font-size:.68rem;margin-left:4px;vertical-align:middle}
+.esc-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;
+  margin-bottom:6px;cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.esc-card:hover{border-color:#c7d2fe;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.esc-card.selected{border-left-color:#4f46e5;background:#f0f4ff}
+.esc-card-nombre{font-weight:700;font-size:.87rem;color:#1a2332;margin-bottom:2px}
+.esc-card-motivo{font-size:.78rem;color:#64748b;margin-bottom:4px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.esc-card-meta{display:flex;align-items:center;gap:6px;font-size:.72rem;color:#94a3b8}
+.esc-urg{padding:2px 7px;border-radius:10px;font-size:.7rem;font-weight:700}
+.esc-urg-alta{background:#fee2e2;color:#b91c1c}
+.esc-urg-normal{background:#fef3c7;color:#92400e}
+.esc-urg-baja{background:#dcfce7;color:#15803d}
+/* Burbujas de chat en panel de escalaciones */
+.esc-bbl{max-width:75%;padding:7px 11px;border-radius:10px;font-size:.84rem;line-height:1.5;
+  word-break:break-word;white-space:pre-wrap}
+.esc-bbl-user{background:#005c4b;color:#fff;align-self:flex-end;border-radius:10px 10px 3px 10px}
+.esc-bbl-bot{background:#1f2c34;color:#e9edef;align-self:flex-start;border-radius:10px 10px 10px 3px}
+.esc-bbl-human{background:#2a3942;color:#e9edef;align-self:flex-start;border-radius:10px 10px 10px 3px;
+  border-left:3px solid #4f46e5}
+.esc-bbl-ts{font-size:.67rem;opacity:.6;margin-top:3px}
 /* Zona adjuntos */
 .img-attach-zone{border:1.5px dashed #c7d2fe;border-radius:8px;padding:8px 10px;
   background:#f8f7ff;margin-bottom:10px;transition:border-color .15s}
@@ -925,6 +952,12 @@ tr:hover td{background:#f8f9fa}
       <div class="nav-item" role="button" tabindex="0" data-sec="metricas"
            onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')">
         <span class="ni" aria-hidden="true">📊</span> Métricas
+      </div>
+      <div class="nav-item" role="button" tabindex="0" data-sec="escalaciones"
+           onclick="showSec('escalaciones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('escalaciones')">
+        <span class="ni" aria-hidden="true">🎯</span> Escalaciones
+        <span id="esc-badge" style="display:none;margin-left:auto;background:#ef4444;color:#fff;
+          border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
       </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" role="button" tabindex="0" data-sec="configuracion"
@@ -1906,6 +1939,82 @@ tr:hover td{background:#f8f9fa}
       </div>
 
       <!-- ═══════════════════════════════════════
+           SECCIÓN: ESCALACIONES (Sprint 1)
+           ═══════════════════════════════════════ -->
+      <div class="sec sec-light" id="sec-escalaciones">
+        <div class="sec-hdr">
+          <div><h1>🎯 Escalaciones</h1><p style="color:#64748b;font-size:.85rem;margin:0">Conversaciones que requieren atención humana</p></div>
+        </div>
+
+        <div style="display:flex;flex:1;overflow:hidden;min-height:0">
+          <!-- ── Lista de tickets (izquierda) ─────────────────────────── -->
+          <div id="esc-sidebar" style="width:340px;min-width:340px;display:flex;flex-direction:column;
+               border-right:1px solid #e2e8f0;background:#f8fafc;overflow:hidden">
+
+            <!-- Filtros -->
+            <div style="display:flex;border-bottom:1px solid #e2e8f0;background:#fff">
+              <button class="esc-tab active" data-est="sin_asignar" onclick="escFiltrar('sin_asignar',this)">Sin asignar<span class="esc-cnt" id="cnt-sin_asignar"></span></button>
+              <button class="esc-tab" data-est="activo" onclick="escFiltrar('activo',this)">Activas<span class="esc-cnt" id="cnt-activo"></span></button>
+              <button class="esc-tab" data-est="pendiente" onclick="escFiltrar('pendiente',this)">Pendientes<span class="esc-cnt" id="cnt-pendiente"></span></button>
+              <button class="esc-tab" data-est="resuelto" onclick="escFiltrar('resuelto',this)">Resueltas</button>
+            </div>
+
+            <!-- Lista -->
+            <div id="esc-lista" style="flex:1;overflow-y:auto;padding:8px"></div>
+          </div>
+
+          <!-- ── Detalle del ticket (derecha) ─────────────────────────── -->
+          <div id="esc-detalle" style="flex:1;display:flex;flex-direction:column;background:#fff;overflow:hidden">
+
+            <!-- Estado vacío -->
+            <div id="esc-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:#94a3b8;flex-direction:column;gap:8px">
+              <span style="font-size:2.5rem">🎯</span>
+              <span>Selecciona un ticket para ver la conversación</span>
+            </div>
+
+            <!-- Detalle activo (oculto hasta seleccionar) -->
+            <div id="esc-conv-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+              <!-- Header del ticket -->
+              <div id="esc-ticket-hdr" style="padding:12px 16px;border-bottom:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <div style="flex:1">
+                  <div id="esc-cliente-nombre" style="font-weight:700;font-size:.95rem;color:#1a2332"></div>
+                  <div id="esc-cliente-tel" style="font-size:.78rem;color:#64748b"></div>
+                </div>
+                <span id="esc-urgencia-badge" style="font-size:.74rem;font-weight:700;padding:3px 10px;border-radius:12px"></span>
+                <div style="display:flex;gap:6px">
+                  <button id="btn-esc-tomar" class="btn-primary" style="font-size:.78rem;padding:5px 12px" onclick="escTomar()">✋ Tomar</button>
+                  <button id="btn-esc-pendiente" class="btn-secondary" style="font-size:.78rem;padding:5px 12px;display:none" onclick="escPendiente()">⏸ Pendiente</button>
+                  <button id="btn-esc-resolver" class="btn-primary" style="font-size:.78rem;padding:5px 12px;background:#16a34a;border-color:#16a34a;display:none" onclick="escResolver()">✅ Resolver</button>
+                </div>
+              </div>
+
+              <!-- Motivo/contexto del ticket -->
+              <div id="esc-motivo-wrap" style="padding:10px 16px;background:#fef3c7;border-bottom:1px solid #fde68a;font-size:.82rem;color:#92400e">
+                <strong>Motivo:</strong> <span id="esc-motivo"></span> &nbsp;|&nbsp;
+                <strong>Contexto:</strong> <span id="esc-contexto"></span>
+              </div>
+
+              <!-- Historial de mensajes -->
+              <div id="esc-msgs" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-height:0;background:#0b141a"></div>
+
+              <!-- Input de respuesta (solo visible si ticket activo) -->
+              <div id="esc-reply-wrap" style="padding:10px 14px;border-top:1px solid #e2e8f0;background:#fff;display:none">
+                <div style="display:flex;gap:8px">
+                  <textarea id="esc-reply-input" placeholder="Escribe tu respuesta al cliente…"
+                    style="flex:1;border:1px solid #dde1e8;border-radius:8px;padding:8px 10px;font-size:.85rem;
+                    resize:none;height:60px;outline:none;font-family:inherit"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();escEnviarRespuesta();}"></textarea>
+                  <button class="btn-primary" style="align-self:flex-end;padding:8px 14px" onclick="escEnviarRespuesta()">Enviar</button>
+                </div>
+                <div style="font-size:.72rem;color:#94a3b8;margin-top:4px">Enter para enviar · Shift+Enter nueva línea · El cliente recibe tu mensaje por WhatsApp</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /sec-escalaciones -->
+
+      <!-- ═══════════════════════════════════════
            SECCIÓN: CONFIGURACIÓN
            ═══════════════════════════════════════ -->
       <div class="sec sec-light" id="sec-configuracion">
@@ -1922,6 +2031,7 @@ tr:hover td{background:#f8f9fa}
             <div class="cfg-tab active" onclick="cfgTab('integraciones',this)">⚙️ Integraciones</div>
             <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()">🧠 Prompt</div>
             <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()">🧪 Probar</div>
+            <div class="cfg-tab" onclick="cfgTab('equipo',this);cargarEquipo()">👥 Equipo</div>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)">📋 Documentación</div>
           </div>
 
@@ -2441,6 +2551,66 @@ tr:hover td{background:#f8f9fa}
 
           </div><!-- /pane probar -->
 
+          <!-- ── Pane: Equipo (Sprint 1) ── -->
+          <div class="cfg-pane" id="cfg-pane-equipo" style="padding:24px;overflow-y:auto">
+
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+              <div>
+                <h2 style="margin:0;font-size:1.1rem;color:#1a2332">👥 Equipo de Soporte</h2>
+                <p style="margin:4px 0 0;font-size:.83rem;color:#64748b">Agentes humanos que atienden escalaciones dentro del panel</p>
+              </div>
+              <button class="btn-primary" style="font-size:.82rem;padding:7px 14px" onclick="mostrarFormNuevoAgente()">
+                + Nuevo agente
+              </button>
+            </div>
+
+            <!-- Formulario nuevo agente (oculto por defecto) -->
+            <div id="equipo-form-wrap" style="display:none;background:#f0f4ff;border:1px solid #c7d2fe;
+                 border-radius:10px;padding:18px;margin-bottom:20px">
+              <h3 style="margin:0 0 14px;font-size:.9rem;color:#1a2332">Nuevo agente</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                  <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Nombre completo</label>
+                  <input id="eq-nombre" type="text" placeholder="Felipe García"
+                    style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+                </div>
+                <div>
+                  <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Email</label>
+                  <input id="eq-email" type="email" placeholder="felipe@empresa.com"
+                    style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+                </div>
+                <div>
+                  <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Contraseña temporal</label>
+                  <input id="eq-password" type="password" placeholder="Min. 6 caracteres"
+                    style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+                </div>
+                <div>
+                  <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Rol</label>
+                  <select id="eq-rol" style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none;background:#fff">
+                    <option value="agente">Agente</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:14px">
+                <button class="btn-primary" style="font-size:.82rem;padding:7px 16px" onclick="crearAgenteEquipo()">Crear agente</button>
+                <button class="btn-secondary" style="font-size:.82rem;padding:7px 14px" onclick="document.getElementById('equipo-form-wrap').style.display='none'">Cancelar</button>
+              </div>
+              <div id="equipo-form-msg" style="margin-top:10px;font-size:.82rem"></div>
+            </div>
+
+            <!-- Tabla de agentes -->
+            <div id="equipo-tabla-wrap">
+              <div id="equipo-tabla" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+                <div style="padding:14px 16px;color:#94a3b8;font-size:.85rem;text-align:center">Cargando equipo…</div>
+              </div>
+            </div>
+
+            <!-- Info de plan -->
+            <div id="equipo-plan-info" style="margin-top:14px;font-size:.78rem;color:#64748b;text-align:center"></div>
+          </div><!-- /pane equipo -->
+
           <!-- ── Pane: Documentación ── -->
           <div class="cfg-pane" id="cfg-pane-documentacion">
 
@@ -2738,6 +2908,7 @@ function showSec(id) {
     if (id === 'metricas')      { cargarMetricas(); }
     if (id === 'clientes')      { cargarClientes(); }
     if (id === 'configuracion') { cargarConfiguracion(); }
+    if (id === 'escalaciones')  { escCargarLista(); }
   }
   // Reflejar sección en el hash de la URL para deep-linking
   try { history.replaceState(null, '', '#' + id); } catch(e) {}
@@ -5705,6 +5876,343 @@ async function limpiarChatTest() {
   } catch(e) {
     alert('Error al limpiar: ' + String(e));
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 1 — SISTEMA DE ESCALACIONES
+   ══════════════════════════════════════════════════════════════ */
+var _escEstadoActual = 'sin_asignar';
+var _escTicketActual = null;   // ticket seleccionado
+var _escAgentId      = 1;      // agent_id activo (SaaS multi-tenant)
+var _escUsuarioId    = 0;      // usuario_interno_id del agente logueado (si aplica)
+
+/* ── Polling de badges (cada 15s) ────────────────────────── */
+function _escActualizarBadges() {
+  fetch('/inbox/api/tickets/counts?agent_id=' + _escAgentId, {credentials:'include'})
+    .then(function(r){ return r.json(); })
+    .then(function(d) {
+      var total = d.total || 0;
+      var badge = document.getElementById('esc-badge');
+      if (badge) {
+        if (total > 0) { badge.textContent = total; badge.style.display = ''; }
+        else           { badge.style.display = 'none'; }
+      }
+      var estados = ['sin_asignar','activo','pendiente'];
+      estados.forEach(function(est) {
+        var el = document.getElementById('cnt-' + est);
+        if (el) { el.textContent = d[est] || 0; el.style.display = d[est] ? '' : 'none'; }
+      });
+    }).catch(function(){});
+}
+// Iniciar polling al cargar
+document.addEventListener('DOMContentLoaded', function() {
+  _escActualizarBadges();
+  setInterval(_escActualizarBadges, 15000);
+});
+
+/* ── Cargar lista de tickets ─────────────────────────────── */
+async function escCargarLista() {
+  _escActualizarBadges();
+  var url = '/inbox/api/tickets?agent_id=' + _escAgentId + (
+    _escEstadoActual ? '&estado=' + _escEstadoActual : ''
+  );
+  var lista = document.getElementById('esc-lista');
+  lista.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.84rem">Cargando…</div>';
+  try {
+    var r = await fetch(url, {credentials:'include'});
+    var d = await r.json();
+    _escRenderLista(d.tickets || []);
+  } catch(e) {
+    lista.innerHTML = '<div style="padding:16px;color:#ef4444;font-size:.82rem">Error al cargar</div>';
+  }
+}
+
+function _escRenderLista(tickets) {
+  var lista = document.getElementById('esc-lista');
+  if (!tickets.length) {
+    lista.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:.84rem">Sin conversaciones en esta categoría</div>';
+    return;
+  }
+  lista.innerHTML = '';
+  tickets.forEach(function(t) {
+    var urgClass = 'esc-urg-' + (t.urgencia || 'normal');
+    var tiempo = _escTiempoRelativo(t.actualizado_at);
+    var card = document.createElement('div');
+    card.className = 'esc-card' + (_escTicketActual && _escTicketActual.id === t.id ? ' selected' : '');
+    card.onclick = function() { escSeleccionarTicket(t); };
+    card.innerHTML =
+      '<div class="esc-card-nombre">' + _escEsc(t.nombre_cliente || t.telefono_cliente) + '</div>' +
+      '<div class="esc-card-motivo">' + _escEsc(t.motivo) + '</div>' +
+      '<div class="esc-card-meta">' +
+        '<span class="esc-urg ' + urgClass + '">' + (t.urgencia||'normal') + '</span>' +
+        (t.agente_nombre ? '<span>👤 ' + _escEsc(t.agente_nombre) + '</span>' : '') +
+        '<span style="margin-left:auto">' + tiempo + '</span>' +
+      '</div>';
+    lista.appendChild(card);
+  });
+}
+
+function _escEsc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function _escTiempoRelativo(iso) {
+  if (!iso) return '';
+  var diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (diff < 60)  return 'hace ' + diff + 's';
+  if (diff < 3600) return 'hace ' + Math.floor(diff/60) + 'min';
+  return 'hace ' + Math.floor(diff/3600) + 'h';
+}
+
+/* ── Filtrar por estado ──────────────────────────────────── */
+function escFiltrar(estado, btn) {
+  _escEstadoActual = estado;
+  document.querySelectorAll('.esc-tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  escCargarLista();
+}
+
+/* ── Seleccionar ticket y cargar historial ───────────────── */
+async function escSeleccionarTicket(ticket) {
+  _escTicketActual = ticket;
+  // Marcar card seleccionada
+  document.querySelectorAll('.esc-card').forEach(function(c){ c.classList.remove('selected'); });
+  event.currentTarget.classList.add('selected');
+
+  // Mostrar detalle
+  document.getElementById('esc-empty').style.display = 'none';
+  var wrap = document.getElementById('esc-conv-wrap');
+  wrap.style.display = 'flex';
+
+  // Header
+  document.getElementById('esc-cliente-nombre').textContent = ticket.nombre_cliente || ticket.telefono_cliente;
+  document.getElementById('esc-cliente-tel').textContent    = '+' + ticket.telefono_cliente;
+  document.getElementById('esc-motivo').textContent         = ticket.motivo;
+  document.getElementById('esc-contexto').textContent       = ticket.contexto || '—';
+
+  var urgBadge = document.getElementById('esc-urgencia-badge');
+  urgBadge.textContent = ticket.urgencia || 'normal';
+  urgBadge.className = 'esc-urg esc-urg-' + (ticket.urgencia || 'normal');
+
+  // Botones según estado
+  var btnTomar     = document.getElementById('btn-esc-tomar');
+  var btnPendiente = document.getElementById('btn-esc-pendiente');
+  var btnResolver  = document.getElementById('btn-esc-resolver');
+  var replyWrap    = document.getElementById('esc-reply-wrap');
+  btnTomar.style.display     = (ticket.estado !== 'activo') ? '' : 'none';
+  btnPendiente.style.display = (ticket.estado === 'activo') ? '' : 'none';
+  btnResolver.style.display  = (ticket.estado === 'activo') ? '' : 'none';
+  replyWrap.style.display    = (ticket.estado === 'activo') ? '' : 'none';
+
+  // Historial
+  var msgsEl = document.getElementById('esc-msgs');
+  msgsEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:12px;font-size:.82rem">Cargando historial…</div>';
+  try {
+    var r = await fetch('/inbox/api/tickets/' + ticket.id + '/historial', {credentials:'include'});
+    var d = await r.json();
+    _escRenderMensajes(d.mensajes || []);
+  } catch(e) {
+    msgsEl.innerHTML = '<div style="color:#ef4444;padding:12px">Error cargando mensajes</div>';
+  }
+}
+
+function _escRenderMensajes(mensajes) {
+  var el = document.getElementById('esc-msgs');
+  el.innerHTML = '';
+  if (!mensajes.length) {
+    el.innerHTML = '<div style="color:#64748b;text-align:center;padding:12px;font-size:.82rem">Sin mensajes aún</div>';
+    return;
+  }
+  mensajes.forEach(function(m) {
+    var wrap = document.createElement('div');
+    wrap.style.display = 'flex';
+    wrap.style.flexDirection = 'column';
+    wrap.style.alignItems = m.role === 'user' ? 'flex-end' : 'flex-start';
+
+    var cls = m.role === 'user' ? 'esc-bbl-user' : (m.human ? 'esc-bbl-human' : 'esc-bbl-bot');
+    var label = m.role !== 'user' ? (m.human ? '👤 Agente' : '🤖 Andrea') : '';
+
+    wrap.innerHTML =
+      (label ? '<div style="font-size:.68rem;color:#94a3b8;margin-bottom:2px;padding:0 4px">' + label + '</div>' : '') +
+      '<div class="esc-bbl ' + cls + '">' + _escEsc(m.content) + '<div class="esc-bbl-ts">' +
+        (m.timestamp ? new Date(m.timestamp).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '') +
+      '</div></div>';
+    el.appendChild(wrap);
+  });
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ── Acciones sobre el ticket ───────────────────────────── */
+async function escTomar() {
+  if (!_escTicketActual) return;
+  try {
+    var r = await fetch('/inbox/api/tickets/' + _escTicketActual.id + '/tomar', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({agente_humano_id: _escUsuarioId || 0})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      _escTicketActual = d.ticket;
+      // Actualizar botones
+      document.getElementById('btn-esc-tomar').style.display     = 'none';
+      document.getElementById('btn-esc-pendiente').style.display = '';
+      document.getElementById('btn-esc-resolver').style.display  = '';
+      document.getElementById('esc-reply-wrap').style.display    = '';
+      escCargarLista();
+    }
+  } catch(e) { alert('Error al tomar el ticket'); }
+}
+
+async function escPendiente() {
+  if (!_escTicketActual) return;
+  var r = await fetch('/inbox/api/tickets/' + _escTicketActual.id + '/pendiente', {
+    method:'POST', credentials:'include'
+  });
+  var d = await r.json();
+  if (d.ok) { _escTicketActual = d.ticket; escCargarLista(); escFiltrar('pendiente', document.querySelector('.esc-tab[data-est="pendiente"]')); }
+}
+
+async function escResolver() {
+  if (!_escTicketActual) return;
+  if (!confirm('¿Marcar como resuelto? El bot retomará automáticamente la conversación.')) return;
+  var r = await fetch('/inbox/api/tickets/' + _escTicketActual.id + '/resolver?agent_id=' + _escAgentId, {
+    method:'POST', credentials:'include'
+  });
+  var d = await r.json();
+  if (d.ok) {
+    _escTicketActual = null;
+    document.getElementById('esc-empty').style.display = '';
+    document.getElementById('esc-conv-wrap').style.display = 'none';
+    escFiltrar('resuelto', document.querySelector('.esc-tab[data-est="resuelto"]') ||
+      document.querySelector('.esc-tab'));
+    escCargarLista();
+  }
+}
+
+/* ── Enviar respuesta desde el panel ────────────────────── */
+async function escEnviarRespuesta() {
+  if (!_escTicketActual) return;
+  var input = document.getElementById('esc-reply-input');
+  var texto = (input.value || '').trim();
+  if (!texto) return;
+  input.value = '';
+  try {
+    // Reutilizar endpoint existente /inbox/api/responder
+    var r = await fetch('/inbox/api/responder', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({telefono: _escTicketActual.telefono_cliente, mensaje: texto})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      // Agregar burbuja local inmediatamente (sin esperar recarga)
+      var msgs = document.getElementById('esc-msgs');
+      var wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start';
+      wrap.innerHTML = '<div style="font-size:.68rem;color:#94a3b8;margin-bottom:2px;padding:0 4px">👤 Agente</div>' +
+        '<div class="esc-bbl esc-bbl-human">' + _escEsc(texto) +
+        '<div class="esc-bbl-ts">' + new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) + '</div></div>';
+      msgs.appendChild(wrap);
+      msgs.scrollTop = msgs.scrollHeight;
+    } else {
+      alert('Error enviando mensaje: ' + (d.error || 'desconocido'));
+      input.value = texto;
+    }
+  } catch(e) { alert('Error de red'); input.value = texto; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 1 — GESTIÓN DE EQUIPO (Usuarios Internos)
+   ══════════════════════════════════════════════════════════════ */
+async function cargarEquipo() {
+  var wrap = document.getElementById('equipo-tabla');
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="padding:14px 16px;color:#94a3b8;font-size:.85rem">Cargando…</div>';
+  try {
+    var r = await fetch('/inbox/api/equipo?agent_id=' + _escAgentId, {credentials:'include'});
+    var d = await r.json();
+    _renderTablaEquipo(d.equipo || []);
+  } catch(e) {
+    wrap.innerHTML = '<div style="padding:14px;color:#ef4444">Error cargando equipo</div>';
+  }
+}
+
+function _renderTablaEquipo(equipo) {
+  var wrap = document.getElementById('equipo-tabla');
+  if (!equipo.length) {
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.85rem">' +
+      'No hay agentes de soporte aún. Crea el primero con el botón "Nuevo agente".</div>';
+    return;
+  }
+  var rolColor = {agente:'#e0f2fe;color:#0369a1', supervisor:'#fef3c7;color:#92400e', admin:'#f3e8ff;color:#7c3aed'};
+  var filas = equipo.map(function(u) {
+    var rc = rolColor[u.rol] || '#f1f5f9;color:#475569';
+    var onlineColor = u.ultimo_ping_at && (Date.now() - new Date(u.ultimo_ping_at).getTime() < 60000)
+      ? '#22c55e' : '#d1d5db';
+    return '<tr style="border-bottom:1px solid #f1f5f9">' +
+      '<td style="padding:10px 14px;font-weight:600;font-size:.86rem;color:#1a2332">' +
+        '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + onlineColor + ';margin-right:6px"></span>' +
+        _escEsc(u.nombre) + '</td>' +
+      '<td style="padding:10px 14px;font-size:.83rem;color:#64748b">' + _escEsc(u.email) + '</td>' +
+      '<td style="padding:10px 14px"><span style="background:' + rc + ';padding:2px 8px;border-radius:10px;font-size:.73rem;font-weight:700">' + u.rol + '</span></td>' +
+      '<td style="padding:10px 14px"><span style="background:' + (u.activo ? '#dcfce7;color:#15803d' : '#fee2e2;color:#b91c1c') +
+        ';padding:2px 8px;border-radius:10px;font-size:.73rem;font-weight:700">' + (u.activo ? 'Activo' : 'Inactivo') + '</span></td>' +
+      '<td style="padding:10px 14px;font-size:.82rem">' +
+        (u.activo ? '<button onclick="desactivarAgenteEquipo(' + u.id + ')" style="color:#ef4444;background:none;border:none;cursor:pointer;font-size:.78rem">Desactivar</button>' : '') +
+      '</td></tr>';
+  });
+  wrap.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+    '<thead><tr style="background:#f8fafc;font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Nombre</th>' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Email</th>' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Rol</th>' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Estado</th>' +
+    '<th style="padding:8px 14px"></th>' +
+    '</thead><tbody>' + filas.join('') + '</tbody></table>';
+}
+
+function mostrarFormNuevoAgente() {
+  var wrap = document.getElementById('equipo-form-wrap');
+  if (wrap) wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+}
+
+async function crearAgenteEquipo() {
+  var nombre   = (document.getElementById('eq-nombre').value   || '').trim();
+  var email    = (document.getElementById('eq-email').value    || '').trim();
+  var password = (document.getElementById('eq-password').value || '').trim();
+  var rol      = document.getElementById('eq-rol').value;
+  var msg      = document.getElementById('equipo-form-msg');
+
+  if (!nombre || !email || !password) { msg.innerHTML = '<span style="color:#ef4444">Completa todos los campos.</span>'; return; }
+  if (password.length < 6) { msg.innerHTML = '<span style="color:#ef4444">La contraseña debe tener al menos 6 caracteres.</span>'; return; }
+
+  msg.innerHTML = 'Creando…';
+  try {
+    var r = await fetch('/inbox/api/equipo?agent_id=' + _escAgentId, {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({nombre, email, password, rol})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      msg.innerHTML = '<span style="color:#16a34a">✅ Agente creado correctamente.</span>';
+      document.getElementById('eq-nombre').value = '';
+      document.getElementById('eq-email').value = '';
+      document.getElementById('eq-password').value = '';
+      cargarEquipo();
+    } else {
+      msg.innerHTML = '<span style="color:#ef4444">' + (d.error || 'Error') + '</span>';
+    }
+  } catch(e) {
+    msg.innerHTML = '<span style="color:#ef4444">Error de red.</span>';
+  }
+}
+
+async function desactivarAgenteEquipo(uid) {
+  if (!confirm('¿Desactivar este agente? No podrá iniciar sesión.')) return;
+  var r = await fetch('/inbox/api/equipo/' + uid, {method:'DELETE', credentials:'include'});
+  var d = await r.json();
+  if (d.ok) cargarEquipo();
+  else alert('Error al desactivar');
 }
 </script>
 </body>

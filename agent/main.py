@@ -44,6 +44,13 @@ from agent.memory import (
     crear_usuario, obtener_usuario_por_email, obtener_usuario_por_id,
     crear_sesion, verificar_sesion, cerrar_sesion,
     listar_usuarios, actualizar_usuario, obtener_agentes_de_usuario,
+    # Sprint 1 — escalación multi-agente
+    crear_usuario_interno, autenticar_usuario_interno, obtener_usuarios_internos,
+    actualizar_usuario_interno, obtener_usuario_interno_por_id, ping_usuario_interno,
+    contar_agentes_activos,
+    crear_ticket, obtener_tickets, contar_tickets,
+    tomar_ticket, marcar_ticket_pendiente, resolver_ticket,
+    obtener_ticket_activo_por_telefono,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html
 from agent.providers import obtener_proveedor
@@ -1275,7 +1282,7 @@ async def webhook_handler(request: Request):
 
             # Notificar al equipo si Andrea decidió escalar
             if datos_escalacion:
-                await _notificar_escalacion(msg.telefono, datos_escalacion)
+                await _notificar_escalacion(msg.telefono, datos_escalacion, agent_id=_agent_id)
 
             logger.info(f"Respuesta a {msg.telefono}: {respuesta}")
 
@@ -1974,6 +1981,229 @@ async def inbox_modo(
     await set_modo_humano(telefono, activo)
     logger.info(f"Modo cambiado a '{'humano' if activo else 'Andrea'}' para {telefono}")
     return JSONResponse(content={"ok": True, "modo_humano": activo})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 1 — API de Tickets de Escalación
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/inbox/api/tickets")
+async def api_listar_tickets(
+    estado: str = "",
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Lista tickets filtrados por estado (sin_asignar|activo|pendiente|resuelto|todos)."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    tickets = await obtener_tickets(agent_id, estado=estado or None)
+    return JSONResponse(content={"tickets": tickets})
+
+
+@app.get("/inbox/api/tickets/counts")
+async def api_contar_tickets(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Conteos por estado para los badges del panel."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    counts = await contar_tickets(agent_id)
+    return JSONResponse(content=counts)
+
+
+@app.post("/inbox/api/tickets/{ticket_id}/tomar")
+async def api_tomar_ticket(
+    ticket_id: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """El agente humano toma un ticket (sin_asignar o pendiente → activo)."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    agente_humano_id = body.get("agente_humano_id", 0)
+    ticket = await tomar_ticket(ticket_id, agente_humano_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    return JSONResponse(content={"ok": True, "ticket": ticket})
+
+
+@app.post("/inbox/api/tickets/{ticket_id}/pendiente")
+async def api_ticket_pendiente(
+    ticket_id: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Marca el ticket como pendiente (agente necesita más info)."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    ticket = await marcar_ticket_pendiente(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    return JSONResponse(content={"ok": True, "ticket": ticket})
+
+
+@app.post("/inbox/api/tickets/{ticket_id}/resolver")
+async def api_resolver_ticket(
+    ticket_id: int,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Resuelve el ticket y reactiva el bot automáticamente."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    ticket = await resolver_ticket(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    # Reactivar bot para este cliente
+    try:
+        await set_modo_humano(ticket["telefono_cliente"], False, agent_id=agent_id)
+        logger.info(f"Bot reactivado para {ticket['telefono_cliente']} al resolver ticket {ticket_id}")
+    except Exception as e:
+        logger.error(f"Error reactivando bot: {e}")
+    return JSONResponse(content={"ok": True, "ticket": ticket})
+
+
+@app.get("/inbox/api/tickets/{ticket_id}/historial")
+async def api_historial_ticket(
+    ticket_id: int,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Historial completo de mensajes del ticket (Andrea + humano) para el panel."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    ticket = await obtener_ticket_activo_por_telefono(agent_id, "")
+    # Buscar por ticket_id directamente
+    from agent.memory import Ticket as _TicketModel, async_session as _as
+    from sqlalchemy import select as _sel
+    async with _as() as sess:
+        r = await sess.execute(_sel(_TicketModel).where(_TicketModel.id == ticket_id))
+        t = r.scalar_one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    mensajes = await obtener_historial_con_timestamps(t.telefono_cliente, 150, agent_id=t.agent_id)
+    return JSONResponse(content={"mensajes": mensajes, "telefono": t.telefono_cliente})
+
+
+# ── API de Equipo (Usuarios Internos) ─────────────────────────────────────────
+
+@app.get("/inbox/api/equipo")
+async def api_listar_equipo(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Lista los agentes humanos de soporte del negocio."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    usuarios = await obtener_usuarios_internos(agent_id)
+    return JSONResponse(content={"equipo": usuarios})
+
+
+@app.post("/inbox/api/equipo")
+async def api_crear_agente_equipo(
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Crea un nuevo agente humano de soporte. Respeta límites por plan."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    body = await request.json()
+    nombre   = (body.get("nombre") or "").strip()
+    email    = (body.get("email") or "").strip().lower()
+    password = (body.get("password") or "").strip()
+    rol      = body.get("rol", "agente")
+
+    if not nombre or not email or not password:
+        return JSONResponse(content={"ok": False, "error": "nombre, email y password son requeridos"})
+    if rol not in ("agente", "supervisor", "admin"):
+        return JSONResponse(content={"ok": False, "error": "Rol inválido"})
+
+    # Verificar límite de agentes según plan del agente
+    from agent.memory import Agent as _AgentModel, async_session as _as
+    from sqlalchemy import select as _sel
+    async with _as() as sess:
+        r = await sess.execute(_sel(_AgentModel).where(_AgentModel.id == agent_id))
+        agente_cfg = r.scalar_one_or_none()
+    max_permitidos = getattr(agente_cfg, "max_agentes", 2) if agente_cfg else 2
+    actuales = await contar_agentes_activos(agent_id)
+    if actuales >= max_permitidos:
+        return JSONResponse(content={
+            "ok": False,
+            "error": f"Límite de {max_permitidos} agentes alcanzado. Actualiza tu plan para agregar más."
+        })
+
+    try:
+        nuevo = await crear_usuario_interno(agent_id, nombre, email, password, rol)
+        return JSONResponse(content={"ok": True, "usuario": nuevo})
+    except Exception as e:
+        return JSONResponse(content={"ok": False, "error": str(e)[:200]})
+
+
+@app.put("/inbox/api/equipo/{ui_id}")
+async def api_actualizar_agente_equipo(
+    ui_id: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Actualiza nombre, rol, activo o password de un agente interno."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    campos = {k: v for k, v in body.items() if k in ("nombre", "rol", "activo", "password")}
+    ok = await actualizar_usuario_interno(ui_id, **campos)
+    return JSONResponse(content={"ok": ok})
+
+
+@app.delete("/inbox/api/equipo/{ui_id}")
+async def api_desactivar_agente_equipo(
+    ui_id: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Desactiva (soft-delete) un agente interno."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    ok = await actualizar_usuario_interno(ui_id, activo=False)
+    return JSONResponse(content={"ok": ok})
+
+
+@app.post("/inbox/api/equipo/ping")
+async def api_ping_agente(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Heartbeat del agente para marcar que está online (Sprint 2: estado online)."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    ui_id = body.get("usuario_interno_id")
+    if ui_id:
+        await ping_usuario_interno(ui_id)
+    return JSONResponse(content={"ok": True})
 
 
 # ── Difusión / Broadcast ───────────────────────────────────────────────────
@@ -3589,21 +3819,41 @@ ADMIN_WHATSAPP_NUMBERS = [
 ]
 
 
-async def _notificar_escalacion(telefono_cliente: str, datos: dict):
-    """Envía un mensaje SOLO a los asesores internos con el contexto de la escalación.
-    NUNCA envía al número del cliente, aunque esté en ADMIN_WHATSAPP_NUMBERS."""
-    if not ADMIN_WHATSAPP_NUMBERS:
-        logger.warning("ADMIN_WHATSAPP_NUMBERS no configurado — escalación no se notifica")
-        return
-
-    motivo = datos.get("motivo", "sin especificar")
-    contexto = datos.get("contexto", "")
-    urgencia = datos.get("urgencia", "normal")
+async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: int = 1):
+    """Crea un ticket en BD, pausa el bot y notifica por WhatsApp a los asesores internos.
+    NUNCA envía el aviso al número del propio cliente."""
+    motivo        = datos.get("motivo", "sin especificar")
+    contexto      = datos.get("contexto", "")
+    urgencia      = datos.get("urgencia", "normal")
     cliente_nombre = datos.get("nombre_cliente", "")
 
-    # Normalizar número del cliente para comparación (solo dígitos)
-    cliente_digits = "".join(filter(str.isdigit, telefono_cliente))
+    # ── 1. Crear ticket en BD (núcleo del sistema de escalación) ──────────────
+    try:
+        await crear_ticket(
+            agent_id=agent_id,
+            telefono_cliente=telefono_cliente,
+            nombre_cliente=cliente_nombre,
+            motivo=motivo,
+            urgencia=urgencia,
+            contexto=contexto,
+        )
+        logger.info(f"Ticket creado para {telefono_cliente} — motivo: {motivo}")
+    except Exception as e:
+        logger.error(f"Error creando ticket de escalación: {e}")
 
+    # ── 2. Pausar el bot para esta conversación ────────────────────────────────
+    try:
+        await set_modo_humano(telefono_cliente, True, agent_id=agent_id)
+        logger.info(f"Bot pausado para {telefono_cliente} por escalación")
+    except Exception as e:
+        logger.error(f"Error pausando bot: {e}")
+
+    # ── 3. Notificar por WhatsApp si hay números de admin configurados ─────────
+    if not ADMIN_WHATSAPP_NUMBERS:
+        logger.info("ADMIN_WHATSAPP_NUMBERS no configurado — escalación solo en panel")
+        return
+
+    cliente_digits = "".join(filter(str.isdigit, telefono_cliente))
     mensaje = (
         f"🚨 *Escalación Andrea Bot*\n\n"
         f"*Motivo:* {motivo}\n"
@@ -3611,21 +3861,17 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict):
         f"*Cliente:* {cliente_nombre or 'desconocido'}\n"
         f"*WhatsApp cliente:* +{telefono_cliente}\n\n"
         f"*Contexto:*\n{contexto}\n\n"
-        f"Responde al cliente desde el WhatsApp Business o llámalo directamente."
+        f"Entra al panel de Equora para tomar la conversación."
     )
 
     for admin in ADMIN_WHATSAPP_NUMBERS:
-        # Guardia: nunca enviar la escalación al mismo número del cliente
         admin_digits = "".join(filter(str.isdigit, admin))
         if admin_digits == cliente_digits or admin_digits.endswith(cliente_digits[-10:]):
-            logger.warning(
-                f"Escalación omitida para {admin}: coincide con el número del cliente. "
-                "Configura ADMIN_WHATSAPP_NUMBERS con el número del asesor interno."
-            )
+            logger.warning(f"Escalación omitida para {admin}: es el mismo número del cliente")
             continue
         try:
             await proveedor.enviar_mensaje(admin, mensaje)
-            logger.info(f"Escalación notificada al asesor interno {admin}")
+            logger.info(f"Escalación notificada al asesor {admin}")
         except Exception as e:
             logger.error(f"Error notificando escalación a {admin}: {e}")
 
