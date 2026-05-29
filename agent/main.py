@@ -3590,7 +3590,8 @@ ADMIN_WHATSAPP_NUMBERS = [
 
 
 async def _notificar_escalacion(telefono_cliente: str, datos: dict):
-    """Envía un mensaje a los administradores con el contexto de la escalación."""
+    """Envía un mensaje SOLO a los asesores internos con el contexto de la escalación.
+    NUNCA envía al número del cliente, aunque esté en ADMIN_WHATSAPP_NUMBERS."""
     if not ADMIN_WHATSAPP_NUMBERS:
         logger.warning("ADMIN_WHATSAPP_NUMBERS no configurado — escalación no se notifica")
         return
@@ -3599,6 +3600,9 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict):
     contexto = datos.get("contexto", "")
     urgencia = datos.get("urgencia", "normal")
     cliente_nombre = datos.get("nombre_cliente", "")
+
+    # Normalizar número del cliente para comparación (solo dígitos)
+    cliente_digits = "".join(filter(str.isdigit, telefono_cliente))
 
     mensaje = (
         f"🚨 *Escalación Andrea Bot*\n\n"
@@ -3611,9 +3615,17 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict):
     )
 
     for admin in ADMIN_WHATSAPP_NUMBERS:
+        # Guardia: nunca enviar la escalación al mismo número del cliente
+        admin_digits = "".join(filter(str.isdigit, admin))
+        if admin_digits == cliente_digits or admin_digits.endswith(cliente_digits[-10:]):
+            logger.warning(
+                f"Escalación omitida para {admin}: coincide con el número del cliente. "
+                "Configura ADMIN_WHATSAPP_NUMBERS con el número del asesor interno."
+            )
+            continue
         try:
             await proveedor.enviar_mensaje(admin, mensaje)
-            logger.info(f"Escalación notificada a admin {admin}")
+            logger.info(f"Escalación notificada al asesor interno {admin}")
         except Exception as e:
             logger.error(f"Error notificando escalación a {admin}: {e}")
 
