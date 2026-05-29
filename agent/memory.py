@@ -276,8 +276,13 @@ async def inicializar_db():
             "ALTER TABLE estado_conversacion ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS campaign_name TEXT DEFAULT ''",
             "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS campaign_id TEXT DEFAULT ''",
+            "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS template_name TEXT DEFAULT ''",
+            "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'es_CO'",
+            "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS destinatarios INTEGER DEFAULT 0",
+            "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS fallidos INTEGER DEFAULT 0",
             "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             "ALTER TABLE difusion_mensajes ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            "ALTER TABLE difusion_mensajes ADD COLUMN IF NOT EXISTS campaign_id TEXT DEFAULT ''",
             "ALTER TABLE opt_outs ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             "ALTER TABLE plantillas_borradores ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             # Sprint 1 — multi-tenant
@@ -1463,7 +1468,7 @@ async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
                 FROM (
                   SELECT
                     COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT)) AS campaign_id,
-                    COALESCE(NULLIF(campaign_name,''), template_name, 'Sin nombre') AS campaign_name,
+                    COALESCE(NULLIF(campaign_name,''), NULLIF(template_name,''), 'Sin nombre') AS campaign_name,
                     MAX(created_at) AS created_at,
                     SUM(enviados)   AS enviados
                   FROM difusiones

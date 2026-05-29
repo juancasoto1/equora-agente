@@ -5239,10 +5239,14 @@ async function cargarMetricas() {
 }
 
 function mkCard(ic, lbl, val, sub) {
+  // val puede ser número o string formateado (ej: "USD $1.23", "—", "5x")
+  var valStr = (typeof val === 'number')
+    ? val.toLocaleString('es-CO')
+    : String(val === null || val === undefined ? '—' : val);
   return '<div class="card">'
     + '<div class="card-ic">' + ic + '</div>'
     + '<div class="card-lbl">' + he(lbl) + '</div>'
-    + '<div class="card-val">' + Number(val).toLocaleString('es-CO') + '</div>'
+    + '<div class="card-val">' + valStr + '</div>'
     + '<div class="card-sub">' + he(sub) + '</div>'
     + '</div>';
 }
