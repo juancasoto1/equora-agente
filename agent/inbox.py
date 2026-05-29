@@ -294,6 +294,78 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   #chat-area.oculto{display:none}
 }
 
+/* ══════════════════════════════════════════════
+   SPRINT 3 — RESPONSIVE MÓVIL
+   ══════════════════════════════════════════════ */
+@media(max-width:768px){
+  /* Nav lateral → barra inferior fija */
+  #nav{
+    position:fixed;bottom:0;left:0;right:0;
+    width:100%!important;min-width:unset!important;
+    height:58px;flex-direction:row;align-items:center;
+    padding:0;border-right:none;border-top:1px solid #1e2e3d;
+    z-index:500;overflow-x:auto;overflow-y:hidden;
+  }
+  .nav-section,.nav-footer{display:none}
+  .nav-item{
+    flex:1;flex-direction:column;align-items:center;justify-content:center;
+    gap:2px;padding:6px 2px;border-left:none!important;
+    border-top:3px solid transparent;min-width:52px;
+    font-size:.58rem;letter-spacing:0;
+  }
+  .nav-item.active{border-top-color:var(--az);border-left-color:transparent!important}
+  .nav-item .ni{font-size:1.3rem;width:auto}
+  /* El badge en nav móvil */
+  #esc-badge{position:absolute;top:4px;right:4px;font-size:.6rem;padding:0 5px}
+
+  /* Body: espacio para la barra inferior */
+  #body{padding-bottom:58px}
+
+  /* Secciones: full width */
+  .sec-light .sec-hdr{padding:12px 14px}
+  .sec-hdr h1{font-size:1rem}
+
+  /* Escalaciones: lista ocupa todo el ancho en móvil */
+  #esc-sidebar{width:100%!important;min-width:unset!important}
+  #esc-sidebar.mob-oculto{display:none!important}
+  #esc-detalle.mob-oculto{display:none!important}
+  #esc-detalle{position:fixed;top:0;left:0;right:0;bottom:58px;z-index:200;background:#fff}
+
+  /* Clientes: tabla → scroll horizontal */
+  #cli-tabla-wrap{overflow-x:auto}
+
+  /* Métricas: cards 2 columnas */
+  .met-grid{grid-template-columns:repeat(2,1fr)!important}
+  /* tabla campañas → scroll */
+  #met-camp-wrap{overflow-x:auto}
+
+  /* Configuración: grid 1 columna */
+  .cfg-grid-2{grid-template-columns:1fr!important}
+  /* Config tabs scroll */
+  .cfg-tabs{overflow-x:auto;white-space:nowrap;flex-wrap:nowrap!important}
+  .cfg-tab{flex-shrink:0}
+
+  /* Formulario equipo: 1 col */
+  #equipo-form-wrap [style*="grid-template-columns"]{display:flex!important;flex-direction:column!important}
+
+  /* Botones acción ticket en móvil: stack */
+  #esc-ticket-hdr{flex-direction:column;align-items:flex-start;gap:6px}
+  #esc-ticket-hdr > div:last-child{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+  #esc-ticket-hdr > div:last-child button{flex:1;min-width:80px}
+
+  /* Back button móvil en escalaciones */
+  #esc-back-btn{display:flex!important}
+
+  /* Panel reply en móvil: más compacto */
+  #esc-reply-wrap textarea{height:48px}
+
+  /* Difusiones: layout 1 col */
+  .dif-form-grid{grid-template-columns:1fr!important}
+
+  /* Ocultar columnas no esenciales en tablas */
+  .mob-hide{display:none!important}
+}
+
 /* sidebar header */
 #sh{background:var(--hd);padding:12px 16px;display:flex;align-items:center;gap:8px;flex-shrink:0}
 #sh h2{font-size:.9rem;font-weight:600;flex:1;color:var(--tx)}
@@ -1711,6 +1783,11 @@ tr:hover td{background:#f8f9fa}
             </select>
             <button class="btn-secondary" onclick="cargarMetricas()">↺ Actualizar</button>
           </div>
+          <!-- Tabs métricas -->
+          <div style="display:flex;border-bottom:1px solid #e2e8f0;margin-top:4px">
+            <button class="det-tab active" id="met-tab-camp" onclick="metTab('camp',this)" style="font-size:.8rem;padding:8px 14px">📊 Campañas</button>
+            <button class="det-tab" id="met-tab-equipo" onclick="metTab('equipo',this);cargarStatsEquipo()" style="font-size:.8rem;padding:8px 14px">👥 Equipo</button>
+          </div>
         </div>
         <div class="sec-body">
 
@@ -1765,6 +1842,29 @@ tr:hover td{background:#f8f9fa}
                   <tr><td colspan="9" class="loading-txt">Cargando...</td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- Panel Equipo (supervisor) -->
+          <div id="met-panel-equipo" style="display:none;padding:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+              <h2 style="margin:0;font-size:1rem;color:#1a2332">👥 Métricas del equipo de soporte</h2>
+              <button class="btn-secondary" style="font-size:.78rem" onclick="cargarStatsEquipo()">↺ Actualizar</button>
+            </div>
+            <div id="met-equipo-tabla" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+              <div style="padding:14px;color:#94a3b8;font-size:.85rem;text-align:center">Cargando...</div>
+            </div>
+            <!-- Toggle auto-asignación -->
+            <div style="margin-top:20px;padding:14px 18px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:10px;display:flex;align-items:center;gap:14px">
+              <div style="flex:1">
+                <div style="font-weight:700;font-size:.88rem;color:#1a2332">⚡ Asignación automática (Round-Robin)</div>
+                <div style="font-size:.78rem;color:#64748b;margin-top:2px">Cuando llega un ticket, se asigna al siguiente agente disponible automáticamente</div>
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
+                <input type="checkbox" id="toggle-autoasignar" onchange="toggleAutoAsignar(this.checked)"
+                  style="width:18px;height:18px;cursor:pointer;accent-color:#4f46e5">
+                <span id="autoasignar-label" style="font-size:.82rem;font-weight:600;color:#4f46e5">Inactivo</span>
+              </label>
             </div>
           </div>
 
@@ -2001,6 +2101,7 @@ tr:hover td{background:#f8f9fa}
 
               <!-- Header del ticket -->
               <div id="esc-ticket-hdr" style="padding:12px 16px;border-bottom:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <button id="esc-back-btn" onclick="escVolverLista()" style="display:none;background:none;border:none;font-size:1.3rem;cursor:pointer;color:#4f46e5;padding:0 6px 0 0">←</button>
                 <div style="flex:1">
                   <div id="esc-cliente-nombre" style="font-weight:700;font-size:.95rem;color:#1a2332"></div>
                   <div id="esc-cliente-tel" style="font-size:.78rem;color:#64748b"></div>
@@ -2023,7 +2124,8 @@ tr:hover td{background:#f8f9fa}
               <div id="esc-det-tabs" style="display:none;border-bottom:1px solid #e2e8f0;background:#fff">
                 <div style="display:flex">
                   <button class="det-tab active" id="det-tab-conv" onclick="escDetTab('conv',this)">💬 Conversación</button>
-                  <button class="det-tab" id="det-tab-notas" onclick="escDetTab('notas',this)">📝 Notas internas <span id="notas-count" style="font-size:.68rem;color:#94a3b8"></span></button>
+                  <button class="det-tab" id="det-tab-notas" onclick="escDetTab('notas',this)">📝 Notas <span id="notas-count" style="font-size:.68rem;color:#94a3b8"></span></button>
+                  <button class="det-tab" id="det-tab-audit" onclick="escDetTab('audit',this)">🔍 Auditoría</button>
                 </div>
               </div>
 
@@ -2061,6 +2163,11 @@ tr:hover td{background:#f8f9fa}
                   </div>
                   <div style="font-size:.72rem;color:#94a3b8;margin-top:4px">Enter para enviar · Shift+Enter nueva línea</div>
                 </div>
+              </div>
+
+              <!-- Panel: Auditoría -->
+              <div id="esc-panel-audit" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0;background:#f8fafc">
+                <div id="esc-audit-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px"></div>
               </div>
 
               <!-- Panel: Notas internas -->
@@ -6322,6 +6429,202 @@ async function desactivarAgenteEquipo(uid) {
   var d = await r.json();
   if (d.ok) cargarEquipo();
   else alert('Error al desactivar');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 3 — MOBILE: navegación y master-detail
+   ══════════════════════════════════════════════════════════════ */
+var _isMobile = function() { return window.innerWidth <= 768; };
+
+/* Escalaciones: mostrar lista en móvil */
+function escVolverLista() {
+  if (!_isMobile()) return;
+  var sidebar = document.getElementById('esc-sidebar');
+  var detalle = document.getElementById('esc-detalle');
+  if (sidebar) sidebar.classList.remove('mob-oculto');
+  if (detalle) detalle.classList.add('mob-oculto');
+  _escTicketActual = null;
+}
+
+/* Override de escSeleccionarTicket para añadir comportamiento móvil */
+var _escSelBase = escSeleccionarTicket;
+escSeleccionarTicket = async function(ticket) {
+  await _escSelBase(ticket);
+  if (_isMobile()) {
+    var sidebar = document.getElementById('esc-sidebar');
+    var detalle = document.getElementById('esc-detalle');
+    if (sidebar) sidebar.classList.add('mob-oculto');
+    if (detalle) detalle.classList.remove('mob-oculto');
+  }
+};
+
+/* Ajustar layout en resize */
+window.addEventListener('resize', function() {
+  if (!_isMobile()) {
+    var sidebar = document.getElementById('esc-sidebar');
+    var detalle = document.getElementById('esc-detalle');
+    if (sidebar) sidebar.classList.remove('mob-oculto');
+    if (detalle) detalle.classList.remove('mob-oculto');
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 3 — AUDITORÍA de tickets
+   ══════════════════════════════════════════════════════════════ */
+var _AUDIT_ICONOS = {
+  creado:      '🆕', tomado: '✋', pendiente: '⏸',
+  resuelto:    '✅', transferido: '↗', nota: '📝', respuesta: '💬'
+};
+
+async function escCargarAuditoria(ticketId) {
+  var lista = document.getElementById('esc-audit-list');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:#94a3b8;font-size:.82rem;padding:8px">Cargando auditoría…</div>';
+  try {
+    var r = await fetch('/inbox/api/tickets/' + ticketId + '/eventos', {credentials:'include'});
+    var d = await r.json();
+    var eventos = d.eventos || [];
+    if (!eventos.length) {
+      lista.innerHTML = '<div style="color:#94a3b8;font-size:.83rem;padding:12px;text-align:center">Sin eventos registrados</div>';
+      return;
+    }
+    lista.innerHTML = '';
+    eventos.forEach(function(ev) {
+      var icono = _AUDIT_ICONOS[ev.tipo] || '•';
+      var hora = new Date(ev.created_at).toLocaleString('es-CO', {
+        hour:'2-digit', minute:'2-digit', day:'2-digit', month:'short'
+      });
+      var el = document.createElement('div');
+      el.style.cssText = 'display:flex;gap:10px;align-items:flex-start;padding:8px 10px;' +
+        'background:#fff;border-radius:8px;border:1px solid #e2e8f0;font-size:.82rem';
+      el.innerHTML = '<span style="font-size:1.1rem">' + icono + '</span>' +
+        '<div style="flex:1">' +
+          '<div style="font-weight:600;color:#1a2332">' + _escEsc(ev.actor_nombre) + '</div>' +
+          '<div style="color:#4a5568;margin-top:1px">' + _escEsc(ev.detalle) + '</div>' +
+        '</div>' +
+        '<div style="font-size:.7rem;color:#94a3b8;white-space:nowrap">' + hora + '</div>';
+      lista.appendChild(el);
+    });
+    lista.scrollTop = lista.scrollHeight;
+  } catch(e) {
+    lista.innerHTML = '<div style="color:#ef4444;font-size:.82rem">Error cargando auditoría</div>';
+  }
+}
+
+/* Override escDetTab para incluir auditoría */
+var _escDetTabOrig = escDetTab;
+escDetTab = function(id, btn) {
+  _escDetTabOrig(id, btn);
+  document.getElementById('esc-panel-audit').style.display = id === 'audit' ? 'flex' : 'none';
+  if (id === 'audit' && _escTicketActual) escCargarAuditoria(_escTicketActual.id);
+};
+
+/* Override escSeleccionarTicket para añadir auditoría al resumen */
+var _escSelAudit = escSeleccionarTicket;
+escSeleccionarTicket = async function(ticket) {
+  await _escSelAudit(ticket);
+  // Resetear panel auditoría
+  var auditList = document.getElementById('esc-audit-list');
+  if (auditList) auditList.innerHTML = '';
+};
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 3 — DASHBOARD SUPERVISOR
+   ══════════════════════════════════════════════════════════════ */
+function metTab(id, btn) {
+  document.querySelectorAll('#met-tab-camp, #met-tab-equipo').forEach(function(t){
+    t.classList.remove('active');
+  });
+  btn.classList.add('active');
+  var secBody = document.querySelector('#sec-metricas .sec-body');
+  if (secBody) {
+    // Mostrar/ocultar paneles dentro del sec-body
+    var campPanel = document.getElementById('met-panel-equipo') ?
+      secBody.querySelector(':not(#met-panel-equipo)') : secBody;
+  }
+  // Toggle simple: ocultar/mostrar contenido de campañas vs equipo
+  document.querySelectorAll('#sec-metricas .sec-body > *:not(#met-panel-equipo)').forEach(function(el){
+    el.style.display = id === 'camp' ? '' : 'none';
+  });
+  var panelEq = document.getElementById('met-panel-equipo');
+  if (panelEq) panelEq.style.display = id === 'equipo' ? '' : 'none';
+}
+
+async function cargarStatsEquipo() {
+  var wrap = document.getElementById('met-equipo-tabla');
+  if (!wrap) return;
+  wrap.innerHTML = '<div style="padding:14px;color:#94a3b8;font-size:.85rem;text-align:center">Cargando...</div>';
+
+  // Cargar config auto-asignar
+  try {
+    var rc = await fetch('/inbox/api/config?agent_id=' + _escAgentId, {credentials:'include'});
+    var dc = await rc.json();
+    var aa = document.getElementById('toggle-autoasignar');
+    var aaLabel = document.getElementById('autoasignar-label');
+    if (aa && dc) {
+      var isActive = (dc['AUTO_ASIGNAR'] === '1');
+      aa.checked = isActive;
+      if (aaLabel) aaLabel.textContent = isActive ? 'Activo' : 'Inactivo';
+    }
+  } catch(e) {}
+
+  try {
+    var r = await fetch('/inbox/api/equipo/stats?agent_id=' + _escAgentId, {credentials:'include'});
+    var d = await r.json();
+    var stats = d.stats || [];
+    _renderStatsEquipo(stats);
+  } catch(e) {
+    wrap.innerHTML = '<div style="padding:14px;color:#ef4444">Error cargando stats</div>';
+  }
+}
+
+function _renderStatsEquipo(stats) {
+  var wrap = document.getElementById('met-equipo-tabla');
+  if (!stats.length) {
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.85rem">' +
+      'Sin agentes de soporte configurados. Crea agentes en Configuración → Equipo.</div>';
+    return;
+  }
+  var filas = stats.map(function(s) {
+    var onlineDot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;' +
+      'background:' + (s.online ? '#22c55e' : '#d1d5db') + ';margin-right:5px"></span>';
+    var rolColor = {agente:'#e0f2fe;color:#0369a1', supervisor:'#fef3c7;color:#92400e', admin:'#f3e8ff;color:#7c3aed'};
+    var rc = rolColor[s.rol] || '#f1f5f9;color:#475569';
+    var avgStr = s.avg_resolucion_min != null
+      ? (s.avg_resolucion_min < 60
+          ? s.avg_resolucion_min + ' min'
+          : (s.avg_resolucion_min / 60).toFixed(1) + ' h')
+      : '—';
+    return '<tr style="border-bottom:1px solid #f1f5f9">' +
+      '<td style="padding:10px 14px;font-weight:600;font-size:.85rem;color:#1a2332">' + onlineDot + _escEsc(s.nombre) + '</td>' +
+      '<td style="padding:10px 14px"><span style="background:' + rc + ';padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:700">' + s.rol + '</span></td>' +
+      '<td style="padding:10px 14px;text-align:center;font-weight:700;color:' + (s.tickets_activos > 0 ? '#4f46e5' : '#94a3b8') + '">' + s.tickets_activos + '</td>' +
+      '<td style="padding:10px 14px;text-align:center;font-weight:700;color:#16a34a">' + s.tickets_resueltos + '</td>' +
+      '<td style="padding:10px 14px;text-align:center;color:#64748b">' + avgStr + '</td>' +
+      '</tr>';
+  });
+  wrap.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+    '<thead><tr style="background:#f8fafc;font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Agente</th>' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Rol</th>' +
+    '<th style="padding:8px 14px;text-align:center;font-weight:600">Activos</th>' +
+    '<th style="padding:8px 14px;text-align:center;font-weight:600">Resueltos</th>' +
+    '<th style="padding:8px 14px;text-align:center;font-weight:600">Tiempo prom.</th>' +
+    '</thead><tbody>' + filas.join('') + '</tbody></table>';
+}
+
+async function toggleAutoAsignar(activo) {
+  var label = document.getElementById('autoasignar-label');
+  try {
+    var r = await fetch('/inbox/api/config/auto-asignar?agent_id=' + _escAgentId, {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({activo: activo})
+    });
+    var d = await r.json();
+    if (d.ok && label) label.textContent = activo ? 'Activo' : 'Inactivo';
+    else if (!d.ok) alert('Error al cambiar configuración');
+  } catch(e) { alert('Error de red'); }
 }
 
 /* ══════════════════════════════════════════════════════════════

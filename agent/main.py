@@ -54,6 +54,9 @@ from agent.memory import (
     # Sprint 2 — notas y templates
     crear_nota_interna, obtener_notas_ticket,
     obtener_templates_rapidos, crear_template_rapido, eliminar_template_rapido,
+    # Sprint 3 — auditoría, supervisor, round-robin
+    registrar_evento_ticket, obtener_eventos_ticket,
+    obtener_stats_equipo, obtener_siguiente_agente_roundrobin,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html
 from agent.providers import obtener_proveedor
@@ -2040,6 +2043,8 @@ async def api_tomar_ticket(
     ticket = await tomar_ticket(ticket_id, agente_humano_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    await registrar_evento_ticket(ticket_id, "tomado", ticket.get("agente_nombre","Agente"),
+                                  "Tomó la conversación")
     _push_evento_ticket(ticket["agent_id"], "ticket_tomado", ticket)
     return JSONResponse(content={"ok": True, "ticket": ticket})
 
@@ -2057,6 +2062,8 @@ async def api_ticket_pendiente(
     ticket = await marcar_ticket_pendiente(ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    await registrar_evento_ticket(ticket_id, "pendiente",
+                                  ticket.get("agente_nombre","Agente"), "Marcó como pendiente")
     _push_evento_ticket(ticket["agent_id"], "ticket_pendiente", ticket)
     return JSONResponse(content={"ok": True, "ticket": ticket})
 
@@ -2081,8 +2088,56 @@ async def api_resolver_ticket(
         logger.info(f"Bot reactivado para {ticket['telefono_cliente']} al resolver ticket {ticket_id}")
     except Exception as e:
         logger.error(f"Error reactivando bot: {e}")
+    await registrar_evento_ticket(ticket_id, "resuelto",
+                                  ticket.get("agente_nombre","Agente"),
+                                  "Resolvió el ticket — bot reactivado")
     _push_evento_ticket(ticket["agent_id"], "ticket_resuelto", ticket)
     return JSONResponse(content={"ok": True, "ticket": ticket})
+
+
+@app.get("/inbox/api/tickets/{ticket_id}/eventos")
+async def api_eventos_ticket(
+    ticket_id: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Auditoría: historial de eventos de un ticket."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    eventos = await obtener_eventos_ticket(ticket_id)
+    return JSONResponse(content={"eventos": eventos})
+
+
+@app.get("/inbox/api/equipo/stats")
+async def api_stats_equipo(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Dashboard supervisor: métricas por agente."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    stats = await obtener_stats_equipo(agent_id)
+    return JSONResponse(content={"stats": stats})
+
+
+@app.post("/inbox/api/config/auto-asignar")
+async def api_toggle_autoasignar(
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Activa/desactiva la asignación automática round-robin."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    activo = "1" if body.get("activo") else "0"
+    await set_config_value("AUTO_ASIGNAR", activo, agent_id)
+    return JSONResponse(content={"ok": True, "auto_asignar": activo == "1"})
 
 
 @app.get("/inbox/api/tickets/{ticket_id}/historial")
@@ -4038,6 +4093,7 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
     cliente_nombre = datos.get("nombre_cliente", "")
 
     # ── 1. Crear ticket en BD y notificar via SSE ─────────────────────────────
+    ticket = None
     try:
         ticket = await crear_ticket(
             agent_id=agent_id,
@@ -4047,6 +4103,22 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
             urgencia=urgencia,
             contexto=contexto,
         )
+        # Auditoría
+        await registrar_evento_ticket(ticket["id"], "creado", "Andrea Bot",
+                                      f"Motivo: {motivo} | Urgencia: {urgencia}")
+        # Auto-asignación round-robin (si está habilitada)
+        try:
+            auto_asig = await get_config_value("AUTO_ASIGNAR", agent_id)
+            if auto_asig == "1":
+                agente_id_rr = await obtener_siguiente_agente_roundrobin(agent_id)
+                if agente_id_rr:
+                    ticket = await tomar_ticket(ticket["id"], agente_id_rr)
+                    if ticket:
+                        await registrar_evento_ticket(ticket["id"], "tomado",
+                            "Sistema (auto)", f"Asignado automáticamente a {ticket.get('agente_nombre','')}")
+        except Exception as e_rr:
+            logger.warning(f"Auto-asignación falló: {e_rr}")
+
         _push_evento_ticket(agent_id, "ticket_nuevo", ticket)
         logger.info(f"Ticket creado para {telefono_cliente} — motivo: {motivo}")
     except Exception as e:

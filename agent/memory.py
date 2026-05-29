@@ -294,6 +294,8 @@ async def inicializar_db():
             # Sprint 2 — notas internas y templates rápidos
             "CREATE INDEX IF NOT EXISTS ix_notas_ticket ON notas_internas (ticket_id)",
             "CREATE INDEX IF NOT EXISTS ix_tpl_agent ON templates_rapidos (agent_id)",
+            # Sprint 3 — auditoría de tickets
+            "CREATE INDEX IF NOT EXISTS ix_tevento_ticket ON ticket_eventos (ticket_id)",
             # Índices útiles
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
             "CREATE INDEX IF NOT EXISTS ix_mensajes_agent ON mensajes (agent_id)",
@@ -2328,3 +2330,154 @@ async def eliminar_template_rapido(tpl_id: int) -> bool:
         await session.delete(tpl)
         await session.commit()
         return True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 3 — Auditoría de tickets
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TicketEvento(Base):
+    """Registro inmutable de cada cambio de estado en un ticket."""
+    __tablename__ = "ticket_eventos"
+
+    id:           Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticket_id:    Mapped[int]      = mapped_column(Integer, index=True)
+    tipo:         Mapped[str]      = mapped_column(String(40))   # creado|tomado|pendiente|resuelto|transferido|nota|respuesta
+    actor_nombre: Mapped[str]      = mapped_column(String(200), default="Sistema")
+    detalle:      Mapped[str]      = mapped_column(Text, default="")
+    created_at:   Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+async def registrar_evento_ticket(
+    ticket_id: int, tipo: str, actor_nombre: str = "Sistema", detalle: str = ""
+) -> dict:
+    async with async_session() as session:
+        ev = TicketEvento(ticket_id=ticket_id, tipo=tipo,
+                          actor_nombre=actor_nombre, detalle=detalle)
+        session.add(ev)
+        await session.commit()
+        await session.refresh(ev)
+        return {"id": ev.id, "tipo": ev.tipo, "actor_nombre": ev.actor_nombre,
+                "detalle": ev.detalle, "created_at": ev.created_at.isoformat()}
+
+
+async def obtener_eventos_ticket(ticket_id: int) -> list[dict]:
+    async with async_session() as session:
+        result = await session.execute(
+            select(TicketEvento)
+            .where(TicketEvento.ticket_id == ticket_id)
+            .order_by(TicketEvento.created_at)
+        )
+        return [{"id": e.id, "tipo": e.tipo, "actor_nombre": e.actor_nombre,
+                 "detalle": e.detalle, "created_at": e.created_at.isoformat()}
+                for e in result.scalars().all()]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 3 — Dashboard supervisor
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def obtener_stats_equipo(agent_id: int) -> list[dict]:
+    """Métricas por agente: tickets resueltos, activos, tiempo promedio (min)."""
+    async with async_session() as session:
+        # Agentes activos del negocio
+        r_agentes = await session.execute(
+            select(UsuarioInterno)
+            .where(UsuarioInterno.agent_id == agent_id, UsuarioInterno.activo == True)
+        )
+        agentes = r_agentes.scalars().all()
+
+        stats = []
+        ahora = datetime.utcnow()
+        for ui in agentes:
+            # Tickets activos asignados
+            r_activos = await session.execute(
+                select(func.count()).select_from(Ticket).where(
+                    Ticket.agente_humano_id == ui.id,
+                    Ticket.estado.in_(["activo", "pendiente"])
+                )
+            )
+            activos = r_activos.scalar() or 0
+
+            # Tickets resueltos (todos)
+            r_resueltos = await session.execute(
+                select(Ticket).where(
+                    Ticket.agente_humano_id == ui.id,
+                    Ticket.estado == "resuelto",
+                    Ticket.tomado_at.isnot(None),
+                    Ticket.resuelto_at.isnot(None),
+                )
+            )
+            tickets_res = r_resueltos.scalars().all()
+            total_resueltos = len(tickets_res)
+
+            # Tiempo promedio de resolución en minutos
+            tiempos = []
+            for t in tickets_res:
+                if t.tomado_at and t.resuelto_at:
+                    delta = (t.resuelto_at - t.tomado_at).total_seconds() / 60
+                    tiempos.append(delta)
+            avg_mins = round(sum(tiempos) / len(tiempos), 1) if tiempos else None
+
+            # Online si hizo ping en últimos 90s
+            online = (ui.ultimo_ping_at is not None and
+                      (ahora - ui.ultimo_ping_at).total_seconds() < 90)
+
+            stats.append({
+                "id":               ui.id,
+                "nombre":           ui.nombre,
+                "email":            ui.email,
+                "rol":              ui.rol,
+                "online":           online,
+                "tickets_activos":  activos,
+                "tickets_resueltos": total_resueltos,
+                "avg_resolucion_min": avg_mins,
+            })
+
+        # Ordenar: supervisores/admin primero, luego por tickets resueltos desc
+        stats.sort(key=lambda x: (-{"admin":2,"supervisor":1}.get(x["rol"],0),
+                                   -x["tickets_resueltos"]))
+        return stats
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 3 — Asignación automática round-robin
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def obtener_siguiente_agente_roundrobin(agent_id: int) -> int | None:
+    """Devuelve el id del siguiente agente disponible en round-robin, o None."""
+    async with async_session() as session:
+        # Solo agentes con rol 'agente' o 'supervisor' activos
+        r = await session.execute(
+            select(UsuarioInterno)
+            .where(UsuarioInterno.agent_id == agent_id,
+                   UsuarioInterno.activo == True,
+                   UsuarioInterno.rol.in_(["agente", "supervisor"]))
+            .order_by(UsuarioInterno.id)
+        )
+        agentes = r.scalars().all()
+        if not agentes:
+            return None
+
+        # Leer índice actual del round-robin desde config_values
+        r_idx = await session.execute(
+            select(ConfigValue).where(
+                ConfigValue.agent_id == agent_id,
+                ConfigValue.clave == "_rr_index"
+            )
+        )
+        cfg = r_idx.scalar_one_or_none()
+        idx = int(cfg.valor) if cfg and cfg.valor.isdigit() else 0
+        idx = idx % len(agentes)
+
+        agente_elegido = agentes[idx]
+
+        # Avanzar índice
+        nuevo_idx = str((idx + 1) % len(agentes))
+        if cfg:
+            cfg.valor = nuevo_idx
+        else:
+            session.add(ConfigValue(agent_id=agent_id, clave="_rr_index", valor=nuevo_idx))
+        await session.commit()
+
+        return agente_elegido.id
