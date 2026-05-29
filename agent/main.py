@@ -50,7 +50,10 @@ from agent.memory import (
     contar_agentes_activos,
     crear_ticket, obtener_tickets, contar_tickets,
     tomar_ticket, marcar_ticket_pendiente, resolver_ticket,
-    obtener_ticket_activo_por_telefono,
+    obtener_ticket_activo_por_telefono, transferir_ticket,
+    # Sprint 2 — notas y templates
+    crear_nota_interna, obtener_notas_ticket,
+    obtener_templates_rapidos, crear_template_rapido, eliminar_template_rapido,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html
 from agent.providers import obtener_proveedor
@@ -2032,6 +2035,7 @@ async def api_tomar_ticket(
     ticket = await tomar_ticket(ticket_id, agente_humano_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    _push_evento_ticket(ticket["agent_id"], "ticket_tomado", ticket)
     return JSONResponse(content={"ok": True, "ticket": ticket})
 
 
@@ -2048,6 +2052,7 @@ async def api_ticket_pendiente(
     ticket = await marcar_ticket_pendiente(ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    _push_evento_ticket(ticket["agent_id"], "ticket_pendiente", ticket)
     return JSONResponse(content={"ok": True, "ticket": ticket})
 
 
@@ -2071,6 +2076,7 @@ async def api_resolver_ticket(
         logger.info(f"Bot reactivado para {ticket['telefono_cliente']} al resolver ticket {ticket_id}")
     except Exception as e:
         logger.error(f"Error reactivando bot: {e}")
+    _push_evento_ticket(ticket["agent_id"], "ticket_resuelto", ticket)
     return JSONResponse(content={"ok": True, "ticket": ticket})
 
 
@@ -2196,7 +2202,7 @@ async def api_ping_agente(
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
-    """Heartbeat del agente para marcar que está online (Sprint 2: estado online)."""
+    """Heartbeat del agente para marcar que está online."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
@@ -2204,6 +2210,178 @@ async def api_ping_agente(
     if ui_id:
         await ping_usuario_interno(ui_id)
     return JSONResponse(content={"ok": True})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 2 — SSE (Server-Sent Events) para notificaciones en tiempo real
+# ══════════════════════════════════════════════════════════════════════════════
+
+import asyncio as _asyncio
+from fastapi.responses import StreamingResponse
+
+# { agent_id → [Queue, Queue, ...] }  — una queue por pestaña/agente conectado
+_sse_queues: dict[int, list[_asyncio.Queue]] = {}
+
+
+def _push_evento_ticket(agent_id: int, tipo: str, ticket: dict) -> None:
+    """Envía un evento SSE a todos los suscriptores del agent_id."""
+    payload = json.dumps({"tipo": tipo, "ticket": ticket})
+    for q in _sse_queues.get(agent_id, []):
+        try:
+            q.put_nowait(payload)
+        except _asyncio.QueueFull:
+            pass
+
+
+async def _sse_stream(agent_id: int, q: _asyncio.Queue):
+    """Generador SSE con keepalive cada 25 segundos."""
+    try:
+        while True:
+            try:
+                data = await _asyncio.wait_for(q.get(), timeout=25)
+                yield f"data: {data}\n\n"
+            except _asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+    except _asyncio.CancelledError:
+        pass
+    finally:
+        # Limpiar queue al desconectar
+        qs = _sse_queues.get(agent_id, [])
+        if q in qs:
+            qs.remove(q)
+
+
+@app.get("/inbox/api/eventos")
+async def api_eventos_sse(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """SSE stream de eventos de tickets para el panel de escalaciones."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    q: _asyncio.Queue = _asyncio.Queue(maxsize=50)
+    _sse_queues.setdefault(agent_id, []).append(q)
+
+    return StreamingResponse(
+        _sse_stream(agent_id, q),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":               "no-cache",
+            "X-Accel-Buffering":           "no",   # Nginx: deshabilitar buffer
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
+# ── Transferir ticket entre agentes ───────────────────────────────────────────
+
+@app.post("/inbox/api/tickets/{ticket_id}/transferir")
+async def api_transferir_ticket(
+    ticket_id: int,
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Transfiere un ticket a otro agente humano."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    nuevo_agente_id = body.get("agente_humano_id")
+    if not nuevo_agente_id:
+        return JSONResponse(content={"ok": False, "error": "agente_humano_id requerido"})
+    ticket = await transferir_ticket(ticket_id, nuevo_agente_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    _push_evento_ticket(agent_id, "ticket_transferido", ticket)
+    return JSONResponse(content={"ok": True, "ticket": ticket})
+
+
+# ── Notas internas ────────────────────────────────────────────────────────────
+
+@app.get("/inbox/api/tickets/{ticket_id}/notas")
+async def api_listar_notas(
+    ticket_id: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    notas = await obtener_notas_ticket(ticket_id)
+    return JSONResponse(content={"notas": notas})
+
+
+@app.post("/inbox/api/tickets/{ticket_id}/notas")
+async def api_crear_nota(
+    ticket_id: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    contenido        = (body.get("contenido") or "").strip()
+    agente_humano_id = body.get("agente_humano_id", 0)
+    agente_nombre    = (body.get("agente_nombre") or "Agente").strip()
+    if not contenido:
+        return JSONResponse(content={"ok": False, "error": "Nota vacía"})
+    nota = await crear_nota_interna(ticket_id, agente_humano_id, agente_nombre, contenido)
+    return JSONResponse(content={"ok": True, "nota": nota})
+
+
+# ── Templates rápidos ─────────────────────────────────────────────────────────
+
+@app.get("/inbox/api/templates")
+async def api_listar_templates(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    templates = await obtener_templates_rapidos(agent_id)
+    return JSONResponse(content={"templates": templates})
+
+
+@app.post("/inbox/api/templates")
+async def api_crear_template(
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body     = await request.json()
+    titulo   = (body.get("titulo")   or "").strip()
+    contenido = (body.get("contenido") or "").strip()
+    orden    = int(body.get("orden", 0))
+    if not titulo or not contenido:
+        return JSONResponse(content={"ok": False, "error": "titulo y contenido requeridos"})
+    tpl = await crear_template_rapido(agent_id, titulo, contenido, orden)
+    return JSONResponse(content={"ok": True, "template": tpl})
+
+
+@app.delete("/inbox/api/templates/{tpl_id}")
+async def api_eliminar_template(
+    tpl_id: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    ok = await eliminar_template_rapido(tpl_id)
+    return JSONResponse(content={"ok": ok})
 
 
 # ── Difusión / Broadcast ───────────────────────────────────────────────────
@@ -3827,9 +4005,9 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
     urgencia      = datos.get("urgencia", "normal")
     cliente_nombre = datos.get("nombre_cliente", "")
 
-    # ── 1. Crear ticket en BD (núcleo del sistema de escalación) ──────────────
+    # ── 1. Crear ticket en BD y notificar via SSE ─────────────────────────────
     try:
-        await crear_ticket(
+        ticket = await crear_ticket(
             agent_id=agent_id,
             telefono_cliente=telefono_cliente,
             nombre_cliente=cliente_nombre,
@@ -3837,6 +4015,7 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
             urgencia=urgencia,
             contexto=contexto,
         )
+        _push_evento_ticket(agent_id, "ticket_nuevo", ticket)
         logger.info(f"Ticket creado para {telefono_cliente} — motivo: {motivo}")
     except Exception as e:
         logger.error(f"Error creando ticket de escalación: {e}")

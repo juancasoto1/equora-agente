@@ -727,6 +727,30 @@ tr:hover td{background:#f8f9fa}
 .esc-bbl-bot{background:#1f2c34;color:#e9edef;align-self:flex-start;border-radius:10px 10px 10px 3px}
 .esc-bbl-human{background:#2a3942;color:#e9edef;align-self:flex-start;border-radius:10px 10px 10px 3px;
   border-left:3px solid #4f46e5}
+.esc-bbl-nota{background:#fef9c3;color:#713f12;align-self:stretch;border-radius:8px;
+  border-left:3px solid #eab308;font-style:italic;font-size:.82rem}
+/* SLA timer */
+.sla-warn{color:#f59e0b;font-weight:700}
+.sla-crit{color:#ef4444;font-weight:700;animation:pulse-sla .8s infinite}
+@keyframes pulse-sla{0%,100%{opacity:1}50%{opacity:.5}}
+/* Templates rápidos */
+.tpl-picker{background:#fff;border:1px solid #e2e8f0;border-radius:8px;
+  box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:220px;overflow-y:auto;
+  position:absolute;bottom:100%;left:0;right:0;z-index:100;margin-bottom:4px}
+.tpl-item{padding:8px 12px;cursor:pointer;font-size:.83rem;border-bottom:1px solid #f1f5f9}
+.tpl-item:hover{background:#f0f4ff}
+.tpl-item-titulo{font-weight:700;color:#1a2332;margin-bottom:2px}
+.tpl-item-prev{color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Tabs del panel de detalle ticket */
+.det-tab{flex:1;border:none;background:none;padding:8px 4px;font-size:.75rem;font-weight:600;
+  color:#64748b;cursor:pointer;border-bottom:2px solid transparent}
+.det-tab.active{color:#4f46e5;border-bottom-color:#4f46e5}
+/* Notificación toast SSE */
+.esc-toast{position:fixed;top:16px;right:16px;background:#1a2332;color:#fff;
+  padding:10px 16px;border-radius:8px;font-size:.83rem;z-index:9999;
+  box-shadow:0 4px 16px rgba(0,0,0,.25);animation:toast-in .25s ease;
+  border-left:4px solid #4f46e5;max-width:300px}
+@keyframes toast-in{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 .esc-bbl-ts{font-size:.67rem;opacity:.6;margin-top:3px}
 /* Zona adjuntos */
 .img-attach-zone{border:1.5px dashed #c7d2fe;border-radius:8px;padding:8px 10px;
@@ -1995,19 +2019,62 @@ tr:hover td{background:#f8f9fa}
                 <strong>Contexto:</strong> <span id="esc-contexto"></span>
               </div>
 
-              <!-- Historial de mensajes -->
-              <div id="esc-msgs" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-height:0;background:#0b141a"></div>
-
-              <!-- Input de respuesta (solo visible si ticket activo) -->
-              <div id="esc-reply-wrap" style="padding:10px 14px;border-top:1px solid #e2e8f0;background:#fff;display:none">
-                <div style="display:flex;gap:8px">
-                  <textarea id="esc-reply-input" placeholder="Escribe tu respuesta al cliente…"
-                    style="flex:1;border:1px solid #dde1e8;border-radius:8px;padding:8px 10px;font-size:.85rem;
-                    resize:none;height:60px;outline:none;font-family:inherit"
-                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();escEnviarRespuesta();}"></textarea>
-                  <button class="btn-primary" style="align-self:flex-end;padding:8px 14px" onclick="escEnviarRespuesta()">Enviar</button>
+              <!-- Tabs: Conversación / Notas internas -->
+              <div id="esc-det-tabs" style="display:none;border-bottom:1px solid #e2e8f0;background:#fff">
+                <div style="display:flex">
+                  <button class="det-tab active" id="det-tab-conv" onclick="escDetTab('conv',this)">💬 Conversación</button>
+                  <button class="det-tab" id="det-tab-notas" onclick="escDetTab('notas',this)">📝 Notas internas <span id="notas-count" style="font-size:.68rem;color:#94a3b8"></span></button>
                 </div>
-                <div style="font-size:.72rem;color:#94a3b8;margin-top:4px">Enter para enviar · Shift+Enter nueva línea · El cliente recibe tu mensaje por WhatsApp</div>
+              </div>
+
+              <!-- Panel: Conversación -->
+              <div id="esc-panel-conv" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
+                <div id="esc-msgs" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-height:0;background:#0b141a"></div>
+
+                <!-- Input de respuesta (solo visible si ticket activo) -->
+                <div id="esc-reply-wrap" style="padding:10px 14px;border-top:1px solid #e2e8f0;background:#fff;display:none">
+                  <!-- Templates rápidos -->
+                  <div style="position:relative">
+                    <div id="tpl-picker" class="tpl-picker" style="display:none"></div>
+                    <div style="display:flex;gap:6px;margin-bottom:6px">
+                      <button class="btn-secondary" style="font-size:.74rem;padding:4px 10px" onclick="escToggleTemplates()" title="Respuestas rápidas">⚡ Templates</button>
+                      <button id="btn-transferir" class="btn-secondary" style="font-size:.74rem;padding:4px 10px;display:none" onclick="escMostrarTransferir()">↗ Transferir</button>
+                    </div>
+                  </div>
+                  <!-- Transferir (select oculto) -->
+                  <div id="transferir-wrap" style="display:none;margin-bottom:6px;padding:8px;background:#f0f4ff;border-radius:8px">
+                    <div style="font-size:.78rem;font-weight:600;color:#1a2332;margin-bottom:6px">Transferir a otro agente:</div>
+                    <div style="display:flex;gap:6px">
+                      <select id="transferir-select" style="flex:1;border:1px solid #dde1e8;border-radius:6px;padding:6px 8px;font-size:.82rem;outline:none">
+                        <option value="">— Selecciona un agente —</option>
+                      </select>
+                      <button class="btn-primary" style="font-size:.78rem;padding:5px 12px" onclick="escConfirmarTransferir()">Transferir</button>
+                      <button class="btn-secondary" style="font-size:.78rem;padding:5px 10px" onclick="document.getElementById('transferir-wrap').style.display='none'">✕</button>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:8px">
+                    <textarea id="esc-reply-input" placeholder="Escribe tu respuesta al cliente…"
+                      style="flex:1;border:1px solid #dde1e8;border-radius:8px;padding:8px 10px;font-size:.85rem;
+                      resize:none;height:60px;outline:none;font-family:inherit"
+                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();escEnviarRespuesta();}"></textarea>
+                    <button class="btn-primary" style="align-self:flex-end;padding:8px 14px" onclick="escEnviarRespuesta()">Enviar</button>
+                  </div>
+                  <div style="font-size:.72rem;color:#94a3b8;margin-top:4px">Enter para enviar · Shift+Enter nueva línea</div>
+                </div>
+              </div>
+
+              <!-- Panel: Notas internas -->
+              <div id="esc-panel-notas" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0">
+                <div id="esc-notas-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;background:#fffbeb"></div>
+                <div id="esc-nota-input-wrap" style="padding:10px 14px;border-top:1px solid #fde68a;background:#fff;display:none">
+                  <div style="display:flex;gap:8px">
+                    <textarea id="esc-nota-input" placeholder="Escribe una nota interna (solo el equipo la verá)…"
+                      style="flex:1;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:.83rem;
+                      resize:none;height:56px;outline:none;font-family:inherit;background:#fffbeb"
+                      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();escGuardarNota();}"></textarea>
+                    <button style="align-self:flex-end;padding:8px 12px;background:#eab308;border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:.84rem" onclick="escGuardarNota()">Guardar</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2032,6 +2099,7 @@ tr:hover td{background:#f8f9fa}
             <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()">🧠 Prompt</div>
             <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()">🧪 Probar</div>
             <div class="cfg-tab" onclick="cfgTab('equipo',this);cargarEquipo()">👥 Equipo</div>
+            <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()">⚡ Templates</div>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)">📋 Documentación</div>
           </div>
 
@@ -2610,6 +2678,43 @@ tr:hover td{background:#f8f9fa}
             <!-- Info de plan -->
             <div id="equipo-plan-info" style="margin-top:14px;font-size:.78rem;color:#64748b;text-align:center"></div>
           </div><!-- /pane equipo -->
+
+          <!-- ── Pane: Templates Rápidos (Sprint 2) ── -->
+          <div class="cfg-pane" id="cfg-pane-templates" style="padding:24px;overflow-y:auto">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+              <div>
+                <h2 style="margin:0;font-size:1.1rem;color:#1a2332">⚡ Templates Rápidos</h2>
+                <p style="margin:4px 0 0;font-size:.83rem;color:#64748b">Respuestas predefinidas para que tus agentes respondan más rápido</p>
+              </div>
+              <button class="btn-primary" style="font-size:.82rem;padding:7px 14px" onclick="mostrarFormTemplate()">+ Nuevo template</button>
+            </div>
+
+            <!-- Formulario nuevo template -->
+            <div id="tpl-form-wrap" style="display:none;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:10px;padding:18px;margin-bottom:20px">
+              <h3 style="margin:0 0 12px;font-size:.9rem;color:#1a2332">Nuevo template</h3>
+              <div style="margin-bottom:10px">
+                <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Título (ej: Saludo inicial)</label>
+                <input id="tpl-titulo" type="text" placeholder="Saludo inicial"
+                  style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+              </div>
+              <div style="margin-bottom:10px">
+                <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Mensaje</label>
+                <textarea id="tpl-contenido" placeholder="Hola! Gracias por comunicarte con nosotros. Mi nombre es [nombre] y estoy aquí para ayudarte."
+                  style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;
+                  box-sizing:border-box;outline:none;height:80px;resize:vertical;font-family:inherit"></textarea>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button class="btn-primary" style="font-size:.82rem;padding:7px 16px" onclick="guardarTemplateRapido()">Guardar</button>
+                <button class="btn-secondary" style="font-size:.82rem;padding:7px 14px" onclick="document.getElementById('tpl-form-wrap').style.display='none'">Cancelar</button>
+              </div>
+              <div id="tpl-form-msg" style="margin-top:8px;font-size:.82rem"></div>
+            </div>
+
+            <!-- Lista de templates -->
+            <div id="tpl-lista" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+              <div style="padding:14px;color:#94a3b8;font-size:.85rem;text-align:center">Cargando templates…</div>
+            </div>
+          </div><!-- /pane templates -->
 
           <!-- ── Pane: Documentación ── -->
           <div class="cfg-pane" id="cfg-pane-documentacion">
@@ -6214,6 +6319,394 @@ async function desactivarAgenteEquipo(uid) {
   if (d.ok) cargarEquipo();
   else alert('Error al desactivar');
 }
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 2 — SSE: notificaciones en tiempo real
+   ══════════════════════════════════════════════════════════════ */
+var _sseSource = null;
+
+function escConectarSSE() {
+  if (_sseSource) return;
+  var url = '/inbox/api/eventos?agent_id=' + _escAgentId;
+  _sseSource = new EventSource(url, {withCredentials: true});
+
+  _sseSource.onmessage = function(e) {
+    if (!e.data || e.data.startsWith(':')) return;  // keepalive
+    try {
+      var evt = JSON.parse(e.data);
+      _escManejarEvento(evt);
+    } catch(err) {}
+  };
+
+  _sseSource.onerror = function() {
+    // Reconectar automáticamente tras 5s
+    _sseSource.close();
+    _sseSource = null;
+    setTimeout(escConectarSSE, 5000);
+  };
+}
+
+function _escManejarEvento(evt) {
+  var tipo   = evt.tipo || '';
+  var ticket = evt.ticket || {};
+
+  // Actualizar badges siempre
+  _escActualizarBadges();
+
+  // Si la sección de escalaciones está abierta, recargar lista
+  if (_secActual === 'escalaciones') {
+    escCargarLista();
+  }
+
+  // Mostrar toast de notificación
+  var mensajes = {
+    ticket_nuevo:       '🚨 Nuevo ticket: ' + (ticket.nombre_cliente || ticket.telefono_cliente),
+    ticket_tomado:      '✋ Ticket tomado por ' + (ticket.agente_nombre || 'un agente'),
+    ticket_pendiente:   '⏸ Ticket marcado como pendiente',
+    ticket_resuelto:    '✅ Ticket resuelto — bot reactivado',
+    ticket_transferido: '↗ Ticket transferido a ' + (ticket.agente_nombre || 'otro agente'),
+  };
+  var msg = mensajes[tipo];
+  if (msg) _escToast(msg, tipo === 'ticket_nuevo' ? '#ef4444' : '#4f46e5');
+}
+
+function _escToast(msg, color) {
+  var toast = document.createElement('div');
+  toast.className = 'esc-toast';
+  toast.style.borderLeftColor = color || '#4f46e5';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(function() {
+    toast.style.opacity = '0';
+    toast.style.transition = 'opacity .3s';
+    setTimeout(function() { toast.remove(); }, 300);
+  }, 4000);
+}
+
+// Iniciar SSE al cargar la página
+document.addEventListener('DOMContentLoaded', escConectarSSE);
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 2 — SLA: timer visual en tarjetas de tickets
+   ══════════════════════════════════════════════════════════════ */
+var _escSlaMinutos = 5;   // alerta en amarillo
+var _escSlaCritico = 15;  // alerta en rojo
+
+function _escSlaClase(creadoAt, estado) {
+  if (estado !== 'sin_asignar') return '';
+  var mins = Math.floor((Date.now() - new Date(creadoAt).getTime()) / 60000);
+  if (mins >= _escSlaCritico) return 'sla-crit';
+  if (mins >= _escSlaMinutos) return 'sla-warn';
+  return '';
+}
+
+function _escSlaLabel(creadoAt, estado) {
+  if (estado !== 'sin_asignar') return '';
+  var mins = Math.floor((Date.now() - new Date(creadoAt).getTime()) / 60000);
+  if (mins < 1) return '';
+  return ' · ' + mins + 'min sin atender';
+}
+
+// Regenerar lista cada 60s para actualizar timers SLA
+setInterval(function() {
+  if (_secActual === 'escalaciones' && _escEstadoActual === 'sin_asignar') {
+    escCargarLista();
+  }
+}, 60000);
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 2 — Tabs detalle ticket (Conversación / Notas)
+   ══════════════════════════════════════════════════════════════ */
+var _escTabActual = 'conv';
+
+function escDetTab(id, btn) {
+  _escTabActual = id;
+  document.querySelectorAll('.det-tab').forEach(function(t){ t.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('esc-panel-conv').style.display   = id === 'conv'  ? 'flex' : 'none';
+  document.getElementById('esc-panel-notas').style.display  = id === 'notas' ? 'flex' : 'none';
+  if (id === 'notas' && _escTicketActual) escCargarNotas(_escTicketActual.id);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 2 — Notas internas
+   ══════════════════════════════════════════════════════════════ */
+async function escCargarNotas(ticketId) {
+  var lista = document.getElementById('esc-notas-list');
+  if (!lista) return;
+  lista.innerHTML = '<div style="color:#94a3b8;font-size:.82rem;padding:8px">Cargando notas…</div>';
+  try {
+    var r = await fetch('/inbox/api/tickets/' + ticketId + '/notas', {credentials:'include'});
+    var d = await r.json();
+    var notas = d.notas || [];
+    var cntEl = document.getElementById('notas-count');
+    if (cntEl) cntEl.textContent = notas.length ? '(' + notas.length + ')' : '';
+
+    if (!notas.length) {
+      lista.innerHTML = '<div style="color:#94a3b8;font-size:.83rem;padding:12px;text-align:center">Sin notas aún. Agrega la primera 👇</div>';
+      return;
+    }
+    lista.innerHTML = '';
+    notas.forEach(function(n) {
+      var el = document.createElement('div');
+      el.className = 'esc-bbl esc-bbl-nota';
+      el.innerHTML = '<div style="font-size:.72rem;font-weight:700;color:#92400e;margin-bottom:3px">📝 ' +
+        _escEsc(n.agente_nombre) + ' · ' + new Date(n.created_at).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) + '</div>' +
+        _escEsc(n.contenido);
+      lista.appendChild(el);
+    });
+    lista.scrollTop = lista.scrollHeight;
+  } catch(e) {
+    lista.innerHTML = '<div style="color:#ef4444;font-size:.82rem">Error cargando notas</div>';
+  }
+}
+
+async function escGuardarNota() {
+  if (!_escTicketActual) return;
+  var input = document.getElementById('esc-nota-input');
+  var texto = (input.value || '').trim();
+  if (!texto) return;
+  input.value = '';
+  await fetch('/inbox/api/tickets/' + _escTicketActual.id + '/notas', {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      contenido: texto,
+      agente_humano_id: _escUsuarioId || 0,
+      agente_nombre: 'Agente',
+    })
+  });
+  escCargarNotas(_escTicketActual.id);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 2 — Transferencia entre agentes
+   ══════════════════════════════════════════════════════════════ */
+var _equipoCache = [];
+
+async function escMostrarTransferir() {
+  var wrap = document.getElementById('transferir-wrap');
+  if (!wrap) return;
+  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+  if (wrap.style.display === 'none') return;
+
+  // Cargar equipo si no está en caché
+  if (!_equipoCache.length) {
+    var r = await fetch('/inbox/api/equipo?agent_id=' + _escAgentId, {credentials:'include'});
+    var d = await r.json();
+    _equipoCache = (d.equipo || []).filter(function(u){ return u.activo; });
+  }
+  var sel = document.getElementById('transferir-select');
+  sel.innerHTML = '<option value="">— Selecciona un agente —</option>';
+  _equipoCache.forEach(function(u) {
+    if (_escTicketActual && u.id === _escTicketActual.agente_humano_id) return; // no mostrar al actual
+    var opt = document.createElement('option');
+    opt.value = u.id;
+    opt.textContent = u.nombre + ' (' + u.rol + ')';
+    sel.appendChild(opt);
+  });
+}
+
+async function escConfirmarTransferir() {
+  if (!_escTicketActual) return;
+  var sel   = document.getElementById('transferir-select');
+  var nuevoId = parseInt(sel.value);
+  if (!nuevoId) { alert('Selecciona un agente'); return; }
+  var r = await fetch('/inbox/api/tickets/' + _escTicketActual.id + '/transferir?agent_id=' + _escAgentId, {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({agente_humano_id: nuevoId})
+  });
+  var d = await r.json();
+  if (d.ok) {
+    document.getElementById('transferir-wrap').style.display = 'none';
+    _escTicketActual = d.ticket;
+    escCargarLista();
+    _escToast('↗ Ticket transferido correctamente', '#4f46e5');
+  } else {
+    alert('Error al transferir');
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 2 — Templates rápidos en el panel de respuesta
+   ══════════════════════════════════════════════════════════════ */
+var _templatesCache = [];
+
+async function escCargarTemplatesParaPanel() {
+  if (_templatesCache.length) return;
+  try {
+    var r = await fetch('/inbox/api/templates?agent_id=' + _escAgentId, {credentials:'include'});
+    var d = await r.json();
+    _templatesCache = d.templates || [];
+  } catch(e) {}
+}
+
+function escToggleTemplates() {
+  var picker = document.getElementById('tpl-picker');
+  if (!picker) return;
+  if (picker.style.display !== 'none') { picker.style.display = 'none'; return; }
+  escCargarTemplatesParaPanel().then(function() {
+    if (!_templatesCache.length) {
+      picker.innerHTML = '<div class="tpl-item" style="color:#94a3b8">Sin templates. Crea uno en Configuración → ⚡ Templates</div>';
+    } else {
+      picker.innerHTML = '';
+      _templatesCache.forEach(function(tpl) {
+        var el = document.createElement('div');
+        el.className = 'tpl-item';
+        el.innerHTML = '<div class="tpl-item-titulo">' + _escEsc(tpl.titulo) + '</div>' +
+                       '<div class="tpl-item-prev">' + _escEsc(tpl.contenido.slice(0,70)) + (tpl.contenido.length>70?'…':'') + '</div>';
+        el.onclick = function() {
+          document.getElementById('esc-reply-input').value = tpl.contenido;
+          picker.style.display = 'none';
+          document.getElementById('esc-reply-input').focus();
+        };
+        picker.appendChild(el);
+      });
+    }
+    picker.style.display = '';
+  });
+}
+
+// Cerrar picker al hacer click fuera
+document.addEventListener('click', function(e) {
+  var picker = document.getElementById('tpl-picker');
+  if (picker && !picker.contains(e.target) && e.target.textContent !== '⚡ Templates') {
+    picker.style.display = 'none';
+  }
+});
+
+/* ── Gestión de templates desde Configuración ────────────────── */
+async function cargarTemplatesRapidos() {
+  var lista = document.getElementById('tpl-lista');
+  if (!lista) return;
+  lista.innerHTML = '<div style="padding:14px;color:#94a3b8;font-size:.85rem">Cargando…</div>';
+  try {
+    var r = await fetch('/inbox/api/templates?agent_id=' + _escAgentId, {credentials:'include'});
+    var d = await r.json();
+    _templatesCache = d.templates || [];
+    _renderListaTemplates(_templatesCache);
+  } catch(e) {
+    lista.innerHTML = '<div style="padding:14px;color:#ef4444">Error al cargar</div>';
+  }
+}
+
+function _renderListaTemplates(templates) {
+  var lista = document.getElementById('tpl-lista');
+  if (!templates.length) {
+    lista.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.85rem">' +
+      'Sin templates aún. Crea el primero con el botón "Nuevo template".</div>';
+    return;
+  }
+  var filas = templates.map(function(t) {
+    return '<tr style="border-bottom:1px solid #f1f5f9">' +
+      '<td style="padding:10px 14px;font-weight:700;font-size:.85rem;color:#1a2332">' + _escEsc(t.titulo) + '</td>' +
+      '<td style="padding:10px 14px;font-size:.82rem;color:#4a5568;max-width:320px">' +
+        _escEsc(t.contenido.slice(0,100)) + (t.contenido.length>100?'…':'') + '</td>' +
+      '<td style="padding:10px 14px">' +
+        '<button onclick="eliminarTemplateRapido(' + t.id + ')" style="color:#ef4444;background:none;border:none;cursor:pointer;font-size:.78rem">Eliminar</button>' +
+      '</td></tr>';
+  });
+  lista.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+    '<thead><tr style="background:#f8fafc;font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Título</th>' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Mensaje</th>' +
+    '<th style="padding:8px 14px"></th>' +
+    '</thead><tbody>' + filas.join('') + '</tbody></table>';
+}
+
+function mostrarFormTemplate() {
+  var wrap = document.getElementById('tpl-form-wrap');
+  if (wrap) wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+}
+
+async function guardarTemplateRapido() {
+  var titulo   = (document.getElementById('tpl-titulo').value   || '').trim();
+  var contenido = (document.getElementById('tpl-contenido').value || '').trim();
+  var msg      = document.getElementById('tpl-form-msg');
+  if (!titulo || !contenido) { msg.innerHTML = '<span style="color:#ef4444">Completa título y mensaje.</span>'; return; }
+  msg.innerHTML = 'Guardando…';
+  var r = await fetch('/inbox/api/templates?agent_id=' + _escAgentId, {
+    method:'POST', credentials:'include',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({titulo, contenido})
+  });
+  var d = await r.json();
+  if (d.ok) {
+    msg.innerHTML = '<span style="color:#16a34a">✅ Template guardado.</span>';
+    document.getElementById('tpl-titulo').value = '';
+    document.getElementById('tpl-contenido').value = '';
+    _templatesCache = [];  // forzar recarga
+    cargarTemplatesRapidos();
+  } else {
+    msg.innerHTML = '<span style="color:#ef4444">' + (d.error || 'Error') + '</span>';
+  }
+}
+
+async function eliminarTemplateRapido(id) {
+  if (!confirm('¿Eliminar este template?')) return;
+  var r = await fetch('/inbox/api/templates/' + id, {method:'DELETE', credentials:'include'});
+  var d = await r.json();
+  if (d.ok) { _templatesCache = []; cargarTemplatesRapidos(); }
+  else alert('Error al eliminar');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 2 — Overrides sobre funciones del Sprint 1 para incluir
+   tabs, SLA y botón transferir al seleccionar un ticket
+   ══════════════════════════════════════════════════════════════ */
+var _escSeleccionarTicketOriginal = escSeleccionarTicket;
+escSeleccionarTicket = async function(ticket) {
+  await _escSeleccionarTicketOriginal(ticket);
+
+  // Mostrar tabs
+  var tabs = document.getElementById('esc-det-tabs');
+  if (tabs) tabs.style.display = '';
+
+  // Mostrar input de nota si ticket activo
+  var notaInputWrap = document.getElementById('esc-nota-input-wrap');
+  if (notaInputWrap) notaInputWrap.style.display = ticket.estado === 'activo' ? '' : 'none';
+
+  // Mostrar botón transferir si activo
+  var btnTransferir = document.getElementById('btn-transferir');
+  if (btnTransferir) btnTransferir.style.display = ticket.estado === 'activo' ? '' : 'none';
+
+  // Resetear a tab Conversación
+  escDetTab('conv', document.getElementById('det-tab-conv'));
+
+  // Reset notas count
+  var cntEl = document.getElementById('notas-count');
+  if (cntEl) cntEl.textContent = '';
+};
+
+// Override _escRenderLista para incluir SLA
+var _escRenderListaOriginal = _escRenderLista;
+_escRenderLista = function(tickets) {
+  var lista = document.getElementById('esc-lista');
+  if (!tickets.length) {
+    lista.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:.84rem">Sin conversaciones en esta categoría</div>';
+    return;
+  }
+  lista.innerHTML = '';
+  tickets.forEach(function(t) {
+    var urgClass = 'esc-urg-' + (t.urgencia || 'normal');
+    var slaClass = _escSlaClase(t.creado_at, t.estado);
+    var slaLabel = _escSlaLabel(t.creado_at, t.estado);
+    var tiempo   = _escTiempoRelativo(t.actualizado_at);
+    var card = document.createElement('div');
+    card.className = 'esc-card' + (_escTicketActual && _escTicketActual.id === t.id ? ' selected' : '');
+    card.onclick = function() { escSeleccionarTicket(t); };
+    card.innerHTML =
+      '<div class="esc-card-nombre">' + _escEsc(t.nombre_cliente || t.telefono_cliente) + '</div>' +
+      '<div class="esc-card-motivo">' + _escEsc(t.motivo) + '</div>' +
+      '<div class="esc-card-meta">' +
+        '<span class="esc-urg ' + urgClass + '">' + (t.urgencia||'normal') + '</span>' +
+        (t.agente_nombre ? '<span>👤 ' + _escEsc(t.agente_nombre) + '</span>' : '') +
+        '<span style="margin-left:auto" class="' + slaClass + '">' + tiempo + slaLabel + '</span>' +
+      '</div>';
+    lista.appendChild(card);
+  });
+};
 </script>
 </body>
 </html>"""

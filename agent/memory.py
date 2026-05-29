@@ -286,6 +286,9 @@ async def inicializar_db():
             "ALTER TABLE agents ADD COLUMN IF NOT EXISTS max_agentes INTEGER DEFAULT 2",
             "CREATE INDEX IF NOT EXISTS ix_tickets_agent_estado ON tickets (agent_id, estado)",
             "CREATE INDEX IF NOT EXISTS ix_ui_agent ON usuarios_internos (agent_id)",
+            # Sprint 2 — notas internas y templates rápidos
+            "CREATE INDEX IF NOT EXISTS ix_notas_ticket ON notas_internas (ticket_id)",
+            "CREATE INDEX IF NOT EXISTS ix_tpl_agent ON templates_rapidos (agent_id)",
             # Índices útiles
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
             "CREATE INDEX IF NOT EXISTS ix_mensajes_agent ON mensajes (agent_id)",
@@ -2196,3 +2199,127 @@ async def obtener_ticket_activo_por_telefono(agent_id: int, telefono: str) -> di
         )
         ticket = result.scalar_one_or_none()
         return _ticket_to_dict(ticket) if ticket else None
+
+
+async def transferir_ticket(ticket_id: int, nuevo_agente_id: int) -> dict | None:
+    """Transfiere un ticket activo a otro agente humano."""
+    async with async_session() as session:
+        result = await session.execute(select(Ticket).where(Ticket.id == ticket_id))
+        ticket = result.scalar_one_or_none()
+        if not ticket:
+            return None
+        ticket.agente_humano_id = nuevo_agente_id
+        ticket.estado = "activo"
+        ticket.actualizado_at = datetime.utcnow()
+        await session.commit()
+        r2 = await session.execute(select(UsuarioInterno).where(UsuarioInterno.id == nuevo_agente_id))
+        ui = r2.scalar_one_or_none()
+        return _ticket_to_dict(ticket, ui.nombre if ui else "")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 2 — Notas internas
+# ══════════════════════════════════════════════════════════════════════════════
+
+class NotaInterna(Base):
+    """Nota interna de un agente sobre un ticket (no visible al cliente)."""
+    __tablename__ = "notas_internas"
+
+    id:               Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticket_id:        Mapped[int]      = mapped_column(Integer, index=True)
+    agente_humano_id: Mapped[int]      = mapped_column(Integer, default=0)
+    agente_nombre:    Mapped[str]      = mapped_column(String(200), default="")
+    contenido:        Mapped[str]      = mapped_column(Text)
+    created_at:       Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+async def crear_nota_interna(
+    ticket_id: int, agente_humano_id: int, agente_nombre: str, contenido: str
+) -> dict:
+    async with async_session() as session:
+        nota = NotaInterna(
+            ticket_id=ticket_id,
+            agente_humano_id=agente_humano_id,
+            agente_nombre=agente_nombre,
+            contenido=contenido,
+        )
+        session.add(nota)
+        await session.commit()
+        await session.refresh(nota)
+        return {
+            "id":               nota.id,
+            "ticket_id":        nota.ticket_id,
+            "agente_humano_id": nota.agente_humano_id,
+            "agente_nombre":    nota.agente_nombre,
+            "contenido":        nota.contenido,
+            "created_at":       nota.created_at.isoformat(),
+        }
+
+
+async def obtener_notas_ticket(ticket_id: int) -> list[dict]:
+    async with async_session() as session:
+        result = await session.execute(
+            select(NotaInterna)
+            .where(NotaInterna.ticket_id == ticket_id)
+            .order_by(NotaInterna.created_at)
+        )
+        return [
+            {
+                "id":            n.id,
+                "agente_nombre": n.agente_nombre,
+                "contenido":     n.contenido,
+                "created_at":    n.created_at.isoformat(),
+            }
+            for n in result.scalars().all()
+        ]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 2 — Templates rápidos de respuesta
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TemplateRapido(Base):
+    """Respuestas rápidas predefinidas para agentes de soporte."""
+    __tablename__ = "templates_rapidos"
+
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:   Mapped[int]      = mapped_column(Integer, index=True)
+    titulo:     Mapped[str]      = mapped_column(String(100))
+    contenido:  Mapped[str]      = mapped_column(Text)
+    orden:      Mapped[int]      = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+def _tpl_to_dict(t: TemplateRapido) -> dict:
+    return {"id": t.id, "agent_id": t.agent_id, "titulo": t.titulo,
+            "contenido": t.contenido, "orden": t.orden}
+
+
+async def obtener_templates_rapidos(agent_id: int) -> list[dict]:
+    async with async_session() as session:
+        result = await session.execute(
+            select(TemplateRapido)
+            .where(TemplateRapido.agent_id == agent_id)
+            .order_by(TemplateRapido.orden, TemplateRapido.id)
+        )
+        return [_tpl_to_dict(t) for t in result.scalars().all()]
+
+
+async def crear_template_rapido(agent_id: int, titulo: str, contenido: str, orden: int = 0) -> dict:
+    async with async_session() as session:
+        tpl = TemplateRapido(agent_id=agent_id, titulo=titulo, contenido=contenido, orden=orden)
+        session.add(tpl)
+        await session.commit()
+        await session.refresh(tpl)
+        return _tpl_to_dict(tpl)
+
+
+async def eliminar_template_rapido(tpl_id: int) -> bool:
+    async with async_session() as session:
+        result = await session.execute(select(TemplateRapido).where(TemplateRapido.id == tpl_id))
+        tpl = result.scalar_one_or_none()
+        if not tpl:
+            return False
+        await session.delete(tpl)
+        await session.commit()
+        return True
