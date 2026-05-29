@@ -5471,18 +5471,8 @@ function _initImgAttach() {
   });
 }
 
-/* Llamar _initImgAttach cuando la sección de configuración se active */
-document.addEventListener('DOMContentLoaded', function() {
-  /* Observar si la sección de config se hace visible */
-  var cfgSection = document.getElementById('sec-cfg');
-  if (!cfgSection) return;
-  var obs = new MutationObserver(function() {
-    if (cfgSection.classList.contains('active')) _initImgAttach();
-  });
-  obs.observe(cfgSection, { attributes: true, attributeFilter: ['class'] });
-  /* Si ya está activa al cargar */
-  if (cfgSection.classList.contains('active')) _initImgAttach();
-});
+/* Inicializar listeners al cargar — funcionan aunque el elemento esté oculto */
+document.addEventListener('DOMContentLoaded', _initImgAttach);
 
 /* ── Mejorar con IA ── */
 async function mejorarPrompt() {
