@@ -359,8 +359,14 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
   /* Panel reply en móvil: más compacto */
   #esc-reply-wrap textarea{height:48px}
 
-  /* Difusiones: layout 1 col */
+  /* Difusiones: stack vertical + ocultar preview WhatsApp */
+  #dif-split{flex-direction:column!important;gap:12px!important}
+  #dif-form-col{width:100%!important;min-width:unset!important}
+  #dif-wa-prev-col,.wa-phone{display:none!important}
   .dif-form-grid{grid-template-columns:1fr!important}
+  #dif-csv-wrap{flex-wrap:wrap!important}
+  #dif-csv-label{flex:1 1 100%!important;text-align:center}
+  .btn-dl-csv{flex:1 1 100%!important;text-align:center}
 
   /* Ocultar columnas no esenciales en tablas */
   .mob-hide{display:none!important}
@@ -3678,12 +3684,16 @@ async function cargarTemplates() {
     var r = await fetch('/inbox/broadcast/templates', {credentials:'include'});
     var d = await r.json();
     if (d.error) {
-      sel.innerHTML = '<option value="">Error: ' + d.error + '</option>';
+      sel.innerHTML = '<option value="">⚠️ ' + d.error + '</option>';
       return;
     }
     // Solo plantillas APPROVED para difusiones
     var todas = d.templates || [];
     _dif_templates = todas.filter(function(t) { return (t.status || '').toUpperCase() === 'APPROVED'; });
+    if (!_dif_templates.length && todas.length) {
+      sel.innerHTML = '<option value="">Sin plantillas APROBADAS — hay ' + todas.length + ' en otro estado</option>';
+      return;
+    }
     if (!_dif_templates.length) {
       sel.innerHTML = '<option value="">No hay plantillas aprobadas en Meta</option>';
       return;
@@ -4193,10 +4203,19 @@ async function cargarTablaPlantillas() {
   try {
     var r = await fetch('/inbox/broadcast/templates', {credentials:'include'});
     var d = await r.json();
-    var tpls = d.templates || [];
 
+    // Error explícito del backend (ej: META_WABA_ID no configurado)
+    if (d.error) {
+      tbody.innerHTML = '<tr><td colspan="6" class="loading-txt" style="color:#c0392b">' +
+        '⚠️ ' + he(d.error) + '</td></tr>';
+      cargarBorradores();
+      return;
+    }
+
+    var tpls = d.templates || [];
     if (!tpls.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="loading-txt">Sin plantillas · Verifica META_WABA_ID</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="loading-txt">Sin plantillas en Meta · Verifica META_WABA_ID en Railway</td></tr>';
+      cargarBorradores();
       return;
     }
 
