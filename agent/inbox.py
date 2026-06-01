@@ -2640,6 +2640,65 @@ tr:hover td{background:#f8f9fa}
               </div>
             </div><!-- /card-shopify -->
 
+            <!-- ══════════════════════════════════════════════════════════
+                 REGLAS DEL NEGOCIO (Sprint 4 — multi-tenant)
+                 ══════════════════════════════════════════════════════════ -->
+            <div class="cfg-card" id="card-reglas">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-ic">📦</div>
+                <div class="cfg-card-info">
+                  <div class="cfg-card-title">Reglas de pedido</div>
+                  <div class="cfg-card-sub">Pedido mínimo, mensaje al cliente cuando no lo alcanza</div>
+                </div>
+                <span class="cfg-pill" id="pill-reglas">⚙️ Opcional</span>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">1</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Pedido mínimo (COP)
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-pedido-min')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge">Opcional</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-pedido-min">
+                    Monto mínimo en pesos para que un cliente pueda confirmar un pedido.<br>
+                    <b>0 o vacío</b> = sin mínimo (cualquier pedido es válido).<br>
+                    Si el pedido del cliente está por debajo, el bot le responderá amablemente con cuánto le falta y le mostrará el catálogo para agregar más productos.<br>
+                    También puedes usar <code>{PEDIDO_MINIMO}</code> en el prompt del agente para que mencione el mínimo de forma dinámica.
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="number" id="cfg-pedido-min" class="f-inp" placeholder="ej: 50000" min="0" step="1000" style="flex:1">
+                    <span class="cfg-field-status" id="st-PEDIDO_MINIMO"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">2</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Mensaje cuando el pedido no alcanza el mínimo
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-pedido-msg')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge">Opcional</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-pedido-msg">
+                    Texto que el bot envía al cliente cuando su pedido está por debajo del mínimo.<br>
+                    Variables disponibles: <code>{ITEMS}</code> (lista del pedido actual), <code>{SUBTOTAL}</code>, <code>{MINIMO}</code>, <code>{FALTA}</code>.<br>
+                    Si dejas vacío, se usa un mensaje genérico por defecto.
+                  </div>
+                  <textarea id="cfg-pedido-msg" class="f-inp" style="height:100px;resize:vertical;font-family:inherit"
+                    placeholder='Ej: ¡Tu pedido va muy bien! {ITEMS}&#10;💰 Subtotal: ${SUBTOTAL}&#10;📦 Mínimo: ${MINIMO}&#10;Te faltan ${FALTA} para confirmar.'></textarea>
+                  <span class="cfg-field-status" id="st-PEDIDO_MIN_MSG" style="display:block;margin-top:6px"></span>
+                </div>
+              </div>
+
+              <div class="cfg-actions">
+                <div id="cfg-reglas-result" class="cfg-test-result" style="display:none"></div>
+                <button class="btn-primary" onclick="guardarConfig('reglas')" type="button">💾 Guardar</button>
+              </div>
+            </div><!-- /card-reglas -->
+
             <!-- Próximas integraciones -->
             <div class="cfg-card" style="border-style:dashed;background:#fafbfc">
               <div class="cfg-card-title" style="color:#6b7a8d;margin-bottom:12px">🚀 Próximas integraciones</div>
@@ -5601,6 +5660,8 @@ async function cargarConfiguracion() {
     SHOPIFY_STORE:           'cfg-sh-domain',
     SHOPIFY_STOREFRONT_TOKEN:'cfg-sh-sftoken',
     SHOPIFY_WEBHOOK_SECRET:  'cfg-sh-whsec',
+    PEDIDO_MINIMO:           'cfg-pedido-min',
+    PEDIDO_MIN_MSG:          'cfg-pedido-msg',
   };
 
   try {
@@ -5676,6 +5737,12 @@ async function guardarConfig(service) {
     if (sd) payload.SHOPIFY_STORE            = sd;
     if (sf) payload.SHOPIFY_STOREFRONT_TOKEN = sf;
     if (sw) payload.SHOPIFY_WEBHOOK_SECRET   = sw;
+  } else if (service === 'reglas') {
+    var pm  = (document.getElementById('cfg-pedido-min').value || '').trim();
+    var pmm = (document.getElementById('cfg-pedido-msg').value || '').trim();
+    // Pedido mínimo: enviar siempre (incluso vacío para que se guarde 0)
+    payload.PEDIDO_MINIMO  = pm || '0';
+    payload.PEDIDO_MIN_MSG = pmm;
   }
 
   if (!Object.keys(payload).length) {

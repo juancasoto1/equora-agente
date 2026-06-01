@@ -70,6 +70,17 @@ async def cargar_system_prompt(agent_id: int = 1) -> str:
     prompt = prompt.replace("{COSTO_ENVIO}", costo_fmt)
     prompt = prompt.replace("{ENVIO_GRATIS}", gratis_fmt)
 
+    # ── 4. Pedido mínimo (configurable por agente desde el panel) ──────────
+    # Si PEDIDO_MINIMO está configurado y > 0, se reemplaza con formato $50.000.
+    # Si no está configurado o es 0, se reemplaza con string vacío (sin mínimo).
+    try:
+        pedido_min_raw = await get_config_value("PEDIDO_MINIMO", agent_id) or ""
+        pedido_min_val = int(float(pedido_min_raw)) if pedido_min_raw else 0
+    except Exception:
+        pedido_min_val = 0
+    pedido_min_fmt = f"${pedido_min_val:,}".replace(",", ".") if pedido_min_val > 0 else ""
+    prompt = prompt.replace("{PEDIDO_MINIMO}", pedido_min_fmt)
+
     return prompt
 
 

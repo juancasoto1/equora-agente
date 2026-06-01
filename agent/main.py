@@ -1046,17 +1046,26 @@ async def webhook_handler(request: Request):
 
                         if pedido_min > 0 and total < pedido_min:
                             falta = pedido_min - total
+                            # Mensaje configurable por agente: usa PEDIDO_MIN_MSG si está
+                            # definido (con variables {SUBTOTAL}, {MINIMO}, {FALTA}, {ITEMS}),
+                            # si no, mensaje genérico por defecto.
                             lineas_pedido = "\n".join(
                                 f"  • {p['producto']} {p['presentacion']} × {p['cantidad']} = ${p['subtotal']:,}".replace(",", ".")
                                 for p in productos
                             )
-                            mensaje_minimo = (
-                                f"😊 ¡Tu pedido va muy bien! Lo que tienes:\n\n"
-                                f"{lineas_pedido}\n\n"
-                                f"💰 *Subtotal:* ${total:,}\n".replace(",", ".") +
-                                f"📦 *Pedido mínimo:* ${pedido_min:,}\n".replace(",", ".") +
-                                f"➕ *Te faltan:* ${falta:,} para confirmar 🎯\n\n".replace(",", ".") +
-                                f"¿Quieres agregar algo más? Te muestro el catálogo:"
+                            msg_template = await get_config_value("PEDIDO_MIN_MSG", _agent_id) or (
+                                "😊 ¡Tu pedido va muy bien! Lo que tienes:\n\n"
+                                "{ITEMS}\n\n"
+                                "💰 *Subtotal:* ${SUBTOTAL}\n"
+                                "📦 *Pedido mínimo:* ${MINIMO}\n"
+                                "➕ *Te faltan:* ${FALTA} para confirmar 🎯\n\n"
+                                "¿Quieres agregar algo más? Te muestro el catálogo:"
+                            )
+                            mensaje_minimo = (msg_template
+                                .replace("{SUBTOTAL}", f"{total:,}".replace(",", "."))
+                                .replace("{MINIMO}",   f"{pedido_min:,}".replace(",", "."))
+                                .replace("{FALTA}",    f"{falta:,}".replace(",", "."))
+                                .replace("{ITEMS}",    lineas_pedido)
                             )
                             await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
                             # Reabrir catálogo para que agregue más
@@ -3671,6 +3680,8 @@ _CONFIG_KEYS_ALLOWED = {
     "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
     "ANTHROPIC_API_KEY", "AI_MODEL",
     "SHOPIFY_STORE", "SHOPIFY_STOREFRONT_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
+    # Sprint 4 — reglas del negocio configurables por agente
+    "PEDIDO_MINIMO", "PEDIDO_MIN_MSG",
 }
 
 _CONFIG_META = {
@@ -3683,6 +3694,8 @@ _CONFIG_META = {
     "SHOPIFY_STORE":           {"label": "Dominio tienda",   "tipo": "plain"},
     "SHOPIFY_STOREFRONT_TOKEN":{"label": "Storefront Token", "tipo": "secret"},
     "SHOPIFY_WEBHOOK_SECRET":  {"label": "Webhook Secret",   "tipo": "secret"},
+    "PEDIDO_MINIMO":           {"label": "Pedido mínimo (COP)", "tipo": "plain"},
+    "PEDIDO_MIN_MSG":          {"label": "Mensaje pedido mínimo", "tipo": "plain"},
 }
 
 
@@ -3723,11 +3736,13 @@ async def inbox_save_config(
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body = await request.json()
+    # Claves que permiten valor vacío (para resetear) — el resto solo guarda si no está vacío
+    _PERMITE_VACIO = {"PEDIDO_MIN_MSG"}
     saved = []
     for clave, valor in body.items():
         if clave in _CONFIG_KEYS_ALLOWED and isinstance(valor, str):
             valor = valor.strip()
-            if valor:
+            if valor or clave in _PERMITE_VACIO:
                 await set_config_value(clave, valor)
                 os.environ[clave] = valor   # actualizar en tiempo real
                 saved.append(clave)
