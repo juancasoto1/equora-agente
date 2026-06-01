@@ -2815,8 +2815,12 @@ async def inbox_difusiones_historial(
     """Devuelve el historial de difusiones enviadas desde el inbox."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    rows = await obtener_difusiones(100)
-    return JSONResponse(content={"difusiones": rows})
+    try:
+        rows = await obtener_difusiones(100)
+        return JSONResponse(content={"difusiones": rows})
+    except Exception as e:
+        logger.error(f"[historial-dif] Error: {e}", exc_info=True)
+        return JSONResponse(content={"difusiones": [], "error": str(e)[:300]})
 
 
 @app.get("/inbox/difusiones/campana/{campaign_id:path}")

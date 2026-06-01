@@ -1199,13 +1199,13 @@ async def obtener_difusiones(limite: int = 100, agent_id: int = 1) -> list[dict]
         # ── Query 1: base de difusiones (agrupada) ──────────────────────────
         sql_base = text("""
             SELECT
-                COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))  AS grp,
-                COALESCE(NULLIF(campaign_name,''), template_name)   AS campaign_name,
-                template_name,
-                language,
-                SUM(destinatarios)                                  AS destinatarios,
-                SUM(enviados)                                       AS enviados,
-                MIN(created_at)                                     AS created_at,
+                COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))          AS grp,
+                COALESCE(NULLIF(MAX(campaign_name),''), MAX(template_name)) AS campaign_name,
+                MAX(template_name)                                          AS template_name,
+                MAX(language)                                               AS language,
+                SUM(destinatarios)                                          AS destinatarios,
+                SUM(enviados)                                               AS enviados,
+                MIN(created_at)                                             AS created_at,
                 MAX(CASE WHEN campaign_id != '' THEN campaign_id ELSE NULL END) AS campaign_id
             FROM difusiones
             WHERE agent_id = :agent_id
