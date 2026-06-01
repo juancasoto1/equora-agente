@@ -4260,12 +4260,16 @@ async def shopify_webhook(request: Request):
     except Exception:
         total_int = 0
 
-    # Guardar/actualizar cliente con los datos que llegaron en la orden
+    # Guardar/actualizar cliente con los datos que llegaron en la orden.
+    # Solo incrementamos pedidos_realizados cuando es orders/paid (pago confirmado).
     datos_cliente = _extraer_datos_cliente(payload)
     if any(datos_cliente.values()):
         try:
-            await guardar_cliente(telefono, datos_cliente)
-            logger.info(f"Cliente {telefono} guardado/actualizado desde Shopify")
+            await guardar_cliente(
+                telefono, datos_cliente,
+                incrementar_pedidos=(topic == "orders/paid")
+            )
+            logger.info(f"Cliente {telefono} guardado/actualizado desde Shopify ({topic})")
         except Exception as e:
             logger.error(f"Error guardando cliente desde webhook: {e}")
 

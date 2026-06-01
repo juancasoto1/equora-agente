@@ -3434,9 +3434,9 @@ function renderClientes() {
        + '<td style="text-align:center;font-weight:700;color:#2d3748">' + (c.pedidos || 0) + '</td>'
        + '<td style="text-align:center;color:#6b7a8d">' + (c.total_msgs || 0) + '</td>'
        + '<td style="display:flex;gap:6px">'
-       + '<button class="cli-act-btn" onclick="verChatCliente(' + JSON.stringify(c.telefono) + ')"'
+       + '<button class="cli-act-btn" onclick="verChatCliente(\'' + he(c.telefono) + '\')"'
        +    ' aria-label="Ver chat de ' + he(disp) + '">Ver chat</button>'
-       + '<button class="cli-act-btn cli-write-btn" onclick="abrirEscribir(' + JSON.stringify(c.telefono) + ',' + JSON.stringify(nm) + ')"'
+       + '<button class="cli-act-btn cli-write-btn" onclick="abrirEscribir(\'' + he(c.telefono) + '\',\'' + he(nm).replace(/'/g,"&#39;") + '\')"'
        +    ' aria-label="Escribir a ' + he(disp) + '" data-tel="' + he(c.telefono) + '" data-nombre="' + he(nm) + '">✍ Escribir</button>'
        + '</td>'
        + '</tr>';

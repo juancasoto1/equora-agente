@@ -296,6 +296,13 @@ async def inicializar_db():
             "CREATE INDEX IF NOT EXISTS ix_tpl_agent ON templates_rapidos (agent_id)",
             # Sprint 3 — auditoría de tickets
             "CREATE INDEX IF NOT EXISTS ix_tevento_ticket ON ticket_eventos (ticket_id)",
+            # Backfill agent_id NULL → 1 en datos históricos (preservar historial)
+            "UPDATE difusiones        SET agent_id = 1 WHERE agent_id IS NULL",
+            "UPDATE difusion_mensajes SET agent_id = 1 WHERE agent_id IS NULL",
+            "UPDATE mensajes          SET agent_id = 1 WHERE agent_id IS NULL",
+            "UPDATE clientes          SET agent_id = 1 WHERE agent_id IS NULL",
+            "UPDATE estado_conversacion SET agent_id = 1 WHERE agent_id IS NULL",
+            "UPDATE opt_outs          SET agent_id = 1 WHERE agent_id IS NULL",
             # Índices útiles
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
             "CREATE INDEX IF NOT EXISTS ix_mensajes_agent ON mensajes (agent_id)",
@@ -409,8 +416,12 @@ async def _get_cliente(session: AsyncSession, telefono: str, agent_id: int) -> "
     return result.scalar_one_or_none()
 
 
-async def guardar_cliente(telefono: str, datos: dict, agent_id: int = 1):
-    """Crea o actualiza el perfil del cliente. Solo guarda campos no vacíos."""
+async def guardar_cliente(
+    telefono: str, datos: dict, agent_id: int = 1, incrementar_pedidos: bool = False
+):
+    """Crea o actualiza el perfil del cliente. Solo guarda campos no vacíos.
+    `incrementar_pedidos=True` SOLO cuando se confirma el pago (webhook Shopify),
+    nunca al crear un checkout — un checkout es intención, no compra confirmada."""
     async with async_session() as session:
         cliente = await _get_cliente(session, telefono, agent_id)
         if cliente:
@@ -418,11 +429,16 @@ async def guardar_cliente(telefono: str, datos: dict, agent_id: int = 1):
                 valor = datos.get(campo)
                 if valor:
                     setattr(cliente, campo, str(valor))
-            cliente.pedidos_realizados = (cliente.pedidos_realizados or 0) + 1
+            if incrementar_pedidos:
+                cliente.pedidos_realizados = (cliente.pedidos_realizados or 0) + 1
             cliente.actualizado = datetime.utcnow()
         else:
             valores = {c: str(datos.get(c, "")) for c in CAMPOS_CLIENTE}
-            cliente = Cliente(agent_id=agent_id, telefono=telefono, pedidos_realizados=1, **valores)
+            cliente = Cliente(
+                agent_id=agent_id, telefono=telefono,
+                pedidos_realizados=(1 if incrementar_pedidos else 0),
+                **valores
+            )
             session.add(cliente)
         await session.commit()
 
@@ -1208,7 +1224,7 @@ async def obtener_difusiones(limite: int = 100, agent_id: int = 1) -> list[dict]
                 MIN(created_at)                                             AS created_at,
                 MAX(CASE WHEN campaign_id != '' THEN campaign_id ELSE NULL END) AS campaign_id
             FROM difusiones
-            WHERE agent_id = :agent_id
+            WHERE COALESCE(agent_id, 1) = :agent_id
             GROUP BY COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))
             ORDER BY MIN(created_at) DESC
             LIMIT :lim
@@ -1224,7 +1240,7 @@ async def obtener_difusiones(limite: int = 100, agent_id: int = 1) -> list[dict]
                 COUNT(CASE WHEN status = 'read'                THEN 1 END) AS leidos,
                 COUNT(CASE WHEN status = 'failed'              THEN 1 END) AS fallidos_wh
             FROM difusion_mensajes
-            WHERE agent_id = :agent_id
+            WHERE COALESCE(agent_id, 1) = :agent_id
             GROUP BY campaign_id
         """)
         r2 = await session.execute(sql_stats, {"agent_id": agent_id})
