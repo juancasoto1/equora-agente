@@ -1662,53 +1662,127 @@ async def webhook_handler(request: Request):
                         await _proveedor_agente.enviar_mensaje(msg.telefono, fallback_text[:4000])
                         logger.info(f"Fallback texto de lista enviado a {msg.telefono}")
 
-            # Enviar link de la tienda web si Andrea lo solicitó
+            # Cuando Andrea usa [[TIENDA:]] PRIORIZAR catálogo nativo de WhatsApp
+            # — el cliente arma su pedido sin salir de WhatsApp. Solo si el
+            # catálogo nativo falla (API caída, sin catalog_id, etc.) caemos
+            # al fallback de URL a la tienda web.
             if abrir_tienda:
-                import urllib.parse
-                tienda_url = _construir_url_tienda(tienda_query)
-                # UTMs para atribución en el Pixel web de Meta
-                tienda_url = _utm_andrea(tienda_url, content=tienda_query)
-                # Añadir teléfono para que Lovable pueda reportar el carrito de vuelta
-                tienda_url += f"&tel={urllib.parse.quote(msg.telefono)}"
                 minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
                 gratis_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
                 pie_tienda = f"📦 Pedido mínimo ${minimo_fmt} | 🚚 Envío gratis > ${gratis_fmt}"
+
+                # ── Detectar si la query es una categoría conocida ──
+                # Si es categoría → product_list de esa categoría (mejor UX)
+                # Si no es categoría → catalog_message (botón "Ver catálogo")
+                categoria_solicitada = None
                 if tienda_query:
-                    texto_tienda = (
-                        "🛒 *Aquí puedes ver el producto, elegir tu presentación y hacer tu pedido:*\n"
+                    from agent.tools import ORDEN_CATEGORIAS, _categorias_cache
+                    q_norm = tienda_query.lower().strip()
+                    # Match exacto contra términos genéricos
+                    mapa_terminos = {
+                        "lavaloza": "Cocina", "desengrasante": "Cocina",
+                        "limpiavidrios": "Cocina", "multiusos": "Cocina",
+                        "detergente": "Lavandería", "shampoo": "Lavandería",
+                        "desmanchador": "Baño", "ambientador": "Baño",
+                        "combos": "Combos", "combo": "Combos",
+                    }
+                    categoria_solicitada = mapa_terminos.get(q_norm)
+                    # Verificar que la categoría exista realmente
+                    if categoria_solicitada and categoria_solicitada not in _categorias_cache:
+                        categoria_solicitada = None
+
+                # Si lo que Andrea escribió en query no es categoría reconocida
+                # pero suena a producto, intentar enviar single_product
+                if tienda_query and not categoria_solicitada:
+                    # Intentar buscar el producto específico en _sku_map
+                    from agent.tools import _sku_map, _normalizar
+                    q_n = _normalizar(tienda_query)
+                    rid_match = ""
+                    for rid, info in _sku_map.items():
+                        if not (rid.isdigit() and len(rid) >= 10):
+                            continue
+                        prod_n = _normalizar(info.get("producto", ""))
+                        if q_n in prod_n or prod_n in q_n:
+                            rid_match = rid
+                            break
+                    if rid_match and hasattr(_proveedor_agente, "enviar_producto"):
+                        try:
+                            res_prod = await _proveedor_agente.enviar_producto(msg.telefono, rid_match)
+                            if (isinstance(res_prod, dict) and res_prod.get("ok")) or res_prod is True:
+                                logger.info(f"[TIENDA→PRODUCTO] '{tienda_query}' → producto {rid_match} enviado")
+                                # Saltarse el resto del bloque tienda
+                                continue
+                        except Exception as e:
+                            logger.warning(f"[TIENDA→PRODUCTO] error: {e}")
+
+                # Construir texto/cuerpo del catálogo
+                if _texto_absorbido_por_cta:
+                    cuerpo_catalogo = respuesta.strip() + "\n\n" + pie_tienda
+                elif tienda_query:
+                    cuerpo_catalogo = (
+                        f"🛒 *Aquí está lo que tenemos:*\n"
                         + pie_tienda
                     )
-                    boton_label = "Ver producto 🌿"
                 else:
-                    # Catálogo general: fusionar el saludo de Andrea con el CTA
-                    # → 1 solo mensaje en lugar de texto + CTA separados
-                    if _texto_absorbido_por_cta:
-                        texto_tienda = respuesta.strip() + "\n\n" + pie_tienda
-                    else:
-                        texto_tienda = (
-                            "🛒 *Aquí puedes ver todos nuestros productos con fotos y hacer tu pedido:*\n"
-                            + pie_tienda
-                        )
-                    boton_label = "Ver catálogo 🌿"
-                enviado_tienda = False
-                if hasattr(_proveedor_agente, "enviar_cta_url"):
-                    try:
-                        enviado_tienda = await _proveedor_agente.enviar_cta_url(
-                            msg.telefono, texto_tienda, boton_label, tienda_url
-                        )
-                    except Exception as e:
-                        logger.error(f"Error enviando link tienda: {e}")
-                if not enviado_tienda:
-                    await _proveedor_agente.enviar_mensaje(
-                        msg.telefono, f"{texto_tienda}\n\n👉 {tienda_url}"
+                    cuerpo_catalogo = (
+                        "🛒 *Aquí está nuestro catálogo completo — arma tu pedido sin salir de WhatsApp:*\n"
+                        + pie_tienda
                     )
-                logger.info(f"Link tienda enviado a {msg.telefono}: {tienda_url}")
-                # CAPI: ViewContent — Andrea envió link de producto/catálogo
-                asyncio.create_task(capi_view_content(
-                    msg.telefono,
-                    tienda_query or "catalogo",
-                    tienda_url,
-                ))
+
+                # ── INTENTO 1: product_list de la categoría (o general) ──
+                enviado_catalogo_wa = False
+                if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
+                    try:
+                        secciones = obtener_secciones_catalogo(categoria_solicitada)
+                        if secciones:
+                            header_cat = categoria_solicitada or "Catálogo Biotú 🌿"
+                            enviado_catalogo_wa = await _proveedor_agente.enviar_catalogo_productos(
+                                msg.telefono, header_cat,
+                                cuerpo_catalogo[:1024],
+                                secciones,
+                            )
+                            if enviado_catalogo_wa:
+                                logger.info(f"[TIENDA→catalogo-WA] product_list enviado a {msg.telefono} (cat={categoria_solicitada})")
+                    except Exception as e:
+                        logger.warning(f"[TIENDA] product_list falló: {e}")
+
+                # ── INTENTO 2: catalog_message (botón "Ver catálogo") ──
+                if not enviado_catalogo_wa and hasattr(_proveedor_agente, "enviar_catalog_message"):
+                    try:
+                        enviado_catalogo_wa = await _proveedor_agente.enviar_catalog_message(
+                            msg.telefono, cuerpo_catalogo
+                        )
+                        if enviado_catalogo_wa:
+                            logger.info(f"[TIENDA→catalogo-WA] catalog_message enviado a {msg.telefono}")
+                    except Exception as e:
+                        logger.warning(f"[TIENDA] catalog_message falló: {e}")
+
+                # ── FALLBACK: URL de la tienda web (solo si lo anterior falló) ──
+                if not enviado_catalogo_wa:
+                    logger.info(f"[TIENDA→FALLBACK-WEB] catálogo WA no disponible para {msg.telefono} — usando URL web")
+                    import urllib.parse
+                    tienda_url = _construir_url_tienda(tienda_query)
+                    tienda_url = _utm_andrea(tienda_url, content=tienda_query)
+                    tienda_url += f"&tel={urllib.parse.quote(msg.telefono)}"
+                    boton_label = "Ver producto 🌿" if tienda_query else "Ver catálogo 🌿"
+                    enviado_tienda = False
+                    if hasattr(_proveedor_agente, "enviar_cta_url"):
+                        try:
+                            enviado_tienda = await _proveedor_agente.enviar_cta_url(
+                                msg.telefono, cuerpo_catalogo, boton_label, tienda_url
+                            )
+                        except Exception as e:
+                            logger.error(f"Error enviando link tienda: {e}")
+                    if not enviado_tienda:
+                        await _proveedor_agente.enviar_mensaje(
+                            msg.telefono, f"{cuerpo_catalogo}\n\n👉 {tienda_url}"
+                        )
+                    # CAPI solo en caso web (atribución del Pixel)
+                    asyncio.create_task(capi_view_content(
+                        msg.telefono,
+                        tienda_query or "catalogo",
+                        tienda_url,
+                    ))
 
             # Enviar link de checkout de Shopify si se generó
             if checkout_url:
