@@ -555,11 +555,13 @@ class ProveedorMeta(ProveedorWhatsApp):
 
     async def enviar_producto(
         self, telefono: str, retailer_id: str, cuerpo: str = ""
-    ) -> bool:
-        """Envía un solo producto del catálogo (single_product). Requiere META_CATALOG_ID."""
-        if not self.access_token or not self.phone_number_id or not self.catalog_id:
-            logger.warning("enviar_producto: credenciales o catalog_id faltan")
-            return False
+    ) -> dict:
+        """Envía un solo producto del catálogo (single_product). Requiere META_CATALOG_ID.
+        Retorna dict: {ok: bool, error: str, code: int, catalog_id: str}"""
+        if not self.access_token or not self.phone_number_id:
+            return {"ok": False, "error": "META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados"}
+        if not self.catalog_id:
+            return {"ok": False, "error": "META_CATALOG_ID no configurado en Railway. Sin él WhatsApp no sabe en qué catálogo buscar el producto."}
         url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
@@ -571,18 +573,32 @@ class ProveedorMeta(ProveedorWhatsApp):
             "type": "interactive",
             "interactive": {
                 "type": "product",
-                "body": {"text": cuerpo[:1024]} if cuerpo else None,
                 "action": {
                     "catalog_id": self.catalog_id,
                     "product_retailer_id": retailer_id,
                 },
             },
         }
-        # Limpiar body si está vacío (Meta lo rechaza con body vacío)
-        if not cuerpo:
-            payload["interactive"].pop("body", None)
+        # Body es opcional, solo lo agregamos si hay texto
+        if cuerpo:
+            payload["interactive"]["body"] = {"text": cuerpo[:1024]}
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
-                logger.error(f"Error Meta API single_product: {r.status_code} — {r.text[:300]}")
-            return r.status_code == 200
+                err_msg = "Error desconocido"
+                err_code = 0
+                try:
+                    err_data = r.json().get("error", {})
+                    err_msg  = err_data.get("message", r.text[:300])
+                    err_code = err_data.get("code", 0)
+                except Exception:
+                    err_msg = r.text[:300]
+                logger.error(
+                    f"Error Meta single_product: HTTP {r.status_code} code={err_code} "
+                    f"catalog_id={self.catalog_id} retailer_id={retailer_id} msg={err_msg}"
+                )
+                return {
+                    "ok": False, "error": err_msg, "code": err_code,
+                    "catalog_id": self.catalog_id, "retailer_id": retailer_id,
+                }
+            return {"ok": True, "catalog_id": self.catalog_id, "retailer_id": retailer_id}

@@ -2218,10 +2218,17 @@ async def inbox_responder_producto(
         from agent.memory import obtener_agente
         _agente = await obtener_agente(agent_id) or {"id": 1}
         _prov = await _get_meta_para_agente(_agente)
-        ok = await _prov.enviar_producto(telefono, retailer_id, cuerpo)
-        if not ok:
+        resultado = await _prov.enviar_producto(telefono, retailer_id, cuerpo)
+        if not resultado.get("ok"):
+            err_msg = resultado.get("error", "Meta rechazó el producto")
+            err_code = resultado.get("code", 0)
+            # Mensajes más amigables según el código de Meta
+            if "Object with ID" in err_msg or err_code == 100:
+                err_msg = f"El SKU '{retailer_id}' no existe en tu catálogo de Meta (CATALOG_ID: {resultado.get('catalog_id','')}). Verifica que el producto esté sincronizado desde Shopify a Facebook Catalog."
+            elif "catalog" in err_msg.lower():
+                err_msg = f"Problema con el catálogo de Meta: {err_msg}"
             return JSONResponse(content={
-                "ok": False, "error": "Meta rechazó el producto (verifica catalog_id y SKU)"
+                "ok": False, "error": err_msg, "detail": resultado
             }, status_code=500)
         marcador = json.dumps({
             "tipo":        "product",
