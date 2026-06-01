@@ -62,7 +62,15 @@ class ProveedorMeta(ProveedorWhatsApp):
                         tipo_interactivo = interactivo.get("type", "")
 
                         if tipo_interactivo == "button_reply":
-                            texto = interactivo.get("button_reply", {}).get("title", "")
+                            btn = interactivo.get("button_reply", {})
+                            btn_id = btn.get("id", "")
+                            btn_title = btn.get("title", "")
+                            # Botones con id "act_*" son acciones internas de Voco
+                            # — Voco los procesa sin pasar por Claude.
+                            if btn_id.startswith("act_"):
+                                texto = f"__ACCION_BTN__:{btn_id}"
+                            else:
+                                texto = btn_title
                         elif tipo_interactivo == "list_reply":
                             texto = interactivo.get("list_reply", {}).get("title", "")
                         else:
@@ -213,6 +221,49 @@ class ProveedorMeta(ProveedorWhatsApp):
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API botones: {r.status_code} — {r.text}")
+            return r.status_code == 200
+
+    async def enviar_botones_reply(
+        self, telefono: str, texto: str, botones: list[dict]
+    ) -> bool:
+        """Envía mensaje con botones de respuesta con IDs personalizados.
+        Cada botón retorna al webhook con su ID. Máximo 3 botones.
+        Útil para flujos de 2 acciones (ej: 'agregar más' vs 'confirmar pedido').
+
+        botones: [{"id": "act_xyz", "title": "Texto visible"}, ...]
+        Los IDs que empiezan con 'act_' los intercepta Voco automáticamente.
+        """
+        if not self.access_token or not self.phone_number_id:
+            return False
+        if not botones:
+            return False
+        botones_payload = [
+            {"type": "reply", "reply": {
+                "id":    b.get("id", f"btn_{i}")[:256],
+                "title": b.get("title", "")[:20],
+            }}
+            for i, b in enumerate(botones[:3])
+        ]
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "button",
+                "body": {"text": texto[:1024]},
+                "action": {"buttons": botones_payload},
+            },
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta botones_reply: {r.status_code} — {r.text[:300]}")
             return r.status_code == 200
 
     async def enviar_cta_url(self, telefono: str, texto: str, boton: str, url: str) -> bool:

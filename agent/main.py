@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 from agent.brain import generar_respuesta
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial,
-    guardar_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
+    guardar_cliente, obtener_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
     guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
@@ -391,32 +391,36 @@ async def _procesar_carrito_unificado():
 
         # ── Detectar flujo activo del cliente ───────────────────────────
         # Si algún item tiene retailer_id, el cliente está en flujo WhatsApp
-        # catálogo nativo → seguimiento debe reabrir el catálogo de WhatsApp,
-        # NO mandar a la web (los carritos no se comunican).
+        # catálogo nativo → seguimientos deben respetar ese flujo.
         flujo_wa = any(p.get("retailer_id") for p in items)
+        costo_envio_loc = obtener_costo_envio()
 
-        async def _enviar_seguimiento_cta(texto_msg: str, texto_btn_wa: str, texto_btn_web: str):
-            """Envía el seguimiento usando el CTA apropiado según el flujo activo."""
-            enviado = False
-            if flujo_wa and hasattr(proveedor, "enviar_catalog_message"):
-                # Flujo WhatsApp: botón abre catálogo nativo de WhatsApp
-                try:
-                    enviado = await proveedor.enviar_catalog_message(telefono, texto_msg)
-                except Exception:
-                    pass
-            if not enviado and hasattr(proveedor, "enviar_cta_url"):
-                # Flujo web o fallback: botón abre URL de la tienda
-                etiqueta_btn = texto_btn_wa if flujo_wa else texto_btn_web
-                try:
-                    enviado = await proveedor.enviar_cta_url(
-                        telefono, texto_msg, etiqueta_btn,
-                        tienda_url
-                    )
-                except Exception:
-                    pass
-            if not enviado:
-                fallback_url = "" if flujo_wa else f"\n\n👉 {tienda_url}"
-                await proveedor.enviar_mensaje(telefono, f"{texto_msg}{fallback_url}")
+        async def _crear_checkout_para_seguimiento() -> str | None:
+            """Crea un checkout de Shopify a partir de los items del carrito
+            y guarda la URL en el cliente. Retorna la URL o None si falla."""
+            if not flujo_wa:
+                return None
+            try:
+                productos_check = []
+                for p in items:
+                    qty = int(p.get("cantidad", p.get("quantity", 1)))
+                    productos_check.append({
+                        "producto":      p.get("producto", ""),
+                        "presentacion":  p.get("presentacion", ""),
+                        "cantidad":      qty,
+                        "precio_unitario": p.get("precio_unitario", 0),
+                        "subtotal":      p.get("subtotal", 0),
+                    })
+                checkout_url_seg = await crear_checkout_shopify(
+                    telefono, {"productos": productos_check, "total": total}
+                )
+                if checkout_url_seg:
+                    await guardar_checkout_url(telefono, checkout_url_seg)
+                    logger.info(f"[seguimiento] Checkout creado para {telefono}: {checkout_url_seg}")
+                return checkout_url_seg
+            except Exception as e:
+                logger.error(f"[seguimiento] No pude crear checkout: {e}")
+                return None
 
         try:
             if total < PEDIDO_MINIMO:
@@ -431,13 +435,32 @@ async def _procesar_carrito_unificado():
                 )
                 if lineas:
                     msg += f"\n\nMuchos clientes agregan:\n{lineas}"
-                await _enviar_seguimiento_cta(msg, "Ver catálogo 🌿", "Ver más productos 🌿")
+
+                # Flujo WhatsApp: reabrir catálogo nativo. Flujo web: URL de tienda.
+                enviado_seg = False
+                if flujo_wa and hasattr(proveedor, "enviar_catalog_message"):
+                    try:
+                        enviado_seg = await proveedor.enviar_catalog_message(telefono, msg)
+                    except Exception:
+                        pass
+                if not enviado_seg:
+                    if hasattr(proveedor, "enviar_cta_url"):
+                        try:
+                            enviado_seg = await proveedor.enviar_cta_url(
+                                telefono, msg,
+                                "Ver catálogo 🌿" if flujo_wa else "Ver productos 🌿",
+                                tienda_url,
+                            )
+                        except Exception:
+                            pass
+                if not enviado_seg:
+                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
 
             elif total < umbral_gratis:
                 # ── Estado 4: sobre el mínimo, bajo envío gratis ──────────
                 falta = umbral_gratis - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
-                costo_envio_fmt = f"{obtener_costo_envio():,}".replace(",", ".")
+                costo_fmt_loc = f"{costo_envio_loc:,}".replace(",", ".") if costo_envio_loc else "0"
                 sugeridos = _sugerir_productos(nombres_en_carrito)
                 lineas = "\n".join(f"✅ {s}" for s in sugeridos)
                 msg = (
@@ -446,31 +469,79 @@ async def _procesar_carrito_unificado():
                 )
                 if lineas:
                     msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
-                # Solo en flujo WEB tiene sentido el aviso "ya puedes confirmar ahora";
-                # en flujo WhatsApp el cliente confirma desde su propio carrito.
-                if not flujo_wa:
-                    msg += (
-                        f"\n\nO si prefieres, ya puedes confirmar tu pedido ahora "
-                        f"(envío *${costo_envio_fmt}*) 👇"
-                    )
-                await _enviar_seguimiento_cta(msg, "Ver catálogo 🌿", "Ir al carrito 🛒")
+                msg += (
+                    f"\n\nO si prefieres, confirma tu pedido ahora "
+                    f"(envío *${costo_fmt_loc}*) 👇"
+                )
+
+                if flujo_wa:
+                    # Crear checkout y enviar 2 reply buttons
+                    checkout_url_seg = await _crear_checkout_para_seguimiento()
+                    botones_seg = False
+                    if checkout_url_seg and hasattr(proveedor, "enviar_botones_reply"):
+                        try:
+                            botones_seg = await proveedor.enviar_botones_reply(
+                                telefono, msg,
+                                [
+                                    {"id": "act_envio_gratis",     "title": "Envío gratis 🚚"},
+                                    {"id": "act_confirmar_pedido", "title": "Confirmar pedido"},
+                                ],
+                            )
+                        except Exception:
+                            pass
+                    if not botones_seg:
+                        # Fallback: catalog_message para agregar más
+                        if hasattr(proveedor, "enviar_catalog_message"):
+                            try:
+                                await proveedor.enviar_catalog_message(telefono, msg)
+                            except Exception:
+                                await proveedor.enviar_mensaje(telefono, msg)
+                        else:
+                            await proveedor.enviar_mensaje(telefono, msg)
+                else:
+                    # Flujo web: CTA URL a la tienda
+                    enviado_seg = False
+                    if hasattr(proveedor, "enviar_cta_url"):
+                        try:
+                            enviado_seg = await proveedor.enviar_cta_url(
+                                telefono, msg, "Ir al carrito 🛒", tienda_url
+                            )
+                        except Exception:
+                            pass
+                    if not enviado_seg:
+                        await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
 
             else:
                 # ── Estado 5: envío gratis garantizado ────────────────────
+                msg = (
+                    f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido!\n\n"
+                    f"Solo confirma tu dirección de entrega 👇"
+                )
                 if flujo_wa:
-                    # Cliente armó pedido en WhatsApp: que confirme desde su carrito de WA
-                    msg = (
-                        f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido!\n\n"
-                        f"Solo abre tu carrito en WhatsApp (toca el ícono 🛒 arriba) "
-                        f"y confirma tu pedido 👇"
-                    )
-                    await _enviar_seguimiento_cta(msg, "Ver catálogo 🌿", "Confirmar pedido ✅")
+                    # Crear checkout y enviar botón "Confirmar pedido" directo
+                    checkout_url_seg = await _crear_checkout_para_seguimiento()
+                    enviado_seg = False
+                    if checkout_url_seg and hasattr(proveedor, "enviar_cta_url"):
+                        try:
+                            enviado_seg = await proveedor.enviar_cta_url(
+                                telefono, msg, "Confirmar pedido", checkout_url_seg
+                            )
+                        except Exception:
+                            pass
+                    if not enviado_seg:
+                        await proveedor.enviar_mensaje(telefono,
+                            f"{msg}\n\n{('👉 ' + checkout_url_seg) if checkout_url_seg else ''}")
                 else:
-                    msg = (
-                        f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido!\n\n"
-                        f"Solo entra a la tienda, revisa tu carrito y confirma tu pedido 👇"
-                    )
-                    await _enviar_seguimiento_cta(msg, "Ver catálogo 🌿", "Confirmar pedido ✅")
+                    enviado_seg = False
+                    if hasattr(proveedor, "enviar_cta_url"):
+                        try:
+                            enviado_seg = await proveedor.enviar_cta_url(
+                                telefono, msg, "Confirmar pedido ✅", tienda_url
+                            )
+                        except Exception:
+                            pass
+                    if not enviado_seg:
+                        await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
 
             await guardar_mensaje(telefono, "assistant", msg)
             _carrito_unif_cooldown[telefono] = ahora
@@ -956,6 +1027,76 @@ async def webhook_handler(request: Request):
             if _es_respuesta_automatica(msg.texto):
                 continue  # ignorar silenciosamente
 
+            # ── Acción de botón interno (act_*) ───────────────────────────────
+            # El cliente tocó un botón de reply con ID act_* (Voco lo procesó
+            # en parsear_webhook y lo serializó como __ACCION_BTN__:act_xxx).
+            # Estas acciones se procesan directo sin pasar por Claude.
+            if msg.texto.startswith("__ACCION_BTN__:"):
+                accion = msg.texto[len("__ACCION_BTN__:"):]
+                await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
+                # Guardamos en historial el título de la acción (más legible que el id)
+                titulos = {
+                    "act_envio_gratis":     "Alcanzar envío gratis",
+                    "act_confirmar_pedido": "Confirmar pedido",
+                    "act_ver_catalogo":     "Ver catálogo",
+                }
+                await guardar_mensaje(msg.telefono, "user", titulos.get(accion, accion), agent_id=_agent_id)
+                logger.info(f"[accion-btn] {msg.telefono} eligió: {accion}")
+
+                if accion == "act_envio_gratis" or accion == "act_ver_catalogo":
+                    # Reabrir catálogo nativo de WhatsApp
+                    enviado = False
+                    if hasattr(_proveedor_agente, "enviar_catalog_message"):
+                        try:
+                            enviado = await _proveedor_agente.enviar_catalog_message(
+                                msg.telefono,
+                                "🌿 Aquí está el catálogo — agrega los productos que quieras "
+                                "y se sumarán a tu pedido automáticamente."
+                            )
+                        except Exception as e:
+                            logger.warning(f"catalog_message en act_envio_gratis: {e}")
+                    if not enviado and hasattr(_proveedor_agente, "enviar_catalogo_productos"):
+                        secciones = obtener_secciones_catalogo(None)
+                        if secciones:
+                            await _proveedor_agente.enviar_catalogo_productos(
+                                msg.telefono, "Catálogo Biotú 🌿",
+                                "Agrega los productos que quieras — se suman a tu pedido.",
+                                secciones,
+                            )
+                    continue
+
+                if accion == "act_confirmar_pedido":
+                    # Buscar checkout_url guardado del cliente
+                    cliente_data = await obtener_cliente(msg.telefono, agent_id=_agent_id)
+                    checkout_url = ""
+                    if cliente_data:
+                        checkout_url = cliente_data.get("pedido_checkout_url", "") or ""
+                    if checkout_url:
+                        msg_checkout = (
+                            "🎉 *¡Perfecto!*\n\n"
+                            "Toca el botón para confirmar tu dirección de entrega. "
+                            "El pago es *contra entrega*. 🌿"
+                        )
+                        ok_cta = False
+                        if hasattr(_proveedor_agente, "enviar_cta_url"):
+                            ok_cta = await _proveedor_agente.enviar_cta_url(
+                                msg.telefono, msg_checkout,
+                                "Confirmar entrega", checkout_url,
+                            )
+                        if not ok_cta:
+                            await _proveedor_agente.enviar_mensaje(
+                                msg.telefono, f"{msg_checkout}\n\n👉 {checkout_url}"
+                            )
+                    else:
+                        await _proveedor_agente.enviar_mensaje(
+                            msg.telefono,
+                            "🤔 No encontré tu pedido. Vuelve a abrir el catálogo y arma tu pedido de nuevo 🌿"
+                        )
+                    continue
+
+                # Acción desconocida: no hacer nada
+                continue
+
             # ── Opt-out: el cliente pide darse de baja de las difusiones ──────
             if _es_solicitud_opt_out(msg.texto):
                 await marcar_opt_out(msg.telefono, motivo=msg.texto.strip()[:200], agent_id=_agent_id)
@@ -1187,15 +1328,73 @@ async def webhook_handler(request: Request):
                         if checkout_url:
                             await guardar_pedido_pendiente(msg.telefono, productos, agent_id=_agent_id)
                             await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
+                            # Guardar checkout_url para que el cliente pueda confirmar después
+                            # vía el botón "Confirmar pedido"
+                            try:
+                                await guardar_checkout_url(msg.telefono, checkout_url, agent_id=_agent_id)
+                            except Exception as e_url:
+                                logger.warning(f"No pude guardar checkout_url: {e_url}")
+
+                            # ── Detectar si alcanzó envío gratis ──────────────
+                            try:
+                                umbral_gratis_local = obtener_umbral_envio_gratis()
+                            except Exception:
+                                umbral_gratis_local = 0
+                            try:
+                                costo_envio_local = obtener_costo_envio()
+                            except Exception:
+                                costo_envio_local = 0
+
+                            total_fmt_loc = f"{total:,}".replace(",", ".")
+
+                            # CASO A: alcanza mínimo PERO no envío gratis → 2 botones
+                            if umbral_gratis_local > 0 and total < umbral_gratis_local:
+                                falta_gratis = umbral_gratis_local - total
+                                falta_g_fmt = f"{falta_gratis:,}".replace(",", ".")
+                                gratis_fmt_loc = f"{umbral_gratis_local:,}".replace(",", ".")
+                                envio_fmt = f"{costo_envio_local:,}".replace(",", ".") if costo_envio_local else "0"
+                                texto_checkout = (
+                                    f"🎉 *¡Pedido confirmado por ${total_fmt_loc}!*\n\n"
+                                    f"🚚 Agrega *${falta_g_fmt}* más y el envío es *gratis* "
+                                    f"(actualmente ${envio_fmt}).\n\n"
+                                    f"¿Qué prefieres?"
+                                )
+                                botones_enviados = False
+                                if hasattr(_proveedor_agente, "enviar_botones_reply"):
+                                    try:
+                                        botones_enviados = await _proveedor_agente.enviar_botones_reply(
+                                            msg.telefono, texto_checkout,
+                                            [
+                                                {"id": "act_envio_gratis",     "title": "Envío gratis 🚚"},
+                                                {"id": "act_confirmar_pedido", "title": "Confirmar pedido"},
+                                            ]
+                                        )
+                                    except Exception as e_btns:
+                                        logger.warning(f"botones_reply falló: {e_btns}")
+                                if not botones_enviados:
+                                    # Fallback: CTA URL directo al checkout
+                                    if hasattr(_proveedor_agente, "enviar_cta_url"):
+                                        await _proveedor_agente.enviar_cta_url(
+                                            msg.telefono, texto_checkout,
+                                            "Confirmar pedido", checkout_url,
+                                        )
+                                    else:
+                                        await _proveedor_agente.enviar_mensaje(
+                                            msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
+                                        )
+                                continue  # No pasar por Claude
+
+                            # CASO B: alcanza mínimo Y envío gratis → CTA URL directo
                             texto_checkout = (
-                                "🎉 *¡Pedido recibido!*\n\n"
+                                f"🎉 *¡Pedido recibido por ${total_fmt_loc}!*\n\n"
+                                "🚚 Envío gratis incluido 🎉\n\n"
                                 "Toca el botón para confirmar tu dirección de entrega. "
                                 "El pago es *contra entrega*. 🌿"
                             )
                             if hasattr(_proveedor_agente, "enviar_cta_url"):
                                 await _proveedor_agente.enviar_cta_url(
                                     msg.telefono, texto_checkout,
-                                    "Confirmar entrega", checkout_url
+                                    "Confirmar pedido", checkout_url
                                 )
                             else:
                                 await _proveedor_agente.enviar_mensaje(

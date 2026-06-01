@@ -482,6 +482,7 @@ async def obtener_cliente(telefono: str, agent_id: int = 1) -> dict | None:
             "departamento": cliente.departamento,
             "email": cliente.email,
             "pedidos_realizados": cliente.pedidos_realizados or 0,
+            "pedido_checkout_url": cliente.pedido_checkout_url or "",
         }
 
 
