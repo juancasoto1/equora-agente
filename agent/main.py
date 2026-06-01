@@ -389,6 +389,35 @@ async def _procesar_carrito_unificado():
         total_fmt = f"{total:,}".replace(",", ".")
         tienda_url = f"{EQUORA_BASE}/catalogo"
 
+        # ── Detectar flujo activo del cliente ───────────────────────────
+        # Si algún item tiene retailer_id, el cliente está en flujo WhatsApp
+        # catálogo nativo → seguimiento debe reabrir el catálogo de WhatsApp,
+        # NO mandar a la web (los carritos no se comunican).
+        flujo_wa = any(p.get("retailer_id") for p in items)
+
+        async def _enviar_seguimiento_cta(texto_msg: str, texto_btn_wa: str, texto_btn_web: str):
+            """Envía el seguimiento usando el CTA apropiado según el flujo activo."""
+            enviado = False
+            if flujo_wa and hasattr(proveedor, "enviar_catalog_message"):
+                # Flujo WhatsApp: botón abre catálogo nativo de WhatsApp
+                try:
+                    enviado = await proveedor.enviar_catalog_message(telefono, texto_msg)
+                except Exception:
+                    pass
+            if not enviado and hasattr(proveedor, "enviar_cta_url"):
+                # Flujo web o fallback: botón abre URL de la tienda
+                etiqueta_btn = texto_btn_wa if flujo_wa else texto_btn_web
+                try:
+                    enviado = await proveedor.enviar_cta_url(
+                        telefono, texto_msg, etiqueta_btn,
+                        tienda_url
+                    )
+                except Exception:
+                    pass
+            if not enviado:
+                fallback_url = "" if flujo_wa else f"\n\n👉 {tienda_url}"
+                await proveedor.enviar_mensaje(telefono, f"{texto_msg}{fallback_url}")
+
         try:
             if total < PEDIDO_MINIMO:
                 # ── Estado 3: bajo el mínimo ──────────────────────────────
@@ -402,21 +431,10 @@ async def _procesar_carrito_unificado():
                 )
                 if lineas:
                     msg += f"\n\nMuchos clientes agregan:\n{lineas}"
-                enviado = False
-                if hasattr(proveedor, "enviar_cta_url"):
-                    try:
-                        enviado = await proveedor.enviar_cta_url(
-                            telefono, msg, "Ver más productos 🌿", tienda_url
-                        )
-                    except Exception:
-                        pass
-                if not enviado:
-                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
+                await _enviar_seguimiento_cta(msg, "Ver catálogo 🌿", "Ver más productos 🌿")
 
             elif total < umbral_gratis:
                 # ── Estado 4: sobre el mínimo, bajo envío gratis ──────────
-                # Incentivo principal: agrega un poco más y el envío es gratis
-                # Secundario: o ya puedes confirmar ahora (paga envío)
                 falta = umbral_gratis - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
                 costo_envio_fmt = f"{obtener_costo_envio():,}".replace(",", ".")
@@ -428,37 +446,31 @@ async def _procesar_carrito_unificado():
                 )
                 if lineas:
                     msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
-                msg += (
-                    f"\n\nO si prefieres, ya puedes confirmar tu pedido ahora "
-                    f"(envío *${costo_envio_fmt}*) 👇"
-                )
-                enviado = False
-                if hasattr(proveedor, "enviar_cta_url"):
-                    try:
-                        enviado = await proveedor.enviar_cta_url(
-                            telefono, msg, "Ir al carrito 🛒", tienda_url
-                        )
-                    except Exception:
-                        pass
-                if not enviado:
-                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
+                # Solo en flujo WEB tiene sentido el aviso "ya puedes confirmar ahora";
+                # en flujo WhatsApp el cliente confirma desde su propio carrito.
+                if not flujo_wa:
+                    msg += (
+                        f"\n\nO si prefieres, ya puedes confirmar tu pedido ahora "
+                        f"(envío *${costo_envio_fmt}*) 👇"
+                    )
+                await _enviar_seguimiento_cta(msg, "Ver catálogo 🌿", "Ir al carrito 🛒")
 
             else:
                 # ── Estado 5: envío gratis garantizado ────────────────────
-                msg = (
-                    f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido!\n\n"
-                    f"Solo entra a la tienda, revisa tu carrito y confirma tu pedido 👇"
-                )
-                enviado = False
-                if hasattr(proveedor, "enviar_cta_url"):
-                    try:
-                        enviado = await proveedor.enviar_cta_url(
-                            telefono, msg, "Confirmar pedido ✅", tienda_url
-                        )
-                    except Exception:
-                        pass
-                if not enviado:
-                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
+                if flujo_wa:
+                    # Cliente armó pedido en WhatsApp: que confirme desde su carrito de WA
+                    msg = (
+                        f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido!\n\n"
+                        f"Solo abre tu carrito en WhatsApp (toca el ícono 🛒 arriba) "
+                        f"y confirma tu pedido 👇"
+                    )
+                    await _enviar_seguimiento_cta(msg, "Ver catálogo 🌿", "Confirmar pedido ✅")
+                else:
+                    msg = (
+                        f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido!\n\n"
+                        f"Solo entra a la tienda, revisa tu carrito y confirma tu pedido 👇"
+                    )
+                    await _enviar_seguimiento_cta(msg, "Ver catálogo 🌿", "Confirmar pedido ✅")
 
             await guardar_mensaje(telefono, "assistant", msg)
             _carrito_unif_cooldown[telefono] = ahora
@@ -1129,23 +1141,36 @@ async def webhook_handler(request: Request):
                                 .replace("{FALTA}",    f"{falta:,}".replace(",", "."))
                                 .replace("{ITEMS}",    lineas_pedido)
                             )
-                            await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
-                            # Reabrir catálogo NATIVO de WhatsApp (mismo flujo que el cliente eligió)
-                            cat_reabierto = False
-                            if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
-                                secciones = obtener_secciones_catalogo(None)
-                                if secciones:
-                                    cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
-                                        msg.telefono, "Agrega más productos 🌿",
-                                        "Tu carrito anterior está guardado — lo nuevo se suma automáticamente.",
-                                        secciones,
+                            # Estrategia: BOTÓN "Ver catálogo" primero (UX más limpia)
+                            # — el cliente lo toca y reabre el catálogo nativo de WhatsApp.
+                            # Si catalog_message falla (no soportado en algunos números),
+                            # fallback al envío directo del catálogo product_list.
+                            cat_btn_enviado = False
+                            if hasattr(_proveedor_agente, "enviar_catalog_message"):
+                                try:
+                                    cat_btn_enviado = await _proveedor_agente.enviar_catalog_message(
+                                        msg.telefono, mensaje_minimo
                                     )
-                            if not cat_reabierto:
-                                # Fallback si el catálogo nativo no se puede enviar
-                                await _proveedor_agente.enviar_mensaje(
-                                    msg.telefono,
-                                    "Escríbeme qué más quieres agregar y te ayudo 🌿"
-                                )
+                                except Exception as e_btn:
+                                    logger.warning(f"catalog_message falló: {e_btn}")
+                            if not cat_btn_enviado:
+                                # Fallback 1: enviar texto + product_list directo
+                                await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
+                                cat_reabierto = False
+                                if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
+                                    secciones = obtener_secciones_catalogo(None)
+                                    if secciones:
+                                        cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
+                                            msg.telefono, "Agrega más productos 🌿",
+                                            "Tu carrito anterior está guardado — lo nuevo se suma automáticamente.",
+                                            secciones,
+                                        )
+                                if not cat_reabierto:
+                                    # Fallback 2: texto de respaldo
+                                    await _proveedor_agente.enviar_mensaje(
+                                        msg.telefono,
+                                        "Escríbeme qué más quieres agregar y te ayudo 🌿"
+                                    )
                             logger.info(f"Pedido bajo mínimo: total={total}, min={pedido_min}, falta={falta} — items guardados para acumular")
                             continue  # No crear checkout
 

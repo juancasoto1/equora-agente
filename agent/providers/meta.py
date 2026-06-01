@@ -403,6 +403,41 @@ class ProveedorMeta(ProveedorWhatsApp):
                 logger.info(f"Catálogo nativo enviado a {telefono} ({len(secciones)} secciones)")
             return r.status_code == 200
 
+    async def enviar_catalog_message(self, telefono: str, cuerpo: str) -> bool:
+        """Envía un mensaje con un botón 'Ver catálogo' que abre el catálogo
+        nativo de WhatsApp del negocio. Requiere META_CATALOG_ID configurado.
+        Perfecto para reabrir el catálogo cuando el carrito está bajo el mínimo."""
+        if not self.access_token or not self.phone_number_id:
+            return False
+        if not self.catalog_id:
+            logger.warning("enviar_catalog_message: META_CATALOG_ID no configurado")
+            return False
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "catalog_message",
+                "body": {"text": cuerpo[:1024]},
+                "action": {
+                    "name": "catalog_message",
+                    "parameters": {
+                        "thumbnail_product_retailer_id": "",  # opcional, vacío usa el default
+                    },
+                },
+            },
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta catalog_message: {r.status_code} — {r.text[:300]}")
+            return r.status_code == 200
+
     # ═══════════════════════════════════════════════════════════════════════
     # SPRINT 4 — Mensajes multimedia (imagen, video, documento, ubicación)
     # ═══════════════════════════════════════════════════════════════════════
