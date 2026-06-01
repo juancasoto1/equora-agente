@@ -7049,9 +7049,10 @@ async function _buscarCatalogoExec() {
       var click = sinSku ? '' :
         ' onclick="enviarProducto(\'' + rid.replace(/'/g, "&#39;") + '\')"';
       var style = sinSku ? ' style="opacity:.5;cursor:not-allowed"' : '';
+      var skuMostrar = p.sku_legible || rid;
       var skuInfo = sinSku
         ? '<div style="font-size:.7rem;color:#ef4444">⚠️ Sin SKU — no se puede enviar</div>'
-        : '<div style="font-size:.7rem;color:#94a3b8">SKU: ' + he(rid) + '</div>';
+        : '<div style="font-size:.7rem;color:#94a3b8">SKU: ' + he(skuMostrar) + '</div>';
       return '<div class="cat-item"' + click + style + '>' +
         img +
         '<div class="cat-item-info">' +

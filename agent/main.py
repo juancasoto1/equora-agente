@@ -988,6 +988,7 @@ async def webhook_handler(request: Request):
             # y creamos el checkout de Shopify directamente.
             if msg.texto.startswith("__ORDEN_CATALOGO__:"):
                 await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
+                logger.info(f"[orden-catalogo] Recibida orden de {msg.telefono}: {msg.texto[:500]}")
                 try:
                     items_raw = json.loads(msg.texto[len("__ORDEN_CATALOGO__:"):])
                     productos = []
@@ -998,6 +999,7 @@ async def webhook_handler(request: Request):
                         info = obtener_producto_por_retailer_id(rid)
                         if not info:
                             # Catálogo puede no estar cargado aún — recargar y reintentar
+                            logger.warning(f"[orden-catalogo] rid '{rid}' no en _sku_map — recargando catálogo")
                             await obtener_catalogo_shopify()
                             info = obtener_producto_por_retailer_id(rid)
                         if info:
@@ -1009,12 +1011,18 @@ async def webhook_handler(request: Request):
                                 "precio_unitario": precio,
                                 "subtotal": precio * qty,
                             })
+                            logger.info(f"[orden-catalogo] rid={rid} → {info['producto']} · {info['presentacion']} × {qty}")
                         else:
                             no_encontrados.append(rid)
-                            logger.warning(f"retailer_id no encontrado en _sku_map: {rid}")
+                            from agent.tools import _sku_map
+                            keys_disponibles = list(_sku_map.keys())[:20]
+                            logger.error(
+                                f"[orden-catalogo] rid '{rid}' NO existe en _sku_map. "
+                                f"Total entradas: {len(_sku_map)}. Primeras 20 keys: {keys_disponibles}"
+                            )
 
                     if no_encontrados:
-                        logger.error(f"IDs sin mapear: {no_encontrados}. SKUs en Shopify necesarios.")
+                        logger.error(f"[orden-catalogo] IDs sin mapear ({len(no_encontrados)}/{len(items_raw)}): {no_encontrados}")
 
                     if productos:
                         total = sum(p["subtotal"] for p in productos)
@@ -2259,14 +2267,28 @@ async def inbox_buscar_catalogo(
         catalogo = obtener_catalogo_json() or []
         # _sku_map mapea: retailer_id → {producto, presentacion, precio_unitario, variant_id}
         # Construimos el reverso: (producto_norm, presentacion_norm) → retailer_id
+        # PRIORIZAR el variant_id largo (numeric_id de Shopify) sobre SKUs cortos,
+        # porque Facebook Catalog usa el variant_id como retailer_id real al sincronizar.
         from agent.tools import _sku_map, _normalizar
         rev_sku = {}
         for rid, info in _sku_map.items():
             clave = (_normalizar(info.get("producto", "")), _normalizar(info.get("presentacion", "")))
-            # Preferir SKUs cortos sobre IDs numéricos largos
             existente = rev_sku.get(clave, "")
-            if not existente or (not existente.isdigit() and rid.isdigit() == False and len(rid) < len(existente)):
+            # Un rid es "variant_id" si es numérico y largo (>=10 dígitos)
+            es_variant_id        = rid.isdigit() and len(rid) >= 10
+            existente_es_variant = existente.isdigit() and len(existente) >= 10
+            # Reemplazar si: no había, o el actual es variant_id y el existente no
+            if not existente or (es_variant_id and not existente_es_variant):
                 rev_sku[clave] = rid
+
+        # Construir mapa de SKU "humano" para mostrar en la UI (cuando exista)
+        sku_humano = {}
+        for rid, info in _sku_map.items():
+            clave = (_normalizar(info.get("producto", "")), _normalizar(info.get("presentacion", "")))
+            # SKU humano = el corto, no-numérico o numérico corto (<10 dígitos)
+            if not (rid.isdigit() and len(rid) >= 10):
+                if clave not in sku_humano:
+                    sku_humano[clave] = rid
 
         q_norm = q.strip().lower()
         resultados = []
@@ -2277,8 +2299,10 @@ async def inbox_buscar_catalogo(
                 continue
             clave = (_normalizar(titulo), _normalizar(presentacion))
             retailer_id = rev_sku.get(clave, "")
+            sku_legible = sku_humano.get(clave, "")
             resultados.append({
                 "retailer_id": retailer_id,
+                "sku_legible": sku_legible or retailer_id,  # para mostrar al usuario
                 "title":       titulo,
                 "variant":     presentacion,
                 "price":       item.get("precio", 0),
