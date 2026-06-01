@@ -1074,20 +1074,37 @@ async def webhook_handler(request: Request):
 
                         if pedido_min > 0 and total < pedido_min:
                             falta = pedido_min - total
-                            # ── Guardar items en carrito_activo para acumular ──
-                            # En el próximo __ORDEN_CATALOGO__ se hará merge automático
+                            # ── Guardar items en carrito_activo con info COMPLETA ──
+                            # Formato consistente con cart_orders en brain.py: producto,
+                            # presentacion, cantidad, subtotal, retailer_id. Esto permite
+                            # tanto el merge automático como que Andrea conozca el carrito.
                             items_para_carrito = []
+                            # Construir mapa retailer_id → producto/presentacion para enriquecer
+                            rids_a_info = {}
+                            for item in items_raw:
+                                rid = item.get("product_retailer_id", "")
+                                if rid and rid not in rids_a_info:
+                                    info_rid = obtener_producto_por_retailer_id(rid)
+                                    if info_rid:
+                                        rids_a_info[rid] = info_rid
                             for item in items_raw:
                                 rid = item.get("product_retailer_id", "")
                                 qty = int(item.get("quantity", 1))
-                                if rid:
+                                info_rid = rids_a_info.get(rid)
+                                if rid and info_rid:
+                                    precio_u = info_rid.get("precio_unitario", 0)
                                     items_para_carrito.append({
-                                        "retailer_id": rid,
-                                        "quantity": qty,
+                                        "retailer_id":  rid,
+                                        "quantity":     qty,
+                                        "cantidad":     qty,
+                                        "producto":     info_rid.get("producto", ""),
+                                        "presentacion": info_rid.get("presentacion", ""),
+                                        "precio_unitario": precio_u,
+                                        "subtotal":     precio_u * qty,
                                     })
                             try:
                                 await guardar_carrito_activo(msg.telefono, items_para_carrito, agent_id=_agent_id)
-                                logger.info(f"[orden-catalogo] Guardado en carrito_activo: {len(items_para_carrito)} items")
+                                logger.info(f"[orden-catalogo] Guardado en carrito_activo: {len(items_para_carrito)} items completos")
                             except Exception as e:
                                 logger.error(f"Error guardando carrito_activo: {e}")
 

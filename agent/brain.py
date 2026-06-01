@@ -185,14 +185,40 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
                     "Úsalo siempre como fuente de verdad — no lo reconstruyas desde el historial."
                 )
                 total_carrito = 0
+                origen_wa = False
                 for item in carrito:
                     subtotal = item.get("subtotal", 0)
                     total_carrito += subtotal
+                    if item.get("retailer_id"):
+                        origen_wa = True
                     bloque_c.append(
                         f"- {item.get('cantidad', 1)}x {item.get('producto', '')} "
                         f"({item.get('presentacion', '')}) → ${subtotal:,}"
                     )
                 bloque_c.append(f"Total acumulado: ${total_carrito:,}")
+
+                # ── REGLA CRÍTICA DE FLUJO ──
+                # Si el carrito tiene retailer_id, el cliente armó pedido vía catálogo
+                # nativo de WhatsApp. Andrea NO debe sugerirle ir a la web — los carritos
+                # de WhatsApp y de la web no se comunican, mezclarlos confunde al cliente.
+                if origen_wa:
+                    bloque_c.append(
+                        "\n## ⚠️ FLUJO ACTIVO: WhatsApp (catálogo nativo)\n"
+                        "El cliente está armando su pedido en el catálogo de WhatsApp.\n\n"
+                        "REGLAS ABSOLUTAS de este flujo:\n"
+                        "1. NO uses [[TIENDA:]] ni [[TIENDA:producto]] en este chat — los\n"
+                        "   carritos de WhatsApp y la web NO se comunican.\n"
+                        "2. Si el cliente pregunta '¿qué más tienes?' o quiere ver más\n"
+                        "   productos: usa [[PRODUCTO:nombre]] específicos (que muestran\n"
+                        "   la tarjeta del catálogo) o sugiérele tocar el catálogo que ya\n"
+                        "   le enviaste arriba.\n"
+                        "3. Si el cliente quiere cambiar al flujo web: explícale claramente\n"
+                        "   que perderá su carrito actual de WhatsApp y deberá armarlo de\n"
+                        "   nuevo en la web. Solo entonces puedes usar [[TIENDA:]].\n"
+                        "4. NO crees el pedido manualmente con [[PEDIDO:]] — el cliente lo\n"
+                        "   confirma desde el catálogo nativo de WhatsApp tocando 'Ver carrito'\n"
+                        "   y luego 'Enviar pedido'. El sistema procesa eso automáticamente.\n"
+                    )
                 system_prompt += "\n".join(bloque_c)
 
             pendiente = await obtener_pedido_pendiente(telefono, agent_id)
