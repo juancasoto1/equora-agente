@@ -1036,6 +1036,41 @@ async def webhook_handler(request: Request):
 
                     if productos:
                         total = sum(p["subtotal"] for p in productos)
+
+                        # ── Validar pedido mínimo ANTES de crear checkout ──
+                        try:
+                            pedido_min_str = await get_config_value("PEDIDO_MINIMO", _agent_id) or os.getenv("PEDIDO_MINIMO", "0")
+                            pedido_min = int(float(pedido_min_str)) if pedido_min_str else 0
+                        except Exception:
+                            pedido_min = 0
+
+                        if pedido_min > 0 and total < pedido_min:
+                            falta = pedido_min - total
+                            lineas_pedido = "\n".join(
+                                f"  • {p['producto']} {p['presentacion']} × {p['cantidad']} = ${p['subtotal']:,}".replace(",", ".")
+                                for p in productos
+                            )
+                            mensaje_minimo = (
+                                f"😊 ¡Tu pedido va muy bien! Lo que tienes:\n\n"
+                                f"{lineas_pedido}\n\n"
+                                f"💰 *Subtotal:* ${total:,}\n".replace(",", ".") +
+                                f"📦 *Pedido mínimo:* ${pedido_min:,}\n".replace(",", ".") +
+                                f"➕ *Te faltan:* ${falta:,} para confirmar 🎯\n\n".replace(",", ".") +
+                                f"¿Quieres agregar algo más? Te muestro el catálogo:"
+                            )
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
+                            # Reabrir catálogo para que agregue más
+                            if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
+                                secciones = obtener_secciones_catalogo(None)
+                                if secciones:
+                                    await _proveedor_agente.enviar_catalogo_productos(
+                                        msg.telefono, "Catálogo Biotú 🌿",
+                                        "Agrega más productos y confirma tu pedido.",
+                                        secciones,
+                                    )
+                            logger.info(f"Pedido bajo mínimo: total={total}, min={pedido_min}, falta={falta}")
+                            continue  # No crear checkout
+
                         datos_pedido = {"productos": productos, "total": total}
                         checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
                         if checkout_url:
