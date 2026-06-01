@@ -403,15 +403,37 @@ class ProveedorMeta(ProveedorWhatsApp):
                 logger.info(f"Catálogo nativo enviado a {telefono} ({len(secciones)} secciones)")
             return r.status_code == 200
 
-    async def enviar_catalog_message(self, telefono: str, cuerpo: str) -> bool:
+    async def enviar_catalog_message(
+        self, telefono: str, cuerpo: str, thumbnail_retailer_id: str = ""
+    ) -> bool:
         """Envía un mensaje con un botón 'Ver catálogo' que abre el catálogo
-        nativo de WhatsApp del negocio. Requiere META_CATALOG_ID configurado.
+        nativo de WhatsApp del negocio. Requiere META_CATALOG_ID configurado
+        Y un thumbnail_retailer_id válido (la imagen del botón).
         Perfecto para reabrir el catálogo cuando el carrito está bajo el mínimo."""
         if not self.access_token or not self.phone_number_id:
+            logger.warning("enviar_catalog_message: credenciales Meta no configuradas")
             return False
         if not self.catalog_id:
             logger.warning("enviar_catalog_message: META_CATALOG_ID no configurado")
             return False
+        # Meta requiere un retailer_id válido como thumbnail. Si no se pasó uno,
+        # usamos el primero del catálogo cargado en _sku_map.
+        if not thumbnail_retailer_id:
+            try:
+                from agent.tools import _sku_map
+                # Preferir variant_id largo (mismo formato que Facebook Catalog usa)
+                for rid in _sku_map.keys():
+                    if rid.isdigit() and len(rid) >= 10:
+                        thumbnail_retailer_id = rid
+                        break
+                if not thumbnail_retailer_id and _sku_map:
+                    thumbnail_retailer_id = next(iter(_sku_map.keys()), "")
+            except Exception as e:
+                logger.warning(f"No pude obtener thumbnail_retailer_id: {e}")
+        if not thumbnail_retailer_id:
+            logger.warning("enviar_catalog_message: sin thumbnail_retailer_id — no se puede enviar")
+            return False
+
         url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
@@ -419,6 +441,7 @@ class ProveedorMeta(ProveedorWhatsApp):
         }
         payload = {
             "messaging_product": "whatsapp",
+            "recipient_type": "individual",
             "to": telefono,
             "type": "interactive",
             "interactive": {
@@ -427,7 +450,7 @@ class ProveedorMeta(ProveedorWhatsApp):
                 "action": {
                     "name": "catalog_message",
                     "parameters": {
-                        "thumbnail_product_retailer_id": "",  # opcional, vacío usa el default
+                        "thumbnail_product_retailer_id": thumbnail_retailer_id,
                     },
                 },
             },
@@ -435,8 +458,21 @@ class ProveedorMeta(ProveedorWhatsApp):
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
-                logger.error(f"Error Meta catalog_message: {r.status_code} — {r.text[:300]}")
-            return r.status_code == 200
+                # Log detallado para diagnóstico
+                try:
+                    err_data = r.json().get("error", {})
+                    err_msg = err_data.get("message", r.text[:300])
+                    err_code = err_data.get("code", 0)
+                    logger.error(
+                        f"Error Meta catalog_message: HTTP {r.status_code} "
+                        f"code={err_code} thumbnail={thumbnail_retailer_id} "
+                        f"catalog_id={self.catalog_id} msg={err_msg}"
+                    )
+                except Exception:
+                    logger.error(f"Error Meta catalog_message: {r.status_code} — {r.text[:300]}")
+                return False
+            logger.info(f"catalog_message enviado a {telefono} (thumbnail={thumbnail_retailer_id})")
+            return True
 
     # ═══════════════════════════════════════════════════════════════════════
     # SPRINT 4 — Mensajes multimedia (imagen, video, documento, ubicación)

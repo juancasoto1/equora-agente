@@ -1141,32 +1141,40 @@ async def webhook_handler(request: Request):
                                 .replace("{FALTA}",    f"{falta:,}".replace(",", "."))
                                 .replace("{ITEMS}",    lineas_pedido)
                             )
-                            # Estrategia: BOTÓN "Ver catálogo" primero (UX más limpia)
-                            # — el cliente lo toca y reabre el catálogo nativo de WhatsApp.
-                            # Si catalog_message falla (no soportado en algunos números),
-                            # fallback al envío directo del catálogo product_list.
+                            # Enviar SIEMPRE el texto primero
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
+
+                            # Luego intentar el botón "Ver catálogo" (UX más limpia)
+                            # Y como fallback, el product_list directo (más confiable)
                             cat_btn_enviado = False
                             if hasattr(_proveedor_agente, "enviar_catalog_message"):
                                 try:
                                     cat_btn_enviado = await _proveedor_agente.enviar_catalog_message(
-                                        msg.telefono, mensaje_minimo
+                                        msg.telefono,
+                                        "Toca el botón para ver el catálogo y agregar más 🛒"
                                     )
+                                    if cat_btn_enviado:
+                                        logger.info(f"[pedido-min] Botón catálogo enviado a {msg.telefono}")
                                 except Exception as e_btn:
-                                    logger.warning(f"catalog_message falló: {e_btn}")
+                                    logger.warning(f"[pedido-min] catalog_message falló: {e_btn}")
+
+                            # Fallback: enviar product_list directo (siempre que el botón falle)
                             if not cat_btn_enviado:
-                                # Fallback 1: enviar texto + product_list directo
-                                await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
+                                logger.info(f"[pedido-min] Botón no disponible, enviando product_list a {msg.telefono}")
                                 cat_reabierto = False
                                 if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
                                     secciones = obtener_secciones_catalogo(None)
                                     if secciones:
-                                        cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
-                                            msg.telefono, "Agrega más productos 🌿",
-                                            "Tu carrito anterior está guardado — lo nuevo se suma automáticamente.",
-                                            secciones,
-                                        )
+                                        try:
+                                            cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
+                                                msg.telefono, "Agrega más productos 🌿",
+                                                "Tu carrito anterior está guardado — lo nuevo se suma automáticamente.",
+                                                secciones,
+                                            )
+                                        except Exception as e_pl:
+                                            logger.error(f"[pedido-min] product_list falló: {e_pl}")
                                 if not cat_reabierto:
-                                    # Fallback 2: texto de respaldo
+                                    # Último recurso: texto sugiriendo acción
                                     await _proveedor_agente.enviar_mensaje(
                                         msg.telefono,
                                         "Escríbeme qué más quieres agregar y te ayudo 🌿"
