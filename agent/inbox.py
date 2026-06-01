@@ -1136,6 +1136,42 @@ tr:hover td{background:#f8f9fa}
                 <div class="nm2" id="cnm">—</div>
                 <div class="st2" id="cst">—</div>
               </div>
+              <!-- Botones de acción header (Sprint 4) -->
+              <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+                <button onclick="llamarCliente()" title="Llamar"
+                  style="background:none;border:none;color:#8696a0;cursor:pointer;font-size:1.15rem;
+                  padding:6px 10px;border-radius:6px;transition:all .15s"
+                  onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='#25d366'"
+                  onmouseout="this.style.background='none';this.style.color='#8696a0'">📞</button>
+                <button onclick="abrirWhatsAppWeb()" title="Abrir en WhatsApp Web"
+                  style="background:none;border:none;color:#8696a0;cursor:pointer;font-size:1.15rem;
+                  padding:6px 10px;border-radius:6px;transition:all .15s"
+                  onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='#25d366'"
+                  onmouseout="this.style.background='none';this.style.color='#8696a0'">💚</button>
+              </div>
+            </div>
+
+            <!-- Modal Llamada (Sprint 4) -->
+            <div id="modal-llamada" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+              background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+              <div style="background:#fff;border-radius:14px;padding:28px;max-width:380px;width:90%;text-align:center">
+                <div style="font-size:3rem;margin-bottom:8px">📞</div>
+                <h3 style="margin:0 0 6px;color:#1a2332;font-size:1.05rem" id="llamada-nombre">Llamar al cliente</h3>
+                <div id="llamada-tel" style="color:#64748b;font-size:.85rem;margin-bottom:20px">—</div>
+                <p style="font-size:.83rem;color:#64748b;margin:0 0 18px;line-height:1.5">
+                  Elige cómo prefieres llamar:
+                </p>
+                <button id="btn-llamar-tel" style="width:100%;padding:12px;background:#25d366;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.9rem;margin-bottom:10px">
+                  📱 Llamar por teléfono normal
+                </button>
+                <button id="btn-llamar-wa" style="width:100%;padding:12px;background:#075e54;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.9rem;margin-bottom:14px">
+                  💬 Abrir chat en WhatsApp (llamar desde ahí)
+                </button>
+                <button onclick="cerrarModalLlamada()" style="width:100%;padding:9px;background:#f1f5f9;border:none;border-radius:8px;font-weight:600;cursor:pointer">Cancelar</button>
+                <p style="font-size:.72rem;color:#94a3b8;margin:14px 0 0;line-height:1.4">
+                  La llamada por WhatsApp se inicia desde la app/web — Meta no permite iniciar llamadas via API todavía.
+                </p>
+              </div>
             </div>
 
             <div id="mbar">
@@ -6740,6 +6776,33 @@ function _renderStatsEquipo(stats) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   SPRINT 4 — Llamadas al cliente
+   ══════════════════════════════════════════════════════════════ */
+function llamarCliente() {
+  if (!TEL) return;
+  var nombre = document.getElementById('cnm').textContent || '';
+  document.getElementById('llamada-nombre').textContent = nombre === '—' ? 'Llamar al cliente' : nombre;
+  document.getElementById('llamada-tel').textContent = '+' + TEL;
+  // Configurar acciones
+  document.getElementById('btn-llamar-tel').onclick = function() {
+    window.location.href = 'tel:+' + TEL;
+    cerrarModalLlamada();
+  };
+  document.getElementById('btn-llamar-wa').onclick = function() {
+    window.open('https://wa.me/' + TEL, '_blank');
+    cerrarModalLlamada();
+  };
+  document.getElementById('modal-llamada').style.display = 'flex';
+}
+function cerrarModalLlamada() {
+  document.getElementById('modal-llamada').style.display = 'none';
+}
+function abrirWhatsAppWeb() {
+  if (!TEL) return;
+  window.open('https://wa.me/' + TEL, '_blank');
+}
+
+/* ══════════════════════════════════════════════════════════════
    SPRINT 4 — MENSAJES MULTIMEDIA EN EL CHAT
    ══════════════════════════════════════════════════════════════ */
 var _mediaTipoActual = '';  // image | video | document
@@ -6981,12 +7044,20 @@ async function _buscarCatalogoExec() {
         '<div class="cat-item-img" style="display:flex;align-items:center;justify-content:center">🛒</div>';
       var label = he(p.title) + (p.variant && p.variant !== 'Default Title' ? ' · ' + he(p.variant) : '');
       var precio = p.price ? '$' + Number(p.price).toLocaleString('es-CO') : '';
-      return '<div class="cat-item" onclick="enviarProducto(\'' + he(p.retailer_id).replace(/\x27/g, '&#39;') + '\')">' +
+      var rid = p.retailer_id || '';
+      var sinSku = !rid;
+      var click = sinSku ? '' :
+        ' onclick="enviarProducto(\'' + rid.replace(/'/g, "&#39;") + '\')"';
+      var style = sinSku ? ' style="opacity:.5;cursor:not-allowed"' : '';
+      var skuInfo = sinSku
+        ? '<div style="font-size:.7rem;color:#ef4444">⚠️ Sin SKU — no se puede enviar</div>'
+        : '<div style="font-size:.7rem;color:#94a3b8">SKU: ' + he(rid) + '</div>';
+      return '<div class="cat-item"' + click + style + '>' +
         img +
         '<div class="cat-item-info">' +
           '<div class="cat-item-titulo">' + label + '</div>' +
           '<div class="cat-item-precio">' + precio + '</div>' +
-          '<div style="font-size:.7rem;color:#94a3b8">SKU: ' + he(p.retailer_id) + '</div>' +
+          skuInfo +
         '</div></div>';
     }).join('');
   } catch(e) {

@@ -2250,16 +2250,28 @@ async def inbox_buscar_catalogo(
         # Asegurar que el catálogo esté cargado en cache
         await obtener_catalogo_shopify()
         catalogo = obtener_catalogo_json() or []
+        # _sku_map mapea: retailer_id → {producto, presentacion, precio_unitario, variant_id}
+        # Construimos el reverso: (producto_norm, presentacion_norm) → retailer_id
+        from agent.tools import _sku_map, _normalizar
+        rev_sku = {}
+        for rid, info in _sku_map.items():
+            clave = (_normalizar(info.get("producto", "")), _normalizar(info.get("presentacion", "")))
+            # Preferir SKUs cortos sobre IDs numéricos largos
+            existente = rev_sku.get(clave, "")
+            if not existente or (not existente.isdigit() and rid.isdigit() == False and len(rid) < len(existente)):
+                rev_sku[clave] = rid
+
         q_norm = q.strip().lower()
         resultados = []
         for item in catalogo:
-            titulo = (item.get("producto") or "").strip()
+            titulo       = (item.get("producto") or "").strip()
             presentacion = (item.get("presentacion") or "").strip()
-            label = f"{titulo}".strip()
             if q_norm and q_norm not in (titulo + " " + presentacion).lower():
                 continue
+            clave = (_normalizar(titulo), _normalizar(presentacion))
+            retailer_id = rev_sku.get(clave, "")
             resultados.append({
-                "retailer_id": item.get("retailer_id") or item.get("sku") or "",
+                "retailer_id": retailer_id,
                 "title":       titulo,
                 "variant":     presentacion,
                 "price":       item.get("precio", 0),
@@ -2270,7 +2282,7 @@ async def inbox_buscar_catalogo(
                 break
         return JSONResponse(content={"productos": resultados})
     except Exception as e:
-        logger.error(f"Error buscando catálogo: {e}")
+        logger.error(f"Error buscando catálogo: {e}", exc_info=True)
         return JSONResponse(content={"productos": [], "error": str(e)[:200]})
 
 
