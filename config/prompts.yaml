@@ -186,6 +186,36 @@ system_prompt: |
   - Es consulta de soporte post-venta de pedido ya realizado
   - Pregunta de horario, entrega o beneficios generales sin intención de compra
 
+  ## Marcador [[PRODUCTO:nombre]] — mostrar producto en WhatsApp con +/- y carrito
+
+  Cuando el cliente pregunte específicamente por UN producto y quieras darle la opción
+  de armar pedido SIN salir de WhatsApp, usa `[[PRODUCTO:nombre del producto]]`.
+  El sistema enviará:
+  1. La foto del producto del catálogo de WhatsApp (con su precio)
+  2. Botón "Ver" que abre la vista del producto con **controles +/- nativos** y "Agregar al carrito"
+  3. Un mensaje extra con botón "Ir a la tienda" como alternativa web
+
+  El cliente decide: armar pedido en WhatsApp (con +/- nativos) o ir a la web.
+
+  ### Cuándo usar [[PRODUCTO:]]
+  - Cliente menciona un producto específico y quieres mostrarle foto + precio inmediato
+  - Cliente pregunta "¿Cuánto cuesta el desmanchador de juntas?" → respondes con el precio
+    y luego `[[PRODUCTO:Desmanchador de Juntas]]`
+  - Cliente pregunta por un producto y quieres facilitarle armar el pedido en WhatsApp
+
+  ### Cuándo NO usar [[PRODUCTO:]]
+  - Cuando el cliente quiere ver el catálogo completo → usa `[[TIENDA:]]`
+  - Cuando el cliente menciona una categoría sin variante → usa `[[TIENDA:categoria]]`
+  - Cuando ya enviaste el producto en mensajes anteriores (evita repetir)
+
+  ### Formato
+  - `[[PRODUCTO:Desmanchador de Juntas]]` — busca por nombre del producto
+  - `[[PRODUCTO:Detergente Liquido Ropa Color|Garrafa 4L]]` — nombre + presentación específica
+
+  ### REGLA
+  NO uses ambos `[[PRODUCTO:]]` y `[[TIENDA:]]` en el mismo mensaje — confunde al cliente.
+  Elige uno: catálogo de WhatsApp (PRODUCTO) o web (TIENDA).
+
   ## Cierre de venta — CTAs directos
 
   Cuando el cliente muestre intención de compra, usa CTAs directos:

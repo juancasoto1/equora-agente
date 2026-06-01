@@ -626,6 +626,16 @@ def extraer_marcador_catalogo_cat(respuesta: str) -> tuple[str, dict | None]:
     return texto_limpio, datos
 
 
+def extraer_marcador_producto(respuesta: str) -> tuple[str, list[str]]:
+    """Extrae uno o más [[PRODUCTO:nombre|presentacion]] — envía single_product del catálogo.
+    Andrea lo usa cuando menciona un producto específico para darle al cliente
+    la opción de armar carrito directo desde WhatsApp (con +/- nativos)."""
+    matches = re.findall(r'\[\[PRODUCTO:([^\]]+)\]\]', respuesta)
+    texto_limpio = re.sub(r'\s*\[\[PRODUCTO:[^\]]+\]\]', '', respuesta).strip()
+    productos = [m.strip() for m in matches if m.strip()]
+    return texto_limpio, productos
+
+
 def extraer_marcador_carrito(respuesta: str) -> tuple[str, list | None]:
     """Extrae [[CARRITO:[...]]] — Andrea lo emite cada vez que el carrito cambia."""
     match = re.search(r'\[\[CARRITO:(\[.*?\])\]\]', respuesta, re.DOTALL)
@@ -1162,6 +1172,7 @@ async def webhook_handler(request: Request):
             respuesta, datos_botones = extraer_marcador_botones(respuesta)
             respuesta, datos_lista = extraer_marcador_lista(respuesta)
             respuesta, abrir_tienda, tienda_query = extraer_marcador_tienda(respuesta)
+            respuesta, productos_mencionados = extraer_marcador_producto(respuesta)
 
             # Enviar texto primero
             # Excepción: si hay CTA de catálogo general (sin query), el texto de Andrea
@@ -1169,6 +1180,64 @@ async def webhook_handler(request: Request):
             _texto_absorbido_por_cta = abrir_tienda and not tienda_query and respuesta.strip()
             if respuesta and not _texto_absorbido_por_cta:
                 await _proveedor_agente.enviar_mensaje(msg.telefono, respuesta)
+
+            # ── [[PRODUCTO:nombre]] — enviar uno o más productos del catálogo ──
+            # Andrea lo usa cuando menciona un producto específico. Por cada
+            # producto: single_product (con +/- nativos al tocar "Ver") + cta_url
+            # (link directo a la tienda como alternativa).
+            if productos_mencionados and hasattr(_proveedor_agente, "enviar_producto"):
+                from agent.tools import _sku_map, _normalizar, obtener_url_producto
+                # Construir índice (producto_norm + presentacion_norm) → retailer_id largo
+                _producto_idx: dict[str, str] = {}
+                for rid, info in _sku_map.items():
+                    if not (rid.isdigit() and len(rid) >= 10):
+                        continue  # Solo variant_id largos (los que sí están en FB Catalog)
+                    prod_n = _normalizar(info.get("producto", ""))
+                    pres_n = _normalizar(info.get("presentacion", ""))
+                    _producto_idx[f"{prod_n}|{pres_n}"] = rid
+                    # También indexar solo por producto (sin presentación) → primera variante
+                    if prod_n not in _producto_idx:
+                        _producto_idx[prod_n] = rid
+
+                for nombre_prod in productos_mencionados[:3]:  # max 3 productos por mensaje
+                    partes = [p.strip() for p in nombre_prod.split("|", 1)]
+                    nombre = partes[0]
+                    presentacion = partes[1] if len(partes) > 1 else ""
+                    nombre_n = _normalizar(nombre)
+                    pres_n   = _normalizar(presentacion)
+                    rid_match = ""
+                    if pres_n:
+                        rid_match = _producto_idx.get(f"{nombre_n}|{pres_n}", "")
+                    if not rid_match:
+                        # Buscar coincidencia parcial por nombre
+                        for k, v in _producto_idx.items():
+                            if "|" in k and nombre_n in k.split("|")[0]:
+                                rid_match = v
+                                break
+                        if not rid_match:
+                            rid_match = _producto_idx.get(nombre_n, "")
+                    if not rid_match:
+                        logger.warning(f"[PRODUCTO] No se encontró '{nombre_prod}' en _sku_map")
+                        continue
+                    # 1) Enviar producto del catálogo nativo
+                    try:
+                        await _proveedor_agente.enviar_producto(msg.telefono, rid_match)
+                        logger.info(f"[PRODUCTO] single_product '{nombre_prod}' (rid={rid_match}) enviado")
+                    except Exception as e:
+                        logger.error(f"[PRODUCTO] Error enviando single_product: {e}")
+                        continue
+                    # 2) Enviar CTA URL con link a la tienda web (alternativa)
+                    try:
+                        url_web = obtener_url_producto(nombre)
+                        if url_web and hasattr(_proveedor_agente, "enviar_cta_url"):
+                            await _proveedor_agente.enviar_cta_url(
+                                msg.telefono,
+                                "¿Prefieres armar tu pedido desde la web? 🌐",
+                                "Ir a la tienda", url_web,
+                            )
+                            logger.info(f"[PRODUCTO] CTA web enviado: {url_web}")
+                    except Exception as e:
+                        logger.error(f"[PRODUCTO] Error enviando CTA URL: {e}")
 
             # Catálogo nativo WhatsApp (product_list con fotos reales)
             if datos_catalogo_cat and hasattr(_proveedor_agente, "enviar_catalogo_productos"):
