@@ -1570,19 +1570,25 @@ async def webhook_handler(request: Request):
                         logger.info(f"[PRODUCTO] single_product '{nombre_prod}' (rid={rid_match}) enviado")
                     except Exception as e:
                         logger.error(f"[PRODUCTO] Error enviando single_product: {e}")
+                        # Registrar falla + alerta al admin
+                        await _registrar_falla_catalogo(
+                            "single_product", msg.telefono,
+                            f"Producto '{nombre_prod}' (rid={rid_match}): {e}",
+                            agent_id=_agent_id,
+                        )
+                        # Fallback: enviar URL del producto en la web
+                        try:
+                            url_web = obtener_url_producto(nombre)
+                            if url_web and hasattr(_proveedor_agente, "enviar_cta_url"):
+                                await _proveedor_agente.enviar_cta_url(
+                                    msg.telefono,
+                                    "Aquí está el producto 🌿",
+                                    "Ver producto", url_web,
+                                )
+                                logger.info(f"[PRODUCTO→FALLBACK-WEB] CTA web enviado: {url_web}")
+                        except Exception as e2:
+                            logger.error(f"[PRODUCTO] Fallback web también falló: {e2}")
                         continue
-                    # 2) Enviar CTA URL con link a la tienda web (alternativa)
-                    try:
-                        url_web = obtener_url_producto(nombre)
-                        if url_web and hasattr(_proveedor_agente, "enviar_cta_url"):
-                            await _proveedor_agente.enviar_cta_url(
-                                msg.telefono,
-                                "¿Prefieres armar tu pedido desde la web? 🌐",
-                                "Ir a la tienda", url_web,
-                            )
-                            logger.info(f"[PRODUCTO] CTA web enviado: {url_web}")
-                    except Exception as e:
-                        logger.error(f"[PRODUCTO] Error enviando CTA URL: {e}")
 
             # Catálogo nativo WhatsApp (product_list con fotos reales)
             if datos_catalogo_cat and hasattr(_proveedor_agente, "enviar_catalogo_productos"):
@@ -1759,6 +1765,12 @@ async def webhook_handler(request: Request):
 
                 # ── FALLBACK: URL de la tienda web (solo si lo anterior falló) ──
                 if not enviado_catalogo_wa:
+                    # Registrar falla + alerta al admin
+                    await _registrar_falla_catalogo(
+                        "tienda_catalogo_wa", msg.telefono,
+                        f"product_list y catalog_message fallaron (query='{tienda_query}')",
+                        agent_id=_agent_id,
+                    )
                     logger.info(f"[TIENDA→FALLBACK-WEB] catálogo WA no disponible para {msg.telefono} — usando URL web")
                     import urllib.parse
                     tienda_url = _construir_url_tienda(tienda_query)
@@ -2935,6 +2947,34 @@ async def api_eventos_ticket(
         raise HTTPException(status_code=401, detail="No autorizado")
     eventos = await obtener_eventos_ticket(ticket_id)
     return JSONResponse(content={"eventos": eventos})
+
+
+@app.get("/inbox/api/sistema/fallas-catalogo")
+async def api_fallas_catalogo(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Devuelve las últimas fallas del catálogo nativo de WhatsApp.
+    Útil para diagnosticar problemas de sincronización con Meta."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    # Filtrar las últimas 24 horas
+    hace_un_dia = datetime.utcnow() - timedelta(hours=24)
+    recientes = [
+        f for f in _catalogo_fallas
+        if datetime.fromisoformat(f["at"]) > hace_un_dia
+    ]
+    # Contar por tipo
+    por_tipo: dict[str, int] = {}
+    for f in recientes:
+        por_tipo[f["tipo"]] = por_tipo.get(f["tipo"], 0) + 1
+    return JSONResponse(content={
+        "total_24h":  len(recientes),
+        "por_tipo":   por_tipo,
+        "ultimas":    list(recientes)[-20:],   # las 20 más recientes
+        "cooldown_alerta_seg": _CATALOGO_ALERTA_COOLDOWN_SEG,
+    })
 
 
 @app.get("/inbox/api/equipo/stats")
@@ -4920,6 +4960,76 @@ _SHOPIFY_DEDUP_TTL = 600  # segundos
 ADMIN_WHATSAPP_NUMBERS = [
     n.strip() for n in os.getenv("ADMIN_WHATSAPP_NUMBERS", "").split(",") if n.strip()
 ]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SISTEMA DE ALERTAS — Tracking de fallas del catálogo nativo de WhatsApp
+# ══════════════════════════════════════════════════════════════════════════════
+# Cuando el catálogo nativo de WhatsApp falla (Meta API caída, token expirado,
+# catalog_id inválido, etc.) y caemos al fallback web, registramos la falla.
+# Si se acumulan en una ventana corta, alertamos al admin por WhatsApp.
+
+from collections import deque
+
+# Buffer en memoria de las últimas 100 fallas del catálogo nativo
+_catalogo_fallas: deque = deque(maxlen=100)
+# Timestamp de la última alerta enviada al admin — cooldown 30 min
+_ultima_alerta_catalogo_at: float = 0.0
+_CATALOGO_ALERTA_COOLDOWN_SEG = 30 * 60  # 30 minutos entre alertas
+
+
+async def _registrar_falla_catalogo(
+    tipo: str, telefono_cliente: str, motivo: str, agent_id: int = 1
+) -> None:
+    """Registra una falla del catálogo nativo y alerta al admin si aplica.
+    `tipo` puede ser: product_list, catalog_message, single_product, etc."""
+    global _ultima_alerta_catalogo_at
+    ahora = time.time()
+    _catalogo_fallas.append({
+        "tipo":     tipo,
+        "telefono": telefono_cliente,
+        "motivo":   motivo[:300],
+        "agent_id": agent_id,
+        "at":       datetime.utcnow().isoformat(),
+    })
+    logger.warning(f"[catalogo-falla] {tipo} → {telefono_cliente}: {motivo[:150]}")
+
+    # Alerta al admin: solo si pasó el cooldown (evita spam) Y hay admins
+    if not ADMIN_WHATSAPP_NUMBERS:
+        return
+    if ahora - _ultima_alerta_catalogo_at < _CATALOGO_ALERTA_COOLDOWN_SEG:
+        return
+    _ultima_alerta_catalogo_at = ahora
+
+    # Contar fallas en la última hora para dar contexto
+    hace_una_hora = datetime.utcnow() - timedelta(hours=1)
+    fallas_recientes = sum(
+        1 for f in _catalogo_fallas
+        if datetime.fromisoformat(f["at"]) > hace_una_hora
+    )
+
+    mensaje_alerta = (
+        f"⚠️ *Alerta Voco — Catálogo WhatsApp*\n\n"
+        f"El catálogo nativo de WhatsApp falló y se está usando el fallback web.\n\n"
+        f"*Último error:* {tipo}\n"
+        f"*Motivo:* {motivo[:200]}\n"
+        f"*Cliente afectado:* +{telefono_cliente}\n"
+        f"*Fallas en la última hora:* {fallas_recientes}\n\n"
+        f"Posibles causas: token Meta expirado, catálogo no sincronizado, "
+        f"Meta API caída, o un SKU específico no existe en Facebook Catalog.\n\n"
+        f"Próxima alerta en {_CATALOGO_ALERTA_COOLDOWN_SEG // 60} min si sigue fallando."
+    )
+
+    cliente_digits = "".join(filter(str.isdigit, telefono_cliente))
+    for admin in ADMIN_WHATSAPP_NUMBERS:
+        admin_digits = "".join(filter(str.isdigit, admin))
+        if admin_digits == cliente_digits or admin_digits.endswith(cliente_digits[-10:]):
+            continue
+        try:
+            await proveedor.enviar_mensaje(admin, mensaje_alerta)
+            logger.info(f"[alerta-catalogo] Notificado al admin {admin}")
+        except Exception as e:
+            logger.error(f"[alerta-catalogo] Error notificando a {admin}: {e}")
 
 
 async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: int = 1):
