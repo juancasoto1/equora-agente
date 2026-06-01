@@ -1001,6 +1001,34 @@ async def webhook_handler(request: Request):
                 logger.info(f"[orden-catalogo] Recibida orden de {msg.telefono}: {msg.texto[:500]}")
                 try:
                     items_raw = json.loads(msg.texto[len("__ORDEN_CATALOGO__:"):])
+                    # ── Acumular con carrito_activo previo (si existe) ──
+                    # Esto permite que el cliente arme el pedido en varios envíos
+                    # sin perder lo que ya tenía cuando no alcanzó el mínimo.
+                    carrito_previo = await obtener_carrito_activo(msg.telefono, agent_id=_agent_id)
+                    if carrito_previo:
+                        logger.info(f"[orden-catalogo] Merge con carrito previo: {len(carrito_previo)} items")
+                        # Convertir items_raw a formato común para merge
+                        items_combinados: dict[str, dict] = {}
+                        # Primero el carrito previo
+                        for prev in carrito_previo:
+                            rid = prev.get("retailer_id") or prev.get("product_retailer_id")
+                            if rid:
+                                items_combinados[rid] = {
+                                    "product_retailer_id": rid,
+                                    "quantity": int(prev.get("quantity", prev.get("cantidad", 1))),
+                                }
+                        # Sumar lo nuevo
+                        for item in items_raw:
+                            rid = item.get("product_retailer_id", "")
+                            qty = int(item.get("quantity", 1))
+                            if not rid:
+                                continue
+                            if rid in items_combinados:
+                                items_combinados[rid]["quantity"] += qty
+                            else:
+                                items_combinados[rid] = {"product_retailer_id": rid, "quantity": qty}
+                        items_raw = list(items_combinados.values())
+                        logger.info(f"[orden-catalogo] Total después de merge: {len(items_raw)} items")
                     productos = []
                     no_encontrados = []
                     for item in items_raw:
@@ -1046,9 +1074,24 @@ async def webhook_handler(request: Request):
 
                         if pedido_min > 0 and total < pedido_min:
                             falta = pedido_min - total
-                            # Mensaje configurable por agente: usa PEDIDO_MIN_MSG si está
-                            # definido (con variables {SUBTOTAL}, {MINIMO}, {FALTA}, {ITEMS}),
-                            # si no, mensaje genérico por defecto.
+                            # ── Guardar items en carrito_activo para acumular ──
+                            # En el próximo __ORDEN_CATALOGO__ se hará merge automático
+                            items_para_carrito = []
+                            for item in items_raw:
+                                rid = item.get("product_retailer_id", "")
+                                qty = int(item.get("quantity", 1))
+                                if rid:
+                                    items_para_carrito.append({
+                                        "retailer_id": rid,
+                                        "quantity": qty,
+                                    })
+                            try:
+                                await guardar_carrito_activo(msg.telefono, items_para_carrito, agent_id=_agent_id)
+                                logger.info(f"[orden-catalogo] Guardado en carrito_activo: {len(items_para_carrito)} items")
+                            except Exception as e:
+                                logger.error(f"Error guardando carrito_activo: {e}")
+
+                            # Mensaje configurable por agente
                             lineas_pedido = "\n".join(
                                 f"  • {p['producto']} {p['presentacion']} × {p['cantidad']} = ${p['subtotal']:,}".replace(",", ".")
                                 for p in productos
@@ -1059,7 +1102,9 @@ async def webhook_handler(request: Request):
                                 "💰 *Subtotal:* ${SUBTOTAL}\n"
                                 "📦 *Pedido mínimo:* ${MINIMO}\n"
                                 "➕ *Te faltan:* ${FALTA} para confirmar 🎯\n\n"
-                                "¿Quieres agregar algo más? Te muestro el catálogo:"
+                                "✅ *No te preocupes, tu pedido quedó guardado.* "
+                                "Solo agrega más productos en el catálogo de abajo "
+                                "y *se sumará automáticamente* a lo que ya tenías. 🛒"
                             )
                             mensaje_minimo = (msg_template
                                 .replace("{SUBTOTAL}", f"{total:,}".replace(",", "."))
@@ -1068,16 +1113,23 @@ async def webhook_handler(request: Request):
                                 .replace("{ITEMS}",    lineas_pedido)
                             )
                             await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
-                            # Reabrir catálogo para que agregue más
+                            # Reabrir catálogo NATIVO de WhatsApp (mismo flujo que el cliente eligió)
+                            cat_reabierto = False
                             if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
                                 secciones = obtener_secciones_catalogo(None)
                                 if secciones:
-                                    await _proveedor_agente.enviar_catalogo_productos(
-                                        msg.telefono, "Catálogo Biotú 🌿",
-                                        "Agrega más productos y confirma tu pedido.",
+                                    cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
+                                        msg.telefono, "Agrega más productos 🌿",
+                                        "Tu carrito anterior está guardado — lo nuevo se suma automáticamente.",
                                         secciones,
                                     )
-                            logger.info(f"Pedido bajo mínimo: total={total}, min={pedido_min}, falta={falta}")
+                            if not cat_reabierto:
+                                # Fallback si el catálogo nativo no se puede enviar
+                                await _proveedor_agente.enviar_mensaje(
+                                    msg.telefono,
+                                    "Escríbeme qué más quieres agregar y te ayudo 🌿"
+                                )
+                            logger.info(f"Pedido bajo mínimo: total={total}, min={pedido_min}, falta={falta} — items guardados para acumular")
                             continue  # No crear checkout
 
                         datos_pedido = {"productos": productos, "total": total}
