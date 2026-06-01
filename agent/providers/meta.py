@@ -114,6 +114,51 @@ class ProveedorMeta(ProveedorWhatsApp):
                             ))
                             logger.info(f"Orden catálogo WhatsApp de {telefono}: {len(items)} items")
 
+                    elif tipo in ("image", "video", "document"):
+                        # Media entrante: serializar como marcador para que el inbox lo renderice
+                        media_data = msg.get(tipo, {})
+                        media_id   = media_data.get("id", "")
+                        mime_type  = media_data.get("mime_type", "")
+                        caption    = media_data.get("caption", "")
+                        filename   = media_data.get("filename", "") if tipo == "document" else ""
+                        if media_id:
+                            payload_media = {
+                                "tipo":       tipo,
+                                "media_id":   media_id,
+                                "mime_type":  mime_type,
+                                "caption":    caption,
+                                "filename":   filename,
+                            }
+                            texto = f"__MEDIA__:{json.dumps(payload_media, ensure_ascii=False)}"
+                            mensajes.append(MensajeEntrante(
+                                telefono=telefono,
+                                texto=texto,
+                                mensaje_id=msg_id,
+                                es_propio=False,
+                            ))
+                            logger.info(f"Media {tipo} recibido de {telefono} (media_id={media_id})")
+
+                    elif tipo == "location":
+                        loc = msg.get("location", {})
+                        lat = loc.get("latitude")
+                        lon = loc.get("longitude")
+                        if lat is not None and lon is not None:
+                            payload_loc = {
+                                "tipo":      "location",
+                                "latitud":   lat,
+                                "longitud":  lon,
+                                "nombre":    loc.get("name", ""),
+                                "direccion": loc.get("address", ""),
+                            }
+                            texto = f"__MEDIA__:{json.dumps(payload_loc, ensure_ascii=False)}"
+                            mensajes.append(MensajeEntrante(
+                                telefono=telefono,
+                                texto=texto,
+                                mensaje_id=msg_id,
+                                es_propio=False,
+                            ))
+                            logger.info(f"Ubicación recibida de {telefono}: {lat},{lon}")
+
         return mensajes
 
     async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
@@ -356,4 +401,188 @@ class ProveedorMeta(ProveedorWhatsApp):
                 logger.error(f"Error Meta API product_list: {r.status_code} — {r.text}")
             else:
                 logger.info(f"Catálogo nativo enviado a {telefono} ({len(secciones)} secciones)")
+            return r.status_code == 200
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # SPRINT 4 — Mensajes multimedia (imagen, video, documento, ubicación)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    async def subir_media(self, file_bytes: bytes, filename: str, mime_type: str) -> str | None:
+        """Sube un archivo a Meta y retorna el media_id para usar en mensajes.
+        Los archivos de Meta expiran a los 30 días."""
+        if not self.access_token or not self.phone_number_id:
+            logger.warning("subir_media: credenciales Meta no configuradas")
+            return None
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/media"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        files = {
+            "file": (filename, file_bytes, mime_type),
+            "messaging_product": (None, "whatsapp"),
+            "type": (None, mime_type),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                r = await client.post(url, headers=headers, files=files)
+                if r.status_code != 200:
+                    logger.error(f"Error subiendo media a Meta: {r.status_code} — {r.text[:300]}")
+                    return None
+                media_id = r.json().get("id")
+                logger.info(f"Media subida a Meta: {filename} ({mime_type}) → id={media_id}")
+                return media_id
+        except Exception as e:
+            logger.error(f"Excepción subiendo media: {e}")
+            return None
+
+    async def obtener_url_media(self, media_id: str) -> str | None:
+        """Obtiene la URL temporal de un media_id de Meta (válida ~5 min)."""
+        if not self.access_token or not media_id:
+            return None
+        url = f"https://graph.facebook.com/{self.api_version}/{media_id}"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(url, headers=headers)
+                if r.status_code == 200:
+                    return r.json().get("url")
+                logger.error(f"Error obteniendo URL media: {r.status_code}")
+                return None
+        except Exception as e:
+            logger.error(f"Excepción obteniendo URL media: {e}")
+            return None
+
+    async def descargar_media(self, media_id: str) -> tuple[bytes, str] | None:
+        """Descarga el contenido binario de un media de Meta. Retorna (bytes, mime_type)."""
+        url = await self.obtener_url_media(media_id)
+        if not url:
+            return None
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.get(url, headers=headers)
+                if r.status_code == 200:
+                    return r.content, r.headers.get("content-type", "application/octet-stream")
+                return None
+        except Exception as e:
+            logger.error(f"Excepción descargando media: {e}")
+            return None
+
+    async def _enviar_media(
+        self, telefono: str, tipo: str, media_id: str = "",
+        link: str = "", caption: str = "", filename: str = ""
+    ) -> bool:
+        """Envío genérico de media (image/video/document/audio).
+        Usa media_id (preferido, ya subido) o link (URL pública)."""
+        if not self.access_token or not self.phone_number_id:
+            return False
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        media_obj: dict = {}
+        if media_id:
+            media_obj["id"] = media_id
+        elif link:
+            media_obj["link"] = link
+        else:
+            logger.error(f"_enviar_media: ni media_id ni link para tipo={tipo}")
+            return False
+        # Caption solo aplica a image, video, document — no a audio
+        if caption and tipo in ("image", "video", "document"):
+            media_obj["caption"] = caption[:1024]
+        if filename and tipo == "document":
+            media_obj["filename"] = filename[:200]
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": tipo,
+            tipo: media_obj,
+        }
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API {tipo}: {r.status_code} — {r.text[:300]}")
+            return r.status_code == 200
+
+    async def enviar_imagen(self, telefono: str, media_id: str = "", link: str = "", caption: str = "") -> bool:
+        """Envía una imagen por WhatsApp. Usa media_id (subido previamente) o link público."""
+        return await self._enviar_media(telefono, "image", media_id=media_id, link=link, caption=caption)
+
+    async def enviar_video(self, telefono: str, media_id: str = "", link: str = "", caption: str = "") -> bool:
+        """Envía un video por WhatsApp."""
+        return await self._enviar_media(telefono, "video", media_id=media_id, link=link, caption=caption)
+
+    async def enviar_documento(
+        self, telefono: str, media_id: str = "", link: str = "",
+        caption: str = "", filename: str = ""
+    ) -> bool:
+        """Envía un documento (PDF, etc.) por WhatsApp."""
+        return await self._enviar_media(
+            telefono, "document", media_id=media_id, link=link, caption=caption, filename=filename
+        )
+
+    async def enviar_audio(self, telefono: str, media_id: str = "", link: str = "") -> bool:
+        """Envía un audio/nota de voz por WhatsApp."""
+        return await self._enviar_media(telefono, "audio", media_id=media_id, link=link)
+
+    async def enviar_ubicacion(
+        self, telefono: str, latitud: float, longitud: float,
+        nombre: str = "", direccion: str = ""
+    ) -> bool:
+        """Envía una ubicación geográfica."""
+        if not self.access_token or not self.phone_number_id:
+            return False
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        location_obj = {"latitude": float(latitud), "longitude": float(longitud)}
+        if nombre:    location_obj["name"]    = nombre[:200]
+        if direccion: location_obj["address"] = direccion[:400]
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "location",
+            "location": location_obj,
+        }
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API ubicacion: {r.status_code} — {r.text[:200]}")
+            return r.status_code == 200
+
+    async def enviar_producto(
+        self, telefono: str, retailer_id: str, cuerpo: str = ""
+    ) -> bool:
+        """Envía un solo producto del catálogo (single_product). Requiere META_CATALOG_ID."""
+        if not self.access_token or not self.phone_number_id or not self.catalog_id:
+            logger.warning("enviar_producto: credenciales o catalog_id faltan")
+            return False
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": telefono,
+            "type": "interactive",
+            "interactive": {
+                "type": "product",
+                "body": {"text": cuerpo[:1024]} if cuerpo else None,
+                "action": {
+                    "catalog_id": self.catalog_id,
+                    "product_retailer_id": retailer_id,
+                },
+            },
+        }
+        # Limpiar body si está vacío (Meta lo rechaza con body vacío)
+        if not cuerpo:
+            payload["interactive"].pop("body", None)
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            if r.status_code != 200:
+                logger.error(f"Error Meta API single_product: {r.status_code} — {r.text[:300]}")
             return r.status_code == 200

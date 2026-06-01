@@ -779,6 +779,36 @@ tr:hover td{background:#f8f9fa}
   border:1px solid #dde1e8;border-radius:8px;padding:10px;resize:vertical;
   color:#1a2332;outline:none;box-sizing:border-box;margin-bottom:8px}
 .prompt-instruccion-ta:focus{border-color:var(--az)}
+/* ── SPRINT 4: Adjuntar media ── */
+.attach-opt{display:flex;align-items:center;gap:10px;padding:8px 12px;color:#e9edef;
+  cursor:pointer;border-radius:6px;font-size:.86rem;transition:background .12s}
+.attach-opt:hover{background:#2a3942}
+.attach-opt > span:first-child{width:30px;height:30px;border-radius:50%;color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
+/* Burbujas de media en el chat */
+.media-img{max-width:280px;max-height:280px;border-radius:8px;cursor:pointer;display:block}
+.media-vid{max-width:280px;max-height:280px;border-radius:8px;display:block}
+.media-doc{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.15);
+  padding:10px 12px;border-radius:8px;text-decoration:none;color:inherit;min-width:200px}
+.media-doc-ic{font-size:1.4rem}
+.media-doc-info{flex:1;min-width:0}
+.media-doc-name{font-size:.85rem;font-weight:600;word-break:break-word}
+.media-doc-meta{font-size:.7rem;opacity:.7}
+.media-loc{display:flex;flex-direction:column;background:rgba(0,0,0,.15);
+  padding:10px 12px;border-radius:8px;min-width:220px;gap:4px;text-decoration:none;color:inherit}
+.media-prod{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.15);
+  padding:10px;border-radius:8px;min-width:240px}
+.media-prod-img{width:50px;height:50px;border-radius:6px;background:#fff;object-fit:cover;flex-shrink:0}
+.media-caption{margin-top:6px;font-size:.86rem;line-height:1.35}
+/* Resultados de catálogo */
+.cat-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:7px;
+  cursor:pointer;border:1px solid transparent;transition:all .12s}
+.cat-item:hover{background:#f0f4ff;border-color:#c7d2fe}
+.cat-item-img{width:42px;height:42px;border-radius:6px;background:#f1f5f9;object-fit:cover;flex-shrink:0}
+.cat-item-info{flex:1;min-width:0}
+.cat-item-titulo{font-weight:600;font-size:.84rem;color:#1a2332;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-item-precio{font-size:.78rem;color:#16a34a;font-weight:700}
+
 /* ── Escalaciones ── */
 .esc-tab{flex:1;border:none;background:none;padding:10px 4px;font-size:.75rem;font-weight:600;
   color:#64748b;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
@@ -1122,11 +1152,87 @@ tr:hover td{background:#f8f9fa}
             <div id="msgs"></div>
 
             <div id="ib">
+              <!-- Botón adjuntar (Sprint 4) -->
+              <div id="attach-wrap" style="position:relative">
+                <button id="attach-btn" onclick="toggleAttachMenu()" aria-label="Adjuntar"
+                  style="background:none;border:none;color:#8696a0;font-size:1.4rem;cursor:pointer;padding:4px 8px">📎</button>
+                <!-- Menú de opciones -->
+                <div id="attach-menu" style="display:none;position:absolute;bottom:42px;left:0;
+                  background:#202c33;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.4);
+                  padding:6px;min-width:200px;z-index:50">
+                  <div class="attach-opt" onclick="abrirSelectorMedia('image')">
+                    <span style="background:#7c3aed">🖼</span> Imagen
+                  </div>
+                  <div class="attach-opt" onclick="abrirSelectorMedia('video')">
+                    <span style="background:#dc2626">🎥</span> Video
+                  </div>
+                  <div class="attach-opt" onclick="abrirSelectorMedia('document')">
+                    <span style="background:#2563eb">📄</span> Documento
+                  </div>
+                  <div class="attach-opt" onclick="abrirUbicacion()">
+                    <span style="background:#059669">📍</span> Ubicación
+                  </div>
+                  <div class="attach-opt" onclick="abrirCatalogoSelector()">
+                    <span style="background:#ea580c">🛒</span> Producto
+                  </div>
+                </div>
+                <input type="file" id="media-file-input" accept="image/*" style="display:none"
+                  onchange="enviarMediaSeleccionada()">
+              </div>
               <label for="ti" style="display:none">Mensaje</label>
               <textarea id="ti" rows="1" placeholder="Escribe un mensaje y presiona Enter…"
                 aria-label="Escribe un mensaje"
                 onkeydown="onKey(event)" oninput="autoResize()"></textarea>
               <button id="sendbtn" onclick="sendMsg()" aria-label="Enviar mensaje">➤</button>
+            </div>
+
+            <!-- Modal: Ubicación (Sprint 4) -->
+            <div id="modal-ubicacion" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+              background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+              <div style="background:#fff;border-radius:12px;padding:24px;max-width:420px;width:90%">
+                <h3 style="margin:0 0 14px;color:#1a2332;font-size:1.05rem">📍 Compartir ubicación</h3>
+                <div style="display:flex;gap:8px;margin-bottom:10px">
+                  <input id="loc-lat" type="number" step="any" placeholder="Latitud" style="flex:1;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem">
+                  <input id="loc-lng" type="number" step="any" placeholder="Longitud" style="flex:1;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem">
+                </div>
+                <input id="loc-nombre" type="text" placeholder="Nombre del lugar (opcional)"
+                  style="width:100%;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem;margin-bottom:8px;box-sizing:border-box">
+                <input id="loc-dir" type="text" placeholder="Dirección (opcional)"
+                  style="width:100%;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem;margin-bottom:14px;box-sizing:border-box">
+                <button onclick="usarMiUbicacion()" style="width:100%;padding:8px;background:#f0f4ff;border:1px solid #c7d2fe;color:#4f46e5;border-radius:7px;font-size:.82rem;cursor:pointer;margin-bottom:10px">📡 Usar mi ubicación actual</button>
+                <div style="display:flex;gap:8px">
+                  <button onclick="cerrarModalUbicacion()" style="flex:1;padding:9px;background:#f1f5f9;border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
+                  <button onclick="enviarUbicacion()" style="flex:1;padding:9px;background:#059669;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Enviar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modal: Catálogo de productos (Sprint 4) -->
+            <div id="modal-catalogo" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+              background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+              <div style="background:#fff;border-radius:12px;padding:20px;max-width:560px;width:92%;max-height:80vh;display:flex;flex-direction:column">
+                <h3 style="margin:0 0 12px;color:#1a2332;font-size:1.05rem">🛒 Enviar producto del catálogo</h3>
+                <input id="cat-buscar" type="text" placeholder="Buscar producto…" oninput="buscarCatalogo()"
+                  style="width:100%;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
+                <div id="cat-resultados" style="flex:1;overflow-y:auto;border:1px solid #f1f5f9;border-radius:8px;padding:6px;background:#fafbfc"></div>
+                <button onclick="cerrarModalCatalogo()" style="margin-top:12px;padding:9px;background:#f1f5f9;border:none;border-radius:7px;font-weight:600;cursor:pointer">Cerrar</button>
+              </div>
+            </div>
+
+            <!-- Modal: Caption antes de enviar media (Sprint 4) -->
+            <div id="modal-caption" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+              background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+              <div style="background:#fff;border-radius:12px;padding:22px;max-width:420px;width:90%">
+                <h3 id="cap-titulo" style="margin:0 0 14px;color:#1a2332;font-size:1rem">Enviar archivo</h3>
+                <div id="cap-preview" style="margin-bottom:14px;text-align:center"></div>
+                <textarea id="cap-texto" placeholder="Descripción (opcional)…" rows="2"
+                  style="width:100%;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
+                <div id="cap-progress" style="display:none;margin-top:8px;font-size:.82rem;color:#4f46e5">⏳ Enviando…</div>
+                <div style="display:flex;gap:8px;margin-top:12px">
+                  <button onclick="cerrarModalCaption()" style="flex:1;padding:9px;background:#f1f5f9;border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
+                  <button id="cap-enviar-btn" onclick="confirmarEnvioMedia()" style="flex:1;padding:9px;background:#25d366;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Enviar</button>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -3293,8 +3399,9 @@ function renderMsgs(msgs, scroll) {
       lastDate = dia;
     }
     var cls = m.role === 'user' ? 'usr' : 'bot';
+    var bodyHtml = renderMediaOrText(m.content);
     h += '<div class="msg ' + cls + '">'
-       + '<div class="mb">' + he(m.content) + '</div>'
+       + '<div class="mb">' + bodyHtml + '</div>'
        + '<div class="mt">' + fmtH(m.timestamp) + '</div>'
        + '</div>';
   }
@@ -6630,6 +6737,276 @@ function _renderStatsEquipo(stats) {
     '<th style="padding:8px 14px;text-align:center;font-weight:600">Resueltos</th>' +
     '<th style="padding:8px 14px;text-align:center;font-weight:600">Tiempo prom.</th>' +
     '</thead><tbody>' + filas.join('') + '</tbody></table>';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 4 — MENSAJES MULTIMEDIA EN EL CHAT
+   ══════════════════════════════════════════════════════════════ */
+var _mediaTipoActual = '';  // image | video | document
+var _mediaFile       = null;
+
+/* Renderiza una burbuja: texto plano o media según marcador */
+function renderMediaOrText(content) {
+  if (!content) return '';
+  // Detectar marcador __MEDIA__
+  if (content.indexOf('__MEDIA__:') === 0) {
+    try {
+      var data = JSON.parse(content.substring(10));
+      return renderMediaBurbuja(data);
+    } catch(e) {
+      return he(content);
+    }
+  }
+  // Detectar marcador __ORDEN_CATALOGO__ (pedido del cliente)
+  if (content.indexOf('__ORDEN_CATALOGO__:') === 0) {
+    try {
+      var items = JSON.parse(content.substring('__ORDEN_CATALOGO__:'.length));
+      var lineas = items.map(function(it) {
+        return '🛒 ' + (it.quantity || 1) + 'x ' + he(it.product_retailer_id || '');
+      });
+      return '<div style="font-size:.82rem">📦 <b>Pedido desde catálogo</b><br>' +
+        lineas.join('<br>') + '</div>';
+    } catch(e) { return he(content); }
+  }
+  return he(content);
+}
+
+function renderMediaBurbuja(d) {
+  var tipo = d.tipo || '';
+  var cap = d.caption ? '<div class="media-caption">' + he(d.caption) + '</div>' : '';
+
+  if (tipo === 'image') {
+    var src = '/inbox/api/media/' + encodeURIComponent(d.media_id);
+    return '<img class="media-img" src="' + src + '" alt="imagen" onclick="window.open(\'' + src + '\',\'_blank\')">' + cap;
+  }
+  if (tipo === 'video') {
+    var src = '/inbox/api/media/' + encodeURIComponent(d.media_id);
+    return '<video class="media-vid" src="' + src + '" controls preload="metadata"></video>' + cap;
+  }
+  if (tipo === 'document') {
+    var src = '/inbox/api/media/' + encodeURIComponent(d.media_id);
+    var nombre = d.filename || 'Documento';
+    return '<a class="media-doc" href="' + src + '" target="_blank" download="' + he(nombre) + '">' +
+      '<div class="media-doc-ic">📄</div>' +
+      '<div class="media-doc-info">' +
+        '<div class="media-doc-name">' + he(nombre) + '</div>' +
+        '<div class="media-doc-meta">Abrir/Descargar</div>' +
+      '</div></a>' + cap;
+  }
+  if (tipo === 'audio') {
+    var src = '/inbox/api/media/' + encodeURIComponent(d.media_id);
+    return '<audio src="' + src + '" controls style="max-width:280px"></audio>';
+  }
+  if (tipo === 'location') {
+    var mapsUrl = 'https://www.google.com/maps?q=' + d.latitud + ',' + d.longitud;
+    return '<a class="media-loc" href="' + mapsUrl + '" target="_blank">' +
+      '<div style="font-weight:700">📍 ' + he(d.nombre || 'Ubicación compartida') + '</div>' +
+      (d.direccion ? '<div style="font-size:.78rem;opacity:.85">' + he(d.direccion) + '</div>' : '') +
+      '<div style="font-size:.72rem;opacity:.6">' + d.latitud + ', ' + d.longitud + '</div>' +
+      '</a>';
+  }
+  if (tipo === 'product') {
+    var cuerpo = d.cuerpo ? '<div style="font-size:.82rem;margin-bottom:4px">' + he(d.cuerpo) + '</div>' : '';
+    return cuerpo + '<div class="media-prod">' +
+      '<div class="media-prod-img" style="font-size:1.6rem;display:flex;align-items:center;justify-content:center">🛒</div>' +
+      '<div><div style="font-weight:700;font-size:.84rem">Producto del catálogo</div>' +
+      '<div style="font-size:.72rem;opacity:.7">SKU: ' + he(d.retailer_id) + '</div></div></div>';
+  }
+  return '<i style="opacity:.6">Mensaje multimedia</i>';
+}
+
+/* Menú adjuntar */
+function toggleAttachMenu() {
+  var m = document.getElementById('attach-menu');
+  if (m) m.style.display = m.style.display === 'none' ? '' : 'none';
+}
+// Cerrar al click fuera
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('attach-menu');
+  var btn  = document.getElementById('attach-btn');
+  if (menu && menu.style.display !== 'none' && e.target !== btn && !menu.contains(e.target)) {
+    menu.style.display = 'none';
+  }
+});
+
+function abrirSelectorMedia(tipo) {
+  toggleAttachMenu();
+  _mediaTipoActual = tipo;
+  var input = document.getElementById('media-file-input');
+  if (tipo === 'image')    input.accept = 'image/*';
+  else if (tipo === 'video') input.accept = 'video/mp4,video/3gpp';
+  else                      input.accept = '.pdf,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt';
+  input.value = '';
+  input.click();
+}
+
+function enviarMediaSeleccionada() {
+  var input = document.getElementById('media-file-input');
+  if (!input.files || !input.files[0]) return;
+  _mediaFile = input.files[0];
+
+  // Mostrar modal con preview y caption
+  var titulo = document.getElementById('cap-titulo');
+  var prev   = document.getElementById('cap-preview');
+  titulo.textContent = 'Enviar ' + (
+    _mediaTipoActual === 'image' ? 'imagen' :
+    _mediaTipoActual === 'video' ? 'video' : 'documento'
+  );
+
+  if (_mediaTipoActual === 'image') {
+    var url = URL.createObjectURL(_mediaFile);
+    prev.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:240px;border-radius:8px">';
+  } else if (_mediaTipoActual === 'video') {
+    var url = URL.createObjectURL(_mediaFile);
+    prev.innerHTML = '<video src="' + url + '" controls style="max-width:100%;max-height:240px;border-radius:8px"></video>';
+  } else {
+    prev.innerHTML = '<div style="padding:14px;background:#f1f5f9;border-radius:8px;color:#1a2332">📄 ' +
+      he(_mediaFile.name) + '<br><small style="color:#64748b">' +
+      (_mediaFile.size / 1024 / 1024).toFixed(2) + ' MB</small></div>';
+  }
+  document.getElementById('cap-texto').value = '';
+  document.getElementById('cap-progress').style.display = 'none';
+  document.getElementById('cap-enviar-btn').disabled = false;
+  document.getElementById('modal-caption').style.display = 'flex';
+}
+
+function cerrarModalCaption() {
+  document.getElementById('modal-caption').style.display = 'none';
+  _mediaFile = null;
+}
+
+async function confirmarEnvioMedia() {
+  if (!_mediaFile || !TEL) return;
+  var btn = document.getElementById('cap-enviar-btn');
+  var prog = document.getElementById('cap-progress');
+  btn.disabled = true;
+  prog.style.display = '';
+  prog.textContent = '⏳ Subiendo archivo…';
+
+  var fd = new FormData();
+  fd.append('file',     _mediaFile);
+  fd.append('telefono', TEL);
+  fd.append('caption',  document.getElementById('cap-texto').value || '');
+
+  try {
+    var r = await fetch('/inbox/api/responder/media', {
+      method: 'POST', credentials: 'include', body: fd
+    });
+    var d = await r.json();
+    if (d.ok) {
+      cerrarModalCaption();
+      loadMsgs(true);  // recargar para ver la burbuja
+    } else {
+      prog.textContent = '❌ ' + (d.error || 'Error');
+      btn.disabled = false;
+    }
+  } catch(e) {
+    prog.textContent = '❌ Error de red';
+    btn.disabled = false;
+  }
+}
+
+/* Ubicación */
+function abrirUbicacion() {
+  toggleAttachMenu();
+  document.getElementById('loc-lat').value = '';
+  document.getElementById('loc-lng').value = '';
+  document.getElementById('loc-nombre').value = '';
+  document.getElementById('loc-dir').value = '';
+  document.getElementById('modal-ubicacion').style.display = 'flex';
+}
+function cerrarModalUbicacion() {
+  document.getElementById('modal-ubicacion').style.display = 'none';
+}
+function usarMiUbicacion() {
+  if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización'); return; }
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    document.getElementById('loc-lat').value = pos.coords.latitude.toFixed(6);
+    document.getElementById('loc-lng').value = pos.coords.longitude.toFixed(6);
+  }, function(err) {
+    alert('No se pudo obtener tu ubicación: ' + err.message);
+  });
+}
+async function enviarUbicacion() {
+  if (!TEL) return;
+  var lat = parseFloat(document.getElementById('loc-lat').value);
+  var lng = parseFloat(document.getElementById('loc-lng').value);
+  if (isNaN(lat) || isNaN(lng)) { alert('Latitud y longitud son requeridas'); return; }
+  var nombre = document.getElementById('loc-nombre').value || '';
+  var dir    = document.getElementById('loc-dir').value || '';
+  try {
+    var r = await fetch('/inbox/api/responder/ubicacion', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({telefono: TEL, latitud: lat, longitud: lng, nombre: nombre, direccion: dir})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      cerrarModalUbicacion();
+      loadMsgs(true);
+    } else { alert('Error: ' + (d.error || 'desconocido')); }
+  } catch(e) { alert('Error de red'); }
+}
+
+/* Catálogo */
+function abrirCatalogoSelector() {
+  toggleAttachMenu();
+  document.getElementById('cat-buscar').value = '';
+  document.getElementById('cat-resultados').innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8">Cargando catálogo…</div>';
+  document.getElementById('modal-catalogo').style.display = 'flex';
+  buscarCatalogo();
+}
+function cerrarModalCatalogo() {
+  document.getElementById('modal-catalogo').style.display = 'none';
+}
+var _catTimer = null;
+function buscarCatalogo() {
+  clearTimeout(_catTimer);
+  _catTimer = setTimeout(_buscarCatalogoExec, 200);
+}
+async function _buscarCatalogoExec() {
+  var q = document.getElementById('cat-buscar').value || '';
+  var box = document.getElementById('cat-resultados');
+  try {
+    var r = await fetch('/inbox/api/catalogo/buscar?q=' + encodeURIComponent(q), {credentials:'include'});
+    var d = await r.json();
+    var prods = d.productos || [];
+    if (!prods.length) {
+      box.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.84rem">' +
+        (q ? 'Sin resultados para "' + he(q) + '"' : 'Sin productos en el catálogo') + '</div>';
+      return;
+    }
+    box.innerHTML = prods.map(function(p) {
+      var img = p.image ? '<img class="cat-item-img" src="' + he(p.image) + '">' :
+        '<div class="cat-item-img" style="display:flex;align-items:center;justify-content:center">🛒</div>';
+      var label = he(p.title) + (p.variant && p.variant !== 'Default Title' ? ' · ' + he(p.variant) : '');
+      var precio = p.price ? '$' + Number(p.price).toLocaleString('es-CO') : '';
+      return '<div class="cat-item" onclick="enviarProducto(\'' + he(p.retailer_id).replace(/\x27/g, '&#39;') + '\')">' +
+        img +
+        '<div class="cat-item-info">' +
+          '<div class="cat-item-titulo">' + label + '</div>' +
+          '<div class="cat-item-precio">' + precio + '</div>' +
+          '<div style="font-size:.7rem;color:#94a3b8">SKU: ' + he(p.retailer_id) + '</div>' +
+        '</div></div>';
+    }).join('');
+  } catch(e) {
+    box.innerHTML = '<div style="padding:20px;color:#ef4444;font-size:.84rem">Error: ' + he(String(e)) + '</div>';
+  }
+}
+async function enviarProducto(retailerId) {
+  if (!TEL) return;
+  try {
+    var r = await fetch('/inbox/api/responder/producto', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({telefono: TEL, retailer_id: retailerId})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      cerrarModalCatalogo();
+      loadMsgs(true);
+    } else { alert('Error: ' + (d.error || 'desconocido')); }
+  } catch(e) { alert('Error de red'); }
 }
 
 async function toggleAutoAsignar(activo) {

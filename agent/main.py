@@ -949,6 +949,40 @@ async def webhook_handler(request: Request):
                 logger.info(f"[opt-out] {msg.telefono} dado de baja — motivo: {msg.texto[:50]}")
                 continue  # no pasar por Claude
 
+            # ── Media entrante (imagen/video/documento/ubicación) ──────────────
+            # Guardamos el marcador en historial para que el inbox lo renderice,
+            # y reemplazamos el texto que pasa a Claude por el caption o un placeholder
+            # genérico (Andrea no procesa el contenido binario, solo responde al caption).
+            if msg.texto.startswith("__MEDIA__:"):
+                try:
+                    media_payload = json.loads(msg.texto[len("__MEDIA__:"):])
+                except Exception:
+                    media_payload = {}
+                # Guardamos el marcador original en BD (el inbox lo renderiza)
+                await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
+                await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
+                # Si hay caption, lo usamos como mensaje "real" para Claude
+                caption = (media_payload.get("caption") or "").strip()
+                tipo_media = media_payload.get("tipo", "media")
+                tipo_legible = {
+                    "image": "imagen", "video": "video",
+                    "document": "documento", "location": "ubicación",
+                    "audio": "audio"
+                }.get(tipo_media, "archivo")
+                if caption:
+                    # Reescribir msg.texto para que Claude responda al caption con contexto
+                    msg = type(msg)(
+                        telefono=msg.telefono,
+                        texto=f"[Cliente envió {tipo_legible}] {caption}",
+                        mensaje_id=msg.mensaje_id,
+                        es_propio=msg.es_propio,
+                    )
+                else:
+                    # Sin caption: Andrea reconoce que llegó media pero no continúa con Claude
+                    # — el operador humano debe responder. Solo registramos.
+                    logger.info(f"Media {tipo_media} de {msg.telefono} sin caption — no se invoca Claude")
+                    continue
+
             # ── Orden directa desde catálogo nativo WhatsApp ──────────────────
             # El cliente armó su carrito en WhatsApp y confirmó — bypaseamos Claude
             # y creamos el checkout de Shopify directamente.
@@ -1975,6 +2009,269 @@ async def inbox_responder(
     except Exception as e:
         logger.error(f"Error enviando desde inbox a {telefono}: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT 4 — Mensajes multimedia desde el inbox
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Límites Meta WhatsApp Cloud API
+_MEDIA_LIMITS = {
+    "image":    5  * 1024 * 1024,   # 5 MB
+    "video":    16 * 1024 * 1024,   # 16 MB
+    "audio":    16 * 1024 * 1024,   # 16 MB
+    "document": 100 * 1024 * 1024,  # 100 MB
+}
+
+_MEDIA_MIME_TIPO = {
+    "image/jpeg":  "image",   "image/png":  "image",   "image/webp": "image",
+    "video/mp4":   "video",   "video/3gpp": "video",
+    "audio/mpeg":  "audio",   "audio/ogg":  "audio",   "audio/mp4":  "audio",   "audio/amr": "audio",
+    "application/pdf": "document",
+}
+
+
+def _detectar_tipo_media(mime_type: str) -> str:
+    """Detecta el tipo de media según el MIME type. Default = document."""
+    mime = (mime_type or "").lower().split(";")[0].strip()
+    if mime in _MEDIA_MIME_TIPO:
+        return _MEDIA_MIME_TIPO[mime]
+    if mime.startswith("image/"):    return "image"
+    if mime.startswith("video/"):    return "video"
+    if mime.startswith("audio/"):    return "audio"
+    return "document"
+
+
+@app.post("/inbox/api/responder/media")
+async def inbox_responder_media(
+    file: UploadFile = File(...),
+    telefono: str = Form(...),
+    caption: str = Form(""),
+    agent_id: int = Form(1),
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Envía un archivo multimedia (imagen/video/documento/audio) por WhatsApp.
+    El frontend sube el archivo aquí, lo subimos a Meta y enviamos el mensaje."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    telefono = telefono.strip()
+    if not telefono:
+        return JSONResponse(content={"ok": False, "error": "Teléfono requerido"}, status_code=400)
+
+    contenido = await file.read()
+    if not contenido:
+        return JSONResponse(content={"ok": False, "error": "Archivo vacío"}, status_code=400)
+
+    mime_type = file.content_type or "application/octet-stream"
+    tipo      = _detectar_tipo_media(mime_type)
+
+    limite = _MEDIA_LIMITS.get(tipo, 5 * 1024 * 1024)
+    if len(contenido) > limite:
+        mb = round(limite / 1024 / 1024)
+        return JSONResponse(content={
+            "ok": False,
+            "error": f"Archivo demasiado grande. Máximo {mb} MB para {tipo}"
+        }, status_code=400)
+
+    try:
+        from agent.memory import obtener_agente
+        _agente = await obtener_agente(agent_id) or {"id": 1}
+        _prov = await _get_meta_para_agente(_agente)
+
+        # 1. Subir el archivo a Meta
+        media_id = await _prov.subir_media(contenido, file.filename or "archivo", mime_type)
+        if not media_id:
+            return JSONResponse(content={
+                "ok": False, "error": "No se pudo subir el archivo a Meta"
+            }, status_code=500)
+
+        # 2. Enviar el mensaje según el tipo
+        cap = caption.strip()
+        ok = False
+        if tipo == "image":
+            ok = await _prov.enviar_imagen(telefono, media_id=media_id, caption=cap)
+        elif tipo == "video":
+            ok = await _prov.enviar_video(telefono, media_id=media_id, caption=cap)
+        elif tipo == "audio":
+            ok = await _prov.enviar_audio(telefono, media_id=media_id)
+        else:  # document
+            ok = await _prov.enviar_documento(
+                telefono, media_id=media_id, caption=cap, filename=file.filename or ""
+            )
+
+        if not ok:
+            return JSONResponse(content={
+                "ok": False, "error": "Meta rechazó el envío del mensaje"
+            }, status_code=500)
+
+        # 3. Guardar marcador en historial
+        marcador = json.dumps({
+            "tipo":      tipo,
+            "media_id":  media_id,
+            "mime_type": mime_type,
+            "filename":  file.filename or "",
+            "caption":   cap,
+        }, ensure_ascii=False)
+        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id)
+        await registrar_mensaje_asistente(telefono)
+        logger.info(f"Media {tipo} enviada a {telefono} desde inbox")
+        return JSONResponse(content={
+            "ok": True, "tipo": tipo, "media_id": media_id, "filename": file.filename or ""
+        })
+    except Exception as e:
+        logger.error(f"Error enviando media a {telefono}: {e}", exc_info=True)
+        return JSONResponse(content={"ok": False, "error": str(e)[:300]}, status_code=500)
+
+
+@app.get("/inbox/api/media/{media_id}")
+async def inbox_obtener_media(
+    media_id: str,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Proxy que descarga el media de Meta y lo sirve al frontend.
+    Necesario porque las URLs scontent.whatsapp.net requieren auth header."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from fastapi.responses import Response
+    try:
+        from agent.memory import obtener_agente
+        _agente = await obtener_agente(agent_id) or {"id": 1}
+        _prov = await _get_meta_para_agente(_agente)
+        result = await _prov.descargar_media(media_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Media no encontrada o expirada")
+        contenido, mime = result
+        return Response(content=contenido, media_type=mime,
+                        headers={"Cache-Control": "private, max-age=3600"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error obteniendo media {media_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e)[:200])
+
+
+@app.post("/inbox/api/responder/ubicacion")
+async def inbox_responder_ubicacion(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Envía una ubicación geográfica al cliente."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    telefono  = (body.get("telefono") or "").strip()
+    latitud   = body.get("latitud")
+    longitud  = body.get("longitud")
+    nombre    = (body.get("nombre")    or "").strip()
+    direccion = (body.get("direccion") or "").strip()
+    agent_id  = int(body.get("agent_id") or 1)
+    if not telefono or latitud is None or longitud is None:
+        return JSONResponse(content={"ok": False, "error": "Faltan datos"}, status_code=400)
+    try:
+        from agent.memory import obtener_agente
+        _agente = await obtener_agente(agent_id) or {"id": 1}
+        _prov = await _get_meta_para_agente(_agente)
+        ok = await _prov.enviar_ubicacion(telefono, float(latitud), float(longitud), nombre, direccion)
+        if not ok:
+            return JSONResponse(content={"ok": False, "error": "Meta rechazó la ubicación"}, status_code=500)
+        marcador = json.dumps({
+            "tipo":      "location",
+            "latitud":   latitud,
+            "longitud":  longitud,
+            "nombre":    nombre,
+            "direccion": direccion,
+        }, ensure_ascii=False)
+        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id)
+        await registrar_mensaje_asistente(telefono)
+        return JSONResponse(content={"ok": True})
+    except Exception as e:
+        logger.error(f"Error enviando ubicación: {e}")
+        return JSONResponse(content={"ok": False, "error": str(e)[:300]}, status_code=500)
+
+
+@app.post("/inbox/api/responder/producto")
+async def inbox_responder_producto(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Envía un producto del catálogo de Shopify al cliente."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    telefono     = (body.get("telefono") or "").strip()
+    retailer_id  = (body.get("retailer_id") or "").strip()
+    cuerpo       = (body.get("cuerpo") or "").strip()
+    agent_id     = int(body.get("agent_id") or 1)
+    if not telefono or not retailer_id:
+        return JSONResponse(content={"ok": False, "error": "Faltan datos"}, status_code=400)
+    try:
+        from agent.memory import obtener_agente
+        _agente = await obtener_agente(agent_id) or {"id": 1}
+        _prov = await _get_meta_para_agente(_agente)
+        ok = await _prov.enviar_producto(telefono, retailer_id, cuerpo)
+        if not ok:
+            return JSONResponse(content={
+                "ok": False, "error": "Meta rechazó el producto (verifica catalog_id y SKU)"
+            }, status_code=500)
+        marcador = json.dumps({
+            "tipo":        "product",
+            "retailer_id": retailer_id,
+            "cuerpo":      cuerpo,
+        }, ensure_ascii=False)
+        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id)
+        await registrar_mensaje_asistente(telefono)
+        return JSONResponse(content={"ok": True})
+    except Exception as e:
+        logger.error(f"Error enviando producto: {e}")
+        return JSONResponse(content={"ok": False, "error": str(e)[:300]}, status_code=500)
+
+
+@app.get("/inbox/api/catalogo/buscar")
+async def inbox_buscar_catalogo(
+    q: str = "",
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Busca productos en el catálogo de Shopify por nombre (para enviar desde el inbox)."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        # Asegurar que el catálogo esté cargado en cache
+        await obtener_catalogo_shopify()
+        catalogo = obtener_catalogo_json() or []
+        q_norm = q.strip().lower()
+        resultados = []
+        for item in catalogo:
+            titulo = (item.get("producto") or "").strip()
+            presentacion = (item.get("presentacion") or "").strip()
+            label = f"{titulo}".strip()
+            if q_norm and q_norm not in (titulo + " " + presentacion).lower():
+                continue
+            resultados.append({
+                "retailer_id": item.get("retailer_id") or item.get("sku") or "",
+                "title":       titulo,
+                "variant":     presentacion,
+                "price":       item.get("precio", 0),
+                "image":       item.get("imagen", ""),
+                "categoria":   item.get("categoria", ""),
+            })
+            if len(resultados) >= 50:
+                break
+        return JSONResponse(content={"productos": resultados})
+    except Exception as e:
+        logger.error(f"Error buscando catálogo: {e}")
+        return JSONResponse(content={"productos": [], "error": str(e)[:200]})
 
 
 @app.post("/inbox/api/modo/{telefono}")
