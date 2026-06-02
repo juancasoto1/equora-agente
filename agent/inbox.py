@@ -8275,13 +8275,13 @@ def obtener_inbox_html(agent: dict | None = None, user: dict | None = None) -> s
     else:
         user_info = ""
 
-    agent_bar = f"""<div style="background:#0f172a;padding:7px 20px;display:flex;align-items:center;
+    agent_bar = f"""<div style="background:var(--voco-nav-bg);padding:7px 20px;display:flex;align-items:center;
 justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
   <div style="display:flex;align-items:center;gap:10px">
     <span style="font-size:1.3rem">{emoji}</span>
     <div>
-      <div style="color:#fff;font-weight:700;font-size:.85rem;line-height:1.2">{name}</div>
-      <div style="color:#94a3b8;font-size:.72rem">{aname} &nbsp;·&nbsp;
+      <div style="color:var(--voco-text);font-weight:700;font-size:.85rem;line-height:1.2">{name}</div>
+      <div style="color:var(--voco-text-muted);font-size:.72rem">{aname} &nbsp;·&nbsp;
         <span style="color:{status_color}">{status_label}</span></div>
     </div>
   </div>
@@ -8289,23 +8289,23 @@ justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
     {user_info}
     <button type="button" onclick="vocoToggleTheme()" title="Cambiar tema"
       aria-label="Cambiar tema claro/oscuro"
-      style="background:transparent;border:1px solid #1e293b;color:#64748b;
+      style="background:transparent;border:1px solid var(--voco-border);color:var(--voco-text-muted);
         width:30px;height:30px;border-radius:6px;cursor:pointer;
         display:inline-flex;align-items:center;justify-content:center;transition:.15s"
-      onmouseover="this.style.color='#e2e8f0';this.style.borderColor='#334155'"
-      onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+      onmouseover="this.style.color='var(--voco-text)';this.style.background='var(--voco-nav-bg-hover)'"
+      onmouseout="this.style.color='var(--voco-text-muted)';this.style.background='transparent'">
       <i data-lucide="sun"  class="hidden dark:inline-block" style="width:15px;height:15px"></i>
       <i data-lucide="moon" class="inline-block dark:hidden" style="width:15px;height:15px"></i>
     </button>
-    <a href="/inbox" style="color:#64748b;font-size:.76rem;text-decoration:none;
-      padding:4px 12px;border:1px solid #1e293b;border-radius:6px;
+    <a href="/inbox" style="color:var(--voco-text-muted);font-size:.76rem;text-decoration:none;
+      padding:4px 12px;border:1px solid var(--voco-border);border-radius:6px;
       transition:.15s;white-space:nowrap"
-      onmouseover="this.style.color='#e2e8f0';this.style.borderColor='#334155'"
-      onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+      onmouseover="this.style.color='var(--voco-text)';this.style.background='var(--voco-nav-bg-hover)'"
+      onmouseout="this.style.color='var(--voco-text-muted)';this.style.background='transparent'">
       ← Voco
     </a>
-    <a href="/inbox/logout" style="color:#475569;font-size:.72rem;text-decoration:none;
-      padding:4px 10px;border:1px solid #1e293b;border-radius:6px">Salir</a>
+    <a href="/inbox/logout" style="color:var(--voco-text-muted);font-size:.72rem;text-decoration:none;
+      padding:4px 10px;border:1px solid var(--voco-border);border-radius:6px">Salir</a>
   </div>
 </div>"""
 
@@ -8454,9 +8454,9 @@ Representas a {NOMBRE_NEGOCIO} y ayudas a los clientes según las instrucciones 
 
     cards_html = ""
     if not agents:
-        cards_html = """<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:#64748b">
+        cards_html = """<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-soft)">
           <div style="font-size:3rem;margin-bottom:12px">🤖</div>
-          <div style="font-size:1rem;font-weight:600;color:#94a3b8;margin-bottom:6px">No hay agentes aún</div>
+          <div style="font-size:1rem;font-weight:600;color:var(--text);margin-bottom:6px">No hay agentes aún</div>
           <div style="font-size:.84rem">Crea tu primer agente con el botón de arriba</div>
         </div>"""
     else:
@@ -8475,6 +8475,9 @@ Representas a {NOMBRE_NEGOCIO} y ayudas a los clientes según las instrucciones 
                          "restaurante": "🍽 Restaurante", "salud": "💊 Salud",
                          "personalizado": "⚙ Personalizado"}.get(btype, btype)
             agent_id = ag.get("id", 1)
+            # En light mode el pill usa colores semánticos limpios; en dark usa tonos oscuros
+            pill_c_light  = {"active": "#047857", "paused": "#b45309", "draft": "#475569"}.get(status, "#475569")
+            pill_bg_light = {"active": "#ecfdf5", "paused": "#fef3c7", "draft": "#f1f5f9"}.get(status, "#f1f5f9")
             cards_html += f"""
         <div class="agent-card" style="border-top:3px solid {color}">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px">
@@ -8482,20 +8485,22 @@ Representas a {NOMBRE_NEGOCIO} y ayudas a los clientes según las instrucciones 
               <div style="width:44px;height:44px;border-radius:12px;background:{color}22;
                 display:flex;align-items:center;justify-content:center;font-size:1.5rem">{emoji}</div>
               <div>
-                <div style="font-weight:700;color:#f1f5f9;font-size:.95rem">{name}</div>
-                <div style="font-size:.77rem;color:#64748b">{aname} · {btype_lbl}</div>
+                <div style="font-weight:700;color:var(--text);font-size:.95rem">{name}</div>
+                <div style="font-size:.77rem;color:var(--text-soft)">{aname} · {btype_lbl}</div>
               </div>
             </div>
-            <span style="background:{pill_bg};color:{pill_c};padding:3px 10px;
-              border-radius:20px;font-size:.72rem;font-weight:600">{pill_lbl}</span>
+            <span class="agent-pill agent-pill-{status}"
+              style="--pill-bg-light:{pill_bg_light};--pill-c-light:{pill_c_light};
+              --pill-bg-dark:{pill_bg};--pill-c-dark:{pill_c};
+              padding:3px 10px;border-radius:20px;font-size:.72rem;font-weight:600;
+              background:var(--pill-bg-light);color:var(--pill-c-light)">{pill_lbl}</span>
           </div>
           <div style="display:flex;gap:8px;margin-top:auto">
             <a href="/inbox/{slug}" class="btn-card-primary" style="background:{color}">
               Abrir panel →
             </a>
-            <button class="btn-card-sec" onclick="editarAgente({agent_id})" type="button">
-              ⚙
-            </button>
+            <button class="btn-card-sec" onclick="editarAgente({agent_id})" type="button"
+              aria-label="Configurar agente">⚙</button>
           </div>
         </div>"""
 
@@ -8508,109 +8513,131 @@ Representas a {NOMBRE_NEGOCIO} y ayudas a los clientes según las instrucciones 
 __VOCO_DS__
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{font-family:'Inter',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}}
-.topbar{{background:#0f172a;border-bottom:1px solid #1e293b;padding:0 28px;
+:root{{
+  --bg:#f8fafc; --bg-card:#ffffff; --bg-soft:#f1f5f9;
+  --border:#e2e8f0; --border-soft:#f1f5f9;
+  --text:#0f172a; --text-soft:#475569; --text-muted:#94a3b8;
+  --brand:#4f46e5; --brand-hover:#4338ca;
+}}
+html.dark{{
+  --bg:#0f172a; --bg-card:#1e293b; --bg-soft:#0b1220;
+  --border:#1e293b; --border-soft:#334155;
+  --text:#f1f5f9; --text-soft:#94a3b8; --text-muted:#64748b;
+  --brand:#818cf8; --brand-hover:#a5b4fc;
+}}
+body{{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);
+  min-height:100vh;transition:background-color .15s, color .15s}}
+.topbar{{background:var(--bg-card);border-bottom:1px solid var(--border);padding:0 28px;
   display:flex;align-items:center;justify-content:space-between;height:58px}}
 .voco-logo{{display:flex;align-items:center;gap:10px;text-decoration:none}}
 .voco-logo-ic{{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
-  display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 2px 8px #6366f144}}
-.voco-logo-txt{{font-weight:800;font-size:1.15rem;color:#f1f5f9;letter-spacing:-.5px}}
-.voco-logo-txt span{{color:#818cf8}}
+  display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 2px 8px #6366f144;color:#fff}}
+.voco-logo-txt{{font-weight:800;font-size:1.15rem;color:var(--text);letter-spacing:-.5px}}
+.voco-logo-txt span{{color:var(--brand)}}
 .topbar-right{{display:flex;align-items:center;gap:12px}}
-.topbar-user{{font-size:.78rem;color:#475569;padding:4px 10px;
-  border:1px solid #1e293b;border-radius:6px}}
+.topbar-user{{font-size:.78rem;color:var(--text-soft);padding:4px 10px;
+  border:1px solid var(--border);border-radius:6px}}
 .content{{max-width:1100px;margin:0 auto;padding:36px 24px}}
 .page-hdr{{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}}
-.page-title{{font-size:1.5rem;font-weight:800;color:#f1f5f9}}
-.page-sub{{font-size:.84rem;color:#64748b;margin-top:3px}}
+.page-title{{font-size:1.5rem;font-weight:800;color:var(--text)}}
+.page-sub{{font-size:.84rem;color:var(--text-soft);margin-top:3px}}
 .btn-new-agent{{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;
   border:none;padding:10px 20px;border-radius:10px;font-weight:700;font-size:.87rem;
-  cursor:pointer;display:flex;align-items:center;gap:8px;transition:.18s;white-space:nowrap}}
-.btn-new-agent:hover{{filter:brightness(1.12);transform:translateY(-1px)}}
+  cursor:pointer;display:flex;align-items:center;gap:8px;transition:.18s;white-space:nowrap;
+  box-shadow:0 2px 6px rgba(99,102,241,.25)}}
+.btn-new-agent:hover{{filter:brightness(1.12);transform:translateY(-1px);
+  box-shadow:0 4px 12px rgba(99,102,241,.35)}}
 .agents-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}}
-.agent-card{{background:#1e293b;border-radius:14px;padding:20px;
-  display:flex;flex-direction:column;transition:.2s;border:1px solid #334155}}
-.agent-card:hover{{border-color:#475569;transform:translateY(-2px);box-shadow:0 8px 24px #00000044}}
-.btn-card-primary{{flex:1;background:#6366f1;color:#fff;text-decoration:none;
+.agent-card{{background:var(--bg-card);border-radius:14px;padding:20px;
+  display:flex;flex-direction:column;transition:.2s;border:1px solid var(--border);
+  box-shadow:0 1px 3px rgba(15,23,42,.04)}}
+.agent-card:hover{{border-color:var(--border-soft);transform:translateY(-2px);
+  box-shadow:0 8px 24px rgba(15,23,42,.08)}}
+.btn-card-primary{{flex:1;background:var(--brand);color:#fff;text-decoration:none;
   padding:8px 14px;border-radius:8px;font-size:.82rem;font-weight:700;text-align:center;
   transition:.15s;display:block}}
-.btn-card-primary:hover{{filter:brightness(1.1)}}
-.btn-card-sec{{background:#0f172a;color:#94a3b8;border:1px solid #334155;
+.btn-card-primary:hover{{background:var(--brand-hover);filter:brightness(1.05)}}
+.btn-card-sec{{background:var(--bg-soft);color:var(--text-soft);border:1px solid var(--border);
   padding:8px 12px;border-radius:8px;font-size:.85rem;cursor:pointer;transition:.15s}}
-.btn-card-sec:hover{{background:#1e293b;color:#e2e8f0}}
+.btn-card-sec:hover{{background:var(--bg);color:var(--text);border-color:var(--border-soft)}}
 /* Wizard modal */
-.modal-overlay{{position:fixed;inset:0;background:#00000088;z-index:1000;
-  display:flex;align-items:center;justify-content:center;padding:20px}}
-.modal{{background:#1e293b;border-radius:16px;width:100%;max-width:620px;
-  max-height:90vh;overflow-y:auto;border:1px solid #334155}}
+.modal-overlay{{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1000;
+  display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)}}
+.modal{{background:var(--bg-card);border-radius:16px;width:100%;max-width:620px;
+  max-height:90vh;overflow-y:auto;border:1px solid var(--border);
+  box-shadow:0 20px 50px rgba(15,23,42,.15)}}
 .modal-hdr{{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;
-  border-bottom:1px solid #334155;padding-bottom:16px}}
-.modal-title{{font-weight:800;font-size:1.05rem;color:#f1f5f9}}
-.modal-close{{background:none;border:none;color:#64748b;font-size:1.3rem;cursor:pointer;
+  border-bottom:1px solid var(--border);padding-bottom:16px}}
+.modal-title{{font-weight:800;font-size:1.05rem;color:var(--text)}}
+.modal-close{{background:none;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;
   padding:4px 8px;border-radius:6px;transition:.15s}}
-.modal-close:hover{{background:#0f172a;color:#e2e8f0}}
+.modal-close:hover{{background:var(--bg-soft);color:var(--text)}}
 .modal-body{{padding:24px}}
 .step-indicator{{display:flex;gap:6px;margin-bottom:20px}}
-.step-dot{{width:28px;height:4px;border-radius:2px;background:#334155;transition:.3s}}
-.step-dot.done{{background:#22c55e}}.step-dot.active{{background:#6366f1}}
-.step-label{{font-size:.75rem;color:#64748b;margin-bottom:16px}}
+.step-dot{{width:28px;height:4px;border-radius:2px;background:var(--border);transition:.3s}}
+.step-dot.done{{background:#10b981}}.step-dot.active{{background:var(--brand)}}
+.step-label{{font-size:.75rem;color:var(--text-soft);margin-bottom:16px}}
 .wiz-field{{margin-bottom:16px}}
-.wiz-label{{font-size:.8rem;font-weight:600;color:#94a3b8;margin-bottom:6px;display:block}}
-.wiz-inp{{width:100%;background:#0f172a;border:1.5px solid #334155;border-radius:8px;
-  color:#e2e8f0;padding:9px 12px;font-size:.87rem;font-family:inherit;outline:none;transition:.15s}}
-.wiz-inp:focus{{border-color:#6366f1}}
-.wiz-inp::placeholder{{color:#475569}}
+.wiz-label{{font-size:.8rem;font-weight:600;color:var(--text-soft);margin-bottom:6px;display:block}}
+.wiz-inp{{width:100%;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;
+  color:var(--text);padding:9px 12px;font-size:.87rem;font-family:inherit;outline:none;transition:.15s}}
+.wiz-inp:focus{{border-color:var(--brand)}}
+.wiz-inp::placeholder{{color:var(--text-muted)}}
 textarea.wiz-inp{{resize:vertical;min-height:120px}}
 .wiz-type-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}
-.wiz-type-btn{{border:2px solid #334155;border-radius:10px;padding:10px 8px;text-align:center;
-  cursor:pointer;background:#0f172a;color:#94a3b8;font-size:.78rem;line-height:1.4;
+.wiz-type-btn{{border:2px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;
+  cursor:pointer;background:var(--bg);color:var(--text-soft);font-size:.78rem;line-height:1.4;
   transition:.18s;user-select:none}}
-.wiz-type-btn:hover{{border-color:#6366f1;background:#1e1b4b}}
-.wiz-type-btn.selected{{border-color:#6366f1;background:#1e1b4b;color:#818cf8;font-weight:700}}
+.wiz-type-btn:hover{{border-color:var(--brand);background:rgba(99,102,241,.05)}}
+.wiz-type-btn.selected{{border-color:var(--brand);background:rgba(99,102,241,.08);color:var(--brand);font-weight:700}}
 .wiz-type-icon{{font-size:1.4rem;margin-bottom:4px}}
 .wiz-emoji-grid{{display:flex;flex-wrap:wrap;gap:8px}}
-.wiz-emoji-btn{{width:38px;height:38px;border:2px solid #334155;border-radius:8px;
-  background:#0f172a;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;
+.wiz-emoji-btn{{width:38px;height:38px;border:2px solid var(--border);border-radius:8px;
+  background:var(--bg);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;
   justify-content:center;transition:.15s}}
-.wiz-emoji-btn.selected,.wiz-emoji-btn:hover{{border-color:#6366f1}}
+.wiz-emoji-btn.selected,.wiz-emoji-btn:hover{{border-color:var(--brand)}}
 .color-swatches{{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}}
 .color-swatch{{width:28px;height:28px;border-radius:50%;cursor:pointer;
   border:3px solid transparent;transition:.15s}}
-.color-swatch.selected{{border-color:#fff;transform:scale(1.15)}}
+.color-swatch.selected{{border-color:var(--text);transform:scale(1.15)}}
 .modal-footer{{display:flex;justify-content:space-between;padding:0 24px 20px;gap:10px}}
-.btn-wiz-prev{{background:#0f172a;color:#94a3b8;border:1px solid #334155;
+.btn-wiz-prev{{background:var(--bg);color:var(--text-soft);border:1px solid var(--border);
   padding:9px 18px;border-radius:8px;font-size:.85rem;cursor:pointer;transition:.15s}}
-.btn-wiz-prev:hover{{background:#1e293b;color:#e2e8f0}}
+.btn-wiz-prev:hover{{background:var(--bg-soft);color:var(--text);border-color:var(--border-soft)}}
 .btn-wiz-next{{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;
   border:none;padding:9px 20px;border-radius:8px;font-size:.85rem;font-weight:700;
   cursor:pointer;transition:.15s;flex:1}}
 .btn-wiz-next:hover{{filter:brightness(1.1)}}
 .btn-wiz-next:disabled{{opacity:.5;cursor:not-allowed}}
 .wiz-result{{padding:10px 14px;border-radius:8px;font-size:.83rem;margin-top:10px;display:none}}
-.wiz-result.ok{{background:#052e16;color:#4ade80;border:1px solid #15803d}}
-.wiz-result.err{{background:#1a0a0a;color:#f87171;border:1px solid #991b1b}}
+.wiz-result.ok{{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}}
+.wiz-result.err{{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}}
+html.dark .wiz-result.ok{{background:#052e16;color:#4ade80;border-color:#15803d}}
+html.dark .wiz-result.err{{background:#1a0a0a;color:#f87171;border-color:#991b1b}}
 /* Toggle */
 .tog-sw{{position:relative;width:38px;height:22px;flex-shrink:0}}
 .tog-sw input{{opacity:0;width:0;height:0;position:absolute}}
-.tog-slider{{position:absolute;inset:0;border-radius:22px;background:#334155;cursor:pointer;transition:.2s}}
+.tog-slider{{position:absolute;inset:0;border-radius:22px;background:var(--border);cursor:pointer;transition:.2s}}
 .tog-slider:before{{content:'';position:absolute;width:16px;height:16px;border-radius:50%;
-  left:3px;bottom:3px;background:#fff;transition:.2s}}
-.tog-sw input:checked+.tog-slider{{background:#22c55e}}
+  left:3px;bottom:3px;background:#fff;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.15)}}
+.tog-sw input:checked+.tog-slider{{background:#10b981}}
 .tog-sw input:checked+.tog-slider:before{{transform:translateX(16px)}}
 .toggle-row{{display:flex;align-items:center;justify-content:space-between;
-  padding:10px 0;border-bottom:1px solid #1e293b}}
+  padding:10px 0;border-bottom:1px solid var(--border-soft)}}
 .toggle-row:last-child{{border:none}}
-.toggle-lbl{{font-size:.84rem;color:#cbd5e1;font-weight:600}}
-.toggle-desc{{font-size:.74rem;color:#475569;margin-top:2px}}
+.toggle-lbl{{font-size:.84rem;color:var(--text);font-weight:600}}
+.toggle-desc{{font-size:.74rem;color:var(--text-soft);margin-top:2px}}
 /* Vars table */
 .vars-tbl{{width:100%;border-collapse:collapse;font-size:.82rem}}
-.vars-tbl td{{padding:5px 4px;border-bottom:1px solid #1e293b;vertical-align:middle}}
-.var-key-inp{{font-family:monospace;font-size:.78rem;font-weight:700;color:#818cf8;
-  border:1px solid #334155;border-radius:6px;padding:5px 8px;width:100%;background:#0f172a;color:#818cf8}}
-.var-val-inp{{border:1px solid #334155;border-radius:6px;padding:5px 8px;width:100%;
-  background:#0f172a;color:#e2e8f0;font-size:.82rem}}
-.var-key-inp:focus,.var-val-inp:focus{{outline:none;border-color:#6366f1}}
+.vars-tbl td{{padding:5px 4px;border-bottom:1px solid var(--border-soft);vertical-align:middle}}
+.var-key-inp{{font-family:monospace;font-size:.78rem;font-weight:700;color:var(--brand);
+  border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100%;background:var(--bg)}}
+.var-val-inp{{border:1px solid var(--border);border-radius:6px;padding:5px 8px;width:100%;
+  background:var(--bg);color:var(--text);font-size:.82rem}}
+.var-key-inp:focus,.var-val-inp:focus{{outline:none;border-color:var(--brand)}}
 .var-del-btn{{background:none;border:none;color:#ef4444;cursor:pointer;font-size:.95rem;padding:4px 7px}}
+/* Agent pills cambian colores según tema */
+html.dark .agent-pill{{background:var(--pill-bg-dark)!important;color:var(--pill-c-dark)!important}}
 </style>
 </head>
 <body>
@@ -8625,16 +8652,16 @@ textarea.wiz-inp{{resize:vertical;min-height:120px}}
     {_build_user_topbar(user)}
     <button type="button" onclick="vocoToggleTheme()" title="Cambiar tema"
       aria-label="Cambiar tema claro/oscuro"
-      style="background:transparent;border:1px solid #1e293b;color:#64748b;
+      style="background:transparent;border:1px solid var(--border);color:var(--text-soft);
         width:32px;height:32px;border-radius:6px;cursor:pointer;
         display:inline-flex;align-items:center;justify-content:center;transition:.15s"
-      onmouseover="this.style.color='#e2e8f0';this.style.borderColor='#334155'"
-      onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+      onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--border-soft)'"
+      onmouseout="this.style.color='var(--text-soft)';this.style.borderColor='var(--border)'">
       <i data-lucide="sun"  class="hidden dark:inline-block" style="width:16px;height:16px"></i>
       <i data-lucide="moon" class="inline-block dark:hidden" style="width:16px;height:16px"></i>
     </button>
-    <a href="/inbox/logout" style="color:#475569;font-size:.76rem;text-decoration:none;
-      padding:4px 10px;border:1px solid #1e293b;border-radius:6px">Salir</a>
+    <a href="/inbox/logout" style="color:var(--text-soft);font-size:.76rem;text-decoration:none;
+      padding:4px 10px;border:1px solid var(--border);border-radius:6px">Salir</a>
   </div>
 </div>
 
