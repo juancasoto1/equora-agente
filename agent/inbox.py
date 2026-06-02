@@ -107,6 +107,7 @@ _DESIGN_SYSTEM_HEAD = """
   html:not(.dark) textarea:not(.chat-inp),
   html:not(.dark) select {
     background-color: var(--voco-card-bg);
+    border-color: var(--voco-border);
     color: var(--voco-text);
   }
 </style>
