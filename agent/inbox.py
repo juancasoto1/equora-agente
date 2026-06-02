@@ -1939,11 +1939,27 @@ tr:hover td{background:#f8f9fa}
             <h1>📊 Métricas</h1>
             <p>Rendimiento de campañas, costo Meta y ventas atribuidas</p>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select id="met-periodo" onchange="cargarMetricas()" style="padding:6px 10px;border:1px solid #dde1e7;border-radius:8px;font-size:.82rem;color:#1a2332">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <!-- Periodo rápido -->
+            <select id="met-periodo" onchange="metAplicarPreset(this.value)" style="padding:6px 10px;border:1px solid #dde1e7;border-radius:8px;font-size:.82rem;color:#1a2332">
               <option value="7">Últimos 7 días</option>
               <option value="30" selected>Últimos 30 días</option>
               <option value="90">Últimos 90 días</option>
+              <option value="custom">Rango personalizado</option>
+            </select>
+            <!-- Date pickers (ocultos por defecto, se muestran con "custom") -->
+            <div id="met-rango-custom" style="display:none;gap:6px;align-items:center">
+              <label style="font-size:.78rem;color:#475569">Desde:</label>
+              <input id="met-desde" type="date" style="padding:5px 8px;border:1px solid #dde1e7;border-radius:7px;font-size:.82rem">
+              <label style="font-size:.78rem;color:#475569">Hasta:</label>
+              <input id="met-hasta" type="date" style="padding:5px 8px;border:1px solid #dde1e7;border-radius:7px;font-size:.82rem">
+            </div>
+            <!-- Granularidad -->
+            <label style="font-size:.78rem;color:#475569;margin-left:6px">Agrupar:</label>
+            <select id="met-granularidad" onchange="cargarMetricas()" style="padding:6px 10px;border:1px solid #dde1e7;border-radius:8px;font-size:.82rem;color:#1a2332">
+              <option value="dia" selected>Diario</option>
+              <option value="semana">Semanal</option>
+              <option value="mes">Mensual</option>
             </select>
             <button class="btn-secondary" onclick="cargarMetricas()">↺ Actualizar</button>
           </div>
@@ -1978,6 +1994,9 @@ tr:hover td{background:#f8f9fa}
           <div class="cards" id="met-cards-conv">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
           </div>
+
+          <!-- Series temporales (gráfica + tabla por período) -->
+          <div id="met-series-wrap"></div>
 
           <!-- Tabla por campaña -->
           <div class="tbl-wrap" style="margin-top:28px">
@@ -5480,6 +5499,28 @@ function _hookPreview() {
 /* ══════════════════════════════════════════════════════
    MÉTRICAS
    ══════════════════════════════════════════════════════ */
+
+/* Preset de rango rápido — al cambiar el select muestra/oculta date pickers */
+function metAplicarPreset(valor) {
+  var custom = document.getElementById('met-rango-custom');
+  if (!custom) return;
+  if (valor === 'custom') {
+    custom.style.display = 'flex';
+    // Si no hay fecha previa, prepoblar últimos 30 días
+    var d_desde = document.getElementById('met-desde');
+    var d_hasta = document.getElementById('met-hasta');
+    if (!d_desde.value) {
+      var hoy = new Date();
+      var hace30 = new Date(hoy.getTime() - 30*86400000);
+      d_desde.value = hace30.toISOString().slice(0,10);
+      d_hasta.value = hoy.toISOString().slice(0,10);
+    }
+  } else {
+    custom.style.display = 'none';
+    cargarMetricas();
+  }
+}
+
 async function cargarMetricas() {
   var cardsDif  = document.getElementById('met-cards-dif');
   var cardsRoi  = document.getElementById('met-cards-roi');
@@ -5487,6 +5528,7 @@ async function cargarMetricas() {
   var campBody  = document.getElementById('met-camp-body');
   var aviso     = document.getElementById('met-aviso-tracking');
   var periodo   = document.getElementById('met-periodo').value || '30';
+  var granularidad = (document.getElementById('met-granularidad') || {}).value || 'dia';
   var ld = '<div class="loading-txt" style="grid-column:1/-1">Cargando...</div>';
 
   cardsDif.innerHTML  = ld;
@@ -5495,8 +5537,23 @@ async function cargarMetricas() {
   campBody.innerHTML  = '<tr><td colspan="9" class="loading-txt">Cargando...</td></tr>';
   if (aviso) aviso.style.display = 'none';
 
+  // Construir querystring según preset o rango custom
+  var qs = 'granularidad=' + encodeURIComponent(granularidad);
+  if (periodo === 'custom') {
+    var desde = document.getElementById('met-desde').value;
+    var hasta = document.getElementById('met-hasta').value;
+    if (!desde || !hasta) {
+      cardsDif.innerHTML = cardsRoi.innerHTML = cardsConv.innerHTML =
+        '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">⚠️ Selecciona fecha desde y hasta</div>';
+      return;
+    }
+    qs += '&desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
+  } else {
+    qs += '&dias=' + encodeURIComponent(periodo);
+  }
+
   try {
-    var r = await fetch('/inbox/metricas/interno?dias=' + periodo, {credentials:'include'});
+    var r = await fetch('/inbox/metricas/interno?' + qs, {credentials:'include'});
     var d = await r.json();
 
     if (d.error) {
@@ -5632,11 +5689,100 @@ async function cargarMetricas() {
     });
     campBody.innerHTML = h;
 
+    // ── Renderizar series temporales (gráfica simple con barras) ──
+    _renderSeriesTemporales(d.series, d.granularidad);
+
   } catch(e) {
     var errMsg = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">Error al cargar métricas: ' + he(String(e)) + '</div>';
     cardsDif.innerHTML = cardsRoi.innerHTML = cardsConv.innerHTML = errMsg;
     campBody.innerHTML = '<tr><td colspan="9" class="loading-txt" style="color:#721c24">Error al cargar</td></tr>';
   }
+}
+
+/* ── Render de series temporales (gráfica simple sin librerías) ── */
+function _renderSeriesTemporales(series, granularidad) {
+  var wrap = document.getElementById('met-series-wrap');
+  if (!wrap || !series) return;
+  var dif  = series.difusiones    || [];
+  var trk  = series.tracking      || [];
+  var conv = series.conversaciones || [];
+
+  // Si todo está vacío, ocultar
+  if (!dif.length && !trk.length && !conv.length) {
+    wrap.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:16px;font-size:.84rem">Sin datos en el rango seleccionado</div>';
+    return;
+  }
+
+  var fmtPeriodo = function(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (granularidad === 'mes') {
+      return d.toLocaleDateString('es-CO', {month:'short', year:'numeric'});
+    } else if (granularidad === 'semana') {
+      return 'Sem ' + d.toLocaleDateString('es-CO', {day:'2-digit', month:'short'});
+    }
+    return d.toLocaleDateString('es-CO', {day:'2-digit', month:'short'});
+  };
+
+  // Mostrar serie de mensajes (recibidos + IA) como mini-gráfica de barras
+  var maxMsg = 1;
+  conv.forEach(function(p){ var t = (p.recibidos||0) + (p.enviados_ai||0); if (t > maxMsg) maxMsg = t; });
+
+  var barrasConv = conv.map(function(p) {
+    var total = (p.recibidos||0) + (p.enviados_ai||0);
+    var pctR = maxMsg > 0 ? (p.recibidos||0)/maxMsg*100 : 0;
+    var pctA = maxMsg > 0 ? (p.enviados_ai||0)/maxMsg*100 : 0;
+    return '<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:50px">' +
+      '<div style="font-size:.7rem;color:#475569;font-weight:700;margin-bottom:4px">' + total + '</div>' +
+      '<div style="width:24px;height:100px;background:#f1f5f9;border-radius:4px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;position:relative">' +
+        '<div style="background:#4f46e5;height:' + pctA + '%" title="IA enviados: ' + (p.enviados_ai||0) + '"></div>' +
+        '<div style="background:#22c55e;height:' + pctR + '%" title="Recibidos: ' + (p.recibidos||0) + '"></div>' +
+      '</div>' +
+      '<div style="font-size:.66rem;color:#94a3b8;margin-top:4px;text-align:center">' + fmtPeriodo(p.periodo) + '</div>' +
+    '</div>';
+  }).join('');
+
+  // Tabla simple de difusiones por período
+  var filasDif = dif.map(function(p) {
+    var t = trk.find(function(x){ return x.periodo === p.periodo; }) || {};
+    return '<tr style="border-bottom:1px solid #f1f5f9">' +
+      '<td style="padding:6px 10px;font-size:.82rem">' + fmtPeriodo(p.periodo) + '</td>' +
+      '<td style="padding:6px 10px;font-size:.82rem;text-align:center">' + p.campanas + '</td>' +
+      '<td style="padding:6px 10px;font-size:.82rem;text-align:right">' + (p.enviados||0).toLocaleString('es-CO') + '</td>' +
+      '<td style="padding:6px 10px;font-size:.82rem;text-align:right;color:#16a34a">' + (t.entregados||0).toLocaleString('es-CO') + '</td>' +
+      '<td style="padding:6px 10px;font-size:.82rem;text-align:right;color:#2563eb">' + (t.leidos||0).toLocaleString('es-CO') + '</td>' +
+      '<td style="padding:6px 10px;font-size:.82rem;text-align:right;color:#ef4444">' + (t.fallidos||0).toLocaleString('es-CO') + '</td>' +
+    '</tr>';
+  }).join('');
+
+  wrap.innerHTML =
+    '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-top:24px">' +
+      '<div style="font-weight:700;color:#1a2332;font-size:.92rem;margin-bottom:14px">📈 Tendencia por ' +
+        (granularidad === 'mes' ? 'mes' : (granularidad === 'semana' ? 'semana' : 'día')) + '</div>' +
+
+      (conv.length ? (
+        '<div style="margin-bottom:18px">' +
+          '<div style="font-size:.78rem;color:#475569;margin-bottom:10px">' +
+            '<span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px;margin-right:4px"></span> Mensajes recibidos &nbsp; ' +
+            '<span style="display:inline-block;width:10px;height:10px;background:#4f46e5;border-radius:2px;margin-right:4px"></span> Respuestas IA' +
+          '</div>' +
+          '<div style="display:flex;gap:4px;overflow-x:auto;padding-bottom:8px">' + barrasConv + '</div>' +
+        '</div>'
+      ) : '') +
+
+      (dif.length ? (
+        '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
+          '<thead><tr style="background:#f8fafc;font-size:.72rem;color:#94a3b8;text-transform:uppercase">' +
+            '<th style="padding:6px 10px;text-align:left">Período</th>' +
+            '<th style="padding:6px 10px;text-align:center">Campañas</th>' +
+            '<th style="padding:6px 10px;text-align:right">Enviados</th>' +
+            '<th style="padding:6px 10px;text-align:right">Entregados</th>' +
+            '<th style="padding:6px 10px;text-align:right">Leídos</th>' +
+            '<th style="padding:6px 10px;text-align:right">Fallidos</th>' +
+          '</tr></thead><tbody>' + filasDif + '</tbody>' +
+        '</table></div>'
+      ) : '') +
+    '</div>';
 }
 
 function mkCard(ic, lbl, val, sub) {

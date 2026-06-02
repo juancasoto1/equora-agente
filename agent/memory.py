@@ -1401,14 +1401,26 @@ async def obtener_campana_reciente_para_telefono(
         }
 
 
-async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
+async def obtener_metricas_internas(
+    dias: int = 30,
+    agent_id: int = 1,
+    desde: datetime | None = None,
+    hasta: datetime | None = None,
+) -> dict:
     """
     Métricas calculadas íntegramente desde la base de datos local.
     Incluye costo Meta (conversaciones iniciadas × tarifa) y
     atribución de ventas Shopify por teléfonos de destinatarios.
-    """
-    desde = datetime.utcnow() - timedelta(days=dias)
 
+    Si se pasan `desde` y `hasta` se usan esas fechas. Si no, se calcula
+    `desde = ahora - dias` y `hasta = ahora`.
+    """
+    if desde is None:
+        desde = datetime.utcnow() - timedelta(days=dias)
+    if hasta is None:
+        hasta = datetime.utcnow()
+
+    params = {"desde": desde, "hasta": hasta, "agent_id": agent_id}
     async with async_session() as session:
         # ── Difusiones (campañas) ──────────────────────────────────────────
         r_dif = await session.execute(
@@ -1419,10 +1431,10 @@ async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
                   COALESCE(SUM(enviados), 0)      AS total_enviados,
                   COALESCE(SUM(destinatarios), 0) AS total_destinatarios
                 FROM difusiones
-                WHERE created_at >= :desde AND agent_id = :agent_id
+                WHERE created_at >= :desde AND created_at <= :hasta AND agent_id = :agent_id
                 """
             ),
-            {"desde": desde, "agent_id": agent_id},
+            params,
         )
         row_dif = r_dif.fetchone()
         total_campanas    = int(row_dif[0] or 0)
@@ -1438,10 +1450,10 @@ async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
                   SUM(CASE WHEN status = 'read'  THEN 1 ELSE 0 END)              AS leidos,
                   SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)             AS fallidos
                 FROM difusion_mensajes
-                WHERE sent_at >= :desde AND agent_id = :agent_id
+                WHERE sent_at >= :desde AND sent_at <= :hasta AND agent_id = :agent_id
                 """
             ),
-            {"desde": desde, "agent_id": agent_id},
+            params,
         )
         row_tr = r_tr.fetchone()
         rastreados  = int(row_tr[0] or 0)
@@ -1461,10 +1473,10 @@ async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
                   SUM(CASE WHEN role = 'user'      THEN 1 ELSE 0 END)             AS mensajes_recibidos,
                   SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END)             AS mensajes_enviados_ai
                 FROM mensajes
-                WHERE timestamp >= :desde AND agent_id = :agent_id
+                WHERE timestamp >= :desde AND timestamp <= :hasta AND agent_id = :agent_id
                 """
             ),
-            {"desde": desde, "agent_id": agent_id},
+            params,
         )
         row_conv = r_conv.fetchone()
         chats_activos      = int(row_conv[0] or 0)
@@ -1486,12 +1498,12 @@ async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
                   COALESCE(tr.fallidos, 0)    AS fallidos
                 FROM (
                   SELECT
-                    COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT)) AS campaign_id,
-                    COALESCE(NULLIF(campaign_name,''), NULLIF(template_name,''), 'Sin nombre') AS campaign_name,
+                    COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))                          AS campaign_id,
+                    COALESCE(NULLIF(MAX(campaign_name),''), NULLIF(MAX(template_name),''), 'Sin nombre') AS campaign_name,
                     MAX(created_at) AS created_at,
                     SUM(enviados)   AS enviados
                   FROM difusiones
-                  WHERE created_at >= :desde AND agent_id = :agent_id
+                  WHERE created_at >= :desde AND created_at <= :hasta AND agent_id = :agent_id
                   GROUP BY COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))
                 ) d
                 LEFT JOIN (
@@ -1502,14 +1514,14 @@ async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
                     SUM(CASE WHEN status = 'read'   THEN 1 ELSE 0 END)            AS leidos,
                     SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)            AS fallidos
                   FROM difusion_mensajes
-                  WHERE sent_at >= :desde AND agent_id = :agent_id
+                  WHERE sent_at >= :desde AND sent_at <= :hasta AND agent_id = :agent_id
                   GROUP BY campaign_id
                 ) tr ON d.campaign_id = tr.campaign_id
                 ORDER BY d.created_at DESC
                 LIMIT 15
                 """
             ),
-            {"desde": desde, "agent_id": agent_id},
+            params,
         )
         # Recopilar filas de campañas primero
         camp_rows = r_camp.fetchall()
@@ -1609,6 +1621,103 @@ async def obtener_metricas_internas(dias: int = 30, agent_id: int = 1) -> dict:
         "campanas":           campanas,
         "ventas_total_cop":   ventas_total_cop,
         "shopify_habilitado": bool(os.getenv("SHOPIFY_ADMIN_TOKEN", "")),
+        "desde":              desde.isoformat(),
+        "hasta":              hasta.isoformat(),
+    }
+
+
+async def obtener_series_metricas(
+    desde: datetime,
+    hasta: datetime,
+    granularidad: str = "dia",   # "dia" | "semana" | "mes"
+    agent_id: int = 1,
+) -> dict:
+    """Series temporales para gráficas: enviados, entregados, leídos, mensajes
+    agrupados por día, semana o mes. PostgreSQL-friendly (usa date_trunc)."""
+    # Validar granularidad
+    if granularidad not in ("dia", "semana", "mes"):
+        granularidad = "dia"
+    pg_trunc = {"dia": "day", "semana": "week", "mes": "month"}[granularidad]
+
+    params = {"desde": desde, "hasta": hasta, "agent_id": agent_id}
+
+    async with async_session() as session:
+        # ── Serie de difusiones (enviados por período) ──
+        r_dif = await session.execute(
+            text(f"""
+                SELECT
+                  date_trunc('{pg_trunc}', created_at) AS periodo,
+                  COUNT(DISTINCT COALESCE(NULLIF(campaign_id,''), CAST(id AS TEXT))) AS campanas,
+                  COALESCE(SUM(enviados), 0) AS enviados
+                FROM difusiones
+                WHERE created_at >= :desde AND created_at <= :hasta AND agent_id = :agent_id
+                GROUP BY 1
+                ORDER BY 1
+            """),
+            params,
+        )
+        serie_difusiones = [
+            {"periodo": r[0].isoformat() if r[0] else "",
+             "campanas": int(r[1] or 0),
+             "enviados": int(r[2] or 0)}
+            for r in r_dif.fetchall()
+        ]
+
+        # ── Serie de tracking (entregados/leídos/fallidos por período) ──
+        r_tr = await session.execute(
+            text(f"""
+                SELECT
+                  date_trunc('{pg_trunc}', sent_at) AS periodo,
+                  COUNT(*) AS rastreados,
+                  SUM(CASE WHEN status IN ('delivered','read') THEN 1 ELSE 0 END) AS entregados,
+                  SUM(CASE WHEN status = 'read'   THEN 1 ELSE 0 END) AS leidos,
+                  SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS fallidos
+                FROM difusion_mensajes
+                WHERE sent_at >= :desde AND sent_at <= :hasta AND agent_id = :agent_id
+                GROUP BY 1
+                ORDER BY 1
+            """),
+            params,
+        )
+        serie_tracking = [
+            {"periodo": r[0].isoformat() if r[0] else "",
+             "rastreados": int(r[1] or 0),
+             "entregados": int(r[2] or 0),
+             "leidos":     int(r[3] or 0),
+             "fallidos":   int(r[4] or 0)}
+            for r in r_tr.fetchall()
+        ]
+
+        # ── Serie de conversaciones (mensajes recibidos/enviados por IA) ──
+        r_conv = await session.execute(
+            text(f"""
+                SELECT
+                  date_trunc('{pg_trunc}', timestamp) AS periodo,
+                  COUNT(DISTINCT telefono) AS chats,
+                  SUM(CASE WHEN role = 'user'      THEN 1 ELSE 0 END) AS recibidos,
+                  SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END) AS enviados_ai
+                FROM mensajes
+                WHERE timestamp >= :desde AND timestamp <= :hasta AND agent_id = :agent_id
+                GROUP BY 1
+                ORDER BY 1
+            """),
+            params,
+        )
+        serie_conversaciones = [
+            {"periodo": r[0].isoformat() if r[0] else "",
+             "chats":       int(r[1] or 0),
+             "recibidos":   int(r[2] or 0),
+             "enviados_ai": int(r[3] or 0)}
+            for r in r_conv.fetchall()
+        ]
+
+    return {
+        "granularidad":  granularidad,
+        "desde":         desde.isoformat(),
+        "hasta":         hasta.isoformat(),
+        "difusiones":    serie_difusiones,
+        "tracking":      serie_tracking,
+        "conversaciones": serie_conversaciones,
     }
 
 

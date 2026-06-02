@@ -4200,15 +4200,50 @@ async def inbox_metricas_plantillas(
 @app.get("/inbox/metricas/interno")
 async def inbox_metricas_interno(
     dias: int = 30,
+    desde: str = "",        # ISO date opcional: "2025-05-01"
+    hasta: str = "",        # ISO date opcional: "2025-05-31"
+    granularidad: str = "dia",   # dia | semana | mes (para series temporales)
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
-    """Métricas calculadas desde la base de datos interna (sin depender de Meta Analytics API)."""
+    """Métricas calculadas desde la base de datos interna.
+    Acepta rango específico con `desde`/`hasta` (formato ISO YYYY-MM-DD) o
+    fallback a últimos `dias` días. Incluye series temporales con la granularidad."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     try:
-        data = await obtener_metricas_internas(dias=dias)
+        # Parsear rango de fechas si vino explícito
+        desde_dt = None
+        hasta_dt = None
+        if desde:
+            try:
+                desde_dt = datetime.fromisoformat(desde.replace("Z", ""))
+            except Exception:
+                logger.warning(f"[metricas] 'desde' inválido: {desde}")
+        if hasta:
+            try:
+                hasta_dt = datetime.fromisoformat(hasta.replace("Z", ""))
+                # Si solo es fecha (YYYY-MM-DD), incluir hasta el final del día
+                if len(hasta) <= 10:
+                    hasta_dt = hasta_dt.replace(hour=23, minute=59, second=59)
+            except Exception:
+                logger.warning(f"[metricas] 'hasta' inválido: {hasta}")
+
+        # Métricas agregadas
+        data = await obtener_metricas_internas(
+            dias=dias, desde=desde_dt, hasta=hasta_dt
+        )
+        # Series temporales (usar fechas efectivas calculadas)
+        from agent.memory import obtener_series_metricas
+        desde_eff = datetime.fromisoformat(data["desde"])
+        hasta_eff = datetime.fromisoformat(data["hasta"])
+        series = await obtener_series_metricas(
+            desde=desde_eff, hasta=hasta_eff,
+            granularidad=granularidad,
+        )
+        data["series"]       = series
+        data["granularidad"] = granularidad
         return JSONResponse(content=data)
     except Exception as e:
         logger.error(f"[metricas-interno] Error: {e}", exc_info=True)
