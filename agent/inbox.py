@@ -3,6 +3,143 @@ agent/inbox.py — Panel de administración SaaS: inbox de conversaciones de And
 Login: POST /inbox/login  |  Acceso: /inbox  |  Logout: /inbox/logout
 """
 
+# ══════════════════════════════════════════════════════════════════════════════
+# DESIGN SYSTEM (Sprint visual refactor) — Tailwind CDN + Inter + Lucide + tema
+# ══════════════════════════════════════════════════════════════════════════════
+# Bloque compartido entre todas las plantillas HTML del panel. Inyectar dentro
+# de <head> ANTES del <style> existente. No rompe estilos legacy — añade capa
+# encima. El refactor de cada módulo irá reemplazando CSS legacy por utilities
+# de Tailwind progresivamente.
+
+_DESIGN_SYSTEM_HEAD = """
+<!-- Voco Design System v1: Tailwind + Inter + Lucide -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script>
+  /* Tema persistente — leer antes de pintar para evitar flash */
+  (function() {
+    try {
+      var saved = localStorage.getItem('voco-theme');
+      var preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var theme = saved || (preferDark ? 'dark' : 'light');
+      if (theme === 'dark') document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-voco-theme', theme);
+    } catch(e) {}
+  })();
+
+  /* Config Tailwind con tokens del Design System Voco */
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        },
+        colors: {
+          /* Primario — Indigo */
+          brand: {
+            50:  '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc',
+            400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca',
+            800: '#3730a3', 900: '#312e81',
+          },
+          /* Acento — Emerald (éxito, activo) */
+          accent: {
+            50:  '#ecfdf5', 100: '#d1fae5', 400: '#34d399', 500: '#10b981',
+            600: '#059669', 700: '#047857',
+          },
+          /* Superficie — Slate neutro */
+          surface: {
+            50:  '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1',
+            400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155',
+            800: '#1e293b', 900: '#0f172a', 950: '#020617',
+          },
+        },
+        boxShadow: {
+          'voco-sm': '0 1px 2px 0 rgba(15, 23, 42, .04)',
+          'voco':    '0 1px 3px 0 rgba(15, 23, 42, .06), 0 1px 2px -1px rgba(15, 23, 42, .04)',
+          'voco-md': '0 4px 6px -1px rgba(15, 23, 42, .07), 0 2px 4px -2px rgba(15, 23, 42, .05)',
+          'voco-lg': '0 10px 15px -3px rgba(15, 23, 42, .08), 0 4px 6px -4px rgba(15, 23, 42, .05)',
+          'voco-xl': '0 20px 25px -5px rgba(15, 23, 42, .10), 0 8px 10px -6px rgba(15, 23, 42, .05)',
+        },
+        borderRadius: {
+          'voco-sm': '6px', 'voco': '8px', 'voco-md': '10px',
+          'voco-lg': '12px', 'voco-xl': '16px',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  /* Aplicar Inter como fuente base sin romper estilos legacy que usan -apple-system */
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  /* Helper: hide en una clase para no depender de inline style */
+  .voco-hidden { display: none !important; }
+</style>
+<script>
+  /* Toggle de tema Voco — disponible en todas las plantillas */
+  function vocoToggleTheme() {
+    var root = document.documentElement;
+    var isDark = root.classList.toggle('dark');
+    var theme = isDark ? 'dark' : 'light';
+    root.setAttribute('data-voco-theme', theme);
+    try { localStorage.setItem('voco-theme', theme); } catch(e) {}
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  }
+  /* Inicializar iconos Lucide al cargar la página */
+  window.addEventListener('DOMContentLoaded', function() {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  });
+</script>
+"""
+
+
+def _voco_theme_toggle_html(extra_classes: str = "") -> str:
+    """Genera el botón de toggle de tema con icono Lucide.
+    Se puede insertar en cualquier header del panel."""
+    return f"""
+<button
+  type="button"
+  onclick="vocoToggleTheme()"
+  title="Cambiar tema"
+  aria-label="Cambiar tema claro/oscuro"
+  class="inline-flex items-center justify-center w-9 h-9 rounded-voco
+         text-surface-500 hover:bg-surface-100 dark:text-surface-400
+         dark:hover:bg-surface-800 transition-colors {extra_classes}">
+  <i data-lucide="sun"  class="w-4 h-4 hidden dark:inline-block"></i>
+  <i data-lucide="moon" class="w-4 h-4 inline-block dark:hidden"></i>
+</button>
+"""
+
+
+_THEME_TOGGLE_JS = """
+/* Toggle de tema Voco — usar desde cualquier botón */
+function vocoToggleTheme() {
+  var root = document.documentElement;
+  var isDark = root.classList.toggle('dark');
+  var theme = isDark ? 'dark' : 'light';
+  root.setAttribute('data-voco-theme', theme);
+  try { localStorage.setItem('voco-theme', theme); } catch(e) {}
+  /* Re-renderizar iconos Lucide que dependen del tema */
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+}
+/* Inicializar iconos Lucide al cargar la página */
+document.addEventListener('DOMContentLoaded', function() {
+  if (window.lucide && typeof window.lucide.createIcons === 'function') {
+    window.lucide.createIcons();
+  }
+});
+"""
+
+
 _AUTH_STYLES = """
 *{box-sizing:border-box;margin:0;padding:0}
 body{min-height:100vh;background:#0f172a;display:flex;align-items:center;
@@ -54,13 +191,14 @@ _AUTH_EXTRA = """
 # ── Página de login ──────────────────────────────────────────────────────────
 def obtener_login_html(error: bool = False) -> str:
     err = '<div class="err">Credenciales incorrectas. Intenta de nuevo.</div>' if error else ''
-    return f"""<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Voco — Iniciar sesión</title>
+__VOCO_DS__
 <style>{_AUTH_STYLES}{_AUTH_EXTRA}</style>
 </head>
 <body>
@@ -121,18 +259,20 @@ function togglePwd(inputId, btnId) {{
 </script>
 </body>
 </html>"""
+    return html.replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
 
 
 # ── Página de registro ───────────────────────────────────────────────────────
 def obtener_register_html(error: str = "") -> str:
     err_html = f'<div class="err">{error}</div>' if error else ''
-    return f"""<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
 <title>Voco — Crear cuenta</title>
+__VOCO_DS__
 <style>{_AUTH_STYLES}{_AUTH_EXTRA}</style>
 </head>
 <body>
@@ -202,6 +342,7 @@ function togglePwd(inputId, btnId) {{
 </script>
 </body>
 </html>"""
+    return html.replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
 
 
 # ── Panel principal ──────────────────────────────────────────────────────────
@@ -211,7 +352,8 @@ _HTML = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="color-scheme" content="dark light">
-<title>Andrea · Equora</title>
+<title>Voco · Panel del agente</title>
+__VOCO_DS__
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden}
@@ -7995,6 +8137,16 @@ justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     {user_info}
+    <button type="button" onclick="vocoToggleTheme()" title="Cambiar tema"
+      aria-label="Cambiar tema claro/oscuro"
+      style="background:transparent;border:1px solid #1e293b;color:#64748b;
+        width:30px;height:30px;border-radius:6px;cursor:pointer;
+        display:inline-flex;align-items:center;justify-content:center;transition:.15s"
+      onmouseover="this.style.color='#e2e8f0';this.style.borderColor='#334155'"
+      onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+      <i data-lucide="sun"  class="hidden dark:inline-block" style="width:15px;height:15px"></i>
+      <i data-lucide="moon" class="inline-block dark:hidden" style="width:15px;height:15px"></i>
+    </button>
     <a href="/inbox" style="color:#64748b;font-size:.76rem;text-decoration:none;
       padding:4px 12px;border:1px solid #1e293b;border-radius:6px;
       transition:.15s;white-space:nowrap"
@@ -8013,7 +8165,7 @@ justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
     hide_topbar = '<style>#topbar{display:none!important}</style>'
     html = html.replace("<body>\n<div id=\"shell\">\n", f"<body>\n<div id=\"shell\">\n{agent_bar}\n", 1)
     html = html.replace("</head>", f"{hide_topbar}\n</head>", 1)
-    return html
+    return html.replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
 
 
 def _build_user_topbar(user: dict | None) -> str:
@@ -8203,6 +8355,7 @@ Representas a {NOMBRE_NEGOCIO} y ayudas a los clientes según las instrucciones 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Voco — Plataforma de Agentes IA</title>
+__VOCO_DS__
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
 body{{font-family:'Inter',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}}
@@ -8320,6 +8473,16 @@ textarea.wiz-inp{{resize:vertical;min-height:120px}}
   </div>
   <div class="topbar-right">
     {_build_user_topbar(user)}
+    <button type="button" onclick="vocoToggleTheme()" title="Cambiar tema"
+      aria-label="Cambiar tema claro/oscuro"
+      style="background:transparent;border:1px solid #1e293b;color:#64748b;
+        width:32px;height:32px;border-radius:6px;cursor:pointer;
+        display:inline-flex;align-items:center;justify-content:center;transition:.15s"
+      onmouseover="this.style.color='#e2e8f0';this.style.borderColor='#334155'"
+      onmouseout="this.style.color='#64748b';this.style.borderColor='#1e293b'">
+      <i data-lucide="sun"  class="hidden dark:inline-block" style="width:16px;height:16px"></i>
+      <i data-lucide="moon" class="inline-block dark:hidden" style="width:16px;height:16px"></i>
+    </button>
     <a href="/inbox/logout" style="color:#475569;font-size:.76rem;text-decoration:none;
       padding:4px 10px;border:1px solid #1e293b;border-radius:6px">Salir</a>
   </div>
@@ -8688,4 +8851,4 @@ async function editarAgente(agentId) {{
 
 </script>
 </body>
-</html>"""
+</html>""".replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
