@@ -2060,7 +2060,7 @@ async def contar_agentes_activos(agent_id: int) -> int:
 # SPRINT 1 — Tickets de escalación
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _ticket_to_dict(t: Ticket, agente_nombre: str = "") -> dict:
+def _ticket_to_dict(t: Ticket, agente_nombre: str = "", agente_rol: str = "") -> dict:
     return {
         "id":               t.id,
         "agent_id":         t.agent_id,
@@ -2072,6 +2072,7 @@ def _ticket_to_dict(t: Ticket, agente_nombre: str = "") -> dict:
         "contexto":         t.contexto,
         "agente_humano_id": t.agente_humano_id,
         "agente_nombre":    agente_nombre,
+        "agente_rol":       agente_rol,
         "creado_at":        t.creado_at.isoformat(),
         "tomado_at":        t.tomado_at.isoformat() if t.tomado_at else None,
         "resuelto_at":      t.resuelto_at.isoformat() if t.resuelto_at else None,
@@ -2133,17 +2134,24 @@ async def obtener_tickets(agent_id: int, estado: str | None = None) -> list[dict
         result = await session.execute(q)
         tickets = result.scalars().all()
 
-        # Enriquecer con nombre del agente humano asignado
+        # Enriquecer con nombre + rol del agente humano que gestionó el ticket
         ids_agente = {t.agente_humano_id for t in tickets if t.agente_humano_id}
-        nombres: dict[int, str] = {}
+        ui_info: dict[int, tuple[str, str]] = {}
         if ids_agente:
             r2 = await session.execute(
                 select(UsuarioInterno).where(UsuarioInterno.id.in_(ids_agente))
             )
             for ui in r2.scalars().all():
-                nombres[ui.id] = ui.nombre
+                ui_info[ui.id] = (ui.nombre, ui.rol or "")
 
-        return [_ticket_to_dict(t, nombres.get(t.agente_humano_id, "")) for t in tickets]
+        return [
+            _ticket_to_dict(
+                t,
+                ui_info.get(t.agente_humano_id, ("", ""))[0],
+                ui_info.get(t.agente_humano_id, ("", ""))[1],
+            )
+            for t in tickets
+        ]
 
 
 async def contar_tickets(agent_id: int) -> dict:
@@ -2181,7 +2189,11 @@ async def tomar_ticket(ticket_id: int, agente_humano_id: int) -> dict | None:
         # Nombre del agente
         r2 = await session.execute(select(UsuarioInterno).where(UsuarioInterno.id == agente_humano_id))
         ui = r2.scalar_one_or_none()
-        return _ticket_to_dict(ticket, ui.nombre if ui else "")
+        return _ticket_to_dict(
+            ticket,
+            ui.nombre if ui else "",
+            (ui.rol or "") if ui else "",
+        )
 
 
 async def marcar_ticket_pendiente(ticket_id: int) -> dict | None:
@@ -2238,7 +2250,11 @@ async def transferir_ticket(ticket_id: int, nuevo_agente_id: int) -> dict | None
         await session.commit()
         r2 = await session.execute(select(UsuarioInterno).where(UsuarioInterno.id == nuevo_agente_id))
         ui = r2.scalar_one_or_none()
-        return _ticket_to_dict(ticket, ui.nombre if ui else "")
+        return _ticket_to_dict(
+            ticket,
+            ui.nombre if ui else "",
+            (ui.rol or "") if ui else "",
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

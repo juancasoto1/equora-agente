@@ -6609,12 +6609,19 @@ function _escRenderLista(tickets) {
     var card = document.createElement('div');
     card.className = 'esc-card' + (_escTicketActual && _escTicketActual.id === t.id ? ' selected' : '');
     card.onclick = function() { escSeleccionarTicket(t); };
+    // Mostrar nombre + rol del último agente que gestionó (sea admin, supervisor o agente)
+    var agenteLabel = '';
+    if (t.agente_nombre) {
+      var rol = t.agente_rol || '';
+      var rolPretty = rol ? ' · ' + rol : '';
+      agenteLabel = '<span>👤 ' + _escEsc(t.agente_nombre) + _escEsc(rolPretty) + '</span>';
+    }
     card.innerHTML =
       '<div class="esc-card-nombre">' + _escEsc(t.nombre_cliente || t.telefono_cliente) + '</div>' +
       '<div class="esc-card-motivo">' + _escEsc(t.motivo) + '</div>' +
       '<div class="esc-card-meta">' +
         '<span class="esc-urg ' + urgClass + '">' + (t.urgencia||'normal') + '</span>' +
-        (t.agente_nombre ? '<span>👤 ' + _escEsc(t.agente_nombre) + '</span>' : '') +
+        agenteLabel +
         '<span style="margin-left:auto">' + tiempo + '</span>' +
       '</div>';
     lista.appendChild(card);
@@ -6651,8 +6658,13 @@ async function escSeleccionarTicket(ticket) {
   var wrap = document.getElementById('esc-conv-wrap');
   wrap.style.display = 'flex';
 
-  // Header
-  document.getElementById('esc-cliente-nombre').textContent = ticket.nombre_cliente || ticket.telefono_cliente;
+  // Header — agregamos línea con agente + rol si existe
+  var headerNombre = (ticket.nombre_cliente || ticket.telefono_cliente);
+  if (ticket.agente_nombre) {
+    var rolHdr = ticket.agente_rol ? ' · ' + ticket.agente_rol : '';
+    headerNombre += '  ·  👤 ' + ticket.agente_nombre + rolHdr;
+  }
+  document.getElementById('esc-cliente-nombre').textContent = headerNombre;
   document.getElementById('esc-cliente-tel').textContent    = '+' + ticket.telefono_cliente;
   document.getElementById('esc-motivo').textContent         = ticket.motivo;
   document.getElementById('esc-contexto').textContent       = ticket.contexto || '—';
@@ -7769,12 +7781,18 @@ _escRenderLista = function(tickets) {
     var card = document.createElement('div');
     card.className = 'esc-card' + (_escTicketActual && _escTicketActual.id === t.id ? ' selected' : '');
     card.onclick = function() { escSeleccionarTicket(t); };
+    // Nombre + rol del último agente (admin / supervisor / agente)
+    var agLabel = '';
+    if (t.agente_nombre) {
+      var rolStr = t.agente_rol ? ' · ' + t.agente_rol : '';
+      agLabel = '<span>👤 ' + _escEsc(t.agente_nombre) + _escEsc(rolStr) + '</span>';
+    }
     card.innerHTML =
       '<div class="esc-card-nombre">' + _escEsc(t.nombre_cliente || t.telefono_cliente) + '</div>' +
       '<div class="esc-card-motivo">' + _escEsc(t.motivo) + '</div>' +
       '<div class="esc-card-meta">' +
         '<span class="esc-urg ' + urgClass + '">' + (t.urgencia||'normal') + '</span>' +
-        (t.agente_nombre ? '<span>👤 ' + _escEsc(t.agente_nombre) + '</span>' : '') +
+        agLabel +
         '<span style="margin-left:auto" class="' + slaClass + '">' + tiempo + slaLabel + '</span>' +
       '</div>';
     lista.appendChild(card);
