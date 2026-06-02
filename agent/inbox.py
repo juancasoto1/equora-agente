@@ -730,6 +730,22 @@ tr:hover td{background:#f8f9fa}
 .cfg-pill-pend{color:#8a94a6}
 .cfg-card{background:#fff;border:1px solid #e0e4e8;border-radius:14px;
   padding:24px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+/* Sistema — luces de estado */
+.sistema-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
+.sistema-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sistema-dot{width:10px;height:10px;border-radius:50%;background:#cbd5e0;flex-shrink:0;
+  transition:background .2s}
+.sistema-dot.ok{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.15)}
+.sistema-dot.warn{background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.15)}
+.sistema-dot.error{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.15);
+  animation:dot-pulse 1.4s infinite}
+.sistema-dot.loading{background:#94a3b8;animation:dot-pulse 1s infinite}
+@keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sistema-name{font-weight:700;font-size:.86rem;color:#1a2332}
+.sistema-msg{font-size:.8rem;color:#475569;margin-bottom:4px}
+.sistema-detalle{font-size:.72rem;color:#94a3b8;line-height:1.4}
+.sistema-sugerencia{font-size:.74rem;color:#dc2626;margin-top:6px;padding:6px 8px;
+  background:#fef2f2;border-radius:6px;border-left:3px solid #ef4444}
 .cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;
   padding-bottom:16px;border-bottom:1px solid #f0f2f5}
 .cfg-card-title{font-weight:700;color:#1a2332;font-size:1rem}
@@ -2699,6 +2715,63 @@ tr:hover td{background:#f8f9fa}
               </div>
             </div><!-- /card-reglas -->
 
+            <!-- ══════════════════════════════════════════════════════════
+                 ESTADO DEL SISTEMA — Diagnóstico de tokens en tiempo real
+                 ══════════════════════════════════════════════════════════ -->
+            <div class="cfg-card" id="card-sistema">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-ic">🔍</div>
+                <div class="cfg-card-info">
+                  <div class="cfg-card-title">Estado del sistema</div>
+                  <div class="cfg-card-sub">Diagnóstico en tiempo real de tokens y servicios</div>
+                </div>
+                <button class="btn-secondary" style="font-size:.78rem;padding:6px 12px" onclick="cargarEstadoSistema()" type="button">↺ Verificar</button>
+              </div>
+
+              <!-- Grid de estados -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px" id="cfg-sistema-grid">
+                <!-- WhatsApp Cloud API -->
+                <div class="sistema-item" id="sistema-whatsapp">
+                  <div class="sistema-hdr">
+                    <span class="sistema-dot" id="dot-whatsapp"></span>
+                    <span class="sistema-name">📱 WhatsApp Cloud API</span>
+                  </div>
+                  <div class="sistema-msg" id="msg-whatsapp">Verificando…</div>
+                  <div class="sistema-detalle" id="det-whatsapp"></div>
+                </div>
+
+                <!-- Conversions API (CAPI) -->
+                <div class="sistema-item" id="sistema-capi">
+                  <div class="sistema-hdr">
+                    <span class="sistema-dot" id="dot-capi"></span>
+                    <span class="sistema-name">📊 Conversions API (Pixel)</span>
+                  </div>
+                  <div class="sistema-msg" id="msg-capi">Verificando…</div>
+                  <div class="sistema-detalle" id="det-capi"></div>
+                </div>
+
+                <!-- Catálogo de WhatsApp -->
+                <div class="sistema-item" id="sistema-catalogo">
+                  <div class="sistema-hdr">
+                    <span class="sistema-dot" id="dot-catalogo"></span>
+                    <span class="sistema-name">🛒 Catálogo WhatsApp</span>
+                  </div>
+                  <div class="sistema-msg" id="msg-catalogo">Verificando…</div>
+                  <div class="sistema-detalle" id="det-catalogo"></div>
+                </div>
+
+                <!-- Shopify -->
+                <div class="sistema-item" id="sistema-shopify">
+                  <div class="sistema-hdr">
+                    <span class="sistema-dot" id="dot-shopify"></span>
+                    <span class="sistema-name">🏪 Shopify</span>
+                  </div>
+                  <div class="sistema-msg" id="msg-shopify">Verificando…</div>
+                  <div class="sistema-detalle" id="det-shopify"></div>
+                </div>
+              </div>
+            </div><!-- /card-sistema -->
+
             <!-- Próximas integraciones -->
             <div class="cfg-card" style="border-style:dashed;background:#fafbfc">
               <div class="cfg-card-title" style="color:#6b7a8d;margin-bottom:12px">🚀 Próximas integraciones</div>
@@ -3326,7 +3399,7 @@ function showSec(id) {
     if (id === 'plantillas')    { cargarTablaPlantillas(); actualizarSubcat(); setTimeout(_hookPreview, 200); }
     if (id === 'metricas')      { cargarMetricas(); }
     if (id === 'clientes')      { cargarClientes(); }
-    if (id === 'configuracion') { cargarConfiguracion(); }
+    if (id === 'configuracion') { cargarConfiguracion(); cargarEstadoSistema(); }
     if (id === 'escalaciones')  { escCargarLista(); }
   }
   // Reflejar sección en el hash de la URL para deep-linking
@@ -5645,6 +5718,154 @@ function togglePwd(inputId, btn) {
   if (!inp) return;
   if (inp.type === 'password') { inp.type = 'text';     btn.textContent = '🙈'; }
   else                         { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ESTADO DEL SISTEMA — diagnóstico en tiempo real de tokens
+   ══════════════════════════════════════════════════════════════ */
+function _setSistemaEstado(servicio, estado, mensaje, detalle, sugerencia) {
+  /* estado: 'ok' | 'warn' | 'error' | 'loading' */
+  var dot = document.getElementById('dot-' + servicio);
+  var msg = document.getElementById('msg-' + servicio);
+  var det = document.getElementById('det-' + servicio);
+  if (!dot || !msg) return;
+  dot.className = 'sistema-dot ' + estado;
+  msg.textContent = mensaje || '';
+  if (det) {
+    var detHtml = detalle || '';
+    if (sugerencia) {
+      detHtml += '<div class="sistema-sugerencia">💡 ' + he(sugerencia) + '</div>';
+    }
+    det.innerHTML = detHtml;
+  }
+}
+
+async function _verificarCAPI() {
+  _setSistemaEstado('capi', 'loading', 'Verificando…', '');
+  try {
+    var r = await fetch('/inbox/api/sistema/capi-status', {credentials:'include'});
+    var d = await r.json();
+    if (d.estado === 'ok_activo') {
+      _setSistemaEstado('capi', 'ok',
+        d.mensaje || 'Token válido y activo',
+        'Pixel: ' + he(d.pixel_info?.name || '—') +
+        '<br>Última actividad: hace ' + (d.horas_sin_eventos || 0) + 'h');
+    } else if (d.estado === 'ok_inactivo_reciente' || d.estado === 'ok') {
+      _setSistemaEstado('capi', 'ok',
+        d.mensaje || 'Token válido',
+        'Pixel: ' + he(d.pixel_info?.name || '—'));
+    } else if (d.estado === 'ok_sin_actividad') {
+      _setSistemaEstado('capi', 'warn',
+        d.mensaje || 'Sin actividad reciente',
+        'Pixel: ' + he(d.pixel_info?.name || '—'));
+    } else if (d.estado === 'no_configurado') {
+      _setSistemaEstado('capi', 'warn',
+        'No configurado (opcional)',
+        'CAPI mejora la atribución en Facebook Ads pero no es necesario para Andrea.');
+    } else if (d.estado === 'token_invalido') {
+      _setSistemaEstado('capi', 'error',
+        '❌ Token inválido o expirado',
+        he(d.mensaje || ''), d.sugerencia);
+    } else if (d.estado === 'sin_acceso_pixel') {
+      _setSistemaEstado('capi', 'error',
+        '❌ Token sin acceso al pixel',
+        he(d.mensaje || ''), d.sugerencia);
+    } else {
+      _setSistemaEstado('capi', 'warn', d.mensaje || 'Estado desconocido', '');
+    }
+  } catch(e) {
+    _setSistemaEstado('capi', 'error', 'Error de red verificando CAPI', he(String(e)));
+  }
+}
+
+async function _verificarWhatsApp() {
+  _setSistemaEstado('whatsapp', 'loading', 'Verificando…', '');
+  try {
+    var r = await fetch('/inbox/api/config/test/meta', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      _setSistemaEstado('whatsapp', 'ok',
+        '✅ Token válido y activo',
+        he(d.detalle || d.message || 'Conexión con Meta Cloud API funcionando'));
+    } else {
+      var sug = '';
+      if ((d.error || '').toLowerCase().includes('invalid') ||
+          (d.error || '').toLowerCase().includes('expired') ||
+          (d.error || '').toLowerCase().includes('190')) {
+        sug = 'Renueva el token: Meta Business Manager → Usuarios del sistema → equora-andreabot → Generar token (selecciona la app de WhatsApp con permisos whatsapp_business_messaging y whatsapp_business_management, expiración "Nunca").';
+      }
+      _setSistemaEstado('whatsapp', 'error',
+        '❌ ' + (d.error || 'Error al verificar token'),
+        '', sug);
+    }
+  } catch(e) {
+    _setSistemaEstado('whatsapp', 'error', 'Error de red', he(String(e)));
+  }
+}
+
+async function _verificarCatalogo() {
+  _setSistemaEstado('catalogo', 'loading', 'Verificando…', '');
+  try {
+    var r = await fetch('/inbox/api/sistema/fallas-catalogo', {credentials:'include'});
+    var d = await r.json();
+    var total = d.total_24h || 0;
+    if (total === 0) {
+      _setSistemaEstado('catalogo', 'ok',
+        '✅ Catálogo nativo funcionando',
+        'Sin fallas registradas en las últimas 24 horas');
+    } else if (total < 5) {
+      var tipos = Object.keys(d.por_tipo || {}).join(', ');
+      _setSistemaEstado('catalogo', 'warn',
+        '⚠️ ' + total + ' falla(s) en 24h',
+        'Tipos: ' + he(tipos),
+        'Revisa los logs o reabre el panel para diagnosticar. Cliente puede haber recibido el fallback web.');
+    } else {
+      var tipos2 = Object.keys(d.por_tipo || {}).join(', ');
+      _setSistemaEstado('catalogo', 'error',
+        '❌ ' + total + ' fallas en 24h — problema sostenido',
+        'Tipos: ' + he(tipos2),
+        'Verifica META_CATALOG_ID y que los SKUs estén sincronizados Shopify → Facebook Catalog.');
+    }
+  } catch(e) {
+    _setSistemaEstado('catalogo', 'warn', 'No pude verificar', he(String(e)));
+  }
+}
+
+async function _verificarShopify() {
+  _setSistemaEstado('shopify', 'loading', 'Verificando…', '');
+  try {
+    var r = await fetch('/inbox/api/config/test/shopify', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      _setSistemaEstado('shopify', 'ok',
+        '✅ Conexión Shopify activa',
+        he(d.detalle || d.message || 'Storefront API respondiendo'));
+    } else {
+      _setSistemaEstado('shopify', 'warn',
+        '⚠️ ' + (d.error || 'No configurado'),
+        '');
+    }
+  } catch(e) {
+    _setSistemaEstado('shopify', 'warn', 'No verificable', he(String(e)));
+  }
+}
+
+async function cargarEstadoSistema() {
+  // Ejecutar las 4 verificaciones en paralelo para velocidad
+  await Promise.all([
+    _verificarWhatsApp(),
+    _verificarCAPI(),
+    _verificarCatalogo(),
+    _verificarShopify(),
+  ]);
 }
 
 /* ── cargarConfiguracion: pide GET /inbox/api/config y rellena indicadores ── */
