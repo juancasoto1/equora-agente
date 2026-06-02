@@ -953,7 +953,8 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .doc-card-title{font-weight:700;color:var(--voco-text);font-size:.9rem;margin-bottom:12px;
   display:flex;align-items:center;gap:8px}
 .doc-formula{background:var(--voco-nav-bg-active);border-left:3px solid var(--az);border-radius:0 8px 8px 0;
-  padding:10px 14px;font-family:monospace;font-size:.83rem;color:#2d3a6b;margin:8px 0;line-height:1.6}
+  padding:10px 14px;font-family:monospace;font-size:.83rem;color:var(--voco-text);margin:8px 0;line-height:1.6}
+html.dark .doc-formula{color:#c7d2fe}
 .doc-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:10px}
 .doc-table th{text-align:left;font-weight:700;color:var(--voco-text-muted);padding:6px 10px;
   border-bottom:2px solid var(--voco-border);white-space:nowrap}
@@ -1078,7 +1079,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
   border-bottom:1.5px solid #e0e4e8;display:flex;align-items:center;gap:8px}
 .info-box{background:#f0f9ff;border:1px solid #bee3f8;border-radius:8px;padding:10px 14px;
   font-size:.79rem;color:#2c5282;line-height:1.65;margin-bottom:10px}
-.info-box code{background:#dbeafe;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:.78rem}
+.info-box code{background:var(--voco-nav-bg-active);color:var(--voco-brand);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:.78rem}
 .info-box b{color:#1a365d}
 .char-counter{font-size:.71rem;color:var(--voco-text-muted);text-align:right;margin-top:3px}
 .char-counter.warn{color:#c05621;font-weight:600}
@@ -1375,52 +1376,55 @@ html.dark .cfg-pill-error{background:rgba(239,68,68,.18);color:#f87171}
 
 /* ── Business type selector ── */
 .biz-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px}
-.biz-type-btn{border:2px solid #e0e4e8;border-radius:10px;padding:12px 10px;text-align:center;
+.biz-type-btn{border:2px solid var(--voco-border);border-radius:10px;padding:12px 10px;text-align:center;
   cursor:pointer;background:var(--voco-card-bg);transition:.18s;font-size:.82rem;color:var(--voco-text-muted);line-height:1.4;
   user-select:none}
-.biz-type-btn:hover{border-color:var(--az);background:#eef2ff}
-.biz-type-btn.selected{border-color:var(--az);background:#eef2ff;color:var(--az);font-weight:700}
+.biz-type-btn:hover{border-color:var(--voco-brand);background:var(--voco-nav-bg-active)}
+.biz-type-btn.selected{border-color:var(--voco-brand);background:var(--voco-nav-bg-active);color:var(--voco-brand);font-weight:700}
 .biz-type-icon{font-size:1.6rem;margin-bottom:6px}
 /* ── Feature toggles ── */
 .toggle-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 @media(max-width:540px){.toggle-grid{grid-template-columns:1fr}}
-.toggle-card{border:1.5px solid #e0e4e8;border-radius:10px;padding:12px 14px;
+.toggle-card{border:1.5px solid var(--voco-border);border-radius:10px;padding:12px 14px;
   display:flex;align-items:flex-start;gap:12px;background:var(--voco-card-bg);transition:.18s}
-.toggle-card.active{border-color:#d1fae5;background:#f0fdf4}
+.toggle-card.active{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.06)}
+html.dark .toggle-card.active{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.10)}
 .toggle-card-text{flex:1;min-width:0}
 .toggle-card-label{font-size:.84rem;font-weight:700;color:var(--voco-text);margin-bottom:2px}
 .toggle-card-desc{font-size:.76rem;color:var(--voco-text-muted);line-height:1.4}
 /* pill toggle switch */
 .tog-sw{position:relative;width:38px;height:22px;flex-shrink:0;margin-top:2px}
 .tog-sw input{opacity:0;width:0;height:0;position:absolute}
-.tog-slider{position:absolute;inset:0;border-radius:22px;background:#cbd5e1;
+.tog-slider{position:absolute;inset:0;border-radius:22px;background:var(--voco-border);
   cursor:pointer;transition:.2s}
 .tog-slider:before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;
-  left:3px;bottom:3px;background:var(--voco-card-bg);transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  left:3px;bottom:3px;background:#ffffff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 .tog-sw input:checked + .tog-slider{background:#22c55e}
 .tog-sw input:checked + .tog-slider:before{transform:translateX(16px)}
-/* ── Test chat (Fase C) ── */
+/* ── Test chat (Fase C — Probar) ── */
 .chat-wrap{display:flex;flex-direction:column;height:540px;max-height:70vh;
-  border:1.5px solid #e0e4e8;border-radius:12px;overflow:hidden;background:#ece5dd}
+  border:1.5px solid var(--voco-border);border-radius:12px;overflow:hidden;background:var(--sb)}
 .chat-messages{flex:1;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:8px}
 .chat-msg{max-width:78%;padding:9px 13px;border-radius:14px;font-size:.87rem;line-height:1.5;
   word-break:break-word;position:relative}
-.chat-msg.user{align-self:flex-end;background:#dcf8c6;border-radius:14px 14px 4px 14px;color:#1a2332}
-.chat-msg.assistant{align-self:flex-start;background:var(--voco-card-bg);border-radius:14px 14px 14px 4px;
-  box-shadow:0 1px 2px rgba(0,0,0,.08);color:#1a2332}
-.chat-msg-time{font-size:.66rem;color:var(--voco-text-muted);margin-top:3px;text-align:right}
-.chat-typing{align-self:flex-start;background:var(--voco-card-bg);border-radius:14px;padding:10px 14px;
-  display:flex;gap:4px;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.chat-msg.user{align-self:flex-end;background:var(--bbl);border-radius:14px 14px 4px 14px;color:var(--tx)}
+.chat-msg.assistant{align-self:flex-start;background:var(--bbr);border-radius:14px 14px 14px 4px;
+  box-shadow:0 1px 0.5px rgba(11,20,26,.08);color:var(--tx)}
+html.dark .chat-msg.assistant{box-shadow:none}
+.chat-msg-time{font-size:.66rem;color:var(--ts);margin-top:3px;text-align:right}
+.chat-typing{align-self:flex-start;background:var(--bbr);border-radius:14px;padding:10px 14px;
+  display:flex;gap:4px;align-items:center;box-shadow:0 1px 0.5px rgba(11,20,26,.08)}
 .chat-typing span{width:7px;height:7px;border-radius:50%;background:#94a3b8;
   animation:typing-dot 1s ease-in-out infinite}
 .chat-typing span:nth-child(2){animation-delay:.2s}
 .chat-typing span:nth-child(3){animation-delay:.4s}
 @keyframes typing-dot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-.chat-input-bar{display:flex;gap:8px;padding:10px 12px;background:#f0f0f0;
-  border-top:1px solid #e0e4e8;align-items:flex-end}
-.chat-inp{flex:1;border:none;border-radius:20px;padding:9px 14px;font-size:.87rem;
-  background:var(--voco-card-bg);resize:none;max-height:100px;outline:none;line-height:1.4;
-  font-family:inherit;box-shadow:0 1px 2px rgba(0,0,0,.07)}
+.chat-input-bar{display:flex;gap:8px;padding:10px 12px;background:var(--hd);
+  border-top:1px solid var(--bd);align-items:flex-end}
+.chat-inp{flex:1;border:1px solid var(--bd);border-radius:20px;padding:9px 14px;font-size:.87rem;
+  background:var(--bbr);color:var(--tx);resize:none;max-height:100px;outline:none;line-height:1.4;
+  font-family:inherit;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.chat-inp::placeholder{color:var(--ts)}
 .chat-send-btn{background:var(--az);border:none;border-radius:50%;width:40px;height:40px;
   display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
   color:#fff;font-size:1rem;transition:.18s}
@@ -1645,17 +1649,21 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 <div class="st2" id="cst">—</div>
               </div>
               <!-- Botones de acción header (Sprint 4) -->
-              <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
-                <button onclick="llamarCliente()" title="Llamar"
-                  style="background:none;border:none;color:#8696a0;cursor:pointer;font-size:1.15rem;
-                  padding:6px 10px;border-radius:6px;transition:all .15s"
-                  onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='#25d366'"
-                  onmouseout="this.style.background='none';this.style.color='#8696a0'">📞</button>
-                <button onclick="abrirWhatsAppWeb()" title="Abrir en WhatsApp Web"
-                  style="background:none;border:none;color:#8696a0;cursor:pointer;font-size:1.15rem;
-                  padding:6px 10px;border-radius:6px;transition:all .15s"
-                  onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='#25d366'"
-                  onmouseout="this.style.background='none';this.style.color='#8696a0'">💚</button>
+              <div style="display:flex;gap:4px;align-items:center;margin-left:auto">
+                <button onclick="llamarCliente()" title="Llamar" aria-label="Llamar al cliente"
+                  style="background:none;border:none;color:var(--ts);cursor:pointer;
+                  padding:8px;border-radius:8px;transition:all .15s;display:flex;align-items:center;justify-content:center"
+                  onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='var(--az)'"
+                  onmouseout="this.style.background='none';this.style.color='var(--ts)'">
+                  <i data-lucide="phone" style="width:18px;height:18px"></i>
+                </button>
+                <button onclick="abrirWhatsAppWeb()" title="Abrir en WhatsApp Web" aria-label="Abrir en WhatsApp Web"
+                  style="background:none;border:none;color:var(--ts);cursor:pointer;
+                  padding:8px;border-radius:8px;transition:all .15s;display:flex;align-items:center;justify-content:center"
+                  onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='var(--az)'"
+                  onmouseout="this.style.background='none';this.style.color='var(--ts)'">
+                  <i data-lucide="external-link" style="width:18px;height:18px"></i>
+                </button>
               </div>
             </div>
 
@@ -3306,10 +3314,11 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <div class="cfg-pane" id="cfg-pane-prompt">
 
             <!-- Intro -->
-            <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:.85rem;color:#3730a3;line-height:1.6">
-              🧠 <b>Editor de prompt</b> — Define quién es tu agente, qué sabe y cómo habla.
+            <div style="background:var(--voco-nav-bg-active);border:1px solid var(--voco-border);border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:.85rem;color:var(--voco-text);line-height:1.6;display:flex;align-items:flex-start;gap:8px">
+              <i data-lucide="brain" style="width:18px;height:18px;color:var(--voco-brand);flex-shrink:0;margin-top:1px"></i>
+              <div><b>Editor de prompt</b> — Define quién es tu agente, qué sabe y cómo habla.
               Usa <code style="background:var(--voco-nav-bg-active);padding:1px 5px;border-radius:4px">{VARIABLES}</code> en el texto y defínelas abajo.
-              El asistente de IA te ayuda a mejorar las instrucciones en lenguaje natural.
+              El asistente de IA te ayuda a mejorar las instrucciones en lenguaje natural.</div>
             </div>
 
             <!-- ── Sección 0A: Tipo de negocio ── -->
@@ -3355,7 +3364,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     <span class="tog-slider"></span>
                   </label>
                   <div class="toggle-card-text">
-                    <div class="toggle-card-label">🛒 Catálogo Shopify</div>
+                    <div class="toggle-card-label" style="display:flex;align-items:center;gap:6px"><i data-lucide="shopping-bag" style="width:14px;height:14px;color:var(--voco-brand)"></i> Catálogo Shopify</div>
                     <div class="toggle-card-desc">Inyecta el catálogo de productos en el contexto del agente</div>
                   </div>
                 </div>
@@ -3365,7 +3374,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     <span class="tog-slider"></span>
                   </label>
                   <div class="toggle-card-text">
-                    <div class="toggle-card-label">🛍️ Carrito y pedidos</div>
+                    <div class="toggle-card-label" style="display:flex;align-items:center;gap:6px"><i data-lucide="shopping-cart" style="width:14px;height:14px;color:var(--voco-brand)"></i> Carrito y pedidos</div>
                     <div class="toggle-card-desc">Muestra carrito activo y pedidos pendientes del cliente</div>
                   </div>
                 </div>
@@ -3375,7 +3384,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     <span class="tog-slider"></span>
                   </label>
                   <div class="toggle-card-text">
-                    <div class="toggle-card-label">🧠 Memoria de clientes</div>
+                    <div class="toggle-card-label" style="display:flex;align-items:center;gap:6px"><i data-lucide="brain" style="width:14px;height:14px;color:var(--voco-brand)"></i> Memoria de clientes</div>
                     <div class="toggle-card-desc">Recuerda datos y pedidos previos de cada cliente</div>
                   </div>
                 </div>
@@ -3385,7 +3394,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     <span class="tog-slider"></span>
                   </label>
                   <div class="toggle-card-text">
-                    <div class="toggle-card-label">📣 Contexto de campaña</div>
+                    <div class="toggle-card-label" style="display:flex;align-items:center;gap:6px"><i data-lucide="megaphone" style="width:14px;height:14px;color:var(--voco-brand)"></i> Contexto de campaña</div>
                     <div class="toggle-card-desc">Sabe a qué difusión responde el cliente sin preguntarle</div>
                   </div>
                 </div>
@@ -3488,9 +3497,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <!-- ── Pane: Probar (Fase C) ── -->
           <div class="cfg-pane" id="cfg-pane-probar">
 
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:.85rem;color:#166534;line-height:1.6">
-              🧪 <b>Chat de prueba</b> — Habla con el agente usando las instrucciones del prompt actual.
-              No envía mensajes reales por WhatsApp. El historial de prueba es independiente de las conversaciones reales.
+            <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:.85rem;color:var(--voco-text);line-height:1.6;display:flex;align-items:flex-start;gap:8px">
+              <i data-lucide="flask-conical" style="width:18px;height:18px;color:#059669;flex-shrink:0;margin-top:1px"></i>
+              <div><b>Chat de prueba</b> — Habla con el agente usando las instrucciones del prompt actual.
+              No envía mensajes reales por WhatsApp. El historial de prueba es independiente de las conversaciones reales.</div>
             </div>
 
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -3970,6 +3980,20 @@ var _convTimer = null;
 var _msgTimer = null;
 
 function loadConvs() {
+  // Skeleton inicial — solo si aún no hay datos cargados
+  var clEl = document.getElementById('cl');
+  if (clEl && !CONVS.length && !clEl.children.length) {
+    var skel = '';
+    for (var i = 0; i < 5; i++) {
+      skel += '<div class="skel-row">' +
+        '<span class="skel skel-circle"></span>' +
+        '<div class="skel-lines">' +
+        '<span class="skel" style="width:55%;height:11px"></span>' +
+        '<span class="skel" style="width:80%;height:9px"></span>' +
+        '</div></div>';
+    }
+    clEl.innerHTML = skel;
+  }
   api('/inbox/api/conversaciones').then(function(data) {
     CONVS = Array.isArray(data) ? data : [];
     document.getElementById('total').textContent = CONVS.length;
@@ -4151,8 +4175,18 @@ var _CLI_DATA   = [];   // todos los clientes cargados
 var _CLI_ESTADO = 'todos'; // filtro activo
 
 function cargarClientes() {
-  document.getElementById('cli-tbody').innerHTML =
-    '<tr><td colspan="8" class="loading-txt">Cargando…</td></tr>';
+  // Skeleton rows mientras cargan los clientes
+  var skelHtml = '';
+  for (var i = 0; i < 6; i++) {
+    skelHtml += '<tr><td colspan="8" style="padding:0">' +
+      '<div class="skel-row">' +
+      '<span class="skel skel-circle"></span>' +
+      '<div class="skel-lines">' +
+      '<span class="skel" style="width:40%;height:12px"></span>' +
+      '<span class="skel" style="width:65%;height:10px"></span>' +
+      '</div></div></td></tr>';
+  }
+  document.getElementById('cli-tbody').innerHTML = skelHtml;
   api('/inbox/api/clientes').then(function(data) {
     _CLI_DATA = data.clientes || [];
     var r = data.resumen || {};
