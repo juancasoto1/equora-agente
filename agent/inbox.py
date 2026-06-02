@@ -610,18 +610,18 @@ html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Sego
 html.dark{
   --voco-shell-bg:        #0f172a;   /* surface-900 */
   --voco-nav-bg:          #0b1220;   /* between 900 y 950 */
-  --voco-nav-border:      #1e293b;   /* surface-800 */
+  --voco-nav-border:      #334155;   /* surface-700 — más visible que 1e293b */
   --voco-nav-text:        #94a3b8;   /* surface-400 */
   --voco-nav-text-hover:  #f1f5f9;   /* surface-100 */
   --voco-nav-text-active: #818cf8;   /* brand-400 */
   --voco-nav-bg-hover:    #1e293b;   /* surface-800 */
   --voco-nav-bg-active:   #1e1b4b;   /* indigo-950 */
-  --voco-nav-section:     #475569;   /* surface-600 */
+  --voco-nav-section:     #64748b;   /* surface-500 — más legible que 475569 */
   --voco-content-bg:      #0f172a;
   --voco-content-bg-alt:  #1e293b;
   --voco-text:            #f1f5f9;
   --voco-text-muted:      #94a3b8;
-  --voco-border:          #1e293b;
+  --voco-border:          #334155;   /* surface-700 — bordes visibles en dark */
   --voco-card-bg:         #1e293b;
   --voco-card-shadow:     0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
   --voco-brand:           #818cf8;
@@ -632,7 +632,7 @@ html.dark{
   --conv-input: #1e293b;
   --conv-text:  #f1f5f9;
   --conv-muted: #94a3b8;
-  --conv-border:#1e293b;
+  --conv-border:#334155;   /* mismo principio — más visible */
   --conv-hover: #1e293b;
   --conv-active:#1e1b4b;
   --conv-empty-bg:#0b141a;
