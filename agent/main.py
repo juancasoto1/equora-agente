@@ -1688,14 +1688,41 @@ async def webhook_handler(request: Request):
                     logger.error(f"Error procesando pedido: {e}")
                 respuesta = re.sub(r'\s*\[\[PEDIDO:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
-            # Procesar marcador de escalación → notificar al equipo
+            # Procesar marcador de escalación → notificar al equipo.
+            # Andrea idealmente escribe JSON, pero a veces se desvía y escribe texto
+            # plano. Lo aceptamos en ambos formatos para no perder escalaciones reales.
             datos_escalacion = None
             match_escalar = re.search(r'\[\[ESCALAR:(.*?)\]\]', respuesta, re.DOTALL)
             if match_escalar:
+                contenido_raw = match_escalar.group(1).strip()
+                # Intento 1: parsear como JSON (formato canónico)
                 try:
-                    datos_escalacion = json.loads(match_escalar.group(1))
-                except Exception as e:
-                    logger.error(f"Marcador ESCALAR inválido: {e}")
+                    datos_escalacion = json.loads(contenido_raw)
+                except Exception:
+                    # Intento 2: texto plano "motivo - cliente: X - contexto: Y"
+                    # Detectar campos por keywords comunes que Andrea suele usar
+                    logger.warning(f"ESCALAR recibido como texto plano: {contenido_raw[:200]}")
+                    datos_escalacion = {
+                        "motivo":         "Escalación solicitada",
+                        "urgencia":       "normal",
+                        "nombre_cliente": "",
+                        "contexto":       contenido_raw[:500],
+                    }
+                    # Extraer campos si Andrea los marcó explícitamente
+                    m_nombre = re.search(r'cliente:\s*([^-\n]+)', contenido_raw, re.IGNORECASE)
+                    if m_nombre:
+                        datos_escalacion["nombre_cliente"] = m_nombre.group(1).strip()[:200]
+                    # El motivo es la parte antes del primer " - " o el contenido completo
+                    primera_parte = contenido_raw.split(" - ")[0].strip()
+                    if primera_parte and len(primera_parte) < 100:
+                        datos_escalacion["motivo"] = primera_parte
+                    # Urgencia explícita
+                    if re.search(r'\b(urgente|urgencia\s*:?\s*alta|alta)\b', contenido_raw, re.IGNORECASE):
+                        datos_escalacion["urgencia"] = "alta"
+                # Validar que tenga estructura mínima
+                if not isinstance(datos_escalacion, dict):
+                    logger.error(f"ESCALAR sin estructura válida — se ignora: {contenido_raw[:200]}")
+                    datos_escalacion = None
                 respuesta = re.sub(r'\s*\[\[ESCALAR:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
             # Marcador de cierre de conversación → suprime futuros seguimientos
