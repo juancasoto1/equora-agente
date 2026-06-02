@@ -1119,19 +1119,19 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
 /* ── Escalaciones ── */
 .esc-tab{flex:1;border:none;background:none;padding:10px 4px;font-size:.75rem;font-weight:600;
-  color:#64748b;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
-.esc-tab:hover{color:#4f46e5}
-.esc-tab.active{color:#4f46e5;border-bottom-color:#4f46e5}
+  color:var(--voco-text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.esc-tab:hover{color:var(--voco-brand)}
+.esc-tab.active{color:var(--voco-brand);border-bottom-color:var(--voco-brand)}
 .esc-cnt{display:inline-block;background:#ef4444;color:#fff;border-radius:10px;
   padding:1px 6px;font-size:.68rem;margin-left:4px;vertical-align:middle}
-.esc-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;
+.esc-card{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:8px;padding:10px 12px;
   margin-bottom:6px;cursor:pointer;transition:all .15s;border-left:3px solid transparent}
-.esc-card:hover{border-color:#c7d2fe;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-.esc-card.selected{border-left-color:#4f46e5;background:#f0f4ff}
-.esc-card-nombre{font-weight:700;font-size:.87rem;color:#1a2332;margin-bottom:2px}
-.esc-card-motivo{font-size:.78rem;color:#64748b;margin-bottom:4px;white-space:nowrap;
+.esc-card:hover{border-color:var(--voco-brand);box-shadow:var(--voco-card-shadow)}
+.esc-card.selected{border-left-color:var(--voco-brand);background:var(--voco-nav-bg-active)}
+.esc-card-nombre{font-weight:700;font-size:.87rem;color:var(--voco-text);margin-bottom:2px}
+.esc-card-motivo{font-size:.78rem;color:var(--voco-text-muted);margin-bottom:4px;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
-.esc-card-meta{display:flex;align-items:center;gap:6px;font-size:.72rem;color:#94a3b8}
+.esc-card-meta{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--voco-text-muted)}
 .esc-urg{padding:2px 7px;border-radius:10px;font-size:.7rem;font-weight:700}
 .esc-urg-alta{background:#fee2e2;color:#b91c1c}
 .esc-urg-normal{background:#fef3c7;color:#92400e}
@@ -1150,17 +1150,17 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .sla-crit{color:#ef4444;font-weight:700;animation:pulse-sla .8s infinite}
 @keyframes pulse-sla{0%,100%{opacity:1}50%{opacity:.5}}
 /* Templates rápidos */
-.tpl-picker{background:#fff;border:1px solid #e2e8f0;border-radius:8px;
-  box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:220px;overflow-y:auto;
+.tpl-picker{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:8px;
+  box-shadow:0 4px 16px rgba(15,23,42,.12);max-height:220px;overflow-y:auto;
   position:absolute;bottom:100%;left:0;right:0;z-index:100;margin-bottom:4px}
-.tpl-item{padding:8px 12px;cursor:pointer;font-size:.83rem;border-bottom:1px solid #f1f5f9}
-.tpl-item:hover{background:#f0f4ff}
-.tpl-item-titulo{font-weight:700;color:#1a2332;margin-bottom:2px}
-.tpl-item-prev{color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tpl-item{padding:8px 12px;cursor:pointer;font-size:.83rem;border-bottom:1px solid var(--voco-border)}
+.tpl-item:hover{background:var(--voco-nav-bg-active)}
+.tpl-item-titulo{font-weight:700;color:var(--voco-text);margin-bottom:2px}
+.tpl-item-prev{color:var(--voco-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Tabs del panel de detalle ticket */
 .det-tab{flex:1;border:none;background:none;padding:8px 4px;font-size:.75rem;font-weight:600;
-  color:#64748b;cursor:pointer;border-bottom:2px solid transparent}
-.det-tab.active{color:#4f46e5;border-bottom-color:#4f46e5}
+  color:var(--voco-text-muted);cursor:pointer;border-bottom:2px solid transparent}
+.det-tab.active{color:var(--voco-brand);border-bottom-color:var(--voco-brand)}
 /* Notificación toast SSE */
 .esc-toast{position:fixed;top:16px;right:16px;background:#1a2332;color:#fff;
   padding:10px 16px;border-radius:8px;font-size:.83rem;z-index:9999;
@@ -2548,10 +2548,10 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
           <!-- ── Lista de tickets (izquierda) ─────────────────────────── -->
           <div id="esc-sidebar" style="width:340px;min-width:340px;display:flex;flex-direction:column;
-               border-right:1px solid #e2e8f0;background:#f8fafc;overflow:hidden">
+               border-right:1px solid var(--voco-border);background:var(--voco-content-bg-alt);overflow:hidden">
 
             <!-- Filtros -->
-            <div style="display:flex;border-bottom:1px solid #e2e8f0;background:#fff">
+            <div style="display:flex;border-bottom:1px solid var(--voco-border);background:var(--voco-card-bg)">
               <button class="esc-tab active" data-est="sin_asignar" onclick="escFiltrar('sin_asignar',this)">Sin asignar<span class="esc-cnt" id="cnt-sin_asignar"></span></button>
               <button class="esc-tab" data-est="activo" onclick="escFiltrar('activo',this)">Activas<span class="esc-cnt" id="cnt-activo"></span></button>
               <button class="esc-tab" data-est="pendiente" onclick="escFiltrar('pendiente',this)">Pendientes<span class="esc-cnt" id="cnt-pendiente"></span></button>
@@ -2563,10 +2563,10 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
           </div>
 
           <!-- ── Detalle del ticket (derecha) ─────────────────────────── -->
-          <div id="esc-detalle" style="flex:1;display:flex;flex-direction:column;background:#fff;overflow:hidden">
+          <div id="esc-detalle" style="flex:1;display:flex;flex-direction:column;background:var(--voco-card-bg);overflow:hidden">
 
             <!-- Estado vacío -->
-            <div id="esc-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:#94a3b8;flex-direction:column;gap:8px">
+            <div id="esc-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--voco-text-muted);flex-direction:column;gap:8px">
               <span style="font-size:2.5rem">🎯</span>
               <span>Selecciona un ticket para ver la conversación</span>
             </div>
@@ -2575,11 +2575,11 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <div id="esc-conv-wrap" style="display:none;flex-direction:column;flex:1;overflow:hidden">
 
               <!-- Header del ticket -->
-              <div id="esc-ticket-hdr" style="padding:12px 16px;border-bottom:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-                <button id="esc-back-btn" onclick="escVolverLista()" style="display:none;background:none;border:none;font-size:1.3rem;cursor:pointer;color:#4f46e5;padding:0 6px 0 0">←</button>
+              <div id="esc-ticket-hdr" style="padding:12px 16px;border-bottom:1px solid var(--voco-border);background:var(--voco-content-bg-alt);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <button id="esc-back-btn" onclick="escVolverLista()" style="display:none;background:none;border:none;font-size:1.3rem;cursor:pointer;color:var(--voco-brand);padding:0 6px 0 0">←</button>
                 <div style="flex:1">
-                  <div id="esc-cliente-nombre" style="font-weight:700;font-size:.95rem;color:#1a2332"></div>
-                  <div id="esc-cliente-tel" style="font-size:.78rem;color:#64748b"></div>
+                  <div id="esc-cliente-nombre" style="font-weight:700;font-size:.95rem;color:var(--voco-text)"></div>
+                  <div id="esc-cliente-tel" style="font-size:.78rem;color:var(--voco-text-muted)"></div>
                 </div>
                 <span id="esc-urgencia-badge" style="font-size:.74rem;font-weight:700;padding:3px 10px;border-radius:12px"></span>
                 <div style="display:flex;gap:6px">
