@@ -590,9 +590,20 @@ html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Sego
   --voco-brand-hover:     #4338ca;   /* indigo-700 */
   --voco-accent:          #10b981;   /* emerald-500 */
   --voco-red:             #ef4444;   /* red-500 */
-  /* WA chat (siempre oscuro — estilo WhatsApp) */
+  /* WA chat (siempre oscuro — estilo WhatsApp, NO cambia con tema) */
   --sb:#202c33;--hd:#2a3942;--bbl:#005c4b;--bbr:#202c33;
   --az:#10b981;--tx:#e9edef;--ts:#8696a0;--bd:#313d45;--hl:#2a3942;--red:#e53935;
+  /* Sidebar de conversaciones — SÍ responde a tema (light por defecto) */
+  --conv-bg:    #ffffff;     /* fondo sidebar */
+  --conv-hdr:   #f8fafc;     /* header del sidebar */
+  --conv-input: #f1f5f9;     /* input búsqueda */
+  --conv-text:  #0f172a;     /* texto principal */
+  --conv-muted: #64748b;     /* texto secundario */
+  --conv-border:#e2e8f0;     /* bordes */
+  --conv-hover: #f1f5f9;     /* hover de items */
+  --conv-active:#eef2ff;     /* item seleccionado */
+  --conv-empty-bg:#f8fafc;   /* fondo área "selecciona conversación" */
+  --conv-empty-text:#94a3b8;
 }
 
 /* Tema oscuro */
@@ -615,6 +626,17 @@ html.dark{
   --voco-card-shadow:     0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
   --voco-brand:           #818cf8;
   --voco-brand-hover:     #a5b4fc;
+  /* Sidebar conversaciones en dark — usa los tonos de la nav lateral */
+  --conv-bg:    #0b1220;
+  --conv-hdr:   #0f172a;
+  --conv-input: #1e293b;
+  --conv-text:  #f1f5f9;
+  --conv-muted: #94a3b8;
+  --conv-border:#1e293b;
+  --conv-hover: #1e293b;
+  --conv-active:#1e1b4b;
+  --conv-empty-bg:#0b141a;
+  --conv-empty-text:#64748b;
 }
 
 /* ══════════════════════════════════════════════
@@ -678,14 +700,18 @@ html.dark{
 .sec.active{display:flex}
 
 /* ══════════════════════════════════════════════
-   SECCIÓN: CONVERSACIONES (dark WhatsApp theme)
+   SECCIÓN: CONVERSACIONES
+   - Sidebar de lista de conversaciones: respeta tema
+   - Área del chat (burbujas): estilo WhatsApp dark siempre
    ══════════════════════════════════════════════ */
-#sec-conversaciones{flex-direction:row;background:#0b141a}
+#sec-conversaciones{flex-direction:row;background:var(--conv-empty-bg)}
 
-/* sidebar conversaciones */
+/* sidebar conversaciones (lista) — tema-aware */
 #sidebar{width:350px;min-width:350px;display:flex;flex-direction:column;
-  background:var(--sb);border-right:1px solid var(--bd);min-height:0;overflow:hidden}
-#chat-area{flex:1;display:flex;flex-direction:column;background:#0b141a;min-width:0;min-height:0;overflow:hidden}
+  background:var(--conv-bg);border-right:1px solid var(--conv-border);
+  min-height:0;overflow:hidden;transition:background-color .15s, border-color .15s}
+#chat-area{flex:1;display:flex;flex-direction:column;background:#0b141a;
+  min-width:0;min-height:0;overflow:hidden}
 
 @media(max-width:720px){
   #sidebar{width:100%;min-width:unset}
@@ -772,33 +798,38 @@ html.dark{
 }
 
 /* sidebar header */
-#sh{background:var(--hd);padding:12px 16px;display:flex;align-items:center;gap:8px;flex-shrink:0}
-#sh h2{font-size:.9rem;font-weight:600;flex:1;color:var(--tx)}
-#sh .cnt{background:var(--az);color:#fff;border-radius:12px;padding:2px 8px;font-size:.7rem;font-weight:700}
-#srch{padding:8px 12px;background:var(--sb);flex-shrink:0}
-#srinput{width:100%;padding:8px 14px;border-radius:8px;border:none;background:var(--hd);
-  color:var(--tx);font-size:.84rem;outline:none}
-#srinput::placeholder{color:var(--ts)}
+#sh{background:var(--conv-hdr);padding:12px 16px;display:flex;align-items:center;gap:8px;flex-shrink:0;
+  border-bottom:1px solid var(--conv-border)}
+#sh h2{font-size:.9rem;font-weight:600;flex:1;color:var(--conv-text)}
+#sh .cnt{background:var(--voco-brand);color:#fff;border-radius:12px;padding:2px 8px;font-size:.7rem;font-weight:700}
+#srch{padding:8px 12px;background:var(--conv-bg);flex-shrink:0}
+#srinput{width:100%;padding:8px 14px;border-radius:8px;border:1px solid var(--conv-border);
+  background:var(--conv-input);color:var(--conv-text);font-size:.84rem;outline:none;
+  transition:border-color .15s, box-shadow .15s}
+#srinput:focus{border-color:var(--voco-brand);box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+#srinput::placeholder{color:var(--conv-muted)}
 #cl{flex:1;overflow-y:auto}
 #cl::-webkit-scrollbar{width:4px}
-#cl::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+#cl::-webkit-scrollbar-thumb{background:var(--conv-border);border-radius:2px}
 .ci{display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;
-  border-bottom:1px solid var(--bd);transition:background .12s}
-.ci:hover,.ci.sel{background:var(--hl)}
-.av{width:46px;height:46px;border-radius:50%;background:#1f6b58;display:flex;
-  align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
+  border-bottom:1px solid var(--conv-border);transition:background .12s, border-color .12s}
+.ci:hover{background:var(--conv-hover)}
+.ci.sel{background:var(--conv-active)}
+.av{width:46px;height:46px;border-radius:50%;background:#10b981;display:flex;
+  align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;color:#fff}
 .inf{flex:1;min-width:0}
-.nm{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--tx)}
-.lm{font-size:.77rem;color:var(--ts);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.nm{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--conv-text)}
+.lm{font-size:.77rem;color:var(--conv-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .meta2{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
-.cts{font-size:.68rem;color:var(--ts)}
-.hmbadge{background:var(--red);color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
-.optbadge{background:#64748b;color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
+.cts{font-size:.68rem;color:var(--conv-muted)}
+.hmbadge{background:var(--voco-red);color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
+.optbadge{background:var(--voco-text-muted);color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
 
 /* chat vacío */
-#empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--ts)}
-#empty .eic{font-size:3.5rem;opacity:.25}
-#empty p{font-size:.88rem}
+#empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:var(--conv-empty-bg);color:var(--conv-empty-text);transition:background-color .15s, color .15s}
+#empty .eic{font-size:3.5rem;opacity:.4}
+#empty p{font-size:.88rem;color:var(--conv-muted)}
 
 /* chat activo */
 #cv{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden}
