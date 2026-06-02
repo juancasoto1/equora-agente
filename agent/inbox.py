@@ -1513,8 +1513,12 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
            onclick="showSec('configuracion')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('configuracion')">
         <span class="ni" aria-hidden="true">⚙️</span> Configuración
       </div>
-      <div class="nav-footer">
-        <small>AgentKit v1.0</small>
+      <div class="nav-footer" style="display:flex;align-items:center;gap:8px">
+        <div style="width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+          display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">
+          <i data-lucide="zap" style="width:12px;height:12px"></i>
+        </div>
+        <small style="color:var(--voco-text-muted);font-weight:600">Voco · v1</small>
       </div>
     </nav>
 
@@ -8754,7 +8758,9 @@ html.dark .agent-pill{{background:var(--pill-bg-dark)!important;color:var(--pill
 <!-- TOPBAR -->
 <div class="topbar">
   <div class="voco-logo">
-    <div class="voco-logo-ic">🔊</div>
+    <div class="voco-logo-ic">
+      <i data-lucide="zap" style="width:18px;height:18px"></i>
+    </div>
     <div class="voco-logo-txt">Vo<span>co</span></div>
   </div>
   <div class="topbar-right">
