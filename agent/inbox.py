@@ -77,6 +77,38 @@ _DESIGN_SYSTEM_HEAD = """
   body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   /* Helper: hide en una clase para no depender de inline style */
   .voco-hidden { display: none !important; }
+
+  /* ── Override Tailwind forms en dark mode ───────────────────────
+     El plugin forms aplica background-color:#fff a todos los inputs/
+     selects/textareas, ignorando nuestras variables. Forzamos los
+     colores tema-aware del Voco Design System con alta especificidad.
+     Excluimos los chats Conversaciones (#ti) y Probar (.chat-inp) que
+     usan estilo WhatsApp y tienen su propio bg via --bbr. */
+  html.dark input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not([type='button']):not(#ti):not(.chat-inp):not(.cli-search input),
+  html.dark textarea:not(.chat-inp),
+  html.dark select {
+    background-color: var(--voco-card-bg) !important;
+    border-color: var(--voco-border);
+    color: var(--voco-text);
+  }
+  html.dark input::placeholder,
+  html.dark textarea::placeholder {
+    color: var(--voco-text-muted);
+    opacity: 0.6;
+  }
+  /* Options del select nativo (no se pueden estilar 100% en todos los browsers,
+     pero al menos definimos el bg para que no sea blanco brillante en dark) */
+  html.dark select option {
+    background-color: var(--voco-card-bg);
+    color: var(--voco-text);
+  }
+  /* Light mode — asegurar consistencia (algunos inputs heredan crema de chat) */
+  html:not(.dark) input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='submit']):not([type='button']):not(#ti):not(.chat-inp):not(.cli-search input),
+  html:not(.dark) textarea:not(.chat-inp),
+  html:not(.dark) select {
+    background-color: var(--voco-card-bg);
+    color: var(--voco-text);
+  }
 </style>
 <script>
   /* Toggle de tema Voco — disponible en todas las plantillas */
@@ -1093,16 +1125,16 @@ html.dark #dif-res-box.err{color:#fca5a5}
 .radio-opt input[type="radio"]{accent-color:var(--az);flex-shrink:0}
 .radio-opt.chk{border-color:var(--az);background:#f0f9f6;color:#1a7a5e;font-weight:600}
 /* Upload zones */
-.upload-zone{border:2px dashed #cbd5e0;border-radius:10px;padding:26px 20px;text-align:center;
+.upload-zone{border:2px dashed var(--voco-border);border-radius:10px;padding:26px 20px;text-align:center;
   cursor:pointer;transition:all .15s;background:var(--voco-content-bg-alt);margin-bottom:6px}
-.upload-zone:hover,.upload-zone.drag{border-color:var(--az);background:#f0f9f6}
-.upload-zone .uz-ic{font-size:1.8rem;margin-bottom:6px}
-.upload-zone .uz-title{font-size:.88rem;font-weight:600;color:var(--voco-text-muted);margin-bottom:3px}
-.upload-zone .uz-hint{font-size:.74rem;color:#6b7a8d}
-.file-preview{display:flex;align-items:center;gap:10px;background:#f0f9f6;
-  border:1px solid #9ae6b4;border-radius:8px;padding:10px 14px;margin-top:6px;font-size:.84rem}
-.fp-ic{font-size:1.2rem;flex-shrink:0}
-.fp-name{font-weight:600;color:#155724;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--az);background:rgba(16,185,129,.06)}
+.upload-zone .uz-ic{font-size:1.8rem;margin-bottom:6px;color:var(--voco-text-muted)}
+.upload-zone .uz-title{font-size:.88rem;font-weight:600;color:var(--voco-text);margin-bottom:3px}
+.upload-zone .uz-hint{font-size:.74rem;color:var(--voco-text-muted)}
+.file-preview{display:flex;align-items:center;gap:10px;background:rgba(16,185,129,.10);
+  border:1px solid rgba(16,185,129,.30);border-radius:8px;padding:10px 14px;margin-top:6px;font-size:.84rem}
+.fp-ic{font-size:1.2rem;flex-shrink:0;color:var(--az)}
+.fp-name{font-weight:600;color:var(--voco-text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fp-size{color:var(--voco-text-muted);font-size:.74rem;flex-shrink:0}
 .fp-remove{cursor:pointer;color:var(--red);font-size:1rem;flex-shrink:0;
   background:none;border:none;padding:0 4px;line-height:1}
@@ -1326,8 +1358,9 @@ html.dark .cfg-pill-error{background:rgba(239,68,68,.18);color:#f87171}
 .esc-bbl-bot{background:var(--bbr);color:var(--tx);align-self:flex-start;border-radius:10px 10px 10px 3px;box-shadow:0 1px 0.5px rgba(11,20,26,.08)}
 .esc-bbl-human{background:var(--hl);color:var(--tx);align-self:flex-start;border-radius:10px 10px 10px 3px;box-shadow:0 1px 0.5px rgba(11,20,26,.08);
   border-left:3px solid #4f46e5}
-.esc-bbl-nota{background:#fef9c3;color:#713f12;align-self:stretch;border-radius:8px;
+.esc-bbl-nota{background:rgba(234,179,8,.10);color:#713f12;align-self:stretch;border-radius:8px;
   border-left:3px solid #eab308;font-style:italic;font-size:.82rem}
+html.dark .esc-bbl-nota{background:rgba(234,179,8,.12);color:#fde68a}
 /* SLA timer */
 .sla-warn{color:#f59e0b;font-weight:700}
 .sla-crit{color:#ef4444;font-weight:700;animation:pulse-sla .8s infinite}
@@ -1352,21 +1385,21 @@ html.dark .cfg-pill-error{background:rgba(239,68,68,.18);color:#f87171}
 @keyframes toast-in{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 .esc-bbl-ts{font-size:.67rem;opacity:.6;margin-top:3px}
 /* Zona adjuntos */
-.img-attach-zone{border:1.5px dashed #c7d2fe;border-radius:8px;padding:8px 10px;
-  background:#f8f7ff;margin-bottom:10px;transition:border-color .15s}
-.img-attach-zone.drag-over{border-color:#4f46e5;background:#eef2ff}
+.img-attach-zone{border:1.5px dashed var(--voco-border);border-radius:8px;padding:8px 10px;
+  background:var(--voco-nav-bg-active);margin-bottom:10px;transition:border-color .15s}
+.img-attach-zone.drag-over{border-color:var(--voco-brand);background:var(--voco-nav-bg-hover)}
 .img-thumbs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
 .img-thumb{position:relative;width:56px;height:56px;border-radius:6px;
-  overflow:hidden;border:1.5px solid #c7d2fe;cursor:default;flex-shrink:0}
+  overflow:hidden;border:1.5px solid var(--voco-border);cursor:default;flex-shrink:0}
 .img-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .img-thumb-del{position:absolute;top:1px;right:1px;width:16px;height:16px;
   background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;
   font-size:10px;line-height:16px;text-align:center;cursor:pointer;padding:0}
 .img-attach-bar{display:flex;align-items:center;gap:8px}
 .btn-attach{display:inline-flex;align-items:center;gap:5px;font-size:.77rem;
-  font-weight:600;color:#4f46e5;background:#eef2ff;border:1px solid #c7d2fe;
+  font-weight:600;color:var(--voco-brand);background:var(--voco-nav-bg-active);border:1px solid var(--voco-border);
   border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap;transition:background .15s}
-.btn-attach:hover{background:#e0e7ff}
+.btn-attach:hover{background:var(--voco-nav-bg-hover)}
 .img-paste-hint{font-size:.72rem;color:var(--voco-text-muted);line-height:1.3}
 .btn-improve{width:100%;padding:11px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
   color:#fff;border:none;border-radius:8px;font-weight:700;font-size:.88rem;cursor:pointer;
@@ -2689,13 +2722,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           </div>
 
           <!-- Drop zone -->
-          <div id="csv-dropzone" style="border:2px dashed #cbd5e1;border-radius:10px;padding:40px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:16px"
+          <div id="csv-dropzone" class="upload-zone" style="padding:40px;margin-bottom:16px"
                onclick="document.getElementById('csv-file-input').click()"
-               ondragover="event.preventDefault();this.style.borderColor='#3b82f6'"
-               ondragleave="this.style.borderColor='#cbd5e1'"
-               ondrop="event.preventDefault();this.style.borderColor='#cbd5e1';procesarCSV(event.dataTransfer.files[0])">
-            <div style="font-size:2.5rem;margin-bottom:8px">📄</div>
-            <div style="font-weight:600;color:#374151;margin-bottom:4px">Arrastra tu archivo CSV aquí</div>
+               ondragover="event.preventDefault();this.classList.add('drag')"
+               ondragleave="this.classList.remove('drag')"
+               ondrop="event.preventDefault();this.classList.remove('drag');procesarCSV(event.dataTransfer.files[0])">
+            <div class="uz-ic" style="font-size:2.5rem">📄</div>
+            <div class="uz-title">Arrastra tu archivo CSV aquí</div>
             <div style="font-size:.8rem;color:var(--voco-text-muted)">o haz clic para seleccionar · Formatos: CSV, XLSX</div>
             <input id="csv-file-input" type="file" accept=".csv,.xlsx" style="display:none"
                    onchange="procesarCSV(this.files[0])">
