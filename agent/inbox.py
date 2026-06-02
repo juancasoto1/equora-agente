@@ -1058,7 +1058,7 @@ html.dark #dif-res-box.err{color:#fca5a5}
   box-shadow:0 24px 64px rgba(0,0,0,.22);animation:slideUp .2s ease}
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px}
-.modal-title{font-size:1.1rem;font-weight:700;color:#1a2332}
+.modal-title{font-size:1.1rem;font-weight:700;color:var(--voco-text)}
 .modal-sub{font-size:.78rem;color:var(--voco-text-muted);margin-top:4px}
 .modal-close{background:none;border:1.5px solid #e0e4e8;border-radius:8px;
   width:34px;height:34px;cursor:pointer;font-size:1rem;color:var(--voco-text-muted);
@@ -2912,8 +2912,8 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
               <!-- Panel: Notas internas -->
               <div id="esc-panel-notas" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0">
-                <div id="esc-notas-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;background:#fffbeb"></div>
-                <div id="esc-nota-input-wrap" style="padding:10px 14px;border-top:1px solid #fde68a;background:var(--voco-card-bg);display:none">
+                <div id="esc-notas-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;background:var(--sb)"></div>
+                <div id="esc-nota-input-wrap" style="padding:10px 14px;border-top:1px solid var(--voco-border);background:var(--voco-card-bg);display:none">
                   <div style="display:flex;gap:8px">
                     <textarea id="esc-nota-input" placeholder="Escribe una nota interna (solo el equipo la verá)…"
                       style="flex:1;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:.83rem;
