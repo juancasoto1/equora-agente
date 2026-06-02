@@ -729,7 +729,7 @@ html.dark{
 #sidebar{width:350px;min-width:350px;display:flex;flex-direction:column;
   background:var(--conv-bg);border-right:1px solid var(--conv-border);
   min-height:0;overflow:hidden;transition:background-color .15s, border-color .15s}
-#chat-area{flex:1;display:flex;flex-direction:column;background:#0b141a;
+#chat-area{flex:1;display:flex;flex-direction:column;background:var(--sb);
   min-width:0;min-height:0;overflow:hidden}
 
 @media(max-width:720px){
@@ -878,8 +878,9 @@ html.dark{
 .msg.bot{align-self:flex-start}
 .msg.usr{align-self:flex-end}
 .mb{padding:8px 12px;border-radius:8px;font-size:.86rem;line-height:1.45;word-break:break-word;white-space:pre-wrap}
-.bot .mb{background:var(--bbr);border-radius:0 8px 8px 8px;color:var(--tx)}
-.usr .mb{background:var(--bbl);border-radius:8px 0 8px 8px;color:var(--tx)}
+.bot .mb{background:var(--bbr);border-radius:0 8px 8px 8px;color:var(--tx);box-shadow:0 1px 0.5px rgba(11,20,26,.08)}
+.usr .mb{background:var(--bbl);border-radius:8px 0 8px 8px;color:var(--tx);box-shadow:0 1px 0.5px rgba(11,20,26,.08)}
+html.dark .bot .mb,html.dark .usr .mb,html.dark .esc-bbl-bot,html.dark .esc-bbl-human{box-shadow:none}
 .mt{font-size:.67rem;color:var(--ts)}
 .bot .mt{align-self:flex-start}
 .usr .mt{align-self:flex-end}
@@ -912,7 +913,8 @@ html.dark{
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-bottom:24px}
 .card{background:var(--voco-card-bg);border-radius:12px;padding:20px;border:1px solid var(--voco-border);
   box-shadow:var(--voco-card-shadow);transition:background-color .15s, border-color .15s}
-.card-ic{font-size:1.5rem;margin-bottom:8px}
+.card-ic{font-size:1.5rem;margin-bottom:10px;color:var(--voco-brand);display:flex;align-items:center}
+.card-ic i{width:20px;height:20px}
 .card-lbl{font-size:.73rem;color:var(--voco-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
 .card-val{font-size:1.6rem;font-weight:700;color:var(--voco-text)}
 .card-sub{font-size:.72rem;color:var(--voco-text-muted);margin-top:2px}
@@ -1300,9 +1302,9 @@ html.dark .cfg-pill-error{background:rgba(239,68,68,.18);color:#f87171}
 /* Burbujas de chat en panel de escalaciones */
 .esc-bbl{max-width:75%;padding:7px 11px;border-radius:10px;font-size:.84rem;line-height:1.5;
   word-break:break-word;white-space:pre-wrap}
-.esc-bbl-user{background:#005c4b;color:#fff;align-self:flex-end;border-radius:10px 10px 3px 10px}
-.esc-bbl-bot{background:#1f2c34;color:#e9edef;align-self:flex-start;border-radius:10px 10px 10px 3px}
-.esc-bbl-human{background:#2a3942;color:#e9edef;align-self:flex-start;border-radius:10px 10px 10px 3px;
+.esc-bbl-user{background:var(--bbl);color:var(--tx);align-self:flex-end;border-radius:10px 10px 3px 10px}
+.esc-bbl-bot{background:var(--bbr);color:var(--tx);align-self:flex-start;border-radius:10px 10px 10px 3px;box-shadow:0 1px 0.5px rgba(11,20,26,.08)}
+.esc-bbl-human{background:var(--hl);color:var(--tx);align-self:flex-start;border-radius:10px 10px 10px 3px;box-shadow:0 1px 0.5px rgba(11,20,26,.08);
   border-left:3px solid #4f46e5}
 .esc-bbl-nota{background:#fef9c3;color:#713f12;align-self:stretch;border-radius:8px;
   border-left:3px solid #eab308;font-style:italic;font-size:.82rem}
@@ -1426,6 +1428,21 @@ html.dark .cfg-pill-error{background:rgba(239,68,68,.18);color:#f87171}
 .chat-send-btn:disabled{opacity:.5;cursor:not-allowed}
 /* ── loading spinner ── */
 .loading-txt{color:var(--voco-text-muted);font-size:.85rem;padding:32px;text-align:center}
+/* ── Skeleton loaders (Voco design system) ───────────────────── */
+@keyframes voco-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.skel{display:inline-block;background:linear-gradient(90deg,
+  var(--voco-content-bg-alt) 0%, var(--voco-nav-bg-hover) 50%, var(--voco-content-bg-alt) 100%);
+  background-size:200% 100%;animation:voco-shimmer 1.4s ease-in-out infinite;
+  border-radius:6px;height:14px;width:100%}
+.skel-card{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:12px;
+  padding:20px;display:flex;flex-direction:column;gap:10px}
+.skel-card .skel-ic{width:24px;height:24px;border-radius:6px}
+.skel-card .skel-lbl{width:60%;height:10px}
+.skel-card .skel-val{width:45%;height:24px;margin-top:2px}
+.skel-card .skel-sub{width:75%;height:10px}
+.skel-row{display:flex;gap:10px;padding:12px;border-bottom:1px solid var(--voco-border)}
+.skel-row .skel-circle{width:36px;height:36px;border-radius:50%;flex-shrink:0}
+.skel-row .skel-lines{flex:1;display:flex;flex-direction:column;gap:6px;justify-content:center}
 
 /* ── Focus visible — accesibilidad teclado ── */
 .nav-item:focus-visible{outline:2px solid var(--az);outline-offset:-2px;border-radius:4px}
@@ -2411,7 +2428,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       <div class="sec sec-light" id="sec-metricas">
         <div class="sec-hdr">
           <div>
-            <h1>📊 Métricas</h1>
+            <h1 style="display:flex;align-items:center;gap:10px"><i data-lucide="bar-chart-3" style="width:22px;height:22px"></i> Métricas</h1>
             <p>Rendimiento de campañas, costo Meta y ventas atribuidas</p>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -2448,7 +2465,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
           <!-- Fila 1: KPIs globales de difusiones -->
           <div style="margin-bottom:6px">
-            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px">📤 Difusiones del período</p>
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px;display:flex;align-items:center;gap:6px"><i data-lucide="send" style="width:12px;height:12px"></i> Difusiones del período</p>
           </div>
           <div class="cards" id="met-cards-dif">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
@@ -2456,7 +2473,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
           <!-- Fila 2: Costo Meta + Ventas + ROI -->
           <div style="margin:24px 0 6px">
-            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px">💰 Costo & Retorno</p>
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px;display:flex;align-items:center;gap:6px"><i data-lucide="dollar-sign" style="width:12px;height:12px"></i> Costo & Retorno</p>
           </div>
           <div class="cards" id="met-cards-roi">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
@@ -2464,7 +2481,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
           <!-- Fila 3: Conversaciones IA -->
           <div style="margin:24px 0 6px">
-            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px">🤖 Conversaciones IA</p>
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px;display:flex;align-items:center;gap:6px"><i data-lucide="message-circle" style="width:12px;height:12px"></i> Conversaciones IA</p>
           </div>
           <div class="cards" id="met-cards-conv">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
@@ -2794,7 +2811,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
               <!-- Panel: Conversación -->
               <div id="esc-panel-conv" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0">
-                <div id="esc-msgs" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-height:0;background:#0b141a"></div>
+                <div id="esc-msgs" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-height:0;background:var(--sb)"></div>
 
                 <!-- Input de respuesta (solo visible si ticket activo) -->
                 <div id="esc-reply-wrap" style="padding:10px 14px;border-top:1px solid #e2e8f0;background:var(--voco-card-bg);display:none">
@@ -3298,7 +3315,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <!-- ── Sección 0A: Tipo de negocio ── -->
             <div class="cfg-card" style="margin-bottom:16px">
               <div class="cfg-card-hdr" style="margin-bottom:4px">
-                <div class="cfg-card-title">🏪 Tipo de negocio</div>
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="store" style="width:18px;height:18px;color:var(--voco-brand)"></i> Tipo de negocio</div>
                 <span style="font-size:.78rem;color:var(--voco-text-muted)">Optimiza las funciones del agente para tu modelo de negocio</span>
               </div>
               <div class="biz-type-grid" id="biz-type-grid">
@@ -3328,7 +3345,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <!-- ── Sección 0B: Módulos activos ── -->
             <div class="cfg-card" style="margin-bottom:20px">
               <div class="cfg-card-hdr" style="margin-bottom:4px">
-                <div class="cfg-card-title">🔌 Módulos del agente</div>
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="layers" style="width:18px;height:18px;color:var(--voco-brand)"></i> Módulos del agente</div>
                 <span style="font-size:.78rem;color:var(--voco-text-muted)">Activa o desactiva funciones según tu caso de uso</span>
               </div>
               <div class="toggle-grid">
@@ -3378,7 +3395,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <!-- ── Sección 1: Variables del negocio ── -->
             <div class="cfg-card" style="margin-bottom:20px">
               <div class="cfg-card-hdr" style="margin-bottom:16px">
-                <div class="cfg-card-title">📋 Variables del negocio</div>
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="list" style="width:18px;height:18px;color:var(--voco-brand)"></i> Variables del negocio</div>
                 <span style="font-size:.78rem;color:var(--voco-text-muted)">Úsalas en el prompt como <code>{NOMBRE_NEGOCIO}</code>, <code>{HORARIO}</code>…</span>
               </div>
 
@@ -6016,11 +6033,22 @@ async function cargarMetricas() {
   var aviso     = document.getElementById('met-aviso-tracking');
   var periodo   = document.getElementById('met-periodo').value || '30';
   var granularidad = (document.getElementById('met-granularidad') || {}).value || 'dia';
-  var ld = '<div class="loading-txt" style="grid-column:1/-1">Cargando...</div>';
+  // Skeleton loaders en vez de "Cargando..." plano
+  function skelCard(){
+    return '<div class="skel-card">' +
+      '<span class="skel skel-ic"></span>' +
+      '<span class="skel skel-lbl"></span>' +
+      '<span class="skel skel-val"></span>' +
+      '<span class="skel skel-sub"></span>' +
+      '</div>';
+  }
+  var ldDif  = skelCard() + skelCard() + skelCard() + skelCard() + skelCard();
+  var ldRoi  = skelCard() + skelCard() + skelCard() + skelCard();
+  var ldConv = skelCard() + skelCard() + skelCard() + skelCard();
 
-  cardsDif.innerHTML  = ld;
-  cardsRoi.innerHTML  = ld;
-  cardsConv.innerHTML = ld;
+  cardsDif.innerHTML  = ldDif;
+  cardsRoi.innerHTML  = ldRoi;
+  cardsConv.innerHTML = ldConv;
   campBody.innerHTML  = '<tr><td colspan="9" class="loading-txt">Cargando...</td></tr>';
   if (aviso) aviso.style.display = 'none';
 
@@ -6072,13 +6100,13 @@ async function cargarMetricas() {
     var pctL = dif.tasa_lectura   || 0;
 
     cardsDif.innerHTML =
-      mkCard('📣', 'Campañas', camps, 'en el período') +
-      mkCard('📤', 'Enviados', env.toLocaleString('es-CO'), 'conversaciones Meta') +
-      mkCard('📦', 'Entregados', ra > 0 ? en.toLocaleString('es-CO') : '—',
+      mkCard(lic('megaphone'), 'Campañas', camps, 'en el período') +
+      mkCard(lic('send'), 'Enviados', env.toLocaleString('es-CO'), 'conversaciones Meta') +
+      mkCard(lic('package-check'), 'Entregados', ra > 0 ? en.toLocaleString('es-CO') : '—',
              ra > 0 ? pctE + '% de rastreados' : 'Sin tracking aún') +
-      mkCard('👁',  'Leídos',     ra > 0 ? le.toLocaleString('es-CO') : '—',
+      mkCard(lic('eye'),  'Leídos',     ra > 0 ? le.toLocaleString('es-CO') : '—',
              ra > 0 ? pctL + '% de rastreados' : 'Sin tracking aún') +
-      mkCard('❌', 'Fallidos',   ra > 0 ? fa.toLocaleString('es-CO') : '—',
+      mkCard(lic('x-circle'), 'Fallidos',   ra > 0 ? fa.toLocaleString('es-CO') : '—',
              ra > 0 ? (fa > 0 ? 'Ver detalle en Difusiones' : 'Sin errores') : 'Sin tracking aún');
 
     // ── Fila 2: Costo Meta + Ventas + ROI ───────────────────────────────
@@ -6092,21 +6120,19 @@ async function cargarMetricas() {
       ? 'USD $' + (costoTotalUsd / env).toFixed(4) + ' / conv.'
       : 'Sin envíos';
 
-    var roiCards = mkCard('💵', 'Costo Meta', costoStr, costoPorEnv)
-                 + mkCard('💱', 'Tarifa / conv.', 'USD $' + tarifa.toFixed(4), 'marketing · Colombia');
+    var roiCards = mkCard(lic('dollar-sign'), 'Costo Meta', costoStr, costoPorEnv)
+                 + mkCard(lic('repeat'), 'Tarifa / conv.', 'USD $' + tarifa.toFixed(4), 'marketing · Colombia');
     if (shopifyOk) {
-      roiCards += mkCard('🛒', 'Ventas atribuidas', ventasStr, 'COP · 7 días post-envío');
+      roiCards += mkCard(lic('shopping-bag'), 'Ventas atribuidas', ventasStr, 'COP · 7 días post-envío');
       if (costoTotalUsd > 0 && ventasTotalCop > 0) {
-        // ROAS en ratio puro (ventas COP / costo USD — comparativo relativo)
-        // Para un ROAS real en misma moneda se necesita TRM; mostramos ratio
         var roas = (ventasTotalCop / costoTotalUsd).toFixed(1);
-        roiCards += mkCard('📈', 'ROAS', roas + 'x', 'COP ventas / USD costo');
+        roiCards += mkCard(lic('trending-up'), 'ROAS', roas + 'x', 'COP ventas / USD costo');
       } else {
-        roiCards += mkCard('📈', 'ROAS', '—', 'Sin ventas atribuidas aún');
+        roiCards += mkCard(lic('trending-up'), 'ROAS', '—', 'Sin ventas atribuidas aún');
       }
     } else {
-      roiCards += mkCard('🛒', 'Ventas Shopify', '—', 'Configura SHOPIFY_ADMIN_TOKEN') +
-                  mkCard('📈', 'ROAS', '—', 'Requiere integración Shopify');
+      roiCards += mkCard(lic('shopping-bag'), 'Ventas Shopify', '—', 'Configura SHOPIFY_ADMIN_TOKEN') +
+                  mkCard(lic('trending-up'), 'ROAS', '—', 'Requiere integración Shopify');
     }
     cardsRoi.innerHTML = roiCards;
 
@@ -6117,10 +6143,13 @@ async function cargarMetricas() {
     var aiMsg = conv.mensajes_ai        || 0;
 
     cardsConv.innerHTML =
-      mkCard('💬', 'Chats activos', chats.toLocaleString('es-CO'), 'números únicos') +
-      mkCard('📨', 'Mensajes recibidos', recv.toLocaleString('es-CO'), 'de clientes') +
-      mkCard('🤖', 'Respuestas IA', aiMsg.toLocaleString('es-CO'), 'generadas por Claude') +
-      mkCard('⚡', 'Total interacciones', (recv + aiMsg).toLocaleString('es-CO'), 'en el período');
+      mkCard(lic('message-circle'), 'Chats activos', chats.toLocaleString('es-CO'), 'números únicos') +
+      mkCard(lic('mail'), 'Mensajes recibidos', recv.toLocaleString('es-CO'), 'de clientes') +
+      mkCard(lic('sparkles'), 'Respuestas IA', aiMsg.toLocaleString('es-CO'), 'generadas por Claude') +
+      mkCard(lic('zap'), 'Total interacciones', (recv + aiMsg).toLocaleString('es-CO'), 'en el período');
+
+    // Renderizar iconos Lucide y disparar refresh para los recién insertados
+    if (window.lucide) window.lucide.createIcons();
 
     // ── Tabla por campaña ────────────────────────────────────────────────
     var campanas = d.campanas || [];
@@ -6270,6 +6299,12 @@ function _renderSeriesTemporales(series, granularidad) {
         '</table></div>'
       ) : '') +
     '</div>';
+}
+
+// Helper para generar HTML de un icono Lucide inline (Voco design system)
+function lic(name, size) {
+  var s = size || 20;
+  return '<i data-lucide="' + name + '" style="width:' + s + 'px;height:' + s + 'px"></i>';
 }
 
 function mkCard(ic, lbl, val, sub) {
