@@ -5745,19 +5745,22 @@ async function _verificarCAPI() {
   try {
     var r = await fetch('/inbox/api/sistema/capi-status', {credentials:'include'});
     var d = await r.json();
-    if (d.estado === 'ok_activo') {
+    if (d.estado === 'ok_activo' || d.estado === 'ok') {
+      var detalle_capi = 'Pixel ID: ' + he(d.pixel_id_partial || '—');
+      if (d.eventos_recibidos != null) {
+        detalle_capi += '<br>Eventos aceptados en el test: ' + d.eventos_recibidos;
+      }
       _setSistemaEstado('capi', 'ok',
         d.mensaje || 'Token válido y activo',
-        'Pixel: ' + he(d.pixel_info?.name || '—') +
-        '<br>Última actividad: hace ' + (d.horas_sin_eventos || 0) + 'h');
-    } else if (d.estado === 'ok_inactivo_reciente' || d.estado === 'ok') {
+        detalle_capi);
+    } else if (d.estado === 'ok_inactivo_reciente') {
       _setSistemaEstado('capi', 'ok',
         d.mensaje || 'Token válido',
-        'Pixel: ' + he(d.pixel_info?.name || '—'));
+        'Pixel: ' + he(d.pixel_id_partial || '—'));
     } else if (d.estado === 'ok_sin_actividad') {
       _setSistemaEstado('capi', 'warn',
         d.mensaje || 'Sin actividad reciente',
-        'Pixel: ' + he(d.pixel_info?.name || '—'));
+        'Pixel: ' + he(d.pixel_id_partial || '—'));
     } else if (d.estado === 'no_configurado') {
       _setSistemaEstado('capi', 'warn',
         'No configurado (opcional)',

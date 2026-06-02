@@ -3215,67 +3215,71 @@ async def api_capi_status(
         resultado["mensaje"] = f"No pude contactar Meta API: {str(e)[:200]}"
         return JSONResponse(content=resultado)
 
-    # 2) Validar acceso al pixel — GET /{pixel_id}
+    # 2) Validar capacidad de enviar eventos al pixel
+    # En vez de hacer GET (requiere ads_management), hacemos un POST de test event
+    # que es exactamente para lo que sirve el token CAPI. Si Meta acepta el envío,
+    # el token funciona para CAPI aunque no tenga permisos de lectura.
+    # Usamos test_event_code para no contaminar el pixel real con eventos de prueba.
     try:
+        url_eventos = f"https://graph.facebook.com/{api_ver}/{pixel_id}/events"
+        # Evento de test mínimo (no se atribuye, solo valida que el token funciona)
+        import hashlib
+        test_payload = {
+            "data": [{
+                "event_name":   "VocoDiagnostico",
+                "event_time":   int(datetime.utcnow().timestamp()),
+                "action_source": "system_generated",
+                "user_data":    {
+                    "external_id": [hashlib.sha256(b"voco_diagnostic").hexdigest()],
+                },
+            }],
+            "test_event_code": "TEST_VOCO_DIAGNOSTIC",  # marca como test, no afecta métricas
+        }
         async with httpx.AsyncClient(timeout=10) as cli:
-            r_px = await cli.get(
-                f"https://graph.facebook.com/{api_ver}/{pixel_id}",
-                params={"fields": "id,name,last_fired_time,creation_time"},
-                headers={"Authorization": f"Bearer {capi_token}"},
+            r_ev = await cli.post(
+                url_eventos,
+                params={"access_token": capi_token},
+                json=test_payload,
             )
-            if r_px.status_code != 200:
+            if r_ev.status_code == 200:
+                ev_data = r_ev.json()
+                resultado["estado"]   = "ok_activo"
+                resultado["mensaje"]  = "✅ Token válido — Meta aceptó evento de prueba"
+                resultado["eventos_recibidos"] = ev_data.get("events_received", 0)
+                resultado["fbtrace_id"] = ev_data.get("fbtrace_id", "")
+            else:
                 err_data_p = {}
                 try:
-                    err_data_p = r_px.json().get("error", {})
+                    err_data_p = r_ev.json().get("error", {})
                 except Exception:
                     pass
-                resultado["estado"] = "sin_acceso_pixel"
-                resultado["mensaje"] = (
-                    f"El token es válido pero NO tiene acceso al pixel {pixel_id}. "
-                    f"code={err_data_p.get('code')} msg={err_data_p.get('message', r_px.text[:200])}"
-                )
-                resultado["sugerencia"] = (
-                    "Verifica que el pixel pertenezca al mismo Business Manager y que "
-                    "el System User tenga el pixel asignado con permisos de admin."
-                )
-                return JSONResponse(content=resultado)
-
-            pixel_data = r_px.json()
-            resultado["pixel_info"] = {
-                "id":               pixel_data.get("id", ""),
-                "name":             pixel_data.get("name", ""),
-                "creation_time":    pixel_data.get("creation_time", ""),
-                "last_fired_time":  pixel_data.get("last_fired_time", ""),
-            }
+                err_code = err_data_p.get("code", 0)
+                err_msg  = err_data_p.get("message", r_ev.text[:200])
+                if err_code == 190:
+                    resultado["estado"]  = "token_invalido"
+                    resultado["mensaje"] = f"Token expirado/inválido: {err_msg}"
+                    resultado["sugerencia"] = (
+                        "Regenera el token en Events Manager → Equora Pixel → "
+                        "Configuración → API de conversiones → Generar token de acceso"
+                    )
+                elif err_code in (100, 200, 803):
+                    resultado["estado"]  = "sin_acceso_pixel"
+                    resultado["mensaje"] = (
+                        f"Token sin permiso sobre el pixel {pixel_id}: {err_msg}"
+                    )
+                    resultado["sugerencia"] = (
+                        "Verifica que el token fue generado DESDE el panel del pixel "
+                        "Equora Pixel en Events Manager (no desde otro pixel). "
+                        "Confirma también que META_PIXEL_ID en Railway coincida con el "
+                        "pixel para el que generaste el token."
+                    )
+                else:
+                    resultado["estado"]  = "error"
+                    resultado["mensaje"] = f"Meta respondió HTTP {r_ev.status_code} code={err_code}: {err_msg}"
+                resultado["error_code"] = err_code
     except Exception as e:
-        resultado["estado"] = "error_red"
-        resultado["mensaje"] = f"Error contactando Meta para el pixel: {str(e)[:200]}"
-        return JSONResponse(content=resultado)
-
-    # 3) Calcular qué tan reciente fue la última actividad del pixel
-    last_fired = resultado["pixel_info"].get("last_fired_time", "")
-    if last_fired:
-        try:
-            last_dt = datetime.fromisoformat(last_fired.replace("Z", "+00:00"))
-            ahora_utc = datetime.now(last_dt.tzinfo)
-            horas_sin_eventos = (ahora_utc - last_dt).total_seconds() / 3600
-            resultado["horas_sin_eventos"] = round(horas_sin_eventos, 1)
-            if horas_sin_eventos < 1:
-                resultado["estado"] = "ok_activo"
-                resultado["mensaje"] = "✅ Token válido y el pixel está recibiendo eventos en vivo"
-            elif horas_sin_eventos < 24:
-                resultado["estado"] = "ok_inactivo_reciente"
-                resultado["mensaje"] = f"✅ Token válido — último evento hace {round(horas_sin_eventos, 1)}h"
-            else:
-                dias = round(horas_sin_eventos / 24, 1)
-                resultado["estado"] = "ok_sin_actividad"
-                resultado["mensaje"] = f"⚠️ Token válido pero el pixel no recibe eventos hace {dias} días"
-        except Exception:
-            resultado["estado"] = "ok"
-            resultado["mensaje"] = "Token válido (no pude parsear last_fired_time)"
-    else:
-        resultado["estado"] = "ok_sin_actividad"
-        resultado["mensaje"] = "⚠️ Token válido pero el pixel nunca ha recibido eventos"
+        resultado["estado"]  = "error_red"
+        resultado["mensaje"] = f"Error enviando evento de test: {str(e)[:200]}"
 
     return JSONResponse(content=resultado)
 
