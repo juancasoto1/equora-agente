@@ -6699,9 +6699,16 @@ function _escRenderMensajes(mensajes) {
     var cls = m.role === 'user' ? 'esc-bbl-user' : (m.human ? 'esc-bbl-human' : 'esc-bbl-bot');
     var label = m.role !== 'user' ? (m.human ? '👤 Agente' : '🤖 Andrea') : '';
 
+    // Renderizar usando la misma función del módulo Conversaciones — soporta
+    // marcadores __MEDIA__ (imagen, video, doc, ubicación, producto) y
+    // __ORDEN_CATALOGO__ (pedidos desde catálogo nativo).
+    var bodyHtml = (typeof renderMediaOrText === 'function')
+      ? renderMediaOrText(m.content)
+      : _escEsc(m.content);
+
     wrap.innerHTML =
       (label ? '<div style="font-size:.68rem;color:#94a3b8;margin-bottom:2px;padding:0 4px">' + label + '</div>' : '') +
-      '<div class="esc-bbl ' + cls + '">' + _escEsc(m.content) + '<div class="esc-bbl-ts">' +
+      '<div class="esc-bbl ' + cls + '">' + bodyHtml + '<div class="esc-bbl-ts">' +
         (m.timestamp ? new Date(m.timestamp).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '') +
       '</div></div>';
     el.appendChild(wrap);
