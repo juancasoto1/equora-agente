@@ -1437,11 +1437,19 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .estado-card.sel-estado{box-shadow:0 0 0 2px var(--az) inset}
 .estado-card::before{content:'';position:absolute;top:0;right:0;width:60px;height:60px;
   border-radius:50%;opacity:.08;transform:translate(20px,-20px)}
-.ec-total {background:#f0f9f6;border-color:#9ae6c4}.ec-total::before{background:#00a884}
+.ec-total {background:#f0f9f6;border-color:#9ae6c4}.ec-total::before{background:#10b981}
 .ec-activo{background:#f0fdf4;border-color:#86efac}.ec-activo::before{background:#16a34a}
 .ec-tibio {background:#fffbeb;border-color:#fcd34d}.ec-tibio::before{background:#d97706}
 .ec-frio  {background:#eff6ff;border-color:#93c5fd}.ec-frio::before{background:#2563eb}
 .ec-baja  {background:var(--voco-content-bg-alt);border-color:#cbd5e1}.ec-baja::before{background:#64748b}
+/* Override en dark: cards de estado con tinte sutil sobre fondo oscuro */
+html.dark .ec-total {background:rgba(16,185,129,.10);border-color:rgba(16,185,129,.35)}
+html.dark .ec-activo{background:rgba(22,163,74,.10);border-color:rgba(22,163,74,.35)}
+html.dark .ec-tibio {background:rgba(217,119,6,.10);border-color:rgba(217,119,6,.35)}
+html.dark .ec-frio  {background:rgba(37,99,235,.10);border-color:rgba(37,99,235,.35)}
+html.dark .ec-baja  {background:rgba(100,116,139,.10);border-color:rgba(100,116,139,.35)}
+html.dark .estado-card,html.dark .estado-card *{color:var(--voco-text)!important}
+html.dark .estado-card small{color:var(--voco-text-muted)!important}
 .ec-val{font-size:2rem;font-weight:800;line-height:1;margin-bottom:6px}
 .ec-total .ec-val{color:#00875a}
 .ec-activo .ec-val{color:#15803d}
@@ -1702,7 +1710,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <h3 style="margin:0 0 12px;color:var(--voco-text);font-size:1.05rem">🛒 Enviar producto del catálogo</h3>
                 <input id="cat-buscar" type="text" placeholder="Buscar producto…" oninput="buscarCatalogo()"
                   style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
-                <div id="cat-resultados" style="flex:1;overflow-y:auto;border:1px solid var(--voco-border);border-radius:8px;padding:6px;background:#fafbfc"></div>
+                <div id="cat-resultados" style="flex:1;overflow-y:auto;border:1px solid var(--voco-border);border-radius:8px;padding:6px;background:var(--voco-content-bg-alt)"></div>
                 <button onclick="cerrarModalCatalogo()" style="margin-top:12px;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cerrar</button>
               </div>
             </div>
@@ -1749,7 +1757,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                   <div style="font-size:1.3rem">✉️</div>
                   <div>
                     <div style="font-weight:700;color:var(--voco-text);font-size:.95rem">Nueva difusión</div>
-                    <div style="font-size:.78rem;color:#6b7a8d">Solo plantillas aprobadas por Meta</div>
+                    <div style="font-size:.78rem;color:var(--voco-text-muted)">Solo plantillas aprobadas por Meta</div>
                   </div>
                 </div>
 
@@ -1954,7 +1962,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                   <div id="tpl-form-icon" style="font-size:1.3rem">✨</div>
                   <div style="flex:1">
                     <div id="tpl-form-title" style="font-weight:700;color:var(--voco-text);font-size:.95rem">Nueva plantilla</div>
-                    <div id="tpl-form-sub" style="font-size:.76rem;color:#6b7a8d">Se envía a Meta · Aprobación en 24-48 h</div>
+                    <div id="tpl-form-sub" style="font-size:.76rem;color:var(--voco-text-muted)">Se envía a Meta · Aprobación en 24-48 h</div>
                   </div>
                   <button id="tpl-cancelar-btn" class="btn-secondary" onclick="cancelarEdicion()" style="display:none;padding:4px 12px;font-size:.78rem">✕ Cancelar edición</button>
                 </div>
@@ -2010,11 +2018,11 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                   </div>
                   <div id="catalog-format-opts" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
                     <label class="radio-opt chk" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid var(--voco-border);background:var(--voco-content-bg-alt);gap:2px;cursor:pointer">
-                      <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="catalog-format" value="FULL" checked> <b style="font-size:.84rem;color:#1a2332">Mensaje de catálogo</b></span>
+                      <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="catalog-format" value="FULL" checked> <b style="font-size:.84rem;color:var(--voco-text)">Mensaje de catálogo</b></span>
                       <span style="font-size:.75rem;color:var(--voco-text-muted);padding-left:22px">Incluye todo el catálogo para ofrecer una visión completa de todos tus productos.</span>
                     </label>
                     <label class="radio-opt" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid var(--voco-border);background:var(--voco-content-bg-alt);gap:2px;cursor:pointer">
-                      <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="catalog-format" value="MULTI"> <b style="font-size:.84rem;color:#1a2332">Mensaje multiproducto</b></span>
+                      <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="catalog-format" value="MULTI"> <b style="font-size:.84rem;color:var(--voco-text)">Mensaje multiproducto</b></span>
                       <span style="font-size:.75rem;color:var(--voco-text-muted);padding-left:22px">Incluye hasta 30 productos específicos del catálogo. Deberás especificar los productos al enviar la plantilla via API.</span>
                     </label>
                   </div>
@@ -2191,11 +2199,11 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                   <div class="radio-group" style="gap:10px">
                     <label class="radio-opt chk" id="vartype-num-lbl">
                       <input type="radio" name="var-type" value="NUMERO" checked onchange="actualizarTipoVar('NUMERO')">
-                      Número &nbsp;<span style="font-size:.72rem;color:#6b7a8d">usa <code>{{1}}</code>, <code>{{2}}</code>…</span>
+                      Número &nbsp;<span style="font-size:.72rem;color:var(--voco-text-muted)">usa <code>{{1}}</code>, <code>{{2}}</code>…</span>
                     </label>
                     <label class="radio-opt" id="vartype-name-lbl">
                       <input type="radio" name="var-type" value="NOMBRE" onchange="actualizarTipoVar('NOMBRE')">
-                      Nombre &nbsp;<span style="font-size:.72rem;color:#6b7a8d">usa <code>{{nombre}}</code>, <code>{{ciudad}}</code>…</span>
+                      Nombre &nbsp;<span style="font-size:.72rem;color:var(--voco-text-muted)">usa <code>{{nombre}}</code>, <code>{{ciudad}}</code>…</span>
                     </label>
                   </div>
                   <span class="f-hint" id="vartype-hint">Escribe <code>{{1}}</code>, <code>{{2}}</code>… en el cuerpo para insertar variables posicionales</span>
@@ -2221,7 +2229,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                     Si no activas esto, WhatsApp aplica el período estándar de <b>30 días</b>.
                   </div>
                   <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.84rem;font-weight:600;color:#2d3748">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.84rem;font-weight:600;color:var(--voco-text)">
                       <input type="checkbox" id="ttl-activo" onchange="toggleTTL()"
                         style="width:16px;height:16px;accent-color:var(--az);cursor:pointer">
                       Activar período de validez personalizado
@@ -2276,7 +2284,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                     + Agregar botón ▾
                   </button>
                   <div id="btn-type-menu" class="btn-type-menu">
-                    <div class="btn-menu-item" onclick="_agregarBoton('QUICK_REPLY')">↩️ Personalizado <span style="font-size:.72rem;color:#6b7a8d">(respuesta rápida)</span></div>
+                    <div class="btn-menu-item" onclick="_agregarBoton('QUICK_REPLY')">↩️ Personalizado <span style="font-size:.72rem;color:var(--voco-text-muted)">(respuesta rápida)</span></div>
                     <div class="btn-menu-item" onclick="_agregarBoton('URL')">🔗 Ir al sitio web</div>
                     <div class="btn-menu-item" onclick="_agregarBoton('WHATSAPP_VOICE_CALL')">📲 Llamar en WhatsApp</div>
                     <div class="btn-menu-item" onclick="_agregarBoton('PHONE_NUMBER')">📞 Llamar a número de teléfono</div>
@@ -2377,7 +2385,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <!-- Periodo rápido -->
-            <select id="met-periodo" onchange="metAplicarPreset(this.value)" style="padding:6px 10px;border:1px solid var(--voco-border);border-radius:8px;font-size:.82rem;color:#1a2332">
+            <select id="met-periodo" onchange="metAplicarPreset(this.value)" style="padding:6px 10px;border:1px solid var(--voco-border);border-radius:8px;font-size:.82rem;color:var(--voco-text)">
               <option value="7">Últimos 7 días</option>
               <option value="30" selected>Últimos 30 días</option>
               <option value="90">Últimos 90 días</option>
@@ -2385,14 +2393,14 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             </select>
             <!-- Date pickers (ocultos por defecto, se muestran con "custom") -->
             <div id="met-rango-custom" style="display:none;gap:6px;align-items:center">
-              <label style="font-size:.78rem;color:#475569">Desde:</label>
+              <label style="font-size:.78rem;color:var(--voco-text-muted)">Desde:</label>
               <input id="met-desde" type="date" style="padding:5px 8px;border:1px solid var(--voco-border);border-radius:7px;font-size:.82rem">
-              <label style="font-size:.78rem;color:#475569">Hasta:</label>
+              <label style="font-size:.78rem;color:var(--voco-text-muted)">Hasta:</label>
               <input id="met-hasta" type="date" style="padding:5px 8px;border:1px solid var(--voco-border);border-radius:7px;font-size:.82rem">
             </div>
             <!-- Granularidad -->
             <label style="font-size:.78rem;color:var(--voco-text-muted);margin-left:6px">Agrupar:</label>
-            <select id="met-granularidad" onchange="cargarMetricas()" style="padding:6px 10px;border:1px solid var(--voco-border);border-radius:8px;font-size:.82rem;color:#1a2332">
+            <select id="met-granularidad" onchange="cargarMetricas()" style="padding:6px 10px;border:1px solid var(--voco-border);border-radius:8px;font-size:.82rem;color:var(--voco-text)">
               <option value="dia" selected>Diario</option>
               <option value="semana">Semanal</option>
               <option value="mes">Mensual</option>
@@ -2467,7 +2475,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
           <!-- Panel Equipo (supervisor) -->
           <div id="met-panel-equipo" style="display:none;padding:20px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-              <h2 style="margin:0;font-size:1rem;color:#1a2332">👥 Métricas del equipo de soporte</h2>
+              <h2 style="margin:0;font-size:1rem;color:var(--voco-text)">👥 Métricas del equipo de soporte</h2>
               <button class="btn-secondary" style="font-size:.78rem" onclick="cargarStatsEquipo()">↺ Actualizar</button>
             </div>
             <div id="met-equipo-tabla" style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;overflow:hidden">
@@ -2476,7 +2484,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <!-- Toggle auto-asignación -->
             <div style="margin-top:20px;padding:14px 18px;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;border-radius:10px;display:flex;align-items:center;gap:14px">
               <div style="flex:1">
-                <div style="font-weight:700;font-size:.88rem;color:#1a2332">⚡ Asignación automática (Round-Robin)</div>
+                <div style="font-weight:700;font-size:.88rem;color:var(--voco-text)">⚡ Asignación automática (Round-Robin)</div>
                 <div style="font-size:.78rem;color:var(--voco-text-muted);margin-top:2px">Cuando llega un ticket, se asigna al siguiente agente disponible automáticamente</div>
               </div>
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
@@ -2613,7 +2621,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                ondrop="event.preventDefault();this.style.borderColor='#cbd5e1';procesarCSV(event.dataTransfer.files[0])">
             <div style="font-size:2.5rem;margin-bottom:8px">📄</div>
             <div style="font-weight:600;color:#374151;margin-bottom:4px">Arrastra tu archivo CSV aquí</div>
-            <div style="font-size:.8rem;color:#6b7a8d">o haz clic para seleccionar · Formatos: CSV, XLSX</div>
+            <div style="font-size:.8rem;color:var(--voco-text-muted)">o haz clic para seleccionar · Formatos: CSV, XLSX</div>
             <input id="csv-file-input" type="file" accept=".csv,.xlsx" style="display:none"
                    onchange="procesarCSV(this.files[0])">
           </div>
@@ -2740,10 +2748,10 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
               </div>
 
               <!-- Tabs: Conversación / Notas internas -->
-              <div id="esc-det-tabs" style="display:none;border-bottom:1px solid var(--voco-border);background:#fff">
+              <div id="esc-det-tabs" style="display:none;border-bottom:1px solid var(--voco-border);background:var(--voco-card-bg)">
                 <div style="display:flex">
                   <button class="det-tab active" id="det-tab-conv" onclick="escDetTab('conv',this)">💬 Conversación</button>
-                  <button class="det-tab" id="det-tab-notas" onclick="escDetTab('notas',this)">📝 Notas <span id="notas-count" style="font-size:.68rem;color:#94a3b8"></span></button>
+                  <button class="det-tab" id="det-tab-notas" onclick="escDetTab('notas',this)">📝 Notas <span id="notas-count" style="font-size:.68rem;color:var(--voco-text-muted)"></span></button>
                   <button class="det-tab" id="det-tab-audit" onclick="escDetTab('audit',this)">🔍 Auditoría</button>
                 </div>
               </div>
@@ -2785,7 +2793,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
               </div>
 
               <!-- Panel: Auditoría -->
-              <div id="esc-panel-audit" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0;background:#f8fafc">
+              <div id="esc-panel-audit" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0;background:var(--voco-content-bg-alt)">
                 <div id="esc-audit-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px"></div>
               </div>
 
@@ -3069,7 +3077,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                     &nbsp;&nbsp;• <b>Token de acceso público</b> — cadena de <b>32 caracteres hex</b> sin prefijo → <em>usa este</em><br>
                     &nbsp;&nbsp;• Token de acceso privado — empieza con <code>shpat_…</code> (también funciona)<br>
                     4. Copia el <b>Token de acceso público</b> y pégalo aquí<br>
-                    <small style="color:#6b7a8d">Ejemplo: <code>d6fe89xxxxxxxxxxxxxxxxxxxxxx</code> (32 chars) &nbsp;·&nbsp; <a href="https://shopify.dev/docs/api/usage/authentication#access-tokens-for-the-storefront-api" target="_blank">Documentación oficial →</a></small>
+                    <small style="color:var(--voco-text-muted)">Ejemplo: <code>d6fe89xxxxxxxxxxxxxxxxxxxxxx</code> (32 chars) &nbsp;·&nbsp; <a href="https://shopify.dev/docs/api/usage/authentication#access-tokens-for-the-storefront-api" target="_blank">Documentación oficial →</a></small>
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
@@ -3228,10 +3236,10 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             </div><!-- /card-sistema -->
 
             <!-- Próximas integraciones -->
-            <div class="cfg-card" style="border-style:dashed;background:#fafbfc">
+            <div class="cfg-card" style="border-style:dashed;background:var(--voco-content-bg-alt)">
               <div class="cfg-card-title" style="color:var(--voco-text-muted);margin-bottom:12px">🚀 Próximas integraciones</div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;font-size:.83rem;color:#6b7a8d">
-                <div>🛒 <b style="color:#4a5568">Shopify OAuth</b><br><span style="font-size:.76rem">Conectar con un clic cuando Andrea sea app de Shopify</span></div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;font-size:.83rem;color:var(--voco-text-muted)">
+                <div>🛒 <b style="color:var(--voco-text-muted)">Shopify OAuth</b><br><span style="font-size:.76rem">Conectar con un clic cuando Andrea sea app de Shopify</span></div>
                 <div>📧 Email (SendGrid / Resend)</div>
                 <div>📅 Calendly / Google Calendar</div>
                 <div>🗃️ CRM (HubSpot / Pipedrive)</div>
@@ -3255,7 +3263,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <div class="cfg-card" style="margin-bottom:16px">
               <div class="cfg-card-hdr" style="margin-bottom:4px">
                 <div class="cfg-card-title">🏪 Tipo de negocio</div>
-                <span style="font-size:.78rem;color:#6b7a8d">Optimiza las funciones del agente para tu modelo de negocio</span>
+                <span style="font-size:.78rem;color:var(--voco-text-muted)">Optimiza las funciones del agente para tu modelo de negocio</span>
               </div>
               <div class="biz-type-grid" id="biz-type-grid">
                 <div class="biz-type-btn" data-type="productos" onclick="selBizType(this)">
@@ -3285,7 +3293,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <div class="cfg-card" style="margin-bottom:20px">
               <div class="cfg-card-hdr" style="margin-bottom:4px">
                 <div class="cfg-card-title">🔌 Módulos del agente</div>
-                <span style="font-size:.78rem;color:#6b7a8d">Activa o desactiva funciones según tu caso de uso</span>
+                <span style="font-size:.78rem;color:var(--voco-text-muted)">Activa o desactiva funciones según tu caso de uso</span>
               </div>
               <div class="toggle-grid">
                 <div class="toggle-card" id="togcard-shopify_catalog">
@@ -3335,7 +3343,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <div class="cfg-card" style="margin-bottom:20px">
               <div class="cfg-card-hdr" style="margin-bottom:16px">
                 <div class="cfg-card-title">📋 Variables del negocio</div>
-                <span style="font-size:.78rem;color:#6b7a8d">Úsalas en el prompt como <code>{NOMBRE_NEGOCIO}</code>, <code>{HORARIO}</code>…</span>
+                <span style="font-size:.78rem;color:var(--voco-text-muted)">Úsalas en el prompt como <code>{NOMBRE_NEGOCIO}</code>, <code>{HORARIO}</code>…</span>
               </div>
 
               <table class="vars-table" id="vars-table">
@@ -3363,11 +3371,11 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
               <div class="prompt-left">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
                   <div style="font-weight:700;color:var(--voco-text);font-size:.9rem">✍️ Prompt actual</div>
-                  <span id="prompt-fuente" style="font-size:.73rem;color:#8a94a6"></span>
+                  <span id="prompt-fuente" style="font-size:.73rem;color:var(--voco-text-muted)"></span>
                 </div>
                 <textarea id="prompt-textarea" class="prompt-ta" placeholder="Escribe aquí las instrucciones de tu agente…" spellcheck="false"></textarea>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-                  <span id="prompt-chars" style="font-size:.74rem;color:#8a94a6">0 caracteres</span>
+                  <span id="prompt-chars" style="font-size:.74rem;color:var(--voco-text-muted)">0 caracteres</span>
                   <button class="btn-primary" onclick="guardarPrompt()" type="button" id="btn-save-prompt">💾 Guardar</button>
                 </div>
               </div>
@@ -3400,7 +3408,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <!-- Propuesta -->
                 <div id="prompt-propuesta-wrap" style="display:none;margin-top:16px">
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-                    <span style="font-size:.82rem;font-weight:700;color:#1a2332">Propuesta de Claude</span>
+                    <span style="font-size:.82rem;font-weight:700;color:var(--voco-text)">Propuesta de Claude</span>
                     <button class="btn-secondary" style="font-size:.76rem;padding:4px 10px" onclick="verDiff()" type="button" id="btn-diff">👁 Ver cambios</button>
                   </div>
                   <textarea id="prompt-propuesta" class="prompt-ta" style="height:220px;background:var(--voco-content-bg-alt);border-color:#c7d2fe" readonly></textarea>
@@ -3433,7 +3441,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             </div>
 
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-              <div style="font-size:.85rem;color:#4a5568">
+              <div style="font-size:.85rem;color:var(--voco-text-muted)">
                 Escribe un mensaje como si fueras un cliente para probar cómo responde el agente.
               </div>
               <button class="btn-secondary" style="font-size:.78rem;padding:6px 14px;white-space:nowrap" onclick="limpiarChatTest()" type="button">🗑 Limpiar chat</button>
@@ -3466,8 +3474,8 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
               <div>
-                <h2 style="margin:0;font-size:1.1rem;color:#1a2332">👥 Equipo de Soporte</h2>
-                <p style="margin:4px 0 0;font-size:.83rem;color:#64748b">Agentes humanos que atienden escalaciones dentro del panel</p>
+                <h2 style="margin:0;font-size:1.1rem;color:var(--voco-text)">👥 Equipo de Soporte</h2>
+                <p style="margin:4px 0 0;font-size:.83rem;color:var(--voco-text-muted)">Agentes humanos que atienden escalaciones dentro del panel</p>
               </div>
               <button class="btn-primary" style="font-size:.82rem;padding:7px 14px" onclick="mostrarFormNuevoAgente()">
                 + Nuevo agente
@@ -3477,7 +3485,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <!-- Formulario nuevo agente (oculto por defecto) -->
             <div id="equipo-form-wrap" style="display:none;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;
                  border-radius:10px;padding:18px;margin-bottom:20px">
-              <h3 style="margin:0 0 14px;font-size:.9rem;color:#1a2332">Nuevo agente</h3>
+              <h3 style="margin:0 0 14px;font-size:.9rem;color:var(--voco-text)">Nuevo agente</h3>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                 <div>
                   <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Nombre completo</label>
@@ -3496,7 +3504,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 </div>
                 <div>
                   <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Rol</label>
-                  <select id="eq-rol" style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none;background:#fff">
+                  <select id="eq-rol" style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none;background:var(--voco-card-bg)">
                     <option value="agente">Agente</option>
                     <option value="supervisor">Supervisor</option>
                     <option value="admin">Admin</option>
@@ -3525,15 +3533,15 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
           <div class="cfg-pane" id="cfg-pane-templates" style="padding:24px;overflow-y:auto">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
               <div>
-                <h2 style="margin:0;font-size:1.1rem;color:#1a2332">⚡ Templates Rápidos</h2>
-                <p style="margin:4px 0 0;font-size:.83rem;color:#64748b">Respuestas predefinidas para que tus agentes respondan más rápido</p>
+                <h2 style="margin:0;font-size:1.1rem;color:var(--voco-text)">⚡ Templates Rápidos</h2>
+                <p style="margin:4px 0 0;font-size:.83rem;color:var(--voco-text-muted)">Respuestas predefinidas para que tus agentes respondan más rápido</p>
               </div>
               <button class="btn-primary" style="font-size:.82rem;padding:7px 14px" onclick="mostrarFormTemplate()">+ Nuevo template</button>
             </div>
 
             <!-- Formulario nuevo template -->
             <div id="tpl-form-wrap" style="display:none;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;border-radius:10px;padding:18px;margin-bottom:20px">
-              <h3 style="margin:0 0 12px;font-size:.9rem;color:#1a2332">Nuevo template</h3>
+              <h3 style="margin:0 0 12px;font-size:.9rem;color:var(--voco-text)">Nuevo template</h3>
               <div style="margin-bottom:10px">
                 <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Título (ej: Saludo inicial)</label>
                 <input id="tpl-titulo" type="text" placeholder="Saludo inicial"
@@ -4156,13 +4164,13 @@ function renderClientes() {
     var lastRel = c.last_msg ? fmtRelativo(c.last_msg) : '—';
     h += '<tr>'
        + '<td><div class="cli-av ' + cf.avcls + '" aria-hidden="true">' + he(ini) + '</div></td>'
-       + '<td><div style="font-weight:600;font-size:.86rem;color:#1a2332">' + he(disp) + '</div>'
-       +     '<div style="font-size:.74rem;color:#6b7a8d">' + he(tel) + '</div></td>'
+       + '<td><div style="font-weight:600;font-size:.86rem;color:var(--voco-text)">' + he(disp) + '</div>'
+       +     '<div style="font-size:.74rem;color:var(--voco-text-muted)">' + he(tel) + '</div></td>'
        + '<td style="color:var(--voco-text-muted);font-size:.83rem">' + he(c.ciudad || '—') + '</td>'
-       + '<td style="font-size:.82rem;color:#4a5568">' + he(lastRel) + '</td>'
+       + '<td style="font-size:.82rem;color:var(--voco-text-muted)">' + he(lastRel) + '</td>'
        + '<td><span class="est-pill ' + cf.cls + '">' + cf.lbl + '</span></td>'
-       + '<td style="text-align:center;font-weight:700;color:#2d3748">' + (c.pedidos || 0) + '</td>'
-       + '<td style="text-align:center;color:#6b7a8d">' + (c.total_msgs || 0) + '</td>'
+       + '<td style="text-align:center;font-weight:700;color:var(--voco-text)">' + (c.pedidos || 0) + '</td>'
+       + '<td style="text-align:center;color:var(--voco-text-muted)">' + (c.total_msgs || 0) + '</td>'
        + '<td style="display:flex;gap:6px">'
        + '<button class="cli-act-btn" onclick="verChatCliente(\'' + he(c.telefono) + '\')"'
        +    ' aria-label="Ver chat de ' + he(disp) + '">Ver chat</button>'
@@ -4256,7 +4264,7 @@ async function importarClientes() {
         }
         html += '</div>';
       }
-      html += '<div style="margin-top:10px;font-size:.78rem;color:#6b7a8d">Total filas procesadas: ' + (d.total || 0) + '</div>';
+      html += '<div style="margin-top:10px;font-size:.78rem;color:var(--voco-text-muted)">Total filas procesadas: ' + (d.total || 0) + '</div>';
       res.innerHTML = html;
       cargarClientes(); // refrescar tabla
     } else {
@@ -4616,7 +4624,7 @@ function cargarArchivoCSV(input) {
       '<span style="color:#155724;font-weight:600">✅ ' + validas.length + ' nuevo' + (validas.length===1?'':'s') +
       ' de <b>' + he(file.name) + '</b></span>' +
       (erroneas > 0 ? ' &nbsp;<span style="color:#721c24">❌ ' + erroneas + ' ignorado' + (erroneas===1?'':'s') + ' (número inválido)</span>' : '') +
-      ' &nbsp;<span style="color:#4a5568">· Total CSV: <b>' + totalCSV + '</b></span>' +
+      ' &nbsp;<span style="color:var(--voco-text-muted)">· Total CSV: <b>' + totalCSV + '</b></span>' +
       ' &nbsp;<button onclick="limpiarCSV()" style="background:none;border:none;color:#721c24;cursor:pointer;font-size:.76rem;text-decoration:underline;padding:0">🗑️ Limpiar CSV</button>';
     input.value = '';
   };
@@ -4630,7 +4638,7 @@ function cargarArchivoCSV(input) {
 function limpiarCSV() {
   _csvContacts = [];
   document.getElementById('dif-csv-stats').innerHTML =
-    '<span style="color:#6b7a8d">CSV limpiado — 0 contactos cargados</span>';
+    '<span style="color:var(--voco-text-muted)">CSV limpiado — 0 contactos cargados</span>';
   actualizarConteo();
 }
 
@@ -4788,8 +4796,8 @@ async function cargarHistorialDif() {
 
       var campaignLabel = he(row.campaign_name || row.template_name);
       var tplLabel = (row.campaign_name && row.campaign_name !== row.template_name)
-        ? '<small style="color:#6b7a8d">📋 ' + he(row.template_name) + ' · ' + he(row.language) + '</small>'
-        : '<small style="color:#6b7a8d">' + he(row.language) + '</small>';
+        ? '<small style="color:var(--voco-text-muted)">📋 ' + he(row.template_name) + ' · ' + he(row.language) + '</small>'
+        : '<small style="color:var(--voco-text-muted)">' + he(row.language) + '</small>';
 
       function fmtStat(val, pct, colorOk, colorWarn) {
         if (val === null) return '<span style="color:#cbd5e0;font-size:.75rem">—</span>';
@@ -5346,7 +5354,7 @@ function actualizarSubcat() {
   var el   = document.getElementById('subcat-opts');
   el.innerHTML = opts.map(function(o, i) {
     return '<label class="radio-opt' + (i===0?' chk':'') + '" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid var(--voco-border);background:var(--voco-content-bg-alt);gap:2px;cursor:pointer">'
-      + '<span style="display:flex;align-items:center;gap:8px"><input type="radio" name="tpl-subcat" value="' + o.value + '"' + (i===0?' checked':'') + '> <b style="font-size:.84rem;color:#1a2332">' + o.label + '</b></span>'
+      + '<span style="display:flex;align-items:center;gap:8px"><input type="radio" name="tpl-subcat" value="' + o.value + '"' + (i===0?' checked':'') + '> <b style="font-size:.84rem;color:var(--voco-text)">' + o.label + '</b></span>'
       + '<span style="font-size:.75rem;color:var(--voco-text-muted);padding-left:22px">' + o.desc + '</span>'
       + '</label>';
   }).join('');
@@ -6088,10 +6096,10 @@ async function cargarMetricas() {
       var pE = c.pct_entrega != null ? c.pct_entrega.toFixed(1) + '%' : '—';
       var pL = c.pct_lectura != null ? c.pct_lectura.toFixed(1) + '%' : '—';
       var enStr = c.rastreados > 0
-        ? c.entregados.toLocaleString('es-CO') + ' <small style="color:#6b7a8d">(' + pE + ')</small>'
+        ? c.entregados.toLocaleString('es-CO') + ' <small style="color:var(--voco-text-muted)">(' + pE + ')</small>'
         : '<span style="color:#aaa">—</span>';
       var leStr = c.rastreados > 0
-        ? c.leidos.toLocaleString('es-CO') + ' <small style="color:#6b7a8d">(' + pL + ')</small>'
+        ? c.leidos.toLocaleString('es-CO') + ' <small style="color:var(--voco-text-muted)">(' + pL + ')</small>'
         : '<span style="color:#aaa">—</span>';
       var faStr = c.rastreados > 0
         ? '<span style="color:' + (c.fallidos > 0 ? '#c62828' : '#4caf50') + '">' + c.fallidos + '</span>'
@@ -7419,10 +7427,10 @@ function _renderTablaEquipo(equipo) {
     var onlineColor = u.ultimo_ping_at && (Date.now() - new Date(u.ultimo_ping_at).getTime() < 60000)
       ? '#22c55e' : '#d1d5db';
     return '<tr style="border-bottom:1px solid #f1f5f9">' +
-      '<td style="padding:10px 14px;font-weight:600;font-size:.86rem;color:#1a2332">' +
+      '<td style="padding:10px 14px;font-weight:600;font-size:.86rem;color:var(--voco-text)">' +
         '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + onlineColor + ';margin-right:6px"></span>' +
         _escEsc(u.nombre) + '</td>' +
-      '<td style="padding:10px 14px;font-size:.83rem;color:#64748b">' + _escEsc(u.email) + '</td>' +
+      '<td style="padding:10px 14px;font-size:.83rem;color:var(--voco-text-muted)">' + _escEsc(u.email) + '</td>' +
       '<td style="padding:10px 14px"><span style="background:' + rc + ';padding:2px 8px;border-radius:10px;font-size:.73rem;font-weight:700">' + u.rol + '</span></td>' +
       '<td style="padding:10px 14px"><span style="background:' + (u.activo ? '#dcfce7;color:#15803d' : '#fee2e2;color:#b91c1c') +
         ';padding:2px 8px;border-radius:10px;font-size:.73rem;font-weight:700">' + (u.activo ? 'Activo' : 'Inactivo') + '</span></td>' +
@@ -7553,7 +7561,7 @@ async function escCargarAuditoria(ticketId) {
         'background:var(--voco-card-bg);border-radius:8px;border:1px solid var(--voco-border);font-size:.82rem';
       el.innerHTML = '<span style="font-size:1.1rem">' + icono + '</span>' +
         '<div style="flex:1">' +
-          '<div style="font-weight:600;color:#1a2332">' + _escEsc(ev.actor_nombre) + '</div>' +
+          '<div style="font-weight:600;color:var(--voco-text)">' + _escEsc(ev.actor_nombre) + '</div>' +
           '<div style="color:var(--voco-text-muted);margin-top:1px">' + _escEsc(ev.detalle) + '</div>' +
         '</div>' +
         '<div style="font-size:.7rem;color:var(--voco-text-muted);white-space:nowrap">' + hora + '</div>';
@@ -7650,11 +7658,11 @@ function _renderStatsEquipo(stats) {
           : (s.avg_resolucion_min / 60).toFixed(1) + ' h')
       : '—';
     return '<tr style="border-bottom:1px solid #f1f5f9">' +
-      '<td style="padding:10px 14px;font-weight:600;font-size:.85rem;color:#1a2332">' + onlineDot + _escEsc(s.nombre) + '</td>' +
+      '<td style="padding:10px 14px;font-weight:600;font-size:.85rem;color:var(--voco-text)">' + onlineDot + _escEsc(s.nombre) + '</td>' +
       '<td style="padding:10px 14px"><span style="background:' + rc + ';padding:2px 8px;border-radius:10px;font-size:.72rem;font-weight:700">' + s.rol + '</span></td>' +
       '<td style="padding:10px 14px;text-align:center;font-weight:700;color:' + (s.tickets_activos > 0 ? '#4f46e5' : '#94a3b8') + '">' + s.tickets_activos + '</td>' +
       '<td style="padding:10px 14px;text-align:center;font-weight:700;color:#16a34a">' + s.tickets_resueltos + '</td>' +
-      '<td style="padding:10px 14px;text-align:center;color:#64748b">' + avgStr + '</td>' +
+      '<td style="padding:10px 14px;text-align:center;color:var(--voco-text-muted)">' + avgStr + '</td>' +
       '</tr>';
   });
   wrap.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
@@ -7815,8 +7823,8 @@ function enviarMediaSeleccionada() {
     var url = URL.createObjectURL(_mediaFile);
     prev.innerHTML = '<video src="' + url + '" controls style="max-width:100%;max-height:240px;border-radius:8px"></video>';
   } else {
-    prev.innerHTML = '<div style="padding:14px;background:var(--voco-nav-bg-hover);border-radius:8px;color:#1a2332">📄 ' +
-      he(_mediaFile.name) + '<br><small style="color:#64748b">' +
+    prev.innerHTML = '<div style="padding:14px;background:var(--voco-nav-bg-hover);border-radius:8px;color:var(--voco-text)">📄 ' +
+      he(_mediaFile.name) + '<br><small style="color:var(--voco-text-muted)">' +
       (_mediaFile.size / 1024 / 1024).toFixed(2) + ' MB</small></div>';
   }
   document.getElementById('cap-texto').value = '';
@@ -7907,7 +7915,7 @@ async function enviarUbicacion() {
 function abrirCatalogoSelector() {
   toggleAttachMenu();
   document.getElementById('cat-buscar').value = '';
-  document.getElementById('cat-resultados').innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8">Cargando catálogo…</div>';
+  document.getElementById('cat-resultados').innerHTML = '<div style="padding:20px;text-align:center;color:var(--voco-text-muted)">Cargando catálogo…</div>';
   document.getElementById('modal-catalogo').style.display = 'flex';
   buscarCatalogo();
 }
@@ -7944,7 +7952,7 @@ async function _buscarCatalogoExec() {
       var skuMostrar = p.sku_legible || rid;
       var skuInfo = sinSku
         ? '<div style="font-size:.7rem;color:#ef4444">⚠️ Sin SKU — no se puede enviar</div>'
-        : '<div style="font-size:.7rem;color:#94a3b8">SKU: ' + he(skuMostrar) + '</div>';
+        : '<div style="font-size:.7rem;color:var(--voco-text-muted)">SKU: ' + he(skuMostrar) + '</div>';
       return '<div class="cat-item"' + click + style + '>' +
         img +
         '<div class="cat-item-info">' +
@@ -8215,7 +8223,7 @@ function escToggleTemplates() {
   if (picker.style.display !== 'none') { picker.style.display = 'none'; return; }
   escCargarTemplatesParaPanel().then(function() {
     if (!_templatesCache.length) {
-      picker.innerHTML = '<div class="tpl-item" style="color:#94a3b8">Sin templates. Crea uno en Configuración → ⚡ Templates</div>';
+      picker.innerHTML = '<div class="tpl-item" style="color:var(--voco-text-muted)">Sin templates. Crea uno en Configuración → ⚡ Templates</div>';
     } else {
       picker.innerHTML = '';
       _templatesCache.forEach(function(tpl) {
@@ -8267,7 +8275,7 @@ function _renderListaTemplates(templates) {
   }
   var filas = templates.map(function(t) {
     return '<tr style="border-bottom:1px solid #f1f5f9">' +
-      '<td style="padding:10px 14px;font-weight:700;font-size:.85rem;color:#1a2332">' + _escEsc(t.titulo) + '</td>' +
+      '<td style="padding:10px 14px;font-weight:700;font-size:.85rem;color:var(--voco-text)">' + _escEsc(t.titulo) + '</td>' +
       '<td style="padding:10px 14px;font-size:.82rem;color:var(--voco-text-muted);max-width:320px">' +
         _escEsc(t.contenido.slice(0,100)) + (t.contenido.length>100?'…':'') + '</td>' +
       '<td style="padding:10px 14px">' +
