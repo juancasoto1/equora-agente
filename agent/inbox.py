@@ -590,9 +590,19 @@ html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Sego
   --voco-brand-hover:     #4338ca;   /* indigo-700 */
   --voco-accent:          #10b981;   /* emerald-500 */
   --voco-red:             #ef4444;   /* red-500 */
-  /* WA chat (siempre oscuro — estilo WhatsApp, NO cambia con tema) */
-  --sb:#202c33;--hd:#2a3942;--bbl:#005c4b;--bbr:#202c33;
-  --az:#10b981;--tx:#e9edef;--ts:#8696a0;--bd:#313d45;--hl:#2a3942;--red:#e53935;
+  /* WA chat — tema-aware (estilo WhatsApp Web)
+     Light: fondo crema, header gris claro, propio verde pastel (#d9fdd3), entrante blanco
+     Dark: WhatsApp Dark clásico */
+  --sb:#efeae2;          /* fondo chat (papel tapiz crema) */
+  --hd:#f0f2f5;          /* header conversación */
+  --bbl:#d9fdd3;         /* burbuja propia (mi mensaje) */
+  --bbr:#ffffff;         /* burbuja entrante (del cliente) */
+  --az:#10b981;          /* acento (botones, links) */
+  --tx:#111b21;          /* texto principal */
+  --ts:#667781;          /* texto secundario / timestamps */
+  --bd:#e9edef;          /* bordes/divisores */
+  --hl:#f0f2f5;          /* highlight (hover) */
+  --red:#e53935;
   /* Sidebar de conversaciones — SÍ responde a tema (light por defecto) */
   --conv-bg:    #ffffff;     /* fondo sidebar */
   --conv-hdr:   #f8fafc;     /* header del sidebar */
@@ -637,6 +647,15 @@ html.dark{
   --conv-active:#1e1b4b;
   --conv-empty-bg:#0b141a;
   --conv-empty-text:#64748b;
+  /* WA chat dark — overrides cuando html.dark */
+  --sb:#0b141a;
+  --hd:#202c33;
+  --bbl:#005c4b;
+  --bbr:#202c33;
+  --tx:#e9edef;
+  --ts:#8696a0;
+  --bd:#313d45;
+  --hl:#2a3942;
 }
 
 /* ══════════════════════════════════════════════
@@ -1179,25 +1198,27 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .sistema-sugerencia{font-size:.74rem;color:#dc2626;margin-top:6px;padding:6px 8px;
   background:#fef2f2;border-radius:6px;border-left:3px solid #ef4444}
 .cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;
-  padding-bottom:16px;border-bottom:1px solid #f0f2f5}
-.cfg-card-title{font-weight:700;color:var(--voco-text);font-size:1rem}
-.cfg-status-pill{font-size:.74rem;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap}
-.cfg-pill-connected{background:#e8f5e9;color:#2d7d32}
-.cfg-pill-error{background:#fce4e4;color:#c62828}
-.cfg-pill-pending{background:#f0f2f5;color:#6b7a8d}
+  padding-bottom:16px;border-bottom:1px solid var(--voco-border)}
+.cfg-card-title{font-weight:600;color:var(--voco-text);font-size:.95rem;letter-spacing:-.005em}
+.cfg-status-pill{font-size:.72rem;font-weight:600;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.cfg-pill-connected{background:rgba(16,185,129,.12);color:#059669}
+html.dark .cfg-pill-connected{background:rgba(16,185,129,.18);color:#34d399}
+.cfg-pill-error{background:rgba(239,68,68,.12);color:#dc2626}
+html.dark .cfg-pill-error{background:rgba(239,68,68,.18);color:#f87171}
+.cfg-pill-pending{background:var(--voco-nav-bg-hover);color:var(--voco-text-muted)}
 .cfg-step{display:flex;gap:14px;margin-bottom:18px}
-.cfg-step-num{width:24px;height:24px;border-radius:50%;background:#eef2ff;color:var(--az);
-  font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center;
+.cfg-step-num{width:24px;height:24px;border-radius:50%;background:var(--voco-nav-bg-active);color:var(--voco-brand);
+  font-size:.74rem;font-weight:700;display:flex;align-items:center;justify-content:center;
   flex-shrink:0;margin-top:2px}
 .cfg-step-body{flex:1}
-.cfg-field-lbl{font-size:.84rem;font-weight:600;color:var(--voco-text);margin-bottom:6px;
-  display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.cfg-help-btn{background:none;border:1px solid #c9d0da;border-radius:50%;width:18px;height:18px;
-  font-size:.7rem;font-weight:700;color:var(--voco-text-muted);cursor:pointer;display:inline-flex;
+.cfg-field-lbl{font-size:.82rem;font-weight:600;color:var(--voco-text);margin-bottom:6px;
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;letter-spacing:-.005em}
+.cfg-help-btn{background:none;border:1px solid var(--voco-border);border-radius:50%;width:18px;height:18px;
+  font-size:.7rem;font-weight:600;color:var(--voco-text-muted);cursor:pointer;display:inline-flex;
   align-items:center;justify-content:center;padding:0;flex-shrink:0;line-height:1}
-.cfg-help-btn:hover{background:#eef2ff;border-color:var(--az);color:var(--az)}
-.cfg-help-box{display:none;background:var(--voco-nav-bg-active);border:1px solid #d0d8f0;border-radius:8px;
-  padding:12px 14px;font-size:.79rem;color:#3a4a6b;line-height:1.65;margin-bottom:10px}
+.cfg-help-btn:hover{background:var(--voco-nav-bg-active);border-color:var(--voco-brand);color:var(--voco-brand)}
+.cfg-help-box{display:none;background:var(--voco-nav-bg-active);border:1px solid var(--voco-border);border-radius:8px;
+  padding:12px 14px;font-size:.79rem;color:var(--voco-text);line-height:1.65;margin-bottom:10px}
 .cfg-help-box a{color:var(--az)}
 .cfg-help-box.open{display:block}
 .cfg-field-row{display:flex;align-items:center;gap:8px}
@@ -1494,9 +1515,14 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 .cli-act-btn:hover{border-color:var(--az);color:var(--az)}
 .cli-write-btn{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
 .cli-write-btn:hover{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}
-.cli-empty{padding:64px 20px;text-align:center;color:#94a3b8}
+.cli-empty{padding:64px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
 .cli-empty-ic{font-size:3rem;margin-bottom:12px;opacity:.5}
-.cli-empty-txt{font-size:.9rem;font-weight:500;color:#64748b}
+.cli-empty-txt{font-size:.9rem;font-weight:500;color:var(--voco-text-muted)}
+/* Empty state reusable — usar en cualquier vista vacía */
+.empty-state-ic{width:64px;height:64px;border-radius:16px;background:var(--voco-nav-bg-active);
+  display:flex;align-items:center;justify-content:center;margin-bottom:4px}
+.empty-state-title{font-size:.95rem;font-weight:600;color:var(--voco-text);margin-bottom:2px}
+.empty-state-sub{font-size:.82rem;color:var(--voco-text-muted);line-height:1.5;max-width:280px;margin:0 auto}
 </style>
 </head>
 <body>
@@ -1583,9 +1609,14 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         </aside>
 
         <section id="chat-area">
-          <div id="empty">
-            <div class="eic">💬</div>
-            <p>Selecciona una conversación para ver el historial</p>
+          <div id="empty" style="flex-direction:column;gap:14px">
+            <div class="empty-state-ic" style="background:rgba(255,255,255,.06);width:72px;height:72px;border-radius:18px">
+              <i data-lucide="message-circle" style="width:34px;height:34px;color:var(--az)"></i>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:1rem;font-weight:600;color:var(--tx);margin-bottom:4px">Selecciona una conversación</div>
+              <div style="font-size:.85rem;color:var(--ts);max-width:300px;line-height:1.5">Elige un chat de la lista para ver el historial y responder al cliente.</div>
+            </div>
           </div>
 
           <div id="cv">
@@ -2718,9 +2749,14 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <div id="esc-detalle" style="flex:1;display:flex;flex-direction:column;background:var(--voco-card-bg);overflow:hidden">
 
             <!-- Estado vacío -->
-            <div id="esc-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--voco-text-muted);flex-direction:column;gap:8px">
-              <span style="font-size:2.5rem">🎯</span>
-              <span>Selecciona un ticket para ver la conversación</span>
+            <div id="esc-empty" style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;padding:40px 20px">
+              <div style="width:64px;height:64px;border-radius:16px;background:var(--voco-nav-bg-active);display:flex;align-items:center;justify-content:center">
+                <i data-lucide="inbox" style="width:32px;height:32px;color:var(--voco-brand)"></i>
+              </div>
+              <div style="text-align:center;max-width:280px">
+                <div style="font-size:.95rem;font-weight:600;color:var(--voco-text);margin-bottom:4px">Ningún ticket seleccionado</div>
+                <div style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.5">Elige un ticket de la lista para ver la conversación y gestionarlo.</div>
+              </div>
             </div>
 
             <!-- Detalle activo (oculto hasta seleccionar) -->
@@ -2821,7 +2857,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       <div class="sec sec-light" id="sec-configuracion">
         <div class="sec-hdr">
           <div>
-            <h1>⚙️ Configuración</h1>
+            <h1 style="display:flex;align-items:center;gap:10px"><i data-lucide="settings" style="width:22px;height:22px"></i> Configuración</h1>
             <p>Integraciones, estado del sistema y documentación</p>
           </div>
         </div>
@@ -2829,12 +2865,12 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
           <!-- Tabs -->
           <div class="cfg-tabs">
-            <div class="cfg-tab active" onclick="cfgTab('integraciones',this)">⚙️ Integraciones</div>
-            <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()">🧠 Prompt</div>
-            <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()">🧪 Probar</div>
-            <div class="cfg-tab" onclick="cfgTab('equipo',this);cargarEquipo()">👥 Equipo</div>
-            <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()">⚡ Templates</div>
-            <div class="cfg-tab" onclick="cfgTab('documentacion',this)">📋 Documentación</div>
+            <div class="cfg-tab active" onclick="cfgTab('integraciones',this)"><i data-lucide="plug" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Integraciones</div>
+            <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()"><i data-lucide="brain" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Prompt</div>
+            <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()"><i data-lucide="flask-conical" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar</div>
+            <div class="cfg-tab" onclick="cfgTab('equipo',this);cargarEquipo()"><i data-lucide="users" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Equipo</div>
+            <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Templates</div>
+            <div class="cfg-tab" onclick="cfgTab('documentacion',this)"><i data-lucide="book-open" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Documentación</div>
           </div>
 
           <!-- ── Pane: Integraciones ── -->
@@ -2843,21 +2879,21 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <!-- Overview: estado de las 3 integraciones -->
             <div class="cfg-overview" id="cfg-overview">
               <div class="cfg-ov-item">
-                <span class="cfg-ov-icon">🔑</span>
+                <span class="cfg-ov-icon"><i data-lucide="message-square" style="width:20px;height:20px;color:var(--voco-brand)"></i></span>
                 <div>
                   <div class="cfg-ov-name">Meta WhatsApp</div>
                   <div class="cfg-ov-status cfg-pill-pend" id="ov-meta-status">Verificando…</div>
                 </div>
               </div>
               <div class="cfg-ov-item">
-                <span class="cfg-ov-icon">🤖</span>
+                <span class="cfg-ov-icon"><i data-lucide="sparkles" style="width:20px;height:20px;color:var(--voco-brand)"></i></span>
                 <div>
                   <div class="cfg-ov-name">Anthropic IA</div>
                   <div class="cfg-ov-status cfg-pill-pend" id="ov-ai-status">Verificando…</div>
                 </div>
               </div>
               <div class="cfg-ov-item">
-                <span class="cfg-ov-icon">🛒</span>
+                <span class="cfg-ov-icon"><i data-lucide="shopping-bag" style="width:20px;height:20px;color:var(--voco-brand)"></i></span>
                 <div>
                   <div class="cfg-ov-name">Shopify</div>
                   <div class="cfg-ov-status cfg-pill-pend" id="ov-shopify-status">Verificando…</div>
@@ -2868,7 +2904,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <!-- ── Card: Meta ── -->
             <div class="cfg-card" id="card-meta">
               <div class="cfg-card-hdr">
-                <div class="cfg-card-title">🔑 Meta WhatsApp Business API</div>
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="message-square" style="width:18px;height:18px;color:var(--voco-brand)"></i> Meta WhatsApp Business API</div>
                 <span class="cfg-status-pill cfg-pill-pending" id="pill-meta">Verificando…</span>
               </div>
 
@@ -2974,7 +3010,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <!-- ── Card: Anthropic ── -->
             <div class="cfg-card" id="card-anthropic">
               <div class="cfg-card-hdr">
-                <div class="cfg-card-title">🤖 Anthropic — Motor de IA (Andrea)</div>
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="sparkles" style="width:18px;height:18px;color:var(--voco-brand)"></i> Anthropic — Motor de IA</div>
                 <span class="cfg-status-pill cfg-pill-pending" id="pill-anthropic">Verificando…</span>
               </div>
 
@@ -3034,7 +3070,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <!-- ── Card: Shopify ── -->
             <div class="cfg-card" id="card-shopify">
               <div class="cfg-card-hdr">
-                <div class="cfg-card-title">🛒 Shopify — Tienda en línea</div>
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="shopping-bag" style="width:18px;height:18px;color:var(--voco-brand)"></i> Shopify — Tienda en línea</div>
                 <span class="cfg-status-pill cfg-pill-pending" id="pill-shopify">Verificando…</span>
               </div>
 
@@ -3945,7 +3981,12 @@ function renderLista() {
 
   if (!lista.length) {
     document.getElementById('cl').innerHTML =
-      '<p style="text-align:center;padding:40px;color:#8696a0;font-size:.84rem">Sin conversaciones</p>';
+      '<div style="padding:48px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">' +
+      '<div class="empty-state-ic"><i data-lucide="message-square" style="width:28px;height:28px;color:var(--voco-brand)"></i></div>' +
+      '<div class="empty-state-title">Sin conversaciones</div>' +
+      '<div class="empty-state-sub">Cuando lleguen mensajes, aparecerán aquí.</div>' +
+      '</div>';
+    if (window.lucide) window.lucide.createIcons();
     return;
   }
   var h = '';
@@ -4140,9 +4181,11 @@ function renderClientes() {
     document.getElementById('cli-tbody').innerHTML =
       '<tr><td colspan="8">' +
       '<div class="cli-empty">' +
-      '<div class="cli-empty-ic">👥</div>' +
-      '<div class="cli-empty-txt">No hay clientes en este segmento</div>' +
+      '<div class="empty-state-ic"><i data-lucide="users" style="width:32px;height:32px;color:var(--voco-brand)"></i></div>' +
+      '<div class="empty-state-title">Sin clientes en este segmento</div>' +
+      '<div class="empty-state-sub">Ajusta los filtros o espera a que lleguen nuevos clientes.</div>' +
       '</div></td></tr>';
+    if (window.lucide) window.lucide.createIcons();
     return;
   }
 
