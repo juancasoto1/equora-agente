@@ -2042,7 +2042,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               <!-- Borradores locales -->
               <div class="tbl-wrap" style="margin-bottom:0">
                 <div class="tbl-head">
-                  <h2>💾 Borradores locales</h2>
+                  <h2 style="display:flex;align-items:center;gap:8px"><i data-lucide="save" style="width:16px;height:16px"></i> Borradores locales</h2>
                   <button class="btn-secondary" style="padding:6px 14px;font-size:.8rem" onclick="cargarBorradores()">↺ Actualizar</button>
                 </div>
                 <div style="overflow-x:auto">
@@ -5083,7 +5083,17 @@ var _borrMap    = {};
 
 async function cargarTablaPlantillas() {
   var tbody = document.getElementById('tpl-tabla-body');
-  tbody.innerHTML = '<tr><td colspan="6" class="loading-txt">Cargando...</td></tr>';
+  // Skeleton rows mientras carga
+  var skelHtml = '';
+  for (var i = 0; i < 5; i++) {
+    skelHtml += '<tr><td colspan="6" style="padding:0">' +
+      '<div class="skel-row" style="padding:14px 12px;border-bottom:1px solid var(--voco-border)">' +
+      '<div class="skel-lines" style="flex:1">' +
+      '<span class="skel" style="width:35%;height:12px"></span>' +
+      '<span class="skel" style="width:55%;height:10px"></span>' +
+      '</div></div></td></tr>';
+  }
+  tbody.innerHTML = skelHtml;
   _tplMetaMap = {};
   try {
     var r = await fetch('/inbox/broadcast/templates', {credentials:'include'});
@@ -9011,8 +9021,8 @@ html.dark .agent-pill{{background:var(--pill-bg-dark)!important;color:var(--pill
       <!-- contenido inyectado por JS -->
     </div>
     <div class="modal-footer">
-      <button class="btn-wiz-prev" id="wiz-prev" onclick="wizPrev()">← Atrás</button>
-      <button class="btn-wiz-next" id="wiz-next" onclick="wizNext()">Siguiente →</button>
+      <button class="btn-wiz-prev" id="wiz-prev" onclick="wizPrev()"><i data-lucide="arrow-left" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Atrás</button>
+      <button class="btn-wiz-next" id="wiz-next" onclick="wizNext()">Siguiente <i data-lucide="arrow-right" style="width:14px;height:14px;vertical-align:-2px;margin-left:4px"></i></button>
     </div>
   </div>
 </div>
@@ -9030,6 +9040,7 @@ function abrirWizard() {{
     modules:{{shopify_catalog:true,cart_orders:true,client_memory:true,campaign_context:true}}}};
   renderWizStep();
   document.getElementById('wizard-overlay').style.display = 'flex';
+  if(window.lucide) window.lucide.createIcons();
 }}
 
 function cerrarWizard() {{
@@ -9051,7 +9062,9 @@ var _WIZ_TITLES = ['','Identidad del negocio','WhatsApp (Meta)','Prompt del agen
 function renderWizStep() {{
   document.getElementById('wiz-title').textContent = 'Paso '+_wizStep+' de 6 — '+_WIZ_TITLES[_wizStep];
   document.getElementById('wiz-prev').style.display = _wizStep === 1 ? 'none' : '';
-  document.getElementById('wiz-next').textContent = _wizStep === 6 ? '🚀 Crear agente' : 'Siguiente →';
+  document.getElementById('wiz-next').innerHTML = _wizStep === 6
+    ? '<i data-lucide="rocket" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Crear agente'
+    : 'Siguiente <i data-lucide="arrow-right" style="width:14px;height:14px;vertical-align:-2px;margin-left:4px"></i>';
   var body = document.getElementById('wiz-body');
   var dots = '<div class="step-indicator">'+wizDots()+'</div>';
 
@@ -9095,7 +9108,7 @@ function renderWizStep() {{
       '<input class="wiz-inp" id="wiz-waba" placeholder="WhatsApp Business Account ID" value="'+((_wizData.waba_id)||'')+'"></div>'+
       '<div class="wiz-field"><label class="wiz-label">Verify Token (puedes inventar uno)</label>'+
       '<input class="wiz-inp" id="wiz-vt" placeholder="mi-agente-2024" value="'+((_wizData.verify_token)||'voco-verify-'+Math.random().toString(36).slice(2,8))+'"></div>'+
-      '<button class="btn-wiz-next" style="width:100%;margin-top:4px" onclick="probarMetaWiz()" type="button">🔌 Probar conexión</button>'+
+      '<button class="btn-wiz-next" style="width:100%;margin-top:4px" onclick="probarMetaWiz()" type="button"><i data-lucide="plug" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar conexión</button>'+
       '<div class="wiz-result" id="wiz-conn-result"></div>';
   }} else if (_wizStep === 3) {{
     var tmpl = _PROMPT_TEMPLATES[_wizData.business_type] || _PROMPT_TEMPLATES['personalizado'];
@@ -9119,12 +9132,13 @@ function renderWizStep() {{
     }});
     body.innerHTML = dots +
       '<p style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:12px">'+
-      'Define variables que puedes usar en el prompt como <code style="color:#818cf8">{{HORARIO}}</code></p>'+
+      'Define variables que puedes usar en el prompt como <code style="color:var(--voco-brand);background:var(--voco-nav-bg-active);padding:1px 5px;border-radius:4px">{{HORARIO}}</code></p>'+
       '<table class="vars-tbl"><thead><tr><th style="color:var(--voco-text-muted);padding:6px 4px;text-align:left">Variable</th>'+
       '<th style="color:var(--voco-text-muted);padding:6px 4px;text-align:left">Valor</th><th></th></tr></thead>'+
       '<tbody id="wiz-vars-body">'+filas+'</tbody></table>'+
-      '<button onclick="agregarVarWiz()" type="button" style="margin-top:10px;background:#0f172a;'+
-      'border:1px solid #334155;color:var(--voco-text-muted);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem">+ Agregar variable</button>';
+      '<button onclick="agregarVarWiz()" type="button" style="margin-top:10px;background:var(--voco-card-bg);'+
+      'border:1px solid var(--voco-border);color:var(--voco-text);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;display:inline-flex;align-items:center;gap:6px">'+
+      '<i data-lucide="plus" style="width:14px;height:14px"></i> Agregar variable</button>';
   }} else if (_wizStep === 5) {{
     var mods = _wizData.modules || {{}};
     function togRow(key, label, desc) {{
@@ -9136,26 +9150,27 @@ function renderWizStep() {{
     }}
     body.innerHTML = dots +
       '<p style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:14px">Activa los módulos que apliquen a tu tipo de negocio.</p>'+
-      togRow('shopify_catalog','🛒 Catálogo Shopify','Inyecta el catálogo en el contexto del agente')+
-      togRow('cart_orders','🛍 Carrito y pedidos','Muestra carrito activo y pedidos pendientes')+
-      togRow('client_memory','🧠 Memoria de clientes','Recuerda datos y pedidos previos')+
-      togRow('campaign_context','📣 Contexto de campaña','Sabe a qué difusión responde el cliente');
+      togRow('shopify_catalog','<i data-lucide=\"shopping-bag\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Catálogo Shopify','Inyecta el catálogo en el contexto del agente')+
+      togRow('cart_orders','<i data-lucide=\"shopping-cart\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Carrito y pedidos','Muestra carrito activo y pedidos pendientes')+
+      togRow('client_memory','<i data-lucide=\"brain\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Memoria de clientes','Recuerda datos y pedidos previos')+
+      togRow('campaign_context','<i data-lucide=\"megaphone\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Contexto de campaña','Sabe a qué difusión responde el cliente');
   }} else if (_wizStep === 6) {{
     var name = _wizData.name || '—';
     var aname = _wizData.agent_name || '—';
     var btype = _wizData.business_type || '—';
     body.innerHTML = dots +
-      '<div style="background:#052e16;border:1px solid #15803d;border-radius:10px;padding:16px;margin-bottom:16px">'+
-      '<div style="font-size:.84rem;font-weight:700;color:#4ade80;margin-bottom:10px">✅ Resumen del agente</div>'+
-      '<div style="font-size:.82rem;color:#cbd5e1;line-height:2">'+
+      '<div style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.30);border-radius:10px;padding:16px;margin-bottom:16px">'+
+      '<div style="font-size:.84rem;font-weight:700;color:#059669;margin-bottom:10px;display:flex;align-items:center;gap:6px">'+
+      '<i data-lucide=\"check-circle-2\" style=\"width:16px;height:16px\"></i> Resumen del agente</div>'+
+      '<div style="font-size:.82rem;color:var(--voco-text);line-height:2">'+
       '<b>Negocio:</b> '+he(name)+'<br>'+
       '<b>Agente:</b> '+he(aname)+' &nbsp; <b>Tipo:</b> '+he(btype)+'<br>'+
       '<b>Phone Number ID:</b> '+he(_wizData.phone_number_id||'(no configurado)')+'<br>'+
       '</div></div>'+
       '<div style="font-size:.8rem;color:var(--voco-text-muted);line-height:1.7">'+
       'Una vez creado el agente:<br>'+
-      '1. Configura el webhook de Meta apuntando a <code style="color:#818cf8">https://tu-app.railway.app/webhook</code><br>'+
-      '2. Suscríbete al campo <code style="color:#818cf8">messages</code><br>'+
+      '1. Configura el webhook de Meta apuntando a <code style="color:var(--voco-brand);background:var(--voco-nav-bg-active);padding:1px 5px;border-radius:4px">https://tu-app.railway.app/webhook</code><br>'+
+      '2. Suscríbete al campo <code style="color:var(--voco-brand);background:var(--voco-nav-bg-active);padding:1px 5px;border-radius:4px">messages</code><br>'+
       '3. El agente comenzará a responder cuando reciba el primer mensaje.</div>'+
       '<div class="wiz-result" id="wiz-create-result"></div>';
   }}
@@ -9266,11 +9281,11 @@ async function wizNext() {{
     await crearAgente();
     return;
   }}
-  if(_wizStep < 6) {{ _wizStep++; renderWizStep(); }}
+  if(_wizStep < 6) {{ _wizStep++; renderWizStep(); if(window.lucide) window.lucide.createIcons(); }}
 }}
 
 function wizPrev() {{
-  if(_wizStep > 1) {{ _wizStep--; renderWizStep(); }}
+  if(_wizStep > 1) {{ _wizStep--; renderWizStep(); if(window.lucide) window.lucide.createIcons(); }}
 }}
 
 async function crearAgente() {{
