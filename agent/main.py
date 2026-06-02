@@ -3143,6 +3143,143 @@ async def api_eventos_ticket(
     return JSONResponse(content={"eventos": eventos})
 
 
+@app.get("/inbox/api/sistema/capi-status")
+async def api_capi_status(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Diagnostica el estado del Conversions API (CAPI) token de Meta.
+    Verifica si el token está configurado, si es válido contra la API de Meta,
+    y a qué pixel/dataset tiene acceso."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    pixel_id    = os.getenv("META_PIXEL_ID", "").strip()
+    capi_token  = os.getenv("META_CAPI_TOKEN", "").strip()
+    test_code   = os.getenv("META_CAPI_TEST_CODE", "").strip()
+    api_ver     = "v21.0"
+
+    resultado = {
+        "pixel_id_configurado":   bool(pixel_id),
+        "capi_token_configurado": bool(capi_token),
+        "modo_prueba_activo":     bool(test_code),
+        "pixel_id_partial":       f"{pixel_id[:6]}...{pixel_id[-4:]}" if len(pixel_id) > 10 else pixel_id,
+        "token_partial":          f"{capi_token[:8]}...{capi_token[-4:]}" if len(capi_token) > 16 else "(vacío)",
+        "estado":                 "desconocido",
+        "mensaje":                "",
+        "pixel_info":             {},
+    }
+
+    if not pixel_id:
+        resultado["estado"] = "no_configurado"
+        resultado["mensaje"] = "Falta META_PIXEL_ID en variables de entorno"
+        return JSONResponse(content=resultado)
+    if not capi_token:
+        resultado["estado"] = "no_configurado"
+        resultado["mensaje"] = "Falta META_CAPI_TOKEN en variables de entorno"
+        return JSONResponse(content=resultado)
+
+    # 1) Validar token contra /me — devuelve la app/usuario al que pertenece
+    try:
+        async with httpx.AsyncClient(timeout=10) as cli:
+            r_me = await cli.get(
+                f"https://graph.facebook.com/{api_ver}/me",
+                headers={"Authorization": f"Bearer {capi_token}"},
+            )
+            if r_me.status_code != 200:
+                err_data = {}
+                try:
+                    err_data = r_me.json().get("error", {})
+                except Exception:
+                    pass
+                resultado["estado"] = "token_invalido"
+                resultado["mensaje"] = (
+                    f"Token rechazado por Meta — code={err_data.get('code', r_me.status_code)} "
+                    f"msg={err_data.get('message', r_me.text[:200])}"
+                )
+                resultado["error_code"] = err_data.get("code")
+                if err_data.get("code") == 190:
+                    resultado["sugerencia"] = (
+                        "Token expirado. Genera uno nuevo en Meta Business Manager → "
+                        "Pixel → Configuración → Conversions API → Generate Access Token"
+                    )
+                return JSONResponse(content=resultado)
+            me_data = r_me.json()
+            resultado["token_owner"] = {
+                "id":   me_data.get("id", ""),
+                "name": me_data.get("name", ""),
+            }
+    except Exception as e:
+        resultado["estado"] = "error_red"
+        resultado["mensaje"] = f"No pude contactar Meta API: {str(e)[:200]}"
+        return JSONResponse(content=resultado)
+
+    # 2) Validar acceso al pixel — GET /{pixel_id}
+    try:
+        async with httpx.AsyncClient(timeout=10) as cli:
+            r_px = await cli.get(
+                f"https://graph.facebook.com/{api_ver}/{pixel_id}",
+                params={"fields": "id,name,last_fired_time,creation_time"},
+                headers={"Authorization": f"Bearer {capi_token}"},
+            )
+            if r_px.status_code != 200:
+                err_data_p = {}
+                try:
+                    err_data_p = r_px.json().get("error", {})
+                except Exception:
+                    pass
+                resultado["estado"] = "sin_acceso_pixel"
+                resultado["mensaje"] = (
+                    f"El token es válido pero NO tiene acceso al pixel {pixel_id}. "
+                    f"code={err_data_p.get('code')} msg={err_data_p.get('message', r_px.text[:200])}"
+                )
+                resultado["sugerencia"] = (
+                    "Verifica que el pixel pertenezca al mismo Business Manager y que "
+                    "el System User tenga el pixel asignado con permisos de admin."
+                )
+                return JSONResponse(content=resultado)
+
+            pixel_data = r_px.json()
+            resultado["pixel_info"] = {
+                "id":               pixel_data.get("id", ""),
+                "name":             pixel_data.get("name", ""),
+                "creation_time":    pixel_data.get("creation_time", ""),
+                "last_fired_time":  pixel_data.get("last_fired_time", ""),
+            }
+    except Exception as e:
+        resultado["estado"] = "error_red"
+        resultado["mensaje"] = f"Error contactando Meta para el pixel: {str(e)[:200]}"
+        return JSONResponse(content=resultado)
+
+    # 3) Calcular qué tan reciente fue la última actividad del pixel
+    last_fired = resultado["pixel_info"].get("last_fired_time", "")
+    if last_fired:
+        try:
+            last_dt = datetime.fromisoformat(last_fired.replace("Z", "+00:00"))
+            ahora_utc = datetime.now(last_dt.tzinfo)
+            horas_sin_eventos = (ahora_utc - last_dt).total_seconds() / 3600
+            resultado["horas_sin_eventos"] = round(horas_sin_eventos, 1)
+            if horas_sin_eventos < 1:
+                resultado["estado"] = "ok_activo"
+                resultado["mensaje"] = "✅ Token válido y el pixel está recibiendo eventos en vivo"
+            elif horas_sin_eventos < 24:
+                resultado["estado"] = "ok_inactivo_reciente"
+                resultado["mensaje"] = f"✅ Token válido — último evento hace {round(horas_sin_eventos, 1)}h"
+            else:
+                dias = round(horas_sin_eventos / 24, 1)
+                resultado["estado"] = "ok_sin_actividad"
+                resultado["mensaje"] = f"⚠️ Token válido pero el pixel no recibe eventos hace {dias} días"
+        except Exception:
+            resultado["estado"] = "ok"
+            resultado["mensaje"] = "Token válido (no pude parsear last_fired_time)"
+    else:
+        resultado["estado"] = "ok_sin_actividad"
+        resultado["mensaje"] = "⚠️ Token válido pero el pixel nunca ha recibido eventos"
+
+    return JSONResponse(content=resultado)
+
+
 @app.get("/inbox/api/sistema/fallas-catalogo")
 async def api_fallas_catalogo(
     token: str = "",
