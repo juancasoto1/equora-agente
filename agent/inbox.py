@@ -19,12 +19,12 @@ _DESIGN_SYSTEM_HEAD = """
 <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script>
-  /* Tema persistente — leer antes de pintar para evitar flash */
+  /* Tema persistente — leer antes de pintar para evitar flash.
+     Default = light si no hay preferencia guardada. */
   (function() {
     try {
       var saved = localStorage.getItem('voco-theme');
-      var preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      var theme = saved || (preferDark ? 'dark' : 'light');
+      var theme = saved || 'light';
       if (theme === 'dark') document.documentElement.classList.add('dark');
       document.documentElement.setAttribute('data-voco-theme', theme);
     } catch(e) {}
@@ -455,36 +455,86 @@ _HTML = r"""<!DOCTYPE html>
 __VOCO_DS__
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden}
-/* ── WA Dark theme vars (usados en sección conversaciones) ── */
+html,body{height:100%;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow:hidden}
+
+/* ════════════════════════════════════════════════════════════════════
+   VOCO Design System v1 — Variables del tema (light por defecto)
+   ════════════════════════════════════════════════════════════════════ */
 :root{
+  /* Shell, navegación y áreas de admin (NO chat) */
+  --voco-shell-bg:        #f8fafc;   /* surface-50 */
+  --voco-nav-bg:          #ffffff;   /* white */
+  --voco-nav-border:      #e2e8f0;   /* surface-200 */
+  --voco-nav-text:        #475569;   /* surface-600 */
+  --voco-nav-text-hover:  #0f172a;   /* surface-900 */
+  --voco-nav-text-active: #4f46e5;   /* brand-600 */
+  --voco-nav-bg-hover:    #f1f5f9;   /* surface-100 */
+  --voco-nav-bg-active:   #eef2ff;   /* brand-50 */
+  --voco-nav-section:     #94a3b8;   /* surface-400 */
+  --voco-content-bg:      #ffffff;   /* white */
+  --voco-content-bg-alt:  #f8fafc;   /* surface-50 */
+  --voco-text:            #0f172a;   /* surface-900 */
+  --voco-text-muted:      #64748b;   /* surface-500 */
+  --voco-border:          #e2e8f0;   /* surface-200 */
+  --voco-card-bg:         #ffffff;
+  --voco-card-shadow:     0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
+  /* Acento (brand) */
+  --voco-brand:           #4f46e5;   /* indigo-600 */
+  --voco-brand-hover:     #4338ca;   /* indigo-700 */
+  --voco-accent:          #10b981;   /* emerald-500 */
+  --voco-red:             #ef4444;   /* red-500 */
+  /* WA chat (siempre oscuro — estilo WhatsApp) */
   --sb:#202c33;--hd:#2a3942;--bbl:#005c4b;--bbr:#202c33;
-  --az:#00a884;--tx:#e9edef;--ts:#8696a0;--bd:#313d45;--hl:#2a3942;--red:#e53935;
+  --az:#10b981;--tx:#e9edef;--ts:#8696a0;--bd:#313d45;--hl:#2a3942;--red:#e53935;
+}
+
+/* Tema oscuro */
+html.dark{
+  --voco-shell-bg:        #0f172a;   /* surface-900 */
+  --voco-nav-bg:          #0b1220;   /* between 900 y 950 */
+  --voco-nav-border:      #1e293b;   /* surface-800 */
+  --voco-nav-text:        #94a3b8;   /* surface-400 */
+  --voco-nav-text-hover:  #f1f5f9;   /* surface-100 */
+  --voco-nav-text-active: #818cf8;   /* brand-400 */
+  --voco-nav-bg-hover:    #1e293b;   /* surface-800 */
+  --voco-nav-bg-active:   #1e1b4b;   /* indigo-950 */
+  --voco-nav-section:     #475569;   /* surface-600 */
+  --voco-content-bg:      #0f172a;
+  --voco-content-bg-alt:  #1e293b;
+  --voco-text:            #f1f5f9;
+  --voco-text-muted:      #94a3b8;
+  --voco-border:          #1e293b;
+  --voco-card-bg:         #1e293b;
+  --voco-card-shadow:     0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
+  --voco-brand:           #818cf8;
+  --voco-brand-hover:     #a5b4fc;
 }
 
 /* ══════════════════════════════════════════════
    SHELL EXTERIOR: topbar + cuerpo
    ══════════════════════════════════════════════ */
-#shell{display:flex;flex-direction:column;height:100vh;max-height:100vh;overflow:hidden;background:#0f1923}
+#shell{display:flex;flex-direction:column;height:100vh;max-height:100vh;
+  overflow:hidden;background:var(--voco-shell-bg);color:var(--voco-text);
+  transition:background-color .15s, color .15s}
 
 /* ── TOPBAR ── */
 #topbar{
-  height:56px;background:#1b2631;display:flex;align-items:center;
+  height:56px;background:var(--voco-nav-bg);display:flex;align-items:center;
   padding:0 20px;gap:14px;flex-shrink:0;
-  border-bottom:1px solid #0e1921;
+  border-bottom:1px solid var(--voco-nav-border);
 }
 #topbar .logo{display:flex;align-items:center;gap:8px}
-#topbar .logo-ic{width:32px;height:32px;background:var(--az);border-radius:8px;
-  display:flex;align-items:center;justify-content:center;font-size:1rem}
-#topbar .logo-txt{font-size:.95rem;font-weight:700;color:#e9edef}
-#topbar .logo-sub{font-size:.72rem;color:#8696a0;margin-left:4px}
-#topbar .badge{background:var(--az);color:#fff;font-size:.68rem;padding:2px 8px;
+#topbar .logo-ic{width:32px;height:32px;background:var(--voco-brand);border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:1rem;color:#fff}
+#topbar .logo-txt{font-size:.95rem;font-weight:700;color:var(--voco-text)}
+#topbar .logo-sub{font-size:.72rem;color:var(--voco-text-muted);margin-left:4px}
+#topbar .badge{background:var(--voco-brand);color:#fff;font-size:.68rem;padding:2px 8px;
   border-radius:12px;font-weight:600;margin-left:4px}
 .topbar-spacer{flex:1}
-#logout-top{background:none;border:1px solid #2c3e50;color:#8696a0;
+#logout-top{background:none;border:1px solid var(--voco-border);color:var(--voco-text-muted);
   border-radius:8px;padding:5px 14px;font-size:.78rem;cursor:pointer;
   transition:all .15s}
-#logout-top:hover{border-color:#8696a0;color:#e9edef}
+#logout-top:hover{border-color:var(--voco-text-muted);color:var(--voco-text)}
 
 /* ── BODY: nav + main ── */
 /* min-height:0 es CRÍTICO en flex column: sin él los hijos no encogen aunque
@@ -493,24 +543,25 @@ html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sa
 
 /* ── LEFT NAV ── */
 #nav{
-  width:220px;min-width:220px;background:#162030;display:flex;
-  flex-direction:column;flex-shrink:0;border-right:1px solid #0e1921;
-  padding-top:8px;overflow:hidden;
+  width:220px;min-width:220px;background:var(--voco-nav-bg);display:flex;
+  flex-direction:column;flex-shrink:0;border-right:1px solid var(--voco-nav-border);
+  padding-top:8px;overflow:hidden;transition:background-color .15s;
 }
-.nav-section{padding:14px 16px 6px;font-size:.65rem;color:#4a6078;
+.nav-section{padding:14px 16px 6px;font-size:.65rem;color:var(--voco-nav-section);
   text-transform:uppercase;letter-spacing:.08em;font-weight:600}
 .nav-item{
   display:flex;align-items:center;gap:10px;padding:10px 18px;
-  color:#8696a0;cursor:pointer;font-size:.875rem;font-weight:500;
+  color:var(--voco-nav-text);cursor:pointer;font-size:.875rem;font-weight:500;
   transition:all .12s;border-left:3px solid transparent;user-select:none;
 }
-.nav-item:hover{background:rgba(255,255,255,.04);color:#c5cdd2}
-.nav-item.active{background:rgba(0,168,132,.10);color:var(--az);border-left-color:var(--az)}
+.nav-item:hover{background:var(--voco-nav-bg-hover);color:var(--voco-nav-text-hover)}
+.nav-item.active{background:var(--voco-nav-bg-active);color:var(--voco-nav-text-active);
+  border-left-color:var(--voco-nav-text-active);font-weight:600}
 .nav-item .ni{font-size:1rem;width:22px;text-align:center;flex-shrink:0}
-.nav-item .nb{font-size:.65rem;background:var(--red);color:#fff;
+.nav-item .nb{font-size:.65rem;background:var(--voco-red);color:#fff;
   border-radius:8px;padding:1px 5px;font-weight:700;margin-left:auto}
-.nav-footer{margin-top:auto;padding:16px 18px;border-top:1px solid #1e2e3d}
-.nav-footer small{font-size:.7rem;color:#4a6078}
+.nav-footer{margin-top:auto;padding:16px 18px;border-top:1px solid var(--voco-nav-border)}
+.nav-footer small{font-size:.7rem;color:var(--voco-nav-section)}
 
 /* ── MAIN: contenedor de secciones ── */
 #main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
