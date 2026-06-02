@@ -1521,36 +1521,36 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       <div class="nav-section">Principal</div>
       <div class="nav-item active" role="button" tabindex="0" data-sec="conversaciones"
            onclick="showSec('conversaciones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('conversaciones')">
-        <span class="ni" aria-hidden="true">💬</span> Conversaciones
+        <span class="ni" aria-hidden="true"><i data-lucide="message-circle" style="width:16px;height:16px;vertical-align:-3px"></i></span> Conversaciones
         <span class="nb" id="conv-badge" style="display:none" aria-live="polite">0</span>
       </div>
       <div class="nav-item" role="button" tabindex="0" data-sec="difusiones"
            onclick="showSec('difusiones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('difusiones')">
-        <span class="ni" aria-hidden="true">📢</span> Difusiones
+        <span class="ni" aria-hidden="true"><i data-lucide="megaphone" style="width:16px;height:16px;vertical-align:-3px"></i></span> Difusiones
       </div>
       <div class="nav-section">Gestión</div>
       <div class="nav-item" role="button" tabindex="0" data-sec="clientes"
            onclick="showSec('clientes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('clientes')">
-        <span class="ni" aria-hidden="true">👥</span> Clientes
+        <span class="ni" aria-hidden="true"><i data-lucide="users" style="width:16px;height:16px;vertical-align:-3px"></i></span> Clientes
       </div>
       <div class="nav-item" role="button" tabindex="0" data-sec="plantillas"
            onclick="showSec('plantillas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('plantillas')">
-        <span class="ni" aria-hidden="true">📋</span> Plantillas
+        <span class="ni" aria-hidden="true"><i data-lucide="file-text" style="width:16px;height:16px;vertical-align:-3px"></i></span> Plantillas
       </div>
       <div class="nav-item" role="button" tabindex="0" data-sec="metricas"
            onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')">
-        <span class="ni" aria-hidden="true">📊</span> Métricas
+        <span class="ni" aria-hidden="true"><i data-lucide="bar-chart-3" style="width:16px;height:16px;vertical-align:-3px"></i></span> Métricas
       </div>
       <div class="nav-item" role="button" tabindex="0" data-sec="escalaciones"
            onclick="showSec('escalaciones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('escalaciones')">
-        <span class="ni" aria-hidden="true">🎯</span> Escalaciones
+        <span class="ni" aria-hidden="true"><i data-lucide="alert-circle" style="width:16px;height:16px;vertical-align:-3px"></i></span> Escalaciones
         <span id="esc-badge" style="display:none;margin-left:auto;background:#ef4444;color:#fff;
           border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
       </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" role="button" tabindex="0" data-sec="configuracion"
            onclick="showSec('configuracion')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('configuracion')">
-        <span class="ni" aria-hidden="true">⚙️</span> Configuración
+        <span class="ni" aria-hidden="true"><i data-lucide="settings" style="width:16px;height:16px;vertical-align:-3px"></i></span> Configuración
       </div>
       <div class="nav-footer" style="display:flex;align-items:center;gap:8px">
         <div style="width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
