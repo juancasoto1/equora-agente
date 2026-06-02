@@ -48,7 +48,7 @@ from agent.memory import (
     # Sprint 1 — escalación multi-agente
     crear_usuario_interno, autenticar_usuario_interno, obtener_usuarios_internos,
     actualizar_usuario_interno, obtener_usuario_interno_por_id, ping_usuario_interno,
-    contar_agentes_activos,
+    contar_agentes_activos, obtener_o_crear_admin_interno,
     crear_ticket, obtener_tickets, contar_tickets,
     tomar_ticket, marcar_ticket_pendiente, resolver_ticket,
     obtener_ticket_activo_por_telefono, transferir_ticket,
@@ -3097,11 +3097,37 @@ async def api_tomar_ticket(
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
-    """El agente humano toma un ticket (sin_asignar o pendiente → activo)."""
-    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+    """El agente humano toma un ticket (sin_asignar o pendiente → activo).
+    Si quien toma es el admin SaaS (no un UsuarioInterno explícito), se
+    crea/usa automáticamente un usuario interno con rol 'admin' para que
+    el ticket quede registrado con nombre + rol."""
+    sesion = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not sesion:
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
-    agente_humano_id = body.get("agente_humano_id", 0)
+    agente_humano_id = int(body.get("agente_humano_id") or 0)
+
+    # Si el frontend no pasó un usuario interno explícito (= 0), significa que
+    # está actuando el admin SaaS o un usuario sin perfil de equipo interno.
+    # Buscamos/creamos un usuario interno tipo admin para él.
+    if not agente_humano_id:
+        # agent_id del ticket (lo necesitamos para crear el admin en el negocio correcto)
+        from agent.memory import Ticket as _T, async_session as _AS
+        from sqlalchemy import select as _sel
+        async with _AS() as _s:
+            _r = await _s.execute(_sel(_T).where(_T.id == ticket_id))
+            _tk = _r.scalar_one_or_none()
+        if _tk:
+            try:
+                admin_ui = await obtener_o_crear_admin_interno(
+                    agent_id=_tk.agent_id,
+                    email=sesion.get("email", "admin@voco.local"),
+                    nombre=sesion.get("nombre", "") or sesion.get("email", "Administrador"),
+                )
+                agente_humano_id = admin_ui["id"]
+            except Exception as e:
+                logger.warning(f"No pude obtener/crear admin interno: {e}")
+
     ticket = await tomar_ticket(ticket_id, agente_humano_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")

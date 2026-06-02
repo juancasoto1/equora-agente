@@ -2044,6 +2044,45 @@ async def obtener_usuario_interno_por_id(ui_id: int) -> dict | None:
         return _ui_to_dict(ui) if ui else None
 
 
+async def obtener_o_crear_admin_interno(
+    agent_id: int, email: str, nombre: str = ""
+) -> dict:
+    """Obtiene (o crea automáticamente) un UsuarioInterno con rol 'admin' que
+    representa al dueño/admin SaaS dentro del sistema de tickets.
+    Permite que cuando el admin toma un ticket, quede registrado con nombre + rol
+    en lugar de aparecer como 'sin agente asignado'."""
+    email_norm = (email or "admin@voco.local").lower().strip()
+    nombre_safe = nombre.strip() or "Administrador"
+    async with async_session() as session:
+        # Buscar por email + agent_id (uno por negocio)
+        result = await session.execute(
+            select(UsuarioInterno).where(
+                UsuarioInterno.agent_id == agent_id,
+                UsuarioInterno.email == email_norm,
+            )
+        )
+        ui = result.scalar_one_or_none()
+        if ui:
+            # Si cambió el nombre, lo actualizamos
+            if nombre.strip() and ui.nombre != nombre_safe:
+                ui.nombre = nombre_safe
+                await session.commit()
+            return _ui_to_dict(ui)
+        # No existe: crear uno marcado como admin del sistema
+        nuevo = UsuarioInterno(
+            agent_id=agent_id,
+            nombre=nombre_safe,
+            email=email_norm,
+            password_hash="",   # No login directo — autenticación via sesión SaaS
+            rol="admin",
+            activo=True,
+        )
+        session.add(nuevo)
+        await session.commit()
+        await session.refresh(nuevo)
+        return _ui_to_dict(nuevo)
+
+
 async def contar_agentes_activos(agent_id: int) -> int:
     """Cuenta agentes humanos activos del negocio (para verificar límite por plan)."""
     async with async_session() as session:
