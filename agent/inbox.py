@@ -148,11 +148,11 @@ body{min-height:100vh;background:#0f172a;display:flex;align-items:center;
       box-shadow:0 8px 40px rgba(0,0,0,.5);border:1px solid #334155}
 .ic{font-size:2.8rem;margin-bottom:10px}
 h2{color:#f1f5f9;font-size:1.15rem;font-weight:800;margin-bottom:4px}
-.sub{color:#64748b;font-size:.82rem;margin-bottom:28px}
+.sub{color:var(--voco-text-muted);font-size:.82rem;margin-bottom:28px}
 .err{color:#f87171;font-size:.82rem;display:block;margin-bottom:12px;
      background:#1a0a0a;border:1px solid #991b1b;border-radius:8px;padding:8px 12px;text-align:left}
 .field{text-align:left;margin-bottom:14px}
-.field label{display:block;font-size:.78rem;font-weight:600;color:#94a3b8;margin-bottom:5px}
+.field label{display:block;font-size:.78rem;font-weight:600;color:var(--voco-text-muted);margin-bottom:5px}
 input{width:100%;padding:11px 14px;border-radius:9px;border:1.5px solid #334155;
        background:#0f172a;color:#f1f5f9;font-size:.9rem;outline:none}
 input:focus{border-color:#6366f1}
@@ -161,7 +161,7 @@ button{width:100%;padding:12px;border-radius:9px;border:none;
        background:linear-gradient(135deg,#6366f1,#8b5cf6);
        color:#fff;font-size:.93rem;font-weight:700;cursor:pointer;transition:opacity .2s;margin-top:4px}
 button:hover{opacity:.88}
-.alt-link{display:block;margin-top:18px;font-size:.8rem;color:#64748b;text-decoration:none}
+.alt-link{display:block;margin-top:18px;font-size:.8rem;color:var(--voco-text-muted);text-decoration:none}
 .alt-link a{color:#818cf8;text-decoration:none}
 .alt-link a:hover{text-decoration:underline}
 """
@@ -172,19 +172,19 @@ _AUTH_EXTRA = """
 .pw-wrap{position:relative}
 .pw-wrap input{padding-right:40px}
 .pw-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);
-  background:none;border:none;width:auto;padding:0;color:#64748b;cursor:pointer;
+  background:none;border:none;width:auto;padding:0;color:var(--voco-text-muted);cursor:pointer;
   font-size:1.1rem;line-height:1;margin:0;transition:color .15s}
 .pw-eye:hover{color:#94a3b8}
 .remember-row{display:flex;align-items:center;gap:8px;margin:8px 0 4px;text-align:left}
 .remember-row input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:#6366f1}
-.remember-row label{font-size:.8rem;color:#64748b;cursor:pointer;font-weight:400;margin:0}
+.remember-row label{font-size:.8rem;color:var(--voco-text-muted);cursor:pointer;font-weight:400;margin:0}
 .divider{display:flex;align-items:center;gap:10px;margin:20px 0 16px;color:#334155;font-size:.75rem}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:#1e293b}
 .social-btn{display:flex;align-items:center;justify-content:center;gap:10px;
   width:100%;padding:10px;border-radius:9px;border:1.5px solid #334155;
   background:#0f172a;color:#cbd5e1;font-size:.88rem;font-weight:600;
   cursor:pointer;transition:all .18s;margin-bottom:10px;text-decoration:none}
-.social-btn:hover{border-color:#475569;background:#1e293b;color:#f1f5f9}
+.social-btn:hover{border-color:var(--voco-text-muted);background:#1e293b;color:#f1f5f9}
 .social-btn svg{width:18px;height:18px;flex-shrink:0}
 """
 
@@ -847,7 +847,7 @@ html.dark{
 .tog{position:relative;display:inline-block;width:40px;height:22px}
 .tog input{opacity:0;width:0;height:0}
 .sl{position:absolute;inset:0;background:#555;border-radius:22px;transition:.25s;cursor:pointer}
-.sl::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.25s}
+.sl::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:var(--voco-card-bg);border-radius:50%;transition:.25s}
 .tog input:checked+.sl{background:var(--red)}
 .tog input:checked+.sl::before{transform:translateX(18px)}
 #mlbl{font-size:.76rem;color:var(--red);font-weight:600;display:none}
@@ -911,7 +911,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .badge-ok{background:#d4edda;color:#155724;border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:600}
 .badge-warn{background:#fff3cd;color:#856404;border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:600}
 .badge-err{background:#f8d7da;color:#721c24;border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:600}
-.badge-pend{background:#e2e8f0;color:#4a5568;border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:600}
+.badge-pend{background:#e2e8f0;color:var(--voco-text-muted);border-radius:6px;padding:2px 8px;font-size:.72rem;font-weight:600}
 
 /* Formularios light */
 .form-card{background:var(--voco-card-bg);border-radius:12px;border:1px solid var(--voco-border);padding:24px}
@@ -925,18 +925,18 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 /* Doc cards */
 .doc-section{margin-bottom:32px}
 .doc-section-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
-  color:#6b7a8d;margin:0 0 14px;padding-bottom:6px;border-bottom:1px solid #e8ecf0}
+  color:var(--voco-text-muted);margin:0 0 14px;padding-bottom:6px;border-bottom:1px solid #e8ecf0}
 .doc-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:700px){.doc-grid{grid-template-columns:1fr}}
-.doc-card{background:#fff;border:1px solid #e0e4e8;border-radius:12px;padding:20px}
-.doc-card-title{font-weight:700;color:#1a2332;font-size:.9rem;margin-bottom:12px;
+.doc-card{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:12px;padding:20px}
+.doc-card-title{font-weight:700;color:var(--voco-text);font-size:.9rem;margin-bottom:12px;
   display:flex;align-items:center;gap:8px}
-.doc-formula{background:#f5f7ff;border-left:3px solid var(--az);border-radius:0 8px 8px 0;
+.doc-formula{background:var(--voco-nav-bg-active);border-left:3px solid var(--az);border-radius:0 8px 8px 0;
   padding:10px 14px;font-family:monospace;font-size:.83rem;color:#2d3a6b;margin:8px 0;line-height:1.6}
 .doc-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:10px}
-.doc-table th{text-align:left;font-weight:700;color:#4a5568;padding:6px 10px;
-  border-bottom:2px solid #e8ecf0;white-space:nowrap}
-.doc-table td{padding:7px 10px;border-bottom:1px solid #f0f2f5;color:#2d3748;vertical-align:top}
+.doc-table th{text-align:left;font-weight:700;color:var(--voco-text-muted);padding:6px 10px;
+  border-bottom:2px solid var(--voco-border);white-space:nowrap}
+.doc-table td{padding:7px 10px;border-bottom:1px solid var(--voco-border);color:var(--voco-text);vertical-align:top}
 .doc-table tr:last-child td{border-bottom:none}
 .doc-chip{display:inline-block;font-size:.72rem;font-weight:700;padding:2px 8px;
   border-radius:4px;margin-left:6px}
@@ -984,10 +984,10 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
   font-weight:600;flex:1;min-width:140px;justify-content:center;transition:background .2s}
 #dif-csv-label:hover{background:#e0f5ee}
 #dif-csv-input{display:none}
-#dif-csv-stats{font-size:.78rem;margin-top:4px;padding:8px 12px;border-radius:8px;display:none;background:#f8f9fa;border:1px solid #e0e4e8}
-#dif-csv-fname{font-size:.76rem;color:#6b7a8d;margin-bottom:4px}
-.btn-dl-csv{display:flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #e0e4e8;
-  border-radius:8px;padding:8px 14px;color:#6b7a8d;font-size:.83rem;cursor:pointer;
+#dif-csv-stats{font-size:.78rem;margin-top:4px;padding:8px 12px;border-radius:8px;display:none;background:var(--voco-content-bg-alt);border:1px solid #e0e4e8}
+#dif-csv-fname{font-size:.76rem;color:var(--voco-text-muted);margin-bottom:4px}
+.btn-dl-csv{display:flex;align-items:center;gap:5px;background:var(--voco-card-bg);border:1.5px solid #e0e4e8;
+  border-radius:8px;padding:8px 14px;color:var(--voco-text-muted);font-size:.83rem;cursor:pointer;
   font-weight:600;transition:all .2s;white-space:nowrap}
 .btn-dl-csv:hover{border-color:var(--az);color:var(--az)}
 /* historial abajo */
@@ -997,49 +997,49 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
   display:flex;align-items:center;justify-content:center;padding:16px;
   animation:fadeIn .15s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-.modal-box{background:#fff;border-radius:18px;max-width:780px;width:100%;
+.modal-box{background:var(--voco-card-bg);border-radius:18px;max-width:780px;width:100%;
   max-height:90vh;overflow-y:auto;padding:32px;
   box-shadow:0 24px 64px rgba(0,0,0,.22);animation:slideUp .2s ease}
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px}
 .modal-title{font-size:1.1rem;font-weight:700;color:#1a2332}
-.modal-sub{font-size:.78rem;color:#6b7a8d;margin-top:4px}
+.modal-sub{font-size:.78rem;color:var(--voco-text-muted);margin-top:4px}
 .modal-close{background:none;border:1.5px solid #e0e4e8;border-radius:8px;
-  width:34px;height:34px;cursor:pointer;font-size:1rem;color:#6b7a8d;
+  width:34px;height:34px;cursor:pointer;font-size:1rem;color:var(--voco-text-muted);
   display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
-.modal-close:hover{background:#f5f7fa;color:#1a2332;border-color:#cbd5e0}
+.modal-close:hover{background:#f5f7fa;color:var(--voco-text);border-color:#cbd5e0}
 /* stat cards del modal */
 .det-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
 @media(max-width:600px){.det-cards{grid-template-columns:repeat(2,1fr)}}
 .det-card{border-radius:12px;padding:16px 12px;text-align:center}
 .det-card-val{font-size:1.7rem;font-weight:800;line-height:1.1}
-.det-card-lbl{font-size:.68rem;color:#6b7a8d;margin-top:5px;font-weight:700;
+.det-card-lbl{font-size:.68rem;color:var(--voco-text-muted);margin-top:5px;font-weight:700;
   text-transform:uppercase;letter-spacing:.05em}
 /* funnel */
 .funnel-section{margin-bottom:24px}
-.funnel-section h4{font-size:.82rem;font-weight:700;color:#4a5568;
+.funnel-section h4{font-size:.82rem;font-weight:700;color:var(--voco-text-muted);
   text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
 .funnel-row{display:flex;align-items:center;gap:10px;margin-bottom:7px}
-.funnel-lbl{font-size:.75rem;color:#6b7a8d;width:82px;text-align:right;flex-shrink:0}
+.funnel-lbl{font-size:.75rem;color:var(--voco-text-muted);width:82px;text-align:right;flex-shrink:0}
 .funnel-wrap{flex:1;background:#f0f2f5;border-radius:6px;height:24px;overflow:hidden}
 .funnel-fill{height:100%;border-radius:6px;display:flex;align-items:center;
   padding-left:10px;font-size:.74rem;font-weight:700;color:#fff;
   transition:width .7s cubic-bezier(.4,0,.2,1);min-width:2px}
-.funnel-cnt{font-size:.78rem;font-weight:700;color:#2d3748;width:70px;flex-shrink:0;white-space:nowrap}
+.funnel-cnt{font-size:.78rem;font-weight:700;color:var(--voco-text);width:70px;flex-shrink:0;white-space:nowrap}
 /* tabla de errores */
-.det-err-section h4{font-size:.82rem;font-weight:700;color:#4a5568;
+.det-err-section h4{font-size:.82rem;font-weight:700;color:var(--voco-text-muted);
   text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px}
 .det-errtbl{width:100%;border-collapse:collapse;font-size:.81rem}
-.det-errtbl th{background:#f8f9fa;padding:9px 12px;text-align:left;font-weight:600;
-  color:#4a5568;border-bottom:2px solid #e0e4e8;white-space:nowrap}
-.det-errtbl td{padding:10px 12px;border-bottom:1px solid #f0f2f5;vertical-align:top}
+.det-errtbl th{background:var(--voco-content-bg-alt);padding:9px 12px;text-align:left;font-weight:600;
+  color:var(--voco-text-muted);border-bottom:2px solid #e0e4e8;white-space:nowrap}
+.det-errtbl td{padding:10px 12px;border-bottom:1px solid var(--voco-border);vertical-align:top}
 .det-errtbl tr:last-child td{border-bottom:none}
 .err-badge{background:#fff3cd;color:#856404;border:1px solid #ffc107;
   border-radius:5px;padding:2px 8px;font-size:.7rem;font-weight:700;display:inline-block}
-.err-nums{color:#6b7a8d;font-size:.73rem;margin-top:3px;font-family:'Courier New',monospace}
+.err-nums{color:var(--voco-text-muted);font-size:.73rem;margin-top:3px;font-family:'Courier New',monospace}
 /* separador cargue manual */
 .dif-manual-hdr{display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:700;
-  color:#2d3748;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #e0e4e8}
+  color:var(--voco-text);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid #e0e4e8}
 /* preview WhatsApp difusión */
 #dif-wa-prev-col{width:240px;flex-shrink:0;position:sticky;top:20px}
 /* vars */
@@ -1051,39 +1051,39 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .tpl-status-rejected{color:#721c24}
 .tpl-status-paused{color:#495057}
 .req{color:var(--red)}
-.opt-badge{background:#e2e8f0;color:#4a5568;border-radius:4px;padding:1px 7px;
+.opt-badge{background:#e2e8f0;color:var(--voco-text-muted);border-radius:4px;padding:1px 7px;
   font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;vertical-align:middle}
-.sep-label{font-size:.82rem;font-weight:700;color:#2d3748;margin:18px 0 10px;padding-bottom:7px;
+.sep-label{font-size:.82rem;font-weight:700;color:var(--voco-text);margin:18px 0 10px;padding-bottom:7px;
   border-bottom:1.5px solid #e0e4e8;display:flex;align-items:center;gap:8px}
 .info-box{background:#f0f9ff;border:1px solid #bee3f8;border-radius:8px;padding:10px 14px;
   font-size:.79rem;color:#2c5282;line-height:1.65;margin-bottom:10px}
 .info-box code{background:#dbeafe;padding:1px 5px;border-radius:4px;font-family:monospace;font-size:.78rem}
 .info-box b{color:#1a365d}
-.char-counter{font-size:.71rem;color:#6b7a8d;text-align:right;margin-top:3px}
+.char-counter{font-size:.71rem;color:var(--voco-text-muted);text-align:right;margin-top:3px}
 .char-counter.warn{color:#c05621;font-weight:600}
 /* Radio styled buttons */
 .radio-group{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
-.radio-opt{display:flex;align-items:center;gap:6px;font-size:.83rem;color:#4a5568;cursor:pointer;
-  background:#f8f9fa;border:1.5px solid #e0e4e8;border-radius:8px;padding:7px 13px;
+.radio-opt{display:flex;align-items:center;gap:6px;font-size:.83rem;color:var(--voco-text-muted);cursor:pointer;
+  background:var(--voco-content-bg-alt);border:1.5px solid #e0e4e8;border-radius:8px;padding:7px 13px;
   transition:all .12s;user-select:none}
 .radio-opt input[type="radio"]{accent-color:var(--az);flex-shrink:0}
 .radio-opt.chk{border-color:var(--az);background:#f0f9f6;color:#1a7a5e;font-weight:600}
 /* Upload zones */
 .upload-zone{border:2px dashed #cbd5e0;border-radius:10px;padding:26px 20px;text-align:center;
-  cursor:pointer;transition:all .15s;background:#fafbfc;margin-bottom:6px}
+  cursor:pointer;transition:all .15s;background:var(--voco-content-bg-alt);margin-bottom:6px}
 .upload-zone:hover,.upload-zone.drag{border-color:var(--az);background:#f0f9f6}
 .upload-zone .uz-ic{font-size:1.8rem;margin-bottom:6px}
-.upload-zone .uz-title{font-size:.88rem;font-weight:600;color:#4a5568;margin-bottom:3px}
+.upload-zone .uz-title{font-size:.88rem;font-weight:600;color:var(--voco-text-muted);margin-bottom:3px}
 .upload-zone .uz-hint{font-size:.74rem;color:#6b7a8d}
 .file-preview{display:flex;align-items:center;gap:10px;background:#f0f9f6;
   border:1px solid #9ae6b4;border-radius:8px;padding:10px 14px;margin-top:6px;font-size:.84rem}
 .fp-ic{font-size:1.2rem;flex-shrink:0}
 .fp-name{font-weight:600;color:#155724;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fp-size{color:#6b7a8d;font-size:.74rem;flex-shrink:0}
+.fp-size{color:var(--voco-text-muted);font-size:.74rem;flex-shrink:0}
 .fp-remove{cursor:pointer;color:var(--red);font-size:1rem;flex-shrink:0;
   background:none;border:none;padding:0 4px;line-height:1}
 /* Botones form */
-.btn-remove{background:none;border:1px solid #e0e4e8;border-radius:6px;color:#6b7a8d;
+.btn-remove{background:none;border:1px solid var(--voco-border);border-radius:6px;color:var(--voco-text-muted);
   cursor:pointer;padding:5px 9px;font-size:.82rem;flex-shrink:0;transition:all .12s}
 .btn-remove:hover{border-color:var(--red);color:var(--red)}
 .qr-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
@@ -1091,15 +1091,15 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .cta-row .f-inp,.cta-row .f-sel{margin:0}
 /* Unified button builder */
 .btn-add-wrap{position:relative;display:inline-block}
-.btn-type-menu{display:none;position:absolute;left:0;top:calc(100% + 4px);background:#fff;
-  border:1px solid #dde1e7;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.13);
+.btn-type-menu{display:none;position:absolute;left:0;top:calc(100% + 4px);background:var(--voco-card-bg);
+  border:1px solid var(--voco-border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.13);
   z-index:300;min-width:230px;overflow:hidden}
 .btn-type-menu.open{display:block}
-.btn-menu-item{padding:10px 16px;font-size:.84rem;color:#1a2332;cursor:pointer;
-  border-bottom:1px solid #f0f2f5;display:flex;align-items:center;gap:8px;transition:background .1s}
+.btn-menu-item{padding:10px 16px;font-size:.84rem;color:var(--voco-text);cursor:pointer;
+  border-bottom:1px solid var(--voco-border);display:flex;align-items:center;gap:8px;transition:background .1s}
 .btn-menu-item:last-child{border-bottom:none}
 .btn-menu-item:hover{background:#f5f7ff}
-.ubn-row{background:#fafbfc;border:1px solid #e0e4e8;border-radius:8px;
+.ubn-row{background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);border-radius:8px;
   padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:6px}
 .ubn-hdr{display:flex;align-items:center;gap:8px}
 .ubn-type-badge{font-size:.71rem;font-weight:700;padding:2px 7px;border-radius:4px;
@@ -1110,7 +1110,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .ubn-badge-wacall{background:#e8f5e9;color:#1b5e20}
 .ubn-badge-flow{background:#f3e5f5;color:#6a1b9a}
 .ubn-badge-code{background:#fff8e1;color:#f57f17}
-.ubn-cnt{font-size:.7rem;color:#6b7a8d;white-space:nowrap;flex-shrink:0}
+.ubn-cnt{font-size:.7rem;color:var(--voco-text-muted);white-space:nowrap;flex-shrink:0}
 .progress-upload{display:none;align-items:center;gap:8px;font-size:.8rem;color:var(--az);
   background:#f0f9f6;border-radius:8px;padding:8px 14px;margin-top:8px}
 .progress-upload .pu-spinner{animation:spin 1s linear infinite;font-size:1rem}
@@ -1124,7 +1124,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .wa-phone-bar .wa-name{color:#fff;font-size:.82rem;font-weight:600}
 .wa-phone-bar .wa-sub{color:#b2dfdb;font-size:.68rem}
 .wa-chat{padding:10px 8px 16px;min-height:200px;background:#e5ddd5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' opacity='.06'%3E%3Ctext y='50' font-size='50'%3E💬%3C/text%3E%3C/svg%3E")}
-.wa-bubble{background:#fff;border-radius:0 10px 10px 10px;margin:0 4px;box-shadow:0 1px 2px rgba(0,0,0,.15);overflow:hidden;max-width:220px;position:relative}
+.wa-bubble{background:var(--voco-card-bg);border-radius:0 10px 10px 10px;margin:0 4px;box-shadow:0 1px 2px rgba(0,0,0,.15);overflow:hidden;max-width:220px;position:relative}
 .wa-hdr-img{width:100%;background:#25d366 linear-gradient(135deg,#1a8a5a 0%,#25d366 100%);min-height:110px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;color:#fff;position:relative;overflow:hidden}
 .wa-hdr-img img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
 .wa-hdr-img .wa-hdr-emoji{position:relative;z-index:1}
@@ -1140,30 +1140,30 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .wa-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:9px 12px;color:#128c7e;font-size:.78rem;font-weight:600;border-bottom:1px solid #e9ecef;cursor:default;text-align:center}
 .wa-btn:last-child{border-bottom:none}
 .wa-btn .wa-btn-ic{font-size:.9rem}
-.wa-preview-label{font-size:.72rem;color:#6b7a8d;text-align:center;margin-top:8px;font-style:italic}
+.wa-preview-label{font-size:.72rem;color:var(--voco-text-muted);text-align:center;margin-top:8px;font-style:italic}
 
 /* ── CONFIGURACIÓN — legacy (puede quedar para otros usos) ── */
 .config-item{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid #f0f2f5}
 .config-item:last-child{border-bottom:none}
-.config-key{font-size:.84rem;font-weight:600;color:#2d3748;flex:1}
-.config-val{font-size:.82rem;color:#6b7a8d;background:#f0f2f5;border-radius:6px;padding:3px 10px;
+.config-key{font-size:.84rem;font-weight:600;color:var(--voco-text);flex:1}
+.config-val{font-size:.82rem;color:var(--voco-text-muted);background:#f0f2f5;border-radius:6px;padding:3px 10px;
   font-family:monospace;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .config-ok{color:var(--az);font-weight:700;font-size:.84rem}
 .config-miss{color:var(--red);font-weight:700;font-size:.84rem}
 /* ── CONFIGURACIÓN — cards interactivas ── */
 .cfg-overview{display:flex;gap:12px;margin-bottom:28px;flex-wrap:wrap}
-.cfg-ov-item{background:#fff;border:1px solid #e0e4e8;border-radius:12px;padding:14px 20px;
+.cfg-ov-item{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:12px;padding:14px 20px;
   display:flex;align-items:center;gap:12px;flex:1;min-width:160px}
 .cfg-ov-icon{font-size:1.5rem;flex-shrink:0}
-.cfg-ov-name{font-weight:700;color:#1a2332;font-size:.86rem}
+.cfg-ov-name{font-weight:700;color:var(--voco-text);font-size:.86rem}
 .cfg-ov-status{font-size:.76rem;margin-top:2px}
 .cfg-pill-ok{color:#2d7d32;font-weight:600}
 .cfg-pill-err{color:#c62828;font-weight:600}
 .cfg-pill-pend{color:#8a94a6}
-.cfg-card{background:#fff;border:1px solid #e0e4e8;border-radius:14px;
+.cfg-card{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:14px;
   padding:24px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 /* Sistema — luces de estado */
-.sistema-item{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px}
+.sistema-item{background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px}
 .sistema-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .sistema-dot{width:10px;height:10px;border-radius:50%;background:#cbd5e0;flex-shrink:0;
   transition:background .2s}
@@ -1174,13 +1174,13 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .sistema-dot.loading{background:#94a3b8;animation:dot-pulse 1s infinite}
 @keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .sistema-name{font-weight:700;font-size:.86rem;color:#1a2332}
-.sistema-msg{font-size:.8rem;color:#475569;margin-bottom:4px}
-.sistema-detalle{font-size:.72rem;color:#94a3b8;line-height:1.4}
+.sistema-msg{font-size:.8rem;color:var(--voco-text-muted);margin-bottom:4px}
+.sistema-detalle{font-size:.72rem;color:var(--voco-text-muted);line-height:1.4}
 .sistema-sugerencia{font-size:.74rem;color:#dc2626;margin-top:6px;padding:6px 8px;
   background:#fef2f2;border-radius:6px;border-left:3px solid #ef4444}
 .cfg-card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;
   padding-bottom:16px;border-bottom:1px solid #f0f2f5}
-.cfg-card-title{font-weight:700;color:#1a2332;font-size:1rem}
+.cfg-card-title{font-weight:700;color:var(--voco-text);font-size:1rem}
 .cfg-status-pill{font-size:.74rem;font-weight:700;padding:4px 12px;border-radius:20px;white-space:nowrap}
 .cfg-pill-connected{background:#e8f5e9;color:#2d7d32}
 .cfg-pill-error{background:#fce4e4;color:#c62828}
@@ -1190,13 +1190,13 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
   font-size:.78rem;font-weight:800;display:flex;align-items:center;justify-content:center;
   flex-shrink:0;margin-top:2px}
 .cfg-step-body{flex:1}
-.cfg-field-lbl{font-size:.84rem;font-weight:600;color:#2d3748;margin-bottom:6px;
+.cfg-field-lbl{font-size:.84rem;font-weight:600;color:var(--voco-text);margin-bottom:6px;
   display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .cfg-help-btn{background:none;border:1px solid #c9d0da;border-radius:50%;width:18px;height:18px;
-  font-size:.7rem;font-weight:700;color:#6b7a8d;cursor:pointer;display:inline-flex;
+  font-size:.7rem;font-weight:700;color:var(--voco-text-muted);cursor:pointer;display:inline-flex;
   align-items:center;justify-content:center;padding:0;flex-shrink:0;line-height:1}
 .cfg-help-btn:hover{background:#eef2ff;border-color:var(--az);color:var(--az)}
-.cfg-help-box{display:none;background:#f5f7ff;border:1px solid #d0d8f0;border-radius:8px;
+.cfg-help-box{display:none;background:var(--voco-nav-bg-active);border:1px solid #d0d8f0;border-radius:8px;
   padding:12px 14px;font-size:.79rem;color:#3a4a6b;line-height:1.65;margin-bottom:10px}
 .cfg-help-box a{color:var(--az)}
 .cfg-help-box.open{display:block}
@@ -1205,7 +1205,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .cfg-input-wrap .f-inp{padding-right:38px}
 .cfg-inp{flex:1}
 .cfg-eye-btn{position:absolute;right:10px;background:none;border:none;cursor:pointer;
-  font-size:.85rem;padding:0;color:#8a94a6;line-height:1}
+  font-size:.85rem;padding:0;color:var(--voco-text-muted);line-height:1}
 .cfg-eye-btn:hover{color:#1a2332}
 .cfg-field-status{font-size:.95rem;flex-shrink:0;width:20px;text-align:center}
 .cfg-actions{display:flex;gap:10px;align-items:center;margin-top:22px;
@@ -1218,14 +1218,14 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 /* ── Prompt editor ─────────────────────────────────────────── */
 .prompt-editor-wrap{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
 @media(max-width:900px){.prompt-editor-wrap{grid-template-columns:1fr}}
-.prompt-left,.prompt-right{background:#fff;border:1px solid #e0e4e8;border-radius:14px;padding:20px}
+.prompt-left,.prompt-right{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:14px;padding:20px}
 .prompt-ta{width:100%;height:420px;font-family:monospace;font-size:.8rem;line-height:1.6;
-  border:1px solid #dde1e8;border-radius:8px;padding:12px;resize:vertical;
-  color:#1a2332;background:#fafbfc;outline:none;box-sizing:border-box}
+  border:1px solid var(--voco-border);border-radius:8px;padding:12px;resize:vertical;
+  color:var(--voco-text);background:var(--voco-content-bg-alt);outline:none;box-sizing:border-box}
 .prompt-ta:focus{border-color:var(--az);background:#fff}
 .prompt-instruccion-ta{width:100%;height:110px;font-size:.83rem;line-height:1.6;
-  border:1px solid #dde1e8;border-radius:8px;padding:10px;resize:vertical;
-  color:#1a2332;outline:none;box-sizing:border-box;margin-bottom:8px}
+  border:1px solid var(--voco-border);border-radius:8px;padding:10px;resize:vertical;
+  color:var(--voco-text);outline:none;box-sizing:border-box;margin-bottom:8px}
 .prompt-instruccion-ta:focus{border-color:var(--az)}
 /* ── SPRINT 4: Adjuntar media ── */
 .attach-opt{display:flex;align-items:center;gap:10px;padding:8px 12px;color:#e9edef;
@@ -1246,15 +1246,15 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
   padding:10px 12px;border-radius:8px;min-width:220px;gap:4px;text-decoration:none;color:inherit}
 .media-prod{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,.15);
   padding:10px;border-radius:8px;min-width:240px}
-.media-prod-img{width:50px;height:50px;border-radius:6px;background:#fff;object-fit:cover;flex-shrink:0}
+.media-prod-img{width:50px;height:50px;border-radius:6px;background:var(--voco-card-bg);object-fit:cover;flex-shrink:0}
 .media-caption{margin-top:6px;font-size:.86rem;line-height:1.35}
 /* Resultados de catálogo */
 .cat-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:7px;
   cursor:pointer;border:1px solid transparent;transition:all .12s}
-.cat-item:hover{background:#f0f4ff;border-color:#c7d2fe}
-.cat-item-img{width:42px;height:42px;border-radius:6px;background:#f1f5f9;object-fit:cover;flex-shrink:0}
+.cat-item:hover{background:var(--voco-nav-bg-active);border-color:#c7d2fe}
+.cat-item-img{width:42px;height:42px;border-radius:6px;background:var(--voco-nav-bg-hover);object-fit:cover;flex-shrink:0}
 .cat-item-info{flex:1;min-width:0}
-.cat-item-titulo{font-weight:600;font-size:.84rem;color:#1a2332;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-item-titulo{font-weight:600;font-size:.84rem;color:var(--voco-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cat-item-precio{font-size:.78rem;color:#16a34a;font-weight:700}
 
 /* ── Escalaciones ── */
@@ -1324,7 +1324,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
   font-weight:600;color:#4f46e5;background:#eef2ff;border:1px solid #c7d2fe;
   border-radius:6px;padding:4px 10px;cursor:pointer;white-space:nowrap;transition:background .15s}
 .btn-attach:hover{background:#e0e7ff}
-.img-paste-hint{font-size:.72rem;color:#94a3b8;line-height:1.3}
+.img-paste-hint{font-size:.72rem;color:var(--voco-text-muted);line-height:1.3}
 .btn-improve{width:100%;padding:11px;background:linear-gradient(135deg,#4f46e5,#7c3aed);
   color:#fff;border:none;border-radius:8px;font-weight:700;font-size:.88rem;cursor:pointer;
   transition:opacity .15s}
@@ -1332,12 +1332,12 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .btn-improve:disabled{opacity:.5;cursor:not-allowed}
 /* Variables table */
 .vars-table{width:100%;border-collapse:collapse;font-size:.83rem}
-.vars-table th{text-align:left;padding:8px 10px;color:#6b7a8d;font-weight:600;
-  border-bottom:2px solid #e8ecf0;background:#f8fafc}
-.vars-table td{padding:6px 6px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+.vars-table th{text-align:left;padding:8px 10px;color:var(--voco-text-muted);font-weight:600;
+  border-bottom:2px solid var(--voco-border);background:#f8fafc}
+.vars-table td{padding:6px 6px;border-bottom:1px solid var(--voco-border);vertical-align:middle}
 .vars-key-inp{font-family:monospace;font-size:.8rem;font-weight:700;color:#4f46e5;
-  border:1px solid #e0e4e8;border-radius:6px;padding:5px 8px;width:100%;background:#f5f3ff}
-.vars-val-inp{font-size:.82rem;border:1px solid #e0e4e8;border-radius:6px;
+  border:1px solid var(--voco-border);border-radius:6px;padding:5px 8px;width:100%;background:#f5f3ff}
+.vars-val-inp{font-size:.82rem;border:1px solid var(--voco-border);border-radius:6px;
   padding:5px 8px;width:100%;background:#fff}
 .vars-key-inp:focus,.vars-val-inp:focus{outline:none;border-color:var(--az)}
 .vars-del-btn{background:none;border:none;color:#e53935;font-size:1rem;cursor:pointer;
@@ -1345,7 +1345,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .vars-del-btn:hover{background:#fce4e4}
 /* Diff */
 .prompt-diff{font-family:monospace;font-size:.76rem;line-height:1.7;
-  background:#fafbfc;border:1px solid #e0e4e8;border-radius:8px;padding:12px;
+  background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);border-radius:8px;padding:12px;
   max-height:280px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
 .diff-add{background:#e8f5e9;color:#1b5e20}
 .diff-del{background:#fce4e4;color:#b71c1c;text-decoration:line-through}
@@ -1353,7 +1353,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 /* ── Business type selector ── */
 .biz-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px}
 .biz-type-btn{border:2px solid #e0e4e8;border-radius:10px;padding:12px 10px;text-align:center;
-  cursor:pointer;background:#fff;transition:.18s;font-size:.82rem;color:#4a5568;line-height:1.4;
+  cursor:pointer;background:var(--voco-card-bg);transition:.18s;font-size:.82rem;color:var(--voco-text-muted);line-height:1.4;
   user-select:none}
 .biz-type-btn:hover{border-color:var(--az);background:#eef2ff}
 .biz-type-btn.selected{border-color:var(--az);background:#eef2ff;color:var(--az);font-weight:700}
@@ -1362,18 +1362,18 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .toggle-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
 @media(max-width:540px){.toggle-grid{grid-template-columns:1fr}}
 .toggle-card{border:1.5px solid #e0e4e8;border-radius:10px;padding:12px 14px;
-  display:flex;align-items:flex-start;gap:12px;background:#fff;transition:.18s}
+  display:flex;align-items:flex-start;gap:12px;background:var(--voco-card-bg);transition:.18s}
 .toggle-card.active{border-color:#d1fae5;background:#f0fdf4}
 .toggle-card-text{flex:1;min-width:0}
-.toggle-card-label{font-size:.84rem;font-weight:700;color:#1a2332;margin-bottom:2px}
-.toggle-card-desc{font-size:.76rem;color:#6b7a8d;line-height:1.4}
+.toggle-card-label{font-size:.84rem;font-weight:700;color:var(--voco-text);margin-bottom:2px}
+.toggle-card-desc{font-size:.76rem;color:var(--voco-text-muted);line-height:1.4}
 /* pill toggle switch */
 .tog-sw{position:relative;width:38px;height:22px;flex-shrink:0;margin-top:2px}
 .tog-sw input{opacity:0;width:0;height:0;position:absolute}
 .tog-slider{position:absolute;inset:0;border-radius:22px;background:#cbd5e1;
   cursor:pointer;transition:.2s}
 .tog-slider:before{content:'';position:absolute;width:16px;height:16px;border-radius:50%;
-  left:3px;bottom:3px;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  left:3px;bottom:3px;background:var(--voco-card-bg);transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
 .tog-sw input:checked + .tog-slider{background:#22c55e}
 .tog-sw input:checked + .tog-slider:before{transform:translateX(16px)}
 /* ── Test chat (Fase C) ── */
@@ -1383,10 +1383,10 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .chat-msg{max-width:78%;padding:9px 13px;border-radius:14px;font-size:.87rem;line-height:1.5;
   word-break:break-word;position:relative}
 .chat-msg.user{align-self:flex-end;background:#dcf8c6;border-radius:14px 14px 4px 14px;color:#1a2332}
-.chat-msg.assistant{align-self:flex-start;background:#fff;border-radius:14px 14px 14px 4px;
+.chat-msg.assistant{align-self:flex-start;background:var(--voco-card-bg);border-radius:14px 14px 14px 4px;
   box-shadow:0 1px 2px rgba(0,0,0,.08);color:#1a2332}
-.chat-msg-time{font-size:.66rem;color:#94a3b8;margin-top:3px;text-align:right}
-.chat-typing{align-self:flex-start;background:#fff;border-radius:14px;padding:10px 14px;
+.chat-msg-time{font-size:.66rem;color:var(--voco-text-muted);margin-top:3px;text-align:right}
+.chat-typing{align-self:flex-start;background:var(--voco-card-bg);border-radius:14px;padding:10px 14px;
   display:flex;gap:4px;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .chat-typing span{width:7px;height:7px;border-radius:50%;background:#94a3b8;
   animation:typing-dot 1s ease-in-out infinite}
@@ -1396,7 +1396,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .chat-input-bar{display:flex;gap:8px;padding:10px 12px;background:#f0f0f0;
   border-top:1px solid #e0e4e8;align-items:flex-end}
 .chat-inp{flex:1;border:none;border-radius:20px;padding:9px 14px;font-size:.87rem;
-  background:#fff;resize:none;max-height:100px;outline:none;line-height:1.4;
+  background:var(--voco-card-bg);resize:none;max-height:100px;outline:none;line-height:1.4;
   font-family:inherit;box-shadow:0 1px 2px rgba(0,0,0,.07)}
 .chat-send-btn{background:var(--az);border:none;border-radius:50%;width:40px;height:40px;
   display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
@@ -1404,7 +1404,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .chat-send-btn:hover{filter:brightness(1.1)}
 .chat-send-btn:disabled{opacity:.5;cursor:not-allowed}
 /* ── loading spinner ── */
-.loading-txt{color:#6b7a8d;font-size:.85rem;padding:32px;text-align:center}
+.loading-txt{color:var(--voco-text-muted);font-size:.85rem;padding:32px;text-align:center}
 
 /* ── Focus visible — accesibilidad teclado ── */
 .nav-item:focus-visible{outline:2px solid var(--az);outline-offset:-2px;border-radius:4px}
@@ -1441,7 +1441,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .ec-activo{background:#f0fdf4;border-color:#86efac}.ec-activo::before{background:#16a34a}
 .ec-tibio {background:#fffbeb;border-color:#fcd34d}.ec-tibio::before{background:#d97706}
 .ec-frio  {background:#eff6ff;border-color:#93c5fd}.ec-frio::before{background:#2563eb}
-.ec-baja  {background:#f8fafc;border-color:#cbd5e1}.ec-baja::before{background:#64748b}
+.ec-baja  {background:var(--voco-content-bg-alt);border-color:#cbd5e1}.ec-baja::before{background:#64748b}
 .ec-val{font-size:2rem;font-weight:800;line-height:1;margin-bottom:6px}
 .ec-total .ec-val{color:#00875a}
 .ec-activo .ec-val{color:#15803d}
@@ -1449,25 +1449,25 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .ec-frio   .ec-val{color:#1d4ed8}
 .ec-baja   .ec-val{color:#475569}
 .ec-lbl{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4a5568}
-.ec-sub{font-size:.7rem;color:#6b7a8d;margin-top:3px}
+.ec-sub{font-size:.7rem;color:var(--voco-text-muted);margin-top:3px}
 
 /* Filter pills */
 .cli-filters{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-.cli-pill{padding:6px 16px;border-radius:20px;border:1.5px solid #e0e4e8;background:#fff;
-  font-size:.8rem;font-weight:600;color:#4a5568;cursor:pointer;transition:all .12s;user-select:none}
+.cli-pill{padding:6px 16px;border-radius:20px;border:1.5px solid #e0e4e8;background:var(--voco-card-bg);
+  font-size:.8rem;font-weight:600;color:var(--voco-text-muted);cursor:pointer;transition:all .12s;user-select:none}
 .cli-pill:hover{border-color:#b0bec5;color:#2d3748}
 .cli-pill.active{background:var(--az);border-color:var(--az);color:#fff}
 .cli-search{flex:1;min-width:160px;max-width:280px;position:relative}
 .cli-search input{width:100%;padding:7px 12px 7px 34px;border-radius:20px;border:1.5px solid #e0e4e8;
-  font-size:.82rem;color:#2d3748;outline:none;transition:border-color .15s;background:#fff}
+  font-size:.82rem;color:var(--voco-text);outline:none;transition:border-color .15s;background:#fff}
 .cli-search input:focus{border-color:var(--az)}
 .cli-search::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);
   font-size:.8rem;pointer-events:none}
 
 /* Tabla clientes */
-.cli-tbl-wrap{background:#fff;border-radius:14px;border:1px solid #e0e4e8;overflow:hidden}
-.cli-tbl-info{padding:12px 20px;background:#f8f9fa;border-bottom:1px solid #e0e4e8;
-  font-size:.78rem;color:#6b7a8d;display:flex;align-items:center;gap:8px}
+.cli-tbl-wrap{background:var(--voco-card-bg);border-radius:14px;border:1px solid var(--voco-border);overflow:hidden}
+.cli-tbl-info{padding:12px 20px;background:var(--voco-content-bg-alt);border-bottom:1px solid var(--voco-border);
+  font-size:.78rem;color:var(--voco-text-muted);display:flex;align-items:center;gap:8px}
 .cli-tbl-info strong{color:#2d3748}
 .cli-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;
   justify-content:center;font-size:1rem;font-weight:700;flex-shrink:0;color:#fff}
@@ -1480,9 +1480,9 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .est-activo{background:#dcfce7;color:#15803d}
 .est-tibio {background:#fef9c3;color:#854d0e}
 .est-frio  {background:#dbeafe;color:#1e40af}
-.est-baja  {background:#f1f5f9;color:#475569}
-.cli-act-btn{background:none;border:1px solid #e0e4e8;border-radius:7px;padding:4px 10px;
-  font-size:.75rem;color:#4a5568;cursor:pointer;transition:all .12s;white-space:nowrap}
+.est-baja  {background:var(--voco-nav-bg-hover);color:#475569}
+.cli-act-btn{background:none;border:1px solid var(--voco-border);border-radius:7px;padding:4px 10px;
+  font-size:.75rem;color:var(--voco-text-muted);cursor:pointer;transition:all .12s;white-space:nowrap}
 .cli-act-btn:hover{border-color:var(--az);color:var(--az)}
 .cli-write-btn{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
 .cli-write-btn:hover{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}
@@ -1606,11 +1606,11 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <!-- Modal Llamada (Sprint 4) -->
             <div id="modal-llamada" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
               background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
-              <div style="background:#fff;border-radius:14px;padding:28px;max-width:380px;width:90%;text-align:center">
+              <div style="background:var(--voco-card-bg);border-radius:14px;padding:28px;max-width:380px;width:90%;text-align:center">
                 <div style="font-size:3rem;margin-bottom:8px">📞</div>
-                <h3 style="margin:0 0 6px;color:#1a2332;font-size:1.05rem" id="llamada-nombre">Llamar al cliente</h3>
-                <div id="llamada-tel" style="color:#64748b;font-size:.85rem;margin-bottom:20px">—</div>
-                <p style="font-size:.83rem;color:#64748b;margin:0 0 18px;line-height:1.5">
+                <h3 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem" id="llamada-nombre">Llamar al cliente</h3>
+                <div id="llamada-tel" style="color:var(--voco-text-muted);font-size:.85rem;margin-bottom:20px">—</div>
+                <p style="font-size:.83rem;color:var(--voco-text-muted);margin:0 0 18px;line-height:1.5">
                   Elige cómo prefieres llamar:
                 </p>
                 <button id="btn-llamar-tel" style="width:100%;padding:12px;background:#25d366;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.9rem;margin-bottom:10px">
@@ -1619,8 +1619,8 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <button id="btn-llamar-wa" style="width:100%;padding:12px;background:#075e54;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.9rem;margin-bottom:14px">
                   💬 Abrir chat en WhatsApp (llamar desde ahí)
                 </button>
-                <button onclick="cerrarModalLlamada()" style="width:100%;padding:9px;background:#f1f5f9;border:none;border-radius:8px;font-weight:600;cursor:pointer">Cancelar</button>
-                <p style="font-size:.72rem;color:#94a3b8;margin:14px 0 0;line-height:1.4">
+                <button onclick="cerrarModalLlamada()" style="width:100%;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:8px;font-weight:600;cursor:pointer">Cancelar</button>
+                <p style="font-size:.72rem;color:var(--voco-text-muted);margin:14px 0 0;line-height:1.4">
                   La llamada por WhatsApp se inicia desde la app/web — Meta no permite iniciar llamadas via API todavía.
                 </p>
               </div>
@@ -1677,19 +1677,19 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <!-- Modal: Ubicación (Sprint 4) -->
             <div id="modal-ubicacion" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
               background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
-              <div style="background:#fff;border-radius:12px;padding:24px;max-width:420px;width:90%">
-                <h3 style="margin:0 0 14px;color:#1a2332;font-size:1.05rem">📍 Compartir ubicación</h3>
+              <div style="background:var(--voco-card-bg);border-radius:12px;padding:24px;max-width:420px;width:90%">
+                <h3 style="margin:0 0 14px;color:var(--voco-text);font-size:1.05rem">📍 Compartir ubicación</h3>
                 <div style="display:flex;gap:8px;margin-bottom:10px">
-                  <input id="loc-lat" type="number" step="any" placeholder="Latitud" style="flex:1;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem">
-                  <input id="loc-lng" type="number" step="any" placeholder="Longitud" style="flex:1;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem">
+                  <input id="loc-lat" type="number" step="any" placeholder="Latitud" style="flex:1;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem">
+                  <input id="loc-lng" type="number" step="any" placeholder="Longitud" style="flex:1;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem">
                 </div>
                 <input id="loc-nombre" type="text" placeholder="Nombre del lugar (opcional)"
-                  style="width:100%;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem;margin-bottom:8px;box-sizing:border-box">
+                  style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:8px;box-sizing:border-box">
                 <input id="loc-dir" type="text" placeholder="Dirección (opcional)"
-                  style="width:100%;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem;margin-bottom:14px;box-sizing:border-box">
-                <button onclick="usarMiUbicacion()" style="width:100%;padding:8px;background:#f0f4ff;border:1px solid #c7d2fe;color:#4f46e5;border-radius:7px;font-size:.82rem;cursor:pointer;margin-bottom:10px">📡 Usar mi ubicación actual</button>
+                  style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:14px;box-sizing:border-box">
+                <button onclick="usarMiUbicacion()" style="width:100%;padding:8px;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;color:#4f46e5;border-radius:7px;font-size:.82rem;cursor:pointer;margin-bottom:10px">📡 Usar mi ubicación actual</button>
                 <div style="display:flex;gap:8px">
-                  <button onclick="cerrarModalUbicacion()" style="flex:1;padding:9px;background:#f1f5f9;border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
+                  <button onclick="cerrarModalUbicacion()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
                   <button onclick="enviarUbicacion()" style="flex:1;padding:9px;background:#059669;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Enviar</button>
                 </div>
               </div>
@@ -1698,26 +1698,26 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <!-- Modal: Catálogo de productos (Sprint 4) -->
             <div id="modal-catalogo" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
               background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
-              <div style="background:#fff;border-radius:12px;padding:20px;max-width:560px;width:92%;max-height:80vh;display:flex;flex-direction:column">
-                <h3 style="margin:0 0 12px;color:#1a2332;font-size:1.05rem">🛒 Enviar producto del catálogo</h3>
+              <div style="background:var(--voco-card-bg);border-radius:12px;padding:20px;max-width:560px;width:92%;max-height:80vh;display:flex;flex-direction:column">
+                <h3 style="margin:0 0 12px;color:var(--voco-text);font-size:1.05rem">🛒 Enviar producto del catálogo</h3>
                 <input id="cat-buscar" type="text" placeholder="Buscar producto…" oninput="buscarCatalogo()"
-                  style="width:100%;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
-                <div id="cat-resultados" style="flex:1;overflow-y:auto;border:1px solid #f1f5f9;border-radius:8px;padding:6px;background:#fafbfc"></div>
-                <button onclick="cerrarModalCatalogo()" style="margin-top:12px;padding:9px;background:#f1f5f9;border:none;border-radius:7px;font-weight:600;cursor:pointer">Cerrar</button>
+                  style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
+                <div id="cat-resultados" style="flex:1;overflow-y:auto;border:1px solid var(--voco-border);border-radius:8px;padding:6px;background:#fafbfc"></div>
+                <button onclick="cerrarModalCatalogo()" style="margin-top:12px;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cerrar</button>
               </div>
             </div>
 
             <!-- Modal: Caption antes de enviar media (Sprint 4) -->
             <div id="modal-caption" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
               background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
-              <div style="background:#fff;border-radius:12px;padding:22px;max-width:420px;width:90%">
-                <h3 id="cap-titulo" style="margin:0 0 14px;color:#1a2332;font-size:1rem">Enviar archivo</h3>
+              <div style="background:var(--voco-card-bg);border-radius:12px;padding:22px;max-width:420px;width:90%">
+                <h3 id="cap-titulo" style="margin:0 0 14px;color:var(--voco-text);font-size:1rem">Enviar archivo</h3>
                 <div id="cap-preview" style="margin-bottom:14px;text-align:center"></div>
                 <textarea id="cap-texto" placeholder="Descripción (opcional)…" rows="2"
-                  style="width:100%;padding:8px 10px;border:1px solid #dde1e8;border-radius:7px;font-size:.85rem;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
+                  style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
                 <div id="cap-progress" style="display:none;margin-top:8px;font-size:.82rem;color:#4f46e5">⏳ Enviando…</div>
                 <div style="display:flex;gap:8px;margin-top:12px">
-                  <button onclick="cerrarModalCaption()" style="flex:1;padding:9px;background:#f1f5f9;border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
+                  <button onclick="cerrarModalCaption()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
                   <button id="cap-enviar-btn" onclick="confirmarEnvioMedia()" style="flex:1;padding:9px;background:#25d366;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Enviar</button>
                 </div>
               </div>
@@ -1748,7 +1748,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
                   <div style="font-size:1.3rem">✉️</div>
                   <div>
-                    <div style="font-weight:700;color:#1a2332;font-size:.95rem">Nueva difusión</div>
+                    <div style="font-weight:700;color:var(--voco-text);font-size:.95rem">Nueva difusión</div>
                     <div style="font-size:.78rem;color:#6b7a8d">Solo plantillas aprobadas por Meta</div>
                   </div>
                 </div>
@@ -1788,14 +1788,14 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <!-- ── INGRESO MANUAL ── -->
                 <div class="dif-manual-hdr">
                   <span>✏️</span> Ingreso manual de contactos
-                  <span style="font-weight:400;color:#6b7a8d;font-size:.76rem;margin-left:4px">— uno por línea: número,nombre</span>
+                  <span style="font-weight:400;color:var(--voco-text-muted);font-size:.76rem;margin-left:4px">— uno por línea: número,nombre</span>
                 </div>
                 <textarea id="dif-phones" class="f-ta" wrap="off"
                   style="min-height:140px;font-family:'Courier New',Courier,monospace;font-size:.8rem;
                          line-height:1.7;overflow-x:auto;white-space:pre;resize:vertical"
                   placeholder="573001234567,Juan García&#10;573009876543,Supermercado La Cosecha del Valle&#10;573001112233,Carlos"
                   oninput="actualizarConteo()"></textarea>
-                <div id="dif-conteo" style="font-size:.75rem;color:#6b7a8d;margin-top:4px">0 destinatarios</div>
+                <div id="dif-conteo" style="font-size:.75rem;color:var(--voco-text-muted);margin-top:4px">0 destinatarios</div>
 
                 <!-- Barra de progreso -->
                 <div id="dif-prog-wrap" style="margin-top:12px">
@@ -1953,7 +1953,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
                   <div id="tpl-form-icon" style="font-size:1.3rem">✨</div>
                   <div style="flex:1">
-                    <div id="tpl-form-title" style="font-weight:700;color:#1a2332;font-size:.95rem">Nueva plantilla</div>
+                    <div id="tpl-form-title" style="font-weight:700;color:var(--voco-text);font-size:.95rem">Nueva plantilla</div>
                     <div id="tpl-form-sub" style="font-size:.76rem;color:#6b7a8d">Se envía a Meta · Aprobación en 24-48 h</div>
                   </div>
                   <button id="tpl-cancelar-btn" class="btn-secondary" onclick="cancelarEdicion()" style="display:none;padding:4px 12px;font-size:.78rem">✕ Cancelar edición</button>
@@ -2009,13 +2009,13 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                     <b>Nota:</b> No se permiten archivos multimedia en plantillas de catálogo. El catálogo vinculado se mostrará automáticamente.
                   </div>
                   <div id="catalog-format-opts" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
-                    <label class="radio-opt chk" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid #e0e4e8;background:#fafbfc;gap:2px;cursor:pointer">
+                    <label class="radio-opt chk" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid var(--voco-border);background:var(--voco-content-bg-alt);gap:2px;cursor:pointer">
                       <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="catalog-format" value="FULL" checked> <b style="font-size:.84rem;color:#1a2332">Mensaje de catálogo</b></span>
-                      <span style="font-size:.75rem;color:#6b7a8d;padding-left:22px">Incluye todo el catálogo para ofrecer una visión completa de todos tus productos.</span>
+                      <span style="font-size:.75rem;color:var(--voco-text-muted);padding-left:22px">Incluye todo el catálogo para ofrecer una visión completa de todos tus productos.</span>
                     </label>
-                    <label class="radio-opt" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid #e0e4e8;background:#fafbfc;gap:2px;cursor:pointer">
+                    <label class="radio-opt" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid var(--voco-border);background:var(--voco-content-bg-alt);gap:2px;cursor:pointer">
                       <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="catalog-format" value="MULTI"> <b style="font-size:.84rem;color:#1a2332">Mensaje multiproducto</b></span>
-                      <span style="font-size:.75rem;color:#6b7a8d;padding-left:22px">Incluye hasta 30 productos específicos del catálogo. Deberás especificar los productos al enviar la plantilla via API.</span>
+                      <span style="font-size:.75rem;color:var(--voco-text-muted);padding-left:22px">Incluye hasta 30 productos específicos del catálogo. Deberás especificar los productos al enviar la plantilla via API.</span>
                     </label>
                   </div>
                 </div>
@@ -2377,7 +2377,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <!-- Periodo rápido -->
-            <select id="met-periodo" onchange="metAplicarPreset(this.value)" style="padding:6px 10px;border:1px solid #dde1e7;border-radius:8px;font-size:.82rem;color:#1a2332">
+            <select id="met-periodo" onchange="metAplicarPreset(this.value)" style="padding:6px 10px;border:1px solid var(--voco-border);border-radius:8px;font-size:.82rem;color:#1a2332">
               <option value="7">Últimos 7 días</option>
               <option value="30" selected>Últimos 30 días</option>
               <option value="90">Últimos 90 días</option>
@@ -2386,13 +2386,13 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <!-- Date pickers (ocultos por defecto, se muestran con "custom") -->
             <div id="met-rango-custom" style="display:none;gap:6px;align-items:center">
               <label style="font-size:.78rem;color:#475569">Desde:</label>
-              <input id="met-desde" type="date" style="padding:5px 8px;border:1px solid #dde1e7;border-radius:7px;font-size:.82rem">
+              <input id="met-desde" type="date" style="padding:5px 8px;border:1px solid var(--voco-border);border-radius:7px;font-size:.82rem">
               <label style="font-size:.78rem;color:#475569">Hasta:</label>
-              <input id="met-hasta" type="date" style="padding:5px 8px;border:1px solid #dde1e7;border-radius:7px;font-size:.82rem">
+              <input id="met-hasta" type="date" style="padding:5px 8px;border:1px solid var(--voco-border);border-radius:7px;font-size:.82rem">
             </div>
             <!-- Granularidad -->
-            <label style="font-size:.78rem;color:#475569;margin-left:6px">Agrupar:</label>
-            <select id="met-granularidad" onchange="cargarMetricas()" style="padding:6px 10px;border:1px solid #dde1e7;border-radius:8px;font-size:.82rem;color:#1a2332">
+            <label style="font-size:.78rem;color:var(--voco-text-muted);margin-left:6px">Agrupar:</label>
+            <select id="met-granularidad" onchange="cargarMetricas()" style="padding:6px 10px;border:1px solid var(--voco-border);border-radius:8px;font-size:.82rem;color:#1a2332">
               <option value="dia" selected>Diario</option>
               <option value="semana">Semanal</option>
               <option value="mes">Mensual</option>
@@ -2400,7 +2400,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <button class="btn-secondary" onclick="cargarMetricas()">↺ Actualizar</button>
           </div>
           <!-- Tabs métricas -->
-          <div style="display:flex;border-bottom:1px solid #e2e8f0;margin-top:4px">
+          <div style="display:flex;border-bottom:1px solid var(--voco-border);margin-top:4px">
             <button class="det-tab active" id="met-tab-camp" onclick="metTab('camp',this)" style="font-size:.8rem;padding:8px 14px">📊 Campañas</button>
             <button class="det-tab" id="met-tab-equipo" onclick="metTab('equipo',this);cargarStatsEquipo()" style="font-size:.8rem;padding:8px 14px">👥 Equipo</button>
           </div>
@@ -2409,7 +2409,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
           <!-- Fila 1: KPIs globales de difusiones -->
           <div style="margin-bottom:6px">
-            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">📤 Difusiones del período</p>
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px">📤 Difusiones del período</p>
           </div>
           <div class="cards" id="met-cards-dif">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
@@ -2417,7 +2417,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
           <!-- Fila 2: Costo Meta + Ventas + ROI -->
           <div style="margin:24px 0 6px">
-            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">💰 Costo & Retorno</p>
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px">💰 Costo & Retorno</p>
           </div>
           <div class="cards" id="met-cards-roi">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
@@ -2425,7 +2425,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
           <!-- Fila 3: Conversaciones IA -->
           <div style="margin:24px 0 6px">
-            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7a8d;margin:0 0 10px">🤖 Conversaciones IA</p>
+            <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px">🤖 Conversaciones IA</p>
           </div>
           <div class="cards" id="met-cards-conv">
             <div class="loading-txt" style="grid-column:1/-1">Cargando...</div>
@@ -2438,7 +2438,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
           <div class="tbl-wrap" style="margin-top:28px">
             <div class="tbl-head">
               <h2>Rendimiento por campaña</h2>
-              <span id="met-aviso-tracking" style="font-size:.75rem;color:#6b7a8d;display:none">
+              <span id="met-aviso-tracking" style="font-size:.75rem;color:var(--voco-text-muted);display:none">
                 ⓘ % entrega/lectura solo en campañas con tracking activo
               </span>
             </div>
@@ -2470,14 +2470,14 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
               <h2 style="margin:0;font-size:1rem;color:#1a2332">👥 Métricas del equipo de soporte</h2>
               <button class="btn-secondary" style="font-size:.78rem" onclick="cargarStatsEquipo()">↺ Actualizar</button>
             </div>
-            <div id="met-equipo-tabla" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
-              <div style="padding:14px;color:#94a3b8;font-size:.85rem;text-align:center">Cargando...</div>
+            <div id="met-equipo-tabla" style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;overflow:hidden">
+              <div style="padding:14px;color:var(--voco-text-muted);font-size:.85rem;text-align:center">Cargando...</div>
             </div>
             <!-- Toggle auto-asignación -->
-            <div style="margin-top:20px;padding:14px 18px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:10px;display:flex;align-items:center;gap:14px">
+            <div style="margin-top:20px;padding:14px 18px;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;border-radius:10px;display:flex;align-items:center;gap:14px">
               <div style="flex:1">
                 <div style="font-weight:700;font-size:.88rem;color:#1a2332">⚡ Asignación automática (Round-Robin)</div>
-                <div style="font-size:.78rem;color:#64748b;margin-top:2px">Cuando llega un ticket, se asigna al siguiente agente disponible automáticamente</div>
+                <div style="font-size:.78rem;color:var(--voco-text-muted);margin-top:2px">Cuando llega un ticket, se asigna al siguiente agente disponible automáticamente</div>
               </div>
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
                 <input type="checkbox" id="toggle-autoasignar" onchange="toggleAutoAsignar(this.checked)"
@@ -2619,19 +2619,19 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
           </div>
 
           <!-- Nombre del archivo seleccionado -->
-          <div id="csv-file-name" style="font-size:.82rem;color:#6b7a8d;margin-bottom:12px;display:none"></div>
+          <div id="csv-file-name" style="font-size:.82rem;color:var(--voco-text-muted);margin-bottom:12px;display:none"></div>
 
           <!-- Botón importar -->
           <button id="csv-import-btn" class="btn-secondary" style="width:100%;padding:10px;font-size:.9rem;display:none"
                   onclick="importarClientes()">Importar clientes</button>
 
           <!-- Spinner -->
-          <div id="csv-loading" style="display:none;text-align:center;padding:16px;color:#6b7a8d;font-size:.85rem">
+          <div id="csv-loading" style="display:none;text-align:center;padding:16px;color:var(--voco-text-muted);font-size:.85rem">
             ⏳ Procesando importación…
           </div>
 
           <!-- Resultados -->
-          <div id="csv-resultados" style="display:none;margin-top:16px;padding:16px;background:#f8fafc;border-radius:10px;font-size:.84rem">
+          <div id="csv-resultados" style="display:none;margin-top:16px;padding:16px;background:var(--voco-content-bg-alt);border-radius:10px;font-size:.84rem">
           </div>
         </div>
       </div>
@@ -2652,12 +2652,12 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
           <!-- Tabs -->
           <div style="display:flex;gap:0;border-bottom:1.5px solid #e5e7eb;margin-bottom:20px">
             <button id="tab-wa" class="escribir-tab active-tab" onclick="mostrarTabEscribir('wa')" style="flex:1;padding:9px;border:none;background:none;cursor:pointer;font-size:.84rem;font-weight:600;color:#2563eb;border-bottom:2px solid #2563eb">📱 WhatsApp Web</button>
-            <button id="tab-tpl" class="escribir-tab" onclick="mostrarTabEscribir('tpl')" style="flex:1;padding:9px;border:none;background:none;cursor:pointer;font-size:.84rem;font-weight:600;color:#6b7a8d;border-bottom:2px solid transparent">📋 Plantilla API</button>
+            <button id="tab-tpl" class="escribir-tab" onclick="mostrarTabEscribir('tpl')" style="flex:1;padding:9px;border:none;background:none;cursor:pointer;font-size:.84rem;font-weight:600;color:var(--voco-text-muted);border-bottom:2px solid transparent">📋 Plantilla API</button>
           </div>
 
           <!-- Tab: WhatsApp Web -->
           <div id="tab-wa-body">
-            <label style="font-size:.8rem;color:#6b7a8d;display:block;margin-bottom:6px">Mensaje</label>
+            <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">Mensaje</label>
             <textarea id="wa-mensaje" rows="4" style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:10px;font-size:.85rem;resize:vertical;box-sizing:border-box" placeholder="Escribe tu mensaje…"></textarea>
             <button onclick="enviarPorWhatsApp()" style="margin-top:12px;width:100%;padding:10px;background:#25d366;color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer">
               Abrir en WhatsApp →
@@ -2666,7 +2666,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
           <!-- Tab: Plantilla API -->
           <div id="tab-tpl-body" style="display:none">
-            <label style="font-size:.8rem;color:#6b7a8d;display:block;margin-bottom:6px">Plantilla aprobada</label>
+            <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">Plantilla aprobada</label>
             <select id="escribir-tpl-sel" style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:8px;font-size:.84rem;margin-bottom:12px;box-sizing:border-box"
                     onchange="previewPlantilla()">
               <option value="">Cargando plantillas…</option>
@@ -2686,7 +2686,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
            ═══════════════════════════════════════ -->
       <div class="sec sec-light" id="sec-escalaciones">
         <div class="sec-hdr">
-          <div><h1>🎯 Escalaciones</h1><p style="color:#64748b;font-size:.85rem;margin:0">Conversaciones que requieren atención humana</p></div>
+          <div><h1>🎯 Escalaciones</h1><p style="color:var(--voco-text-muted);font-size:.85rem;margin:0">Conversaciones que requieren atención humana</p></div>
         </div>
 
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
@@ -2740,7 +2740,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
               </div>
 
               <!-- Tabs: Conversación / Notas internas -->
-              <div id="esc-det-tabs" style="display:none;border-bottom:1px solid #e2e8f0;background:#fff">
+              <div id="esc-det-tabs" style="display:none;border-bottom:1px solid var(--voco-border);background:#fff">
                 <div style="display:flex">
                   <button class="det-tab active" id="det-tab-conv" onclick="escDetTab('conv',this)">💬 Conversación</button>
                   <button class="det-tab" id="det-tab-notas" onclick="escDetTab('notas',this)">📝 Notas <span id="notas-count" style="font-size:.68rem;color:#94a3b8"></span></button>
@@ -2753,7 +2753,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div id="esc-msgs" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-height:0;background:#0b141a"></div>
 
                 <!-- Input de respuesta (solo visible si ticket activo) -->
-                <div id="esc-reply-wrap" style="padding:10px 14px;border-top:1px solid #e2e8f0;background:#fff;display:none">
+                <div id="esc-reply-wrap" style="padding:10px 14px;border-top:1px solid #e2e8f0;background:var(--voco-card-bg);display:none">
                   <!-- Templates rápidos -->
                   <div style="position:relative">
                     <div id="tpl-picker" class="tpl-picker" style="display:none"></div>
@@ -2763,10 +2763,10 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                     </div>
                   </div>
                   <!-- Transferir (select oculto) -->
-                  <div id="transferir-wrap" style="display:none;margin-bottom:6px;padding:8px;background:#f0f4ff;border-radius:8px">
-                    <div style="font-size:.78rem;font-weight:600;color:#1a2332;margin-bottom:6px">Transferir a otro agente:</div>
+                  <div id="transferir-wrap" style="display:none;margin-bottom:6px;padding:8px;background:var(--voco-nav-bg-active);border-radius:8px">
+                    <div style="font-size:.78rem;font-weight:600;color:var(--voco-text);margin-bottom:6px">Transferir a otro agente:</div>
                     <div style="display:flex;gap:6px">
-                      <select id="transferir-select" style="flex:1;border:1px solid #dde1e8;border-radius:6px;padding:6px 8px;font-size:.82rem;outline:none">
+                      <select id="transferir-select" style="flex:1;border:1px solid var(--voco-border);border-radius:6px;padding:6px 8px;font-size:.82rem;outline:none">
                         <option value="">— Selecciona un agente —</option>
                       </select>
                       <button class="btn-primary" style="font-size:.78rem;padding:5px 12px" onclick="escConfirmarTransferir()">Transferir</button>
@@ -2775,12 +2775,12 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                   </div>
                   <div style="display:flex;gap:8px">
                     <textarea id="esc-reply-input" placeholder="Escribe tu respuesta al cliente…"
-                      style="flex:1;border:1px solid #dde1e8;border-radius:8px;padding:8px 10px;font-size:.85rem;
+                      style="flex:1;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.85rem;
                       resize:none;height:60px;outline:none;font-family:inherit"
                       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();escEnviarRespuesta();}"></textarea>
                     <button class="btn-primary" style="align-self:flex-end;padding:8px 14px" onclick="escEnviarRespuesta()">Enviar</button>
                   </div>
-                  <div style="font-size:.72rem;color:#94a3b8;margin-top:4px">Enter para enviar · Shift+Enter nueva línea</div>
+                  <div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:4px">Enter para enviar · Shift+Enter nueva línea</div>
                 </div>
               </div>
 
@@ -2792,7 +2792,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
               <!-- Panel: Notas internas -->
               <div id="esc-panel-notas" style="display:none;flex-direction:column;flex:1;overflow:hidden;min-height:0">
                 <div id="esc-notas-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;background:#fffbeb"></div>
-                <div id="esc-nota-input-wrap" style="padding:10px 14px;border-top:1px solid #fde68a;background:#fff;display:none">
+                <div id="esc-nota-input-wrap" style="padding:10px 14px;border-top:1px solid #fde68a;background:var(--voco-card-bg);display:none">
                   <div style="display:flex;gap:8px">
                     <textarea id="esc-nota-input" placeholder="Escribe una nota interna (solo el equipo la verá)…"
                       style="flex:1;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:.83rem;
@@ -3229,7 +3229,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
             <!-- Próximas integraciones -->
             <div class="cfg-card" style="border-style:dashed;background:#fafbfc">
-              <div class="cfg-card-title" style="color:#6b7a8d;margin-bottom:12px">🚀 Próximas integraciones</div>
+              <div class="cfg-card-title" style="color:var(--voco-text-muted);margin-bottom:12px">🚀 Próximas integraciones</div>
               <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;font-size:.83rem;color:#6b7a8d">
                 <div>🛒 <b style="color:#4a5568">Shopify OAuth</b><br><span style="font-size:.76rem">Conectar con un clic cuando Andrea sea app de Shopify</span></div>
                 <div>📧 Email (SendGrid / Resend)</div>
@@ -3247,7 +3247,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <!-- Intro -->
             <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:.85rem;color:#3730a3;line-height:1.6">
               🧠 <b>Editor de prompt</b> — Define quién es tu agente, qué sabe y cómo habla.
-              Usa <code style="background:#e0e7ff;padding:1px 5px;border-radius:4px">{VARIABLES}</code> en el texto y defínelas abajo.
+              Usa <code style="background:var(--voco-nav-bg-active);padding:1px 5px;border-radius:4px">{VARIABLES}</code> en el texto y defínelas abajo.
               El asistente de IA te ayuda a mejorar las instrucciones en lenguaje natural.
             </div>
 
@@ -3351,7 +3351,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 </tbody>
               </table>
               <button class="btn-secondary" style="margin-top:12px;font-size:.8rem;padding:6px 14px" onclick="agregarVar()" type="button">+ Agregar variable</button>
-              <p style="font-size:.76rem;color:#8a94a6;margin-top:10px">
+              <p style="font-size:.76rem;color:var(--voco-text-muted);margin-top:10px">
                 💡 Variables de sistema (no editables aquí): <code>{COSTO_ENVIO}</code> <code>{ENVIO_GRATIS}</code> — vienen de la configuración de Shopify
               </p>
             </div>
@@ -3362,7 +3362,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
               <!-- Editor izquierdo -->
               <div class="prompt-left">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-                  <div style="font-weight:700;color:#1a2332;font-size:.9rem">✍️ Prompt actual</div>
+                  <div style="font-weight:700;color:var(--voco-text);font-size:.9rem">✍️ Prompt actual</div>
                   <span id="prompt-fuente" style="font-size:.73rem;color:#8a94a6"></span>
                 </div>
                 <textarea id="prompt-textarea" class="prompt-ta" placeholder="Escribe aquí las instrucciones de tu agente…" spellcheck="false"></textarea>
@@ -3374,9 +3374,9 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
               <!-- Panel IA derecho -->
               <div class="prompt-right">
-                <div style="font-weight:700;color:#1a2332;font-size:.9rem;margin-bottom:10px">✨ Asistente de mejora</div>
+                <div style="font-weight:700;color:var(--voco-text);font-size:.9rem;margin-bottom:10px">✨ Asistente de mejora</div>
 
-                <label style="font-size:.8rem;font-weight:600;color:#4a5568;display:block;margin-bottom:6px">
+                <label style="font-size:.8rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:6px">
                   ¿Qué quieres mejorar o agregar?
                 </label>
                 <textarea id="prompt-instruccion" class="prompt-instruccion-ta" placeholder="Ej: &quot;Quiero que sea más empática cuando el cliente menciona un problema&quot;&#10;Ej: &quot;Agrega que el envío gratis aplica desde $80.000&quot;&#10;Ej: &quot;Haz que responda más corto y directo&quot;"></textarea>
@@ -3403,7 +3403,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                     <span style="font-size:.82rem;font-weight:700;color:#1a2332">Propuesta de Claude</span>
                     <button class="btn-secondary" style="font-size:.76rem;padding:4px 10px" onclick="verDiff()" type="button" id="btn-diff">👁 Ver cambios</button>
                   </div>
-                  <textarea id="prompt-propuesta" class="prompt-ta" style="height:220px;background:#f8fafc;border-color:#c7d2fe" readonly></textarea>
+                  <textarea id="prompt-propuesta" class="prompt-ta" style="height:220px;background:var(--voco-content-bg-alt);border-color:#c7d2fe" readonly></textarea>
                   <div style="display:flex;gap:8px;margin-top:8px">
                     <button class="btn-secondary" style="flex:1" onclick="descartarPropuesta()" type="button">✕ Descartar</button>
                     <button class="btn-primary" style="flex:1" onclick="aplicarPropuesta()" type="button">✅ Aplicar al editor</button>
@@ -3412,7 +3412,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
                 <!-- Diff -->
                 <div id="prompt-diff-wrap" style="display:none;margin-top:16px">
-                  <div style="font-size:.82rem;font-weight:700;color:#1a2332;margin-bottom:8px">Cambios detectados</div>
+                  <div style="font-size:.82rem;font-weight:700;color:var(--voco-text);margin-bottom:8px">Cambios detectados</div>
                   <div id="prompt-diff-content" class="prompt-diff"></div>
                   <button class="btn-secondary" style="margin-top:8px;font-size:.78rem" onclick="cerrarDiff()" type="button">← Volver</button>
                 </div>
@@ -3442,7 +3442,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             <!-- Ventana de chat estilo WhatsApp -->
             <div class="chat-wrap">
               <div class="chat-messages" id="chat-messages">
-                <div style="text-align:center;font-size:.76rem;color:#8a94a6;padding:8px 0">
+                <div style="text-align:center;font-size:.76rem;color:var(--voco-text-muted);padding:8px 0">
                   Inicio de la conversación de prueba
                 </div>
               </div>
@@ -3475,28 +3475,28 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             </div>
 
             <!-- Formulario nuevo agente (oculto por defecto) -->
-            <div id="equipo-form-wrap" style="display:none;background:#f0f4ff;border:1px solid #c7d2fe;
+            <div id="equipo-form-wrap" style="display:none;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;
                  border-radius:10px;padding:18px;margin-bottom:20px">
               <h3 style="margin:0 0 14px;font-size:.9rem;color:#1a2332">Nuevo agente</h3>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
                 <div>
-                  <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Nombre completo</label>
+                  <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Nombre completo</label>
                   <input id="eq-nombre" type="text" placeholder="Felipe García"
-                    style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+                    style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
                 </div>
                 <div>
-                  <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Email</label>
+                  <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Email</label>
                   <input id="eq-email" type="email" placeholder="felipe@empresa.com"
-                    style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+                    style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
                 </div>
                 <div>
-                  <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Contraseña temporal</label>
+                  <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Contraseña temporal</label>
                   <input id="eq-password" type="password" placeholder="Min. 6 caracteres"
-                    style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+                    style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
                 </div>
                 <div>
-                  <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Rol</label>
-                  <select id="eq-rol" style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none;background:#fff">
+                  <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Rol</label>
+                  <select id="eq-rol" style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none;background:#fff">
                     <option value="agente">Agente</option>
                     <option value="supervisor">Supervisor</option>
                     <option value="admin">Admin</option>
@@ -3512,13 +3512,13 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
             <!-- Tabla de agentes -->
             <div id="equipo-tabla-wrap">
-              <div id="equipo-tabla" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
-                <div style="padding:14px 16px;color:#94a3b8;font-size:.85rem;text-align:center">Cargando equipo…</div>
+              <div id="equipo-tabla" style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;overflow:hidden">
+                <div style="padding:14px 16px;color:var(--voco-text-muted);font-size:.85rem;text-align:center">Cargando equipo…</div>
               </div>
             </div>
 
             <!-- Info de plan -->
-            <div id="equipo-plan-info" style="margin-top:14px;font-size:.78rem;color:#64748b;text-align:center"></div>
+            <div id="equipo-plan-info" style="margin-top:14px;font-size:.78rem;color:var(--voco-text-muted);text-align:center"></div>
           </div><!-- /pane equipo -->
 
           <!-- ── Pane: Templates Rápidos (Sprint 2) ── -->
@@ -3532,17 +3532,17 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             </div>
 
             <!-- Formulario nuevo template -->
-            <div id="tpl-form-wrap" style="display:none;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:10px;padding:18px;margin-bottom:20px">
+            <div id="tpl-form-wrap" style="display:none;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;border-radius:10px;padding:18px;margin-bottom:20px">
               <h3 style="margin:0 0 12px;font-size:.9rem;color:#1a2332">Nuevo template</h3>
               <div style="margin-bottom:10px">
-                <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Título (ej: Saludo inicial)</label>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Título (ej: Saludo inicial)</label>
                 <input id="tpl-titulo" type="text" placeholder="Saludo inicial"
-                  style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
               </div>
               <div style="margin-bottom:10px">
-                <label style="font-size:.78rem;font-weight:600;color:#4a5568;display:block;margin-bottom:4px">Mensaje</label>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Mensaje</label>
                 <textarea id="tpl-contenido" placeholder="Hola! Gracias por comunicarte con nosotros. Mi nombre es [nombre] y estoy aquí para ayudarte."
-                  style="width:100%;border:1px solid #dde1e8;border-radius:7px;padding:8px 10px;font-size:.84rem;
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;
                   box-sizing:border-box;outline:none;height:80px;resize:vertical;font-family:inherit"></textarea>
               </div>
               <div style="display:flex;gap:8px">
@@ -3553,8 +3553,8 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
             </div>
 
             <!-- Lista de templates -->
-            <div id="tpl-lista" style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
-              <div style="padding:14px;color:#94a3b8;font-size:.85rem;text-align:center">Cargando templates…</div>
+            <div id="tpl-lista" style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;overflow:hidden">
+              <div style="padding:14px;color:var(--voco-text-muted);font-size:.85rem;text-align:center">Cargando templates…</div>
             </div>
           </div><!-- /pane templates -->
 
@@ -3569,7 +3569,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div class="doc-card">
                   <div class="doc-card-title">💵 Costo Meta</div>
                   <div class="doc-formula">Costo = Enviados × USD $0.0165 × TRM</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
                     Meta cobra <strong>por conversación de 24 horas iniciada</strong>, no por mensaje individual ni por entrega o lectura.
                     La tarifa <b>$0.0165 USD</b> aplica a conversaciones de marketing en Colombia (vigente 2024–2025).
                     El valor en COP depende de la TRM del día.
@@ -3579,7 +3579,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div class="doc-card">
                   <div class="doc-card-title">📈 ROAS (Retorno sobre inversión)</div>
                   <div class="doc-formula">ROAS = Ventas atribuidas COP / Costo Meta COP</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
                     ROAS &gt; 1 = la campaña es rentable. Ejemplo: ROAS 3.5 significa que por cada $1 invertido en Meta, se generaron $3.50 en ventas.
                     Un ROAS &lt; 1 indica que el costo supera las ventas atribuidas en la ventana de 7 días.
                   </p>
@@ -3588,7 +3588,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div class="doc-card">
                   <div class="doc-card-title">📦 Tasa de entrega</div>
                   <div class="doc-formula">Entrega % = Entregados / Enviados × 100</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
                     Requiere <strong>tracking activo</strong> via webhook de Meta (campo <code>statuses</code>).
                     Un mensaje no entregado puede deberse a: número inválido, WhatsApp desinstalado, teléfono apagado &gt;30 días, o bloqueo del usuario.
                   </p>
@@ -3597,7 +3597,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div class="doc-card">
                   <div class="doc-card-title">👁 Tasa de lectura</div>
                   <div class="doc-formula">Lectura % = Leídos / Entregados × 100</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
                     Solo se registra si el destinatario tiene activados los <strong>recibos de lectura</strong> en WhatsApp.
                     Una tasa de lectura baja puede indicar que el horario de envío o el asunto de la plantilla no es atractivo.
                   </p>
@@ -3606,7 +3606,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div class="doc-card">
                   <div class="doc-card-title">🛒 Ventas atribuidas</div>
                   <div class="doc-formula">Ventana de atribución: 7 días post-envío</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
                     Se cruzan las órdenes de Shopify con el número de teléfono de cada destinatario.
                     Si el cliente recibió la difusión y realizó una compra en los <strong>7 días siguientes</strong>, la venta se atribuye a esa campaña.
                     Atribución por <em>último toque</em>.
@@ -3616,7 +3616,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                 <div class="doc-card">
                   <div class="doc-card-title">🤖 Conversaciones IA</div>
                   <div class="doc-formula">Interacciones = Mensajes recibidos + Respuestas IA</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
                     Cada mensaje de un cliente genera una respuesta de Andrea (Claude Haiku 4.5).
                     El costo de la IA depende de los tokens usados (incluido el catálogo de Shopify y el perfil del cliente en el contexto).
                     No tiene costo adicional de Meta — Andrea solo responde dentro de la ventana de 24h abierta por el cliente.
@@ -3661,7 +3661,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                     </tr>
                   </tbody>
                 </table>
-                <p style="font-size:.76rem;color:#8a94a6;margin-top:10px;line-height:1.5">
+                <p style="font-size:.76rem;color:var(--voco-text-muted);margin-top:10px;line-height:1.5">
                   TRM referencia: ~$4.100 COP/USD. Las tarifas pueden cambiar — consultar siempre la
                   <a href="https://developers.facebook.com/docs/whatsapp/pricing" target="_blank" style="color:var(--az)">tabla oficial de Meta</a>.
                   Conversación de 24h: un solo cargo sin importar cuántos mensajes se envíen en esa ventana.
@@ -3682,7 +3682,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
                     <tr><td>Nivel 3</td><td><strong>100.000/día</strong></td></tr>
                     <tr><td>Ilimitado</td><td><strong>Sin límite</strong></td></tr>
                   </table>
-                  <p style="font-size:.78rem;color:#6b7a8d;margin-top:8px">
+                  <p style="font-size:.78rem;color:var(--voco-text-muted);margin-top:8px">
                     El nivel sube automáticamente cuando la tasa de mensajes enviados vs. bloqueados es buena.
                     Una calidad <em>alta</em> o <em>media</em> del número es necesaria para subir de nivel.
                   </p>
@@ -3690,13 +3690,13 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
                 <div class="doc-card">
                   <div class="doc-card-title">🛡️ Anti-spam y opt-out</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0 0 8px">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0 0 8px">
                     Si un cliente responde palabras de baja (<b>STOP, BAJA, NO MÁS, CANCELAR…</b>), Andrea lo marca automáticamente y queda excluido de futuras difusiones.
                   </p>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
                     Meta penaliza números con alta tasa de bloqueos. Mantener calidad alta:
                   </p>
-                  <ul style="font-size:.82rem;color:#4a5568;line-height:1.8;margin:6px 0 0 16px;padding:0">
+                  <ul style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.8;margin:6px 0 0 16px;padding:0">
                     <li>Incluir botón "Dar de baja" en cada plantilla</li>
                     <li>Enviar solo a contactos que dieron consentimiento</li>
                     <li>Espaciar difusiones (no todos los días al mismo segmento)</li>
@@ -3714,11 +3714,11 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
                 <div class="doc-card">
                   <div class="doc-card-title">🔗 Webhook Meta</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0 0 8px">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0 0 8px">
                     Meta envía todos los eventos (mensajes, entregas, lecturas, estados) a:
                   </p>
                   <div class="doc-formula">POST /webhook</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:8px 0 0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:8px 0 0">
                     La verificación inicial usa un GET con <code>hub.verify_token</code>.
                     Si el webhook deja de responder, Meta auto-deshabilita la suscripción — el endpoint debe estar siempre activo.
                   </p>
@@ -3736,7 +3736,7 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 
                 <div class="doc-card">
                   <div class="doc-card-title">🛒 Integración Shopify</div>
-                  <p style="font-size:.82rem;color:#4a5568;line-height:1.6;margin:0">
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
                     El catálogo de productos se carga via <strong>Shopify Admin API</strong> y se cachea en memoria (actualización cada 5 min).
                     El perfil del cliente y el historial de pedidos se obtienen por número de teléfono.
                     Los checkouts se crean via la API de Shopify — el cliente recibe un link directo para completar el pago.
@@ -4158,7 +4158,7 @@ function renderClientes() {
        + '<td><div class="cli-av ' + cf.avcls + '" aria-hidden="true">' + he(ini) + '</div></td>'
        + '<td><div style="font-weight:600;font-size:.86rem;color:#1a2332">' + he(disp) + '</div>'
        +     '<div style="font-size:.74rem;color:#6b7a8d">' + he(tel) + '</div></td>'
-       + '<td style="color:#4a5568;font-size:.83rem">' + he(c.ciudad || '—') + '</td>'
+       + '<td style="color:var(--voco-text-muted);font-size:.83rem">' + he(c.ciudad || '—') + '</td>'
        + '<td style="font-size:.82rem;color:#4a5568">' + he(lastRel) + '</td>'
        + '<td><span class="est-pill ' + cf.cls + '">' + cf.lbl + '</span></td>'
        + '<td style="text-align:center;font-weight:700;color:#2d3748">' + (c.pedidos || 0) + '</td>'
@@ -4240,7 +4240,7 @@ async function importarClientes() {
     var res = document.getElementById('csv-resultados');
     res.style.display = 'block';
     if (d.ok) {
-      var html = '<div style="font-weight:700;font-size:.9rem;color:#1a2332;margin-bottom:10px">Resultado de la importación</div>';
+      var html = '<div style="font-weight:700;font-size:.9rem;color:var(--voco-text);margin-bottom:10px">Resultado de la importación</div>';
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
       html += '<div style="background:#f0fdf4;border-radius:8px;padding:10px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:#15803d">' + (d.inserted || 0) + '</div><div style="font-size:.75rem;color:#15803d">✅ Insertados</div></div>';
       html += '<div style="background:#eff6ff;border-radius:8px;padding:10px;text-align:center"><div style="font-size:1.3rem;font-weight:800;color:#1d4ed8">' + (d.updated || 0) + '</div><div style="font-size:.75rem;color:#1d4ed8">🔄 Actualizados</div></div>';
@@ -4458,7 +4458,7 @@ function seleccionarTemplate() {
       var row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
       row.innerHTML =
-        '<label style="font-size:.82rem;color:#6b7a8d;white-space:nowrap;min-width:50px">{{' + he(n) + '}}</label>' +
+        '<label style="font-size:.82rem;color:var(--voco-text-muted);white-space:nowrap;min-width:50px">{{' + he(n) + '}}</label>' +
         '<input class="f-inp" id="dif-var-' + n + '" style="flex:1" placeholder="Valor de ejemplo para {{' + n + '}}" oninput="_difActualizarPreview(_dif_templates.find(function(t){return t.name===document.getElementById(\'dif-tpl\').value;}))">';
       varsDiv.appendChild(row);
     });
@@ -4806,7 +4806,7 @@ async function cargarHistorialDif() {
 
       h += '<tr>'
         + '<td><b>' + campaignLabel + '</b><br>' + tplLabel + '</td>'
-        + '<td style="font-size:.78rem;color:#6b7a8d;white-space:nowrap">' + fmtFecha(row.created_at) + '</td>'
+        + '<td style="font-size:.78rem;color:var(--voco-text-muted);white-space:nowrap">' + fmtFecha(row.created_at) + '</td>'
         + '<td style="text-align:center;font-weight:600">' + env + '</td>'
         + '<td style="text-align:center">' + fmtStat(ent, pctEnt, '#155724', '#721c24') + '</td>'
         + '<td style="text-align:center">' + fmtStat(lei, pctLei, '#283593', '#856404') + '</td>'
@@ -4883,7 +4883,7 @@ function _renderDetalleCampana(d, campaignName) {
       + '<span class="funnel-cnt">' + val + ' <small style="color:#a0aec0;font-weight:400">(' + pct + '%)</small></span>'
       + '</div>';
   }
-  funnelEl.innerHTML = '<h4 style="font-size:.82rem;font-weight:700;color:#4a5568;'
+  funnelEl.innerHTML = '<h4 style="font-size:.82rem;font-weight:700;color:var(--voco-text-muted);'
     + 'text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">📊 Embudo de entrega</h4>'
     + mkFunnelRow('Enviados',   total, 100,    '#4299e1')
     + mkFunnelRow('Entregados', ent,   pctEnt, '#48bb78')
@@ -5345,9 +5345,9 @@ function actualizarSubcat() {
   var opts = _SUBCATS[cat] || _SUBCATS.MARKETING;
   var el   = document.getElementById('subcat-opts');
   el.innerHTML = opts.map(function(o, i) {
-    return '<label class="radio-opt' + (i===0?' chk':'') + '" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid #e0e4e8;background:#fafbfc;gap:2px;cursor:pointer">'
+    return '<label class="radio-opt' + (i===0?' chk':'') + '" style="flex-direction:column;align-items:flex-start;padding:10px 14px;border-radius:8px;border:1px solid var(--voco-border);background:var(--voco-content-bg-alt);gap:2px;cursor:pointer">'
       + '<span style="display:flex;align-items:center;gap:8px"><input type="radio" name="tpl-subcat" value="' + o.value + '"' + (i===0?' checked':'') + '> <b style="font-size:.84rem;color:#1a2332">' + o.label + '</b></span>'
-      + '<span style="font-size:.75rem;color:#6b7a8d;padding-left:22px">' + o.desc + '</span>'
+      + '<span style="font-size:.75rem;color:var(--voco-text-muted);padding-left:22px">' + o.desc + '</span>'
       + '</label>';
   }).join('');
   // Re-hook radio style + aplicar reglas al cambiar subcategoría
@@ -6113,7 +6113,7 @@ async function cargarMetricas() {
 
       h += '<tr>'
         + '<td><b>' + he(c.campaign_name || '—') + '</b></td>'
-        + '<td style="color:#6b7a8d;font-size:.8rem">' + fecha + '</td>'
+        + '<td style="color:var(--voco-text-muted);font-size:.8rem">' + fecha + '</td>'
         + '<td style="text-align:right">' + (c.enviados || 0).toLocaleString('es-CO') + '</td>'
         + '<td style="text-align:right">' + enStr + '</td>'
         + '<td style="text-align:right">' + leStr + '</td>'
@@ -6145,7 +6145,7 @@ function _renderSeriesTemporales(series, granularidad) {
 
   // Si todo está vacío, ocultar
   if (!dif.length && !trk.length && !conv.length) {
-    wrap.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:16px;font-size:.84rem">Sin datos en el rango seleccionado</div>';
+    wrap.innerHTML = '<div style="color:var(--voco-text-muted);text-align:center;padding:16px;font-size:.84rem">Sin datos en el rango seleccionado</div>';
     return;
   }
 
@@ -6169,12 +6169,12 @@ function _renderSeriesTemporales(series, granularidad) {
     var pctR = maxMsg > 0 ? (p.recibidos||0)/maxMsg*100 : 0;
     var pctA = maxMsg > 0 ? (p.enviados_ai||0)/maxMsg*100 : 0;
     return '<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:50px">' +
-      '<div style="font-size:.7rem;color:#475569;font-weight:700;margin-bottom:4px">' + total + '</div>' +
-      '<div style="width:24px;height:100px;background:#f1f5f9;border-radius:4px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;position:relative">' +
+      '<div style="font-size:.7rem;color:var(--voco-text-muted);font-weight:700;margin-bottom:4px">' + total + '</div>' +
+      '<div style="width:24px;height:100px;background:var(--voco-nav-bg-hover);border-radius:4px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;position:relative">' +
         '<div style="background:#4f46e5;height:' + pctA + '%" title="IA enviados: ' + (p.enviados_ai||0) + '"></div>' +
         '<div style="background:#22c55e;height:' + pctR + '%" title="Recibidos: ' + (p.recibidos||0) + '"></div>' +
       '</div>' +
-      '<div style="font-size:.66rem;color:#94a3b8;margin-top:4px;text-align:center">' + fmtPeriodo(p.periodo) + '</div>' +
+      '<div style="font-size:.66rem;color:var(--voco-text-muted);margin-top:4px;text-align:center">' + fmtPeriodo(p.periodo) + '</div>' +
     '</div>';
   }).join('');
 
@@ -6192,13 +6192,13 @@ function _renderSeriesTemporales(series, granularidad) {
   }).join('');
 
   wrap.innerHTML =
-    '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-top:24px">' +
-      '<div style="font-weight:700;color:#1a2332;font-size:.92rem;margin-bottom:14px">📈 Tendencia por ' +
+    '<div style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;padding:16px;margin-top:24px">' +
+      '<div style="font-weight:700;color:var(--voco-text);font-size:.92rem;margin-bottom:14px">📈 Tendencia por ' +
         (granularidad === 'mes' ? 'mes' : (granularidad === 'semana' ? 'semana' : 'día')) + '</div>' +
 
       (conv.length ? (
         '<div style="margin-bottom:18px">' +
-          '<div style="font-size:.78rem;color:#475569;margin-bottom:10px">' +
+          '<div style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:10px">' +
             '<span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px;margin-right:4px"></span> Mensajes recibidos &nbsp; ' +
             '<span style="display:inline-block;width:10px;height:10px;background:#4f46e5;border-radius:2px;margin-right:4px"></span> Respuestas IA' +
           '</div>' +
@@ -6208,7 +6208,7 @@ function _renderSeriesTemporales(series, granularidad) {
 
       (dif.length ? (
         '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
-          '<thead><tr style="background:#f8fafc;font-size:.72rem;color:#94a3b8;text-transform:uppercase">' +
+          '<thead><tr style="background:var(--voco-content-bg-alt);font-size:.72rem;color:var(--voco-text-muted);text-transform:uppercase">' +
             '<th style="padding:6px 10px;text-align:left">Período</th>' +
             '<th style="padding:6px 10px;text-align:center">Campañas</th>' +
             '<th style="padding:6px 10px;text-align:right">Enviados</th>' +
@@ -7168,7 +7168,7 @@ async function escCargarLista() {
     _escEstadoActual ? '&estado=' + _escEstadoActual : ''
   );
   var lista = document.getElementById('esc-lista');
-  lista.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.84rem">Cargando…</div>';
+  lista.innerHTML = '<div style="padding:20px;text-align:center;color:var(--voco-text-muted);font-size:.84rem">Cargando…</div>';
   try {
     var r = await fetch(url, {credentials:'include'});
     var d = await r.json();
@@ -7181,7 +7181,7 @@ async function escCargarLista() {
 function _escRenderLista(tickets) {
   var lista = document.getElementById('esc-lista');
   if (!tickets.length) {
-    lista.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:.84rem">Sin conversaciones en esta categoría</div>';
+    lista.innerHTML = '<div style="padding:24px;text-align:center;color:var(--voco-text-muted);font-size:.84rem">Sin conversaciones en esta categoría</div>';
     return;
   }
   lista.innerHTML = '';
@@ -7267,7 +7267,7 @@ async function escSeleccionarTicket(ticket) {
 
   // Historial
   var msgsEl = document.getElementById('esc-msgs');
-  msgsEl.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:12px;font-size:.82rem">Cargando historial…</div>';
+  msgsEl.innerHTML = '<div style="color:var(--voco-text-muted);text-align:center;padding:12px;font-size:.82rem">Cargando historial…</div>';
   try {
     var r = await fetch('/inbox/api/tickets/' + ticket.id + '/historial', {credentials:'include'});
     var d = await r.json();
@@ -7281,7 +7281,7 @@ function _escRenderMensajes(mensajes) {
   var el = document.getElementById('esc-msgs');
   el.innerHTML = '';
   if (!mensajes.length) {
-    el.innerHTML = '<div style="color:#64748b;text-align:center;padding:12px;font-size:.82rem">Sin mensajes aún</div>';
+    el.innerHTML = '<div style="color:var(--voco-text-muted);text-align:center;padding:12px;font-size:.82rem">Sin mensajes aún</div>';
     return;
   }
   mensajes.forEach(function(m) {
@@ -7301,7 +7301,7 @@ function _escRenderMensajes(mensajes) {
       : _escEsc(m.content);
 
     wrap.innerHTML =
-      (label ? '<div style="font-size:.68rem;color:#94a3b8;margin-bottom:2px;padding:0 4px">' + label + '</div>' : '') +
+      (label ? '<div style="font-size:.68rem;color:var(--voco-text-muted);margin-bottom:2px;padding:0 4px">' + label + '</div>' : '') +
       '<div class="esc-bbl ' + cls + '">' + bodyHtml + '<div class="esc-bbl-ts">' +
         (m.timestamp ? new Date(m.timestamp).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '') +
       '</div></div>';
@@ -7378,7 +7378,7 @@ async function escEnviarRespuesta() {
       var msgs = document.getElementById('esc-msgs');
       var wrap = document.createElement('div');
       wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-start';
-      wrap.innerHTML = '<div style="font-size:.68rem;color:#94a3b8;margin-bottom:2px;padding:0 4px">👤 Agente</div>' +
+      wrap.innerHTML = '<div style="font-size:.68rem;color:var(--voco-text-muted);margin-bottom:2px;padding:0 4px">👤 Agente</div>' +
         '<div class="esc-bbl esc-bbl-human">' + _escEsc(texto) +
         '<div class="esc-bbl-ts">' + new Date().toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) + '</div></div>';
       msgs.appendChild(wrap);
@@ -7396,7 +7396,7 @@ async function escEnviarRespuesta() {
 async function cargarEquipo() {
   var wrap = document.getElementById('equipo-tabla');
   if (!wrap) return;
-  wrap.innerHTML = '<div style="padding:14px 16px;color:#94a3b8;font-size:.85rem">Cargando…</div>';
+  wrap.innerHTML = '<div style="padding:14px 16px;color:var(--voco-text-muted);font-size:.85rem">Cargando…</div>';
   try {
     var r = await fetch('/inbox/api/equipo?agent_id=' + _escAgentId, {credentials:'include'});
     var d = await r.json();
@@ -7409,7 +7409,7 @@ async function cargarEquipo() {
 function _renderTablaEquipo(equipo) {
   var wrap = document.getElementById('equipo-tabla');
   if (!equipo.length) {
-    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.85rem">' +
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">' +
       'No hay agentes de soporte aún. Crea el primero con el botón "Nuevo agente".</div>';
     return;
   }
@@ -7431,7 +7431,7 @@ function _renderTablaEquipo(equipo) {
       '</td></tr>';
   });
   wrap.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
-    '<thead><tr style="background:#f8fafc;font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">' +
+    '<thead><tr style="background:var(--voco-content-bg-alt);font-size:.75rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.04em">' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Nombre</th>' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Email</th>' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Rol</th>' +
@@ -7533,13 +7533,13 @@ var _AUDIT_ICONOS = {
 async function escCargarAuditoria(ticketId) {
   var lista = document.getElementById('esc-audit-list');
   if (!lista) return;
-  lista.innerHTML = '<div style="color:#94a3b8;font-size:.82rem;padding:8px">Cargando auditoría…</div>';
+  lista.innerHTML = '<div style="color:var(--voco-text-muted);font-size:.82rem;padding:8px">Cargando auditoría…</div>';
   try {
     var r = await fetch('/inbox/api/tickets/' + ticketId + '/eventos', {credentials:'include'});
     var d = await r.json();
     var eventos = d.eventos || [];
     if (!eventos.length) {
-      lista.innerHTML = '<div style="color:#94a3b8;font-size:.83rem;padding:12px;text-align:center">Sin eventos registrados</div>';
+      lista.innerHTML = '<div style="color:var(--voco-text-muted);font-size:.83rem;padding:12px;text-align:center">Sin eventos registrados</div>';
       return;
     }
     lista.innerHTML = '';
@@ -7550,13 +7550,13 @@ async function escCargarAuditoria(ticketId) {
       });
       var el = document.createElement('div');
       el.style.cssText = 'display:flex;gap:10px;align-items:flex-start;padding:8px 10px;' +
-        'background:#fff;border-radius:8px;border:1px solid #e2e8f0;font-size:.82rem';
+        'background:var(--voco-card-bg);border-radius:8px;border:1px solid var(--voco-border);font-size:.82rem';
       el.innerHTML = '<span style="font-size:1.1rem">' + icono + '</span>' +
         '<div style="flex:1">' +
           '<div style="font-weight:600;color:#1a2332">' + _escEsc(ev.actor_nombre) + '</div>' +
-          '<div style="color:#4a5568;margin-top:1px">' + _escEsc(ev.detalle) + '</div>' +
+          '<div style="color:var(--voco-text-muted);margin-top:1px">' + _escEsc(ev.detalle) + '</div>' +
         '</div>' +
-        '<div style="font-size:.7rem;color:#94a3b8;white-space:nowrap">' + hora + '</div>';
+        '<div style="font-size:.7rem;color:var(--voco-text-muted);white-space:nowrap">' + hora + '</div>';
       lista.appendChild(el);
     });
     lista.scrollTop = lista.scrollHeight;
@@ -7607,7 +7607,7 @@ function metTab(id, btn) {
 async function cargarStatsEquipo() {
   var wrap = document.getElementById('met-equipo-tabla');
   if (!wrap) return;
-  wrap.innerHTML = '<div style="padding:14px;color:#94a3b8;font-size:.85rem;text-align:center">Cargando...</div>';
+  wrap.innerHTML = '<div style="padding:14px;color:var(--voco-text-muted);font-size:.85rem;text-align:center">Cargando...</div>';
 
   // Cargar config auto-asignar
   try {
@@ -7635,7 +7635,7 @@ async function cargarStatsEquipo() {
 function _renderStatsEquipo(stats) {
   var wrap = document.getElementById('met-equipo-tabla');
   if (!stats.length) {
-    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.85rem">' +
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">' +
       'Sin agentes de soporte configurados. Crea agentes en Configuración → Equipo.</div>';
     return;
   }
@@ -7658,7 +7658,7 @@ function _renderStatsEquipo(stats) {
       '</tr>';
   });
   wrap.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
-    '<thead><tr style="background:#f8fafc;font-size:.72rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">' +
+    '<thead><tr style="background:var(--voco-content-bg-alt);font-size:.72rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.04em">' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Agente</th>' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Rol</th>' +
     '<th style="padding:8px 14px;text-align:center;font-weight:600">Activos</th>' +
@@ -7815,7 +7815,7 @@ function enviarMediaSeleccionada() {
     var url = URL.createObjectURL(_mediaFile);
     prev.innerHTML = '<video src="' + url + '" controls style="max-width:100%;max-height:240px;border-radius:8px"></video>';
   } else {
-    prev.innerHTML = '<div style="padding:14px;background:#f1f5f9;border-radius:8px;color:#1a2332">📄 ' +
+    prev.innerHTML = '<div style="padding:14px;background:var(--voco-nav-bg-hover);border-radius:8px;color:#1a2332">📄 ' +
       he(_mediaFile.name) + '<br><small style="color:#64748b">' +
       (_mediaFile.size / 1024 / 1024).toFixed(2) + ' MB</small></div>';
   }
@@ -7927,7 +7927,7 @@ async function _buscarCatalogoExec() {
     var d = await r.json();
     var prods = d.productos || [];
     if (!prods.length) {
-      box.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.84rem">' +
+      box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--voco-text-muted);font-size:.84rem">' +
         (q ? 'Sin resultados para "' + he(q) + '"' : 'Sin productos en el catálogo') + '</div>';
       return;
     }
@@ -8101,7 +8101,7 @@ function escDetTab(id, btn) {
 async function escCargarNotas(ticketId) {
   var lista = document.getElementById('esc-notas-list');
   if (!lista) return;
-  lista.innerHTML = '<div style="color:#94a3b8;font-size:.82rem;padding:8px">Cargando notas…</div>';
+  lista.innerHTML = '<div style="color:var(--voco-text-muted);font-size:.82rem;padding:8px">Cargando notas…</div>';
   try {
     var r = await fetch('/inbox/api/tickets/' + ticketId + '/notas', {credentials:'include'});
     var d = await r.json();
@@ -8110,7 +8110,7 @@ async function escCargarNotas(ticketId) {
     if (cntEl) cntEl.textContent = notas.length ? '(' + notas.length + ')' : '';
 
     if (!notas.length) {
-      lista.innerHTML = '<div style="color:#94a3b8;font-size:.83rem;padding:12px;text-align:center">Sin notas aún. Agrega la primera 👇</div>';
+      lista.innerHTML = '<div style="color:var(--voco-text-muted);font-size:.83rem;padding:12px;text-align:center">Sin notas aún. Agrega la primera 👇</div>';
       return;
     }
     lista.innerHTML = '';
@@ -8247,7 +8247,7 @@ document.addEventListener('click', function(e) {
 async function cargarTemplatesRapidos() {
   var lista = document.getElementById('tpl-lista');
   if (!lista) return;
-  lista.innerHTML = '<div style="padding:14px;color:#94a3b8;font-size:.85rem">Cargando…</div>';
+  lista.innerHTML = '<div style="padding:14px;color:var(--voco-text-muted);font-size:.85rem">Cargando…</div>';
   try {
     var r = await fetch('/inbox/api/templates?agent_id=' + _escAgentId, {credentials:'include'});
     var d = await r.json();
@@ -8261,21 +8261,21 @@ async function cargarTemplatesRapidos() {
 function _renderListaTemplates(templates) {
   var lista = document.getElementById('tpl-lista');
   if (!templates.length) {
-    lista.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:.85rem">' +
+    lista.innerHTML = '<div style="padding:20px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">' +
       'Sin templates aún. Crea el primero con el botón "Nuevo template".</div>';
     return;
   }
   var filas = templates.map(function(t) {
     return '<tr style="border-bottom:1px solid #f1f5f9">' +
       '<td style="padding:10px 14px;font-weight:700;font-size:.85rem;color:#1a2332">' + _escEsc(t.titulo) + '</td>' +
-      '<td style="padding:10px 14px;font-size:.82rem;color:#4a5568;max-width:320px">' +
+      '<td style="padding:10px 14px;font-size:.82rem;color:var(--voco-text-muted);max-width:320px">' +
         _escEsc(t.contenido.slice(0,100)) + (t.contenido.length>100?'…':'') + '</td>' +
       '<td style="padding:10px 14px">' +
         '<button onclick="eliminarTemplateRapido(' + t.id + ')" style="color:#ef4444;background:none;border:none;cursor:pointer;font-size:.78rem">Eliminar</button>' +
       '</td></tr>';
   });
   lista.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
-    '<thead><tr style="background:#f8fafc;font-size:.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">' +
+    '<thead><tr style="background:var(--voco-content-bg-alt);font-size:.75rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.04em">' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Título</th>' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Mensaje</th>' +
     '<th style="padding:8px 14px"></th>' +
@@ -8351,7 +8351,7 @@ var _escRenderListaOriginal = _escRenderLista;
 _escRenderLista = function(tickets) {
   var lista = document.getElementById('esc-lista');
   if (!tickets.length) {
-    lista.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:.84rem">Sin conversaciones en esta categoría</div>';
+    lista.innerHTML = '<div style="padding:24px;text-align:center;color:var(--voco-text-muted);font-size:.84rem">Sin conversaciones en esta categoría</div>';
     return;
   }
   lista.innerHTML = '';
@@ -8415,7 +8415,7 @@ def obtener_inbox_html(agent: dict | None = None, user: dict | None = None) -> s
             pc = plan_colors.get(plan, "#64748b")
             pb = plan_bg.get(plan, "#1e293b")
             user_badge = f'<span style="background:{pb};color:{pc};font-size:.68rem;padding:2px 8px;border-radius:10px;font-weight:700;text-transform:capitalize">{plan}</span>'
-        user_info = f'<span style="color:#94a3b8;font-size:.76rem;margin-right:6px">{nombre_u}</span>{user_badge}'
+        user_info = f'<span style="color:var(--voco-text-muted);font-size:.76rem;margin-right:6px">{nombre_u}</span>{user_badge}'
     else:
         user_info = ""
 
@@ -8763,7 +8763,7 @@ html.dark .wiz-result.err{{background:#1a0a0a;color:#f87171;border-color:#991b1b
 .tog-sw input{{opacity:0;width:0;height:0;position:absolute}}
 .tog-slider{{position:absolute;inset:0;border-radius:22px;background:var(--border);cursor:pointer;transition:.2s}}
 .tog-slider:before{{content:'';position:absolute;width:16px;height:16px;border-radius:50%;
-  left:3px;bottom:3px;background:#fff;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.15)}}
+  left:3px;bottom:3px;background:var(--voco-card-bg);transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.15)}}
 .tog-sw input:checked+.tog-slider{{background:#10b981}}
 .tog-sw input:checked+.tog-slider:before{{transform:translateX(16px)}}
 .toggle-row{{display:flex;align-items:center;justify-content:space-between;
@@ -8930,7 +8930,7 @@ function renderWizStep() {{
     var aname = _wizData.agent_name || 'Agente';
     tmpl = tmpl.replace(/\\{{NOMBRE_AGENTE\\}}/g,aname).replace(/\\{{NOMBRE_NEGOCIO\\}}/g,name);
     body.innerHTML = dots +
-      '<p style="font-size:.78rem;color:#64748b;margin-bottom:12px">'+
+      '<p style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:12px">'+
       'Prompt generado según el tipo de negocio. Puedes editarlo ahora o ajustarlo después en la pestaña Prompt.</p>'+
       '<div class="wiz-field"><label class="wiz-label">Descripción del negocio (se incluirá en el prompt)</label>'+
       '<textarea class="wiz-inp" id="wiz-desc" style="height:80px" placeholder="Ej: Ofrecemos servicios de corte, coloración y tratamientos capilares...">'+((_wizData.descripcion)||'')+'</textarea></div>'+
@@ -8945,13 +8945,13 @@ function renderWizStep() {{
       filas += varRow(k, varsObj[k]);
     }});
     body.innerHTML = dots +
-      '<p style="font-size:.78rem;color:#64748b;margin-bottom:12px">'+
+      '<p style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:12px">'+
       'Define variables que puedes usar en el prompt como <code style="color:#818cf8">{{HORARIO}}</code></p>'+
-      '<table class="vars-tbl"><thead><tr><th style="color:#64748b;padding:6px 4px;text-align:left">Variable</th>'+
-      '<th style="color:#64748b;padding:6px 4px;text-align:left">Valor</th><th></th></tr></thead>'+
+      '<table class="vars-tbl"><thead><tr><th style="color:var(--voco-text-muted);padding:6px 4px;text-align:left">Variable</th>'+
+      '<th style="color:var(--voco-text-muted);padding:6px 4px;text-align:left">Valor</th><th></th></tr></thead>'+
       '<tbody id="wiz-vars-body">'+filas+'</tbody></table>'+
       '<button onclick="agregarVarWiz()" type="button" style="margin-top:10px;background:#0f172a;'+
-      'border:1px solid #334155;color:#94a3b8;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem">+ Agregar variable</button>';
+      'border:1px solid #334155;color:var(--voco-text-muted);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:.8rem">+ Agregar variable</button>';
   }} else if (_wizStep === 5) {{
     var mods = _wizData.modules || {{}};
     function togRow(key, label, desc) {{
@@ -8962,7 +8962,7 @@ function renderWizStep() {{
         '<span class="tog-slider"></span></label></div>';
     }}
     body.innerHTML = dots +
-      '<p style="font-size:.78rem;color:#64748b;margin-bottom:14px">Activa los módulos que apliquen a tu tipo de negocio.</p>'+
+      '<p style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:14px">Activa los módulos que apliquen a tu tipo de negocio.</p>'+
       togRow('shopify_catalog','🛒 Catálogo Shopify','Inyecta el catálogo en el contexto del agente')+
       togRow('cart_orders','🛍 Carrito y pedidos','Muestra carrito activo y pedidos pendientes')+
       togRow('client_memory','🧠 Memoria de clientes','Recuerda datos y pedidos previos')+
@@ -8979,7 +8979,7 @@ function renderWizStep() {{
       '<b>Agente:</b> '+he(aname)+' &nbsp; <b>Tipo:</b> '+he(btype)+'<br>'+
       '<b>Phone Number ID:</b> '+he(_wizData.phone_number_id||'(no configurado)')+'<br>'+
       '</div></div>'+
-      '<div style="font-size:.8rem;color:#64748b;line-height:1.7">'+
+      '<div style="font-size:.8rem;color:var(--voco-text-muted);line-height:1.7">'+
       'Una vez creado el agente:<br>'+
       '1. Configura el webhook de Meta apuntando a <code style="color:#818cf8">https://tu-app.railway.app/webhook</code><br>'+
       '2. Suscríbete al campo <code style="color:#818cf8">messages</code><br>'+
