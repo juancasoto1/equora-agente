@@ -808,23 +808,25 @@ tr:hover td{background:var(--voco-nav-bg-hover)}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .form-grid.full{grid-template-columns:1fr}
 .f-group{display:flex;flex-direction:column;gap:6px}
-.f-label{font-size:.78rem;font-weight:600;color:#4a5568;text-transform:uppercase;letter-spacing:.04em}
+.f-label{font-size:.78rem;font-weight:600;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.04em}
 .f-inp,.f-sel,.f-ta{
-  padding:9px 13px;border-radius:8px;border:1.5px solid #e0e4e8;
-  font-size:.88rem;color:#2d3748;background:#fff;outline:none;font-family:inherit;
-  transition:border-color .15s;width:100%;box-sizing:border-box;
+  padding:9px 13px;border-radius:8px;border:1.5px solid var(--voco-border);
+  font-size:.88rem;color:var(--voco-text);background:var(--voco-card-bg);outline:none;font-family:inherit;
+  transition:border-color .15s, box-shadow .15s;width:100%;box-sizing:border-box;
 }
-.f-inp:focus,.f-sel:focus,.f-ta:focus{border-color:var(--az)}
+.f-inp:focus,.f-sel:focus,.f-ta:focus{border-color:var(--voco-brand);box-shadow:0 0 0 3px rgba(99,102,241,.12)}
 .f-ta{resize:vertical;min-height:100px;line-height:1.5}
-.f-hint{font-size:.73rem;color:#6b7a8d;margin-top:2px}
-.btn-primary{background:var(--az);color:#fff;border:none;border-radius:9px;padding:10px 22px;
-  font-size:.9rem;font-weight:700;cursor:pointer;transition:opacity .2s}
-.btn-primary:hover{opacity:.88}
-.btn-primary:disabled{opacity:.45;cursor:not-allowed}
-.btn-secondary{background:#fff;color:#4a5568;border:1.5px solid #e0e4e8;border-radius:9px;
+.f-hint{font-size:.73rem;color:var(--voco-text-muted);margin-top:2px}
+.btn-primary{background:var(--voco-brand);color:#fff;border:none;border-radius:9px;padding:10px 22px;
+  font-size:.9rem;font-weight:700;cursor:pointer;transition:background-color .15s, transform .15s;
+  box-shadow:0 1px 2px rgba(79,70,229,.15)}
+.btn-primary:hover{background:var(--voco-brand-hover);box-shadow:0 2px 4px rgba(79,70,229,.25)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;background:var(--voco-text-muted);box-shadow:none}
+.btn-secondary{background:var(--voco-card-bg);color:var(--voco-text);border:1.5px solid var(--voco-border);border-radius:9px;
   padding:10px 18px;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .15s}
-.btn-secondary:hover{border-color:#b0bec5;color:#2d3748}
-.sep{height:1px;background:#e0e4e8;margin:20px 0}
+.btn-secondary:hover{border-color:var(--voco-brand);color:var(--voco-brand);background:var(--voco-nav-bg-active)}
+.sep{height:1px;background:var(--voco-border);margin:20px 0}
 
 /* ── DIFUSIÓN ── */
 #dif-split{display:flex;gap:24px;align-items:flex-start}
