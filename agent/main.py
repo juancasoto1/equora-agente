@@ -1396,11 +1396,17 @@ async def webhook_handler(request: Request):
                             # al product_list que es estable en todos los devices.
                             logger.info(f"[pedido-min] Enviando product_list a {msg.telefono}")
                             cat_reabierto = False
-                            if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
+                            tiene_metodo = hasattr(_proveedor_agente, "enviar_catalogo_productos")
+                            logger.info(f"[pedido-min] tiene enviar_catalogo_productos={tiene_metodo}")
+                            if tiene_metodo:
                                 # Async: garantiza que _fb_items esté cargado antes
                                 # de armar el payload (defensa contra cold start).
-                                from agent.tools import obtener_secciones_catalogo_async
+                                from agent.tools import obtener_secciones_catalogo_async, _fb_items
                                 secciones = await obtener_secciones_catalogo_async(None)
+                                logger.info(
+                                    f"[pedido-min] _fb_items={len(_fb_items)} | secciones={len(secciones)} | "
+                                    f"items_en_secciones={sum(len(s.get('product_items', [])) for s in secciones)}"
+                                )
                                 if secciones:
                                     try:
                                         cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
@@ -1408,8 +1414,11 @@ async def webhook_handler(request: Request):
                                             "Tu carrito anterior está guardado — lo nuevo se suma automáticamente.",
                                             secciones,
                                         )
+                                        logger.info(f"[pedido-min] cat_reabierto={cat_reabierto}")
                                     except Exception as e_pl:
-                                        logger.error(f"[pedido-min] product_list falló: {e_pl}")
+                                        logger.error(f"[pedido-min] product_list excepción: {e_pl}", exc_info=True)
+                                else:
+                                    logger.warning(f"[pedido-min] secciones VACÍAS — no se mandó product_list")
                             # Mensaje de cierre — siempre se envía (haya o no funcionado el product_list).
                             # IMPORTANTE: NO mezclar universos de carrito. El carrito vive en el
                             # catálogo nativo de WhatsApp; nada de link a tienda web (rompería el flujo).
