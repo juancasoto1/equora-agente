@@ -221,6 +221,15 @@ async def lifespan(app: FastAPI):
         logger.info("Catálogo Shopify pre-cargado al arrancar ✅")
     except Exception as e:
         logger.warning(f"No se pudo pre-cargar catálogo Shopify al arrancar: {e}")
+    # Pre-cargar SINCRÓNICAMENTE el catálogo de Facebook (retailer_ids) para
+    # que product_list funcione desde el primer mensaje. Antes se lanzaba como
+    # background task y la primera petición podía llegar con _fb_items vacío.
+    try:
+        from agent.tools import _cargar_fb_catalog, _fb_items
+        await _cargar_fb_catalog()
+        logger.info(f"Catálogo Facebook pre-cargado: {len(_fb_items)} items ✅")
+    except Exception as e:
+        logger.warning(f"No se pudo pre-cargar catálogo Facebook al arrancar: {e}")
     try:
         costo, gratis = await cargar_tarifas_envio()
         logger.info(f"Tarifas de envío: costo=${costo:,} / gratis desde=${gratis:,} ✅")
@@ -817,6 +826,21 @@ def extraer_marcador_carrito(respuesta: str) -> tuple[str, list | None]:
     return texto_limpio, items
 
 
+def extraer_marcador_vaciar_carrito(respuesta: str) -> tuple[str, bool]:
+    """Extrae [[VACIAR_CARRITO]] — el agente lo emite cuando el cliente pide
+    vaciar/borrar/limpiar su carrito. El parser ejecuta limpiar_carrito_activo()
+    y limpia el marcador del texto que llega al cliente.
+
+    Acepta variantes: [[VACIAR_CARRITO]], [[VACIAR CARRITO]], [[LIMPIAR_CARRITO]],
+    [[LIMPIAR CARRITO]] — tolerante a errores del LLM.
+    """
+    patron = r'\[\[(?:VACIAR|LIMPIAR)[_ ]?CARRITO\]\]'
+    if not re.search(patron, respuesta, flags=re.IGNORECASE):
+        return respuesta, False
+    texto_limpio = re.sub(patron, '', respuesta, flags=re.IGNORECASE).strip()
+    return texto_limpio, True
+
+
 def extraer_marcador_lista(respuesta: str) -> tuple[str, dict | None]:
     """Extrae datos del marcador [[LISTA:...]] y lo elimina del texto."""
     match = re.search(r'\[\[LISTA:(.*?)\]\]', respuesta, re.DOTALL)
@@ -1373,7 +1397,10 @@ async def webhook_handler(request: Request):
                             logger.info(f"[pedido-min] Enviando product_list a {msg.telefono}")
                             cat_reabierto = False
                             if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
-                                secciones = obtener_secciones_catalogo(None)
+                                # Async: garantiza que _fb_items esté cargado antes
+                                # de armar el payload (defensa contra cold start).
+                                from agent.tools import obtener_secciones_catalogo_async
+                                secciones = await obtener_secciones_catalogo_async(None)
                                 if secciones:
                                     try:
                                         cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
@@ -1383,19 +1410,21 @@ async def webhook_handler(request: Request):
                                         )
                                     except Exception as e_pl:
                                         logger.error(f"[pedido-min] product_list falló: {e_pl}")
-                            if not cat_reabierto:
-                                # IMPORTANTE: NO mezclar universos de carrito.
-                                # El carrito vive en el catálogo nativo de WhatsApp.
-                                # Si product_list falla, NO mandamos link a tienda web
-                                # (Shopify) porque rompe el flujo: el cliente terminaría
-                                # con un carrito en WA y otro en web sin merge posible.
-                                # Mejor: pedir a Andrea (al cliente) que escriba qué quiere.
-                                texto_final = "Escríbeme qué más quieres agregar y te ayudo 🌿"
-                                await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
-                                await guardar_mensaje(
-                                    msg.telefono, "assistant", texto_final,
-                                    agent_id=_agent_id,
+                            # Mensaje de cierre — siempre se envía (haya o no funcionado el product_list).
+                            # IMPORTANTE: NO mezclar universos de carrito. El carrito vive en el
+                            # catálogo nativo de WhatsApp; nada de link a tienda web (rompería el flujo).
+                            if cat_reabierto:
+                                texto_final = (
+                                    "Escríbeme qué más quieres agregar y te ayudo, "
+                                    "o explora el catálogo en *Ver catálogo* 👆🌿"
                                 )
+                            else:
+                                texto_final = "Escríbeme qué más quieres agregar y te ayudo 🌿"
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
+                            await guardar_mensaje(
+                                msg.telefono, "assistant", texto_final,
+                                agent_id=_agent_id,
+                            )
                             logger.info(f"Pedido bajo mínimo: total={total}, min={pedido_min}, falta={falta} — items guardados para acumular")
                             continue  # No crear checkout
 
@@ -1666,6 +1695,16 @@ async def webhook_handler(request: Request):
                     logger.info(f"Carrito actualizado para {msg.telefono}: {len(items_carrito)} items")
                 except Exception as e:
                     logger.error(f"Error guardando carrito: {e}")
+
+            # Procesar marcador [[VACIAR_CARRITO]] → vaciar carrito en BD real.
+            # Antes Andrea decía "ya quedó vacío" pero el carrito_activo seguía lleno.
+            respuesta, vaciar = extraer_marcador_vaciar_carrito(respuesta)
+            if vaciar:
+                try:
+                    await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
+                    logger.info(f"[VACIAR_CARRITO] carrito vaciado para {msg.telefono}")
+                except Exception as e:
+                    logger.error(f"Error vaciando carrito de {msg.telefono}: {e}")
 
             # Procesar marcador de pedido → crear checkout en Shopify
             checkout_url = None

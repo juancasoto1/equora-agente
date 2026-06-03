@@ -539,6 +539,19 @@ async def _cargar_fb_catalog():
         logger.error(f"Error cargando catálogo Facebook: {e}")
 
 
+async def obtener_secciones_catalogo_async(categoria: str | None = None) -> list[dict]:
+    """Versión async: si _fb_items está vacío, intenta cargarlo antes de devolver.
+    Útil en flujos donde queremos garantizar el product_list aunque el catálogo
+    no estuviera precargado (ej: cold start, deploy reciente)."""
+    if not _fb_items:
+        logger.info("_fb_items vacío en runtime — cargando catálogo Facebook inline")
+        try:
+            await _cargar_fb_catalog()
+        except Exception as e:
+            logger.error(f"Fallo cargando catálogo Facebook inline: {e}")
+    return obtener_secciones_catalogo(categoria)
+
+
 def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
     """Devuelve las secciones para un mensaje product_list de WhatsApp.
     Usa los retailer_ids REALES del catálogo de Facebook (no SKUs de Shopify).
@@ -547,6 +560,9 @@ def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
     LÍMITES DE META: product_list admite max 30 items totales y max 10 secciones.
     Si el catálogo excede 30, se recortan respetando el orden de categorías
     (las primeras categorías de ORDEN_CATEGORIAS tienen prioridad).
+
+    NOTA: Si _fb_items está vacío, esta función SINCRÓNICA no puede cargarlo.
+    En ese caso, usar obtener_secciones_catalogo_async() en el caller.
     """
     if not _fb_items:
         logger.warning("_fb_items vacío — catálogo Facebook aún no cargado")
