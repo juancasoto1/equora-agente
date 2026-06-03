@@ -8761,6 +8761,92 @@ Asistes a pacientes y clientes con información sobre servicios de salud y belle
 - Mantén la privacidad: no solicites información médica sensible por chat
 - Ante emergencias, indica llamar al número de emergencias local""",
 
+        "calificador": """Eres {NOMBRE_AGENTE}, agente de calificación de leads de {NOMBRE_NEGOCIO}.
+
+## Tu identidad
+Tu trabajo NO es vender productos sueltos ni dar precios. Tu trabajo es entender la
+necesidad del lead, calificarlo y llevarlo a la siguiente etapa del pipeline comercial.
+
+## Sobre el negocio
+{DESCRIPCION_NEGOCIO}
+
+## Tu proceso (BANT simplificado)
+1. **Entender la necesidad**: ¿Qué problema quiere resolver?
+2. **Presupuesto**: ¿Tiene presupuesto definido o lo está explorando?
+3. **Autoridad**: ¿Decide él o necesita aprobación de otra persona?
+4. **Urgencia**: ¿Cuándo lo necesita? ¿Tiene una fecha límite?
+5. **Acción**: Si califica, agenda una reunión. Si no, nutre con info útil.
+
+## Marcadores que puedes emitir (al final del mensaje, entre dobles corchetes)
+
+- `[[DEAL:valor_estimado_cop|score_0_100]]` — crea/actualiza un deal con el lead.
+  Emitir cuando: el cliente expresa intención clara de compra o solicita cotización.
+  Ejemplo: `[[DEAL:4500000|70]]`
+
+- `[[STAGE:nombre_stage]]` — mueve el deal a otra etapa.
+  Valores válidos: Nuevo | Calificado | Negociando | Ganado | Perdido
+  Ejemplo: `[[STAGE:Calificado]]` cuando el lead pasó BANT completo.
+
+- `[[AGENDAR:tipo_reunion]]` — envía link de Calendly al cliente.
+  Ejemplo: `[[AGENDAR:demo_30min]]` cuando el lead está listo para reunión.
+
+- `[[EMAIL:template|asunto]]` — dispara envío por SendGrid (cotización formal, etc.)
+  Ejemplo: `[[EMAIL:cotizacion_estandar|Cotización solicitada]]`
+
+- `[[ESCALAR:motivo]]` — escala a humano cuando no puedes resolver.
+
+## Horario de atención
+{HORARIO}
+
+## Reglas
+- Habla en tono profesional, consultivo — no eres vendedor de mostrador.
+- NUNCA des precio exacto sin haber calificado primero.
+- Antes de agendar, valida email del lead — es clave para el follow-up.
+- Si el cliente no califica (presupuesto muy bajo, no decide, no es urgente),
+  marca [[STAGE:Perdido]] con cortesía y agrega [[EMAIL:material_educativo|...]] para nutrirlo.
+- Una respuesta = máximo 3 párrafos. Sé directo.""",
+
+        "soporte": """Eres {NOMBRE_AGENTE}, agente de soporte al cliente de {NOMBRE_NEGOCIO}.
+
+## Tu identidad
+Resuelves problemas, no vendes. Tu éxito se mide en clientes satisfechos y problemas
+cerrados rápido — no en pedidos cerrados.
+
+## Sobre el negocio
+{DESCRIPCION_NEGOCIO}
+
+## Tu proceso
+1. **Escucha activa**: deja que el cliente explique el problema completo.
+2. **Empatía**: reconoce la frustración antes de proponer solución.
+3. **Diagnóstico**: pide los datos mínimos (número de pedido, fecha, foto si aplica).
+4. **Resolución**: consulta tu Knowledge Base. Si no tienes respuesta, escala.
+5. **Cierre**: confirma que el problema quedó resuelto y dispara CSAT.
+
+## Marcadores que puedes emitir
+
+- `[[ESTADO_PEDIDO:numero_pedido]]` — consulta el estado de un pedido por número.
+  Ejemplo: `[[ESTADO_PEDIDO:1234]]`
+
+- `[[KB:tema_a_buscar]]` — busca en la Knowledge Base del negocio.
+  Ejemplo: `[[KB:politica_devolucion]]` o `[[KB:garantia_productos]]`
+
+- `[[TICKET:resumen_problema|urgencia]]` — crea ticket interno (baja|media|alta).
+  Ejemplo: `[[TICKET:Cliente recibió producto dañado|alta]]`
+
+- `[[CSAT:enviar]]` — manda encuesta de satisfacción al cerrar el caso.
+
+- `[[ESCALAR:motivo]]` — escala a humano cuando no puedes resolver.
+
+## Horario de atención
+{HORARIO}
+
+## Reglas
+- SIEMPRE valida que el problema quedó resuelto antes de cerrar.
+- Si el cliente está molesto, primero empatía, después solución.
+- NUNCA prometas algo que no esté en tu Knowledge Base ni en políticas oficiales.
+- Si un problema requiere reembolso, cambio o reposición → [[ESCALAR:]] o [[TICKET:]].
+- Una respuesta = máximo 3 párrafos. Claridad sobre extensión.""",
+
         "personalizado": """Eres {NOMBRE_AGENTE}, asistente virtual de {NOMBRE_NEGOCIO}.
 
 ## Tu identidad
@@ -9032,13 +9118,34 @@ html.dark .agent-pill{{background:var(--pill-bg-dark)!important;color:var(--pill
 var _PROMPT_TEMPLATES = {templates_js};
 var _wizStep = 1;
 var _wizData = {{}};
-var _wizPropTypes = ['productos','servicios','restaurante','salud','personalizado'];
+var _wizPropTypes = ['productos','servicios','restaurante','salud','calificador','soporte','personalizado'];
+
+/* Defaults de módulos según tipo de agente (Sprint A).
+   Los módulos viejos (shopify_catalog/cart_orders/client_memory/campaign_context)
+   siguen viviendo en _wizData.modules.
+   Los 5 nuevos viven en _wizData.modules_new — se guardan en Agent.modules_json.
+   Andrea y cualquier agente existente NO se ven afectados — esto solo aplica
+   a agentes creados con el wizard de aquí en adelante. */
+function _defaultModulesNew(btype) {{
+  // Todos los nuevos arrancan OFF
+  var base = {{pipeline:false, calendly:false, sendgrid:false,
+              knowledge_base:false, order_status:false}};
+  if (btype === 'calificador') {{
+    base.pipeline = true; base.calendly = true; base.sendgrid = true;
+  }} else if (btype === 'soporte') {{
+    base.knowledge_base = true; base.order_status = true; base.sendgrid = true;
+  }} else if (btype === 'servicios' || btype === 'salud') {{
+    base.calendly = true; // estos tipos suelen agendar
+  }}
+  return base;
+}}
 
 /* ── Wizard ── */
 function abrirWizard() {{
   _wizStep = 1;
   _wizData = {{business_type:'productos',emoji:'🤖',color:'#6366f1',
-    modules:{{shopify_catalog:true,cart_orders:true,client_memory:true,campaign_context:true}}}};
+    modules:{{shopify_catalog:true,cart_orders:true,client_memory:true,campaign_context:true}},
+    modules_new: _defaultModulesNew('productos')}};
   renderWizStep();
   document.getElementById('wizard-overlay').style.display = 'flex';
   if(window.lucide) window.lucide.createIcons();
@@ -9072,6 +9179,7 @@ function renderWizStep() {{
   if (_wizStep === 1) {{
     var types = [['productos','🛍','Productos físicos'],['servicios','🔧','Servicios'],
                  ['restaurante','🍽','Restaurante'],['salud','💊','Salud/Belleza'],
+                 ['calificador','🎯','Calificador de leads'],['soporte','🎧','Soporte al cliente'],
                  ['personalizado','⚙','Personalizado']];
     var typeBtns = types.map(function(t) {{
       var sel = (_wizData.business_type===t[0]) ? ' selected' : '';
@@ -9141,20 +9249,37 @@ function renderWizStep() {{
       'border:1px solid var(--voco-border);color:var(--voco-text);padding:7px 14px;border-radius:6px;cursor:pointer;font-size:.8rem;display:inline-flex;align-items:center;gap:6px">'+
       '<i data-lucide="plus" style="width:14px;height:14px"></i> Agregar variable</button>';
   }} else if (_wizStep === 5) {{
-    var mods = _wizData.modules || {{}};
-    function togRow(key, label, desc) {{
-      var chk = (key in mods) ? mods[key] : true;
+    var mods    = _wizData.modules || {{}};
+    var modsNew = _wizData.modules_new || _defaultModulesNew(_wizData.business_type);
+    /* togRow soporta 2 buckets: 'old' (vive en _wizData.modules) y
+       'new' (vive en _wizData.modules_new → se guarda en Agent.modules_json) */
+    function togRow(key, label, desc, bucket) {{
+      var src = (bucket === 'new') ? modsNew : mods;
+      var chk = (key in src) ? src[key] : (bucket === 'new' ? false : true);
+      var pfx = (bucket === 'new') ? 'wtogn-' : 'wtog-';
       return '<div class="toggle-row"><div><div class="toggle-lbl">'+label+'</div>'+
         '<div class="toggle-desc">'+desc+'</div></div>'+
-        '<label class="tog-sw"><input type="checkbox" id="wtog-'+key+'"'+(chk?' checked':'')+'>'+
+        '<label class="tog-sw"><input type="checkbox" id="'+pfx+key+'"'+(chk?' checked':'')+'>'+
         '<span class="tog-slider"></span></label></div>';
+    }}
+    function sectionLabel(txt) {{
+      return '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;'+
+        'color:var(--voco-text-muted);margin:18px 0 8px;padding-bottom:6px;'+
+        'border-bottom:1px solid var(--voco-border)">'+txt+'</div>';
     }}
     body.innerHTML = dots +
       '<p style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:14px">Activa los módulos que apliquen a tu tipo de negocio.</p>'+
-      togRow('shopify_catalog','<i data-lucide=\"shopping-bag\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Catálogo Shopify','Inyecta el catálogo en el contexto del agente')+
-      togRow('cart_orders','<i data-lucide=\"shopping-cart\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Carrito y pedidos','Muestra carrito activo y pedidos pendientes')+
-      togRow('client_memory','<i data-lucide=\"brain\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Memoria de clientes','Recuerda datos y pedidos previos')+
-      togRow('campaign_context','<i data-lucide=\"megaphone\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Contexto de campaña','Sabe a qué difusión responde el cliente');
+      sectionLabel('Comercio y conversaciones')+
+      togRow('shopify_catalog','<i data-lucide=\"shopping-bag\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Catálogo Shopify','Inyecta el catálogo en el contexto del agente','old')+
+      togRow('cart_orders','<i data-lucide=\"shopping-cart\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Carrito y pedidos','Muestra carrito activo y pedidos pendientes','old')+
+      togRow('client_memory','<i data-lucide=\"brain\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Memoria de clientes','Recuerda datos y pedidos previos','old')+
+      togRow('campaign_context','<i data-lucide=\"megaphone\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Contexto de campaña','Sabe a qué difusión responde el cliente','old')+
+      sectionLabel('Pipeline e integraciones')+
+      togRow('pipeline','<i data-lucide=\"trending-up\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Pipeline de ventas','Habilita deals, stages y kanban para calificar leads','new')+
+      togRow('calendly','<i data-lucide=\"calendar\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Calendly','El agente puede enviar links de agendamiento y registrar reuniones','new')+
+      togRow('sendgrid','<i data-lucide=\"mail\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>SendGrid email','Envío de correos transaccionales y follow-ups desde el agente','new')+
+      togRow('knowledge_base','<i data-lucide=\"book-open\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Knowledge Base','Base de conocimiento consultable para agentes de soporte','new')+
+      togRow('order_status','<i data-lucide=\"package\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Estado de pedidos','Consulta tracking y estado de órdenes Shopify','new');
   }} else if (_wizStep === 6) {{
     var name = _wizData.name || '—';
     var aname = _wizData.agent_name || '—';
@@ -9181,6 +9306,8 @@ function selType(el) {{
   document.querySelectorAll('.wiz-type-btn').forEach(function(b){{b.classList.remove('selected')}});
   el.classList.add('selected');
   _wizData.business_type = el.getAttribute('data-type');
+  // Recalcular defaults de módulos nuevos según el tipo elegido
+  _wizData.modules_new = _defaultModulesNew(_wizData.business_type);
 }}
 
 function selEmoji(el, e) {{
@@ -9277,6 +9404,14 @@ async function wizNext() {{
       client_memory:   document.getElementById('wtog-client_memory').checked,
       campaign_context:document.getElementById('wtog-campaign_context').checked,
     }};
+    /* Sprint A — bucket de módulos nuevos (se guardan en Agent.modules_json) */
+    _wizData.modules_new = {{
+      pipeline:       document.getElementById('wtogn-pipeline').checked,
+      calendly:       document.getElementById('wtogn-calendly').checked,
+      sendgrid:       document.getElementById('wtogn-sendgrid').checked,
+      knowledge_base: document.getElementById('wtogn-knowledge_base').checked,
+      order_status:   document.getElementById('wtogn-order_status').checked,
+    }};
   }} else if(_wizStep===6) {{
     // Crear el agente
     await crearAgente();
@@ -9325,6 +9460,15 @@ async function crearAgente() {{
         active_modules: _wizData.modules || {{}},
       }})
     }});
+
+    // 2.5 Sprint A — Guardar módulos nuevos (modules_json)
+    if (_wizData.modules_new) {{
+      await fetch('/inbox/api/agents/'+newId+'/modules', {{
+        method:'POST', credentials:'include',
+        headers:{{'Content-Type':'application/json'}},
+        body: JSON.stringify({{modules: _wizData.modules_new}})
+      }});
+    }}
 
     // 3. Guardar credenciales Meta para este agente
     if(_wizData.meta_access_token || _wizData.phone_number_id) {{

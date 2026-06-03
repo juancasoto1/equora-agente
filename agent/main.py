@@ -2529,6 +2529,48 @@ async def inbox_activar_agente(
     return JSONResponse(content={"ok": True})
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Sprint A — Módulos por agente (modules_json)
+# ──────────────────────────────────────────────────────────────────────────────
+@app.get("/inbox/api/agents/{agent_id_param}/modules")
+async def inbox_obtener_modulos_agente(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Devuelve el dict de módulos activos para un agente. Defaults seguros."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import get_agent_modules
+    modules = await get_agent_modules(agent_id_param)
+    return JSONResponse(content={"ok": True, "modules": modules})
+
+
+@app.post("/inbox/api/agents/{agent_id_param}/modules")
+async def inbox_guardar_modulos_agente(
+    agent_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Guarda los módulos del agente. Espera body JSON con claves válidas.
+
+    Solo procesa claves en DEFAULT_MODULES; el resto se ignora silenciosamente.
+    """
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import set_agent_modules
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    modules_in = body.get("modules", body) if isinstance(body, dict) else {}
+    saved = await set_agent_modules(agent_id_param, modules_in)
+    return JSONResponse(content={"ok": True, "modules": saved})
+
+
 @app.post("/inbox/api/agents/{agent_id_param}/pause")
 async def inbox_pausar_agente(
     agent_id_param: int,

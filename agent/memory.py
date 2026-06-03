@@ -62,6 +62,10 @@ class Agent(Base):
     emoji: Mapped[str] = mapped_column(String(10), default="🤖")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     owner_id: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)  # None = admin-owned
+    # Sprint A — toggles de módulos opt-in (JSON serializado).
+    # Si el campo está vacío o null, get_modules() devuelve defaults seguros
+    # (todos OFF para agentes existentes). Ver get_modules() / set_modules() abajo.
+    modules_json: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
 
 class Mensaje(Base):
@@ -306,6 +310,20 @@ async def inicializar_db():
             # Índices útiles
             "CREATE INDEX IF NOT EXISTS ix_difmsg_campaign ON difusion_mensajes (campaign_id)",
             "CREATE INDEX IF NOT EXISTS ix_mensajes_agent ON mensajes (agent_id)",
+            # ─── Sprint A — Pipeline + Soporte ─────────────────────────
+            # Agregar modules_json al Agent (default empty = todos OFF)
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS modules_json TEXT DEFAULT ''",
+            # Índices para las nuevas tablas (create_all ya las creó si no existían)
+            "CREATE INDEX IF NOT EXISTS ix_pipelines_agent       ON pipelines           (agent_id)",
+            "CREATE INDEX IF NOT EXISTS ix_deals_agent           ON deals               (agent_id)",
+            "CREATE INDEX IF NOT EXISTS ix_deals_pipeline        ON deals               (pipeline_id)",
+            "CREATE INDEX IF NOT EXISTS ix_deals_telefono        ON deals               (cliente_telefono)",
+            "CREATE INDEX IF NOT EXISTS ix_deals_stage           ON deals               (stage)",
+            "CREATE INDEX IF NOT EXISTS ix_deals_created         ON deals               (created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_dealact_deal          ON deal_activities     (deal_id)",
+            "CREATE INDEX IF NOT EXISTS ix_dealact_created       ON deal_activities     (created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_intcfg_agent_tipo     ON integration_configs (agent_id, tipo)",
+            "CREATE INDEX IF NOT EXISTS ix_kbart_agent           ON kb_articles         (agent_id)",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -2662,3 +2680,186 @@ async def obtener_siguiente_agente_roundrobin(agent_id: int) -> int | None:
         await session.commit()
 
         return agente_elegido.id
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPRINT A — Pipeline + Soporte (modelos)
+# ──────────────────────────────────────────────────────────────────────────────
+# Tablas opt-in: solo se usan cuando el agente activa el módulo correspondiente
+# en Agent.modules_json. Andrea (Equora) no las ve hasta que se activen módulos.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class Pipeline(Base):
+    """Pipeline de un agente — define las etapas (stages) por las que pasan los deals.
+
+    Cada agente puede tener UN pipeline activo (`activo=True`). Los stages se
+    guardan como JSON-array de strings para que el operador los personalice
+    (ej: ["Nuevo", "Calificado", "Negociando", "Ganado", "Perdido"]).
+    """
+    __tablename__ = "pipelines"
+
+    id:          Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:    Mapped[int]      = mapped_column(Integer, index=True, nullable=False)
+    nombre:      Mapped[str]      = mapped_column(String(100), default="Pipeline principal")
+    stages_json: Mapped[str]      = mapped_column(
+        Text,
+        default='["Nuevo","Calificado","Negociando","Ganado","Perdido"]'
+    )
+    activo:      Mapped[bool]     = mapped_column(Boolean, default=True)
+    created_at:  Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Deal(Base):
+    """Oportunidad/lead asignada a un cliente y pipeline.
+
+    Source indica el canal de origen del lead (whatsapp|instagram|messenger|manual).
+    Score es 0-100, calculado por reglas determinísticas (ver pipeline_logic.py).
+    """
+    __tablename__ = "deals"
+
+    id:               Mapped[int]                = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:         Mapped[int]                = mapped_column(Integer, index=True, nullable=False)
+    pipeline_id:      Mapped[int]                = mapped_column(Integer, index=True, nullable=False)
+    cliente_telefono: Mapped[str]                = mapped_column(String(50), index=True)
+    cliente_nombre:   Mapped[str]                = mapped_column(String(200), default="")
+    cliente_email:    Mapped[str]                = mapped_column(String(200), default="")
+    titulo:           Mapped[str]                = mapped_column(String(200), default="")
+    stage:            Mapped[str]                = mapped_column(String(50), default="Nuevo", index=True)
+    valor_cop:        Mapped[int]                = mapped_column(Integer, default=0)
+    score:            Mapped[int]                = mapped_column(Integer, default=0)
+    source:           Mapped[str]                = mapped_column(String(40), default="whatsapp")
+    owner_id:         Mapped[int | None]         = mapped_column(Integer, nullable=True, default=None)
+    notas:            Mapped[str]                = mapped_column(Text, default="")
+    created_at:       Mapped[datetime]           = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at:       Mapped[datetime]           = mapped_column(DateTime, default=datetime.utcnow)
+    closed_at:        Mapped[datetime | None]    = mapped_column(DateTime, nullable=True, default=None)
+
+
+class DealActivity(Base):
+    """Evento en el timeline de un deal — mensajes, cambios de stage, meetings, emails.
+
+    tipo ∈ {msg_in, msg_out, note, stage_change, email_sent, meeting_booked,
+            order_placed, score_change, deal_created}
+    metadata_json guarda datos extra (stage_old/new, calendly_uri, email_id, etc.)
+    """
+    __tablename__ = "deal_activities"
+
+    id:            Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    deal_id:       Mapped[int]      = mapped_column(Integer, index=True, nullable=False)
+    tipo:          Mapped[str]      = mapped_column(String(40))
+    contenido:     Mapped[str]      = mapped_column(Text, default="")
+    metadata_json: Mapped[str]      = mapped_column(Text, default="{}")
+    autor_nombre:  Mapped[str]      = mapped_column(String(200), default="Sistema")
+    created_at:    Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class IntegrationConfig(Base):
+    """Configuración por agente de integraciones externas.
+
+    tipo ∈ {calendly, sendgrid, hubspot, pipedrive}
+    Un (agent_id, tipo) único por agente — pero no se aplica constraint UNIQUE
+    en BD por ahora para evitar problemas de migración; se valida en código.
+    """
+    __tablename__ = "integration_configs"
+
+    id:            Mapped[int]              = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:      Mapped[int]              = mapped_column(Integer, index=True, nullable=False)
+    tipo:          Mapped[str]              = mapped_column(String(40), index=True)
+    api_token:     Mapped[str]              = mapped_column(Text, default="")
+    settings_json: Mapped[str]              = mapped_column(Text, default="{}")
+    activo:        Mapped[bool]             = mapped_column(Boolean, default=False)
+    last_sync_at:  Mapped[datetime | None]  = mapped_column(DateTime, nullable=True, default=None)
+    created_at:    Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class KbArticle(Base):
+    """Artículo de Knowledge Base para agentes de soporte.
+
+    El agente Soporte consulta esta tabla cuando emite [[KB:tema]].
+    tags es un string CSV simple para búsqueda — si crece, indexar con fulltext.
+    """
+    __tablename__ = "kb_articles"
+
+    id:         Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:   Mapped[int]      = mapped_column(Integer, index=True, nullable=False)
+    titulo:     Mapped[str]      = mapped_column(String(200))
+    contenido:  Mapped[str]      = mapped_column(Text, default="")
+    tags:       Mapped[str]      = mapped_column(String(300), default="")
+    activo:     Mapped[bool]     = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Helpers de módulos por agente
+# ──────────────────────────────────────────────────────────────────────────────
+# DEFAULT_MODULES es la verdad sobre qué módulos existen y su estado por
+# defecto. Cuando un agente no tiene modules_json, get_modules() devuelve
+# este dict — todos los nuevos módulos OFF para que Andrea no se entere.
+#
+# Los módulos viejos (shopify_catalog, cart_orders, client_memory,
+# campaign_context) siguen siendo controlados por config_values como
+# hasta ahora — modules_json es SOLO para los toggles del Sprint A.
+# Eso evita migrar datos existentes.
+# ──────────────────────────────────────────────────────────────────────────────
+
+DEFAULT_MODULES: dict[str, bool] = {
+    # Sprint A — Pipeline + Soporte
+    "pipeline":       False,
+    "calendly":       False,
+    "sendgrid":       False,
+    "knowledge_base": False,
+    "order_status":   False,
+}
+
+
+def get_modules_from_json(modules_json: str) -> dict[str, bool]:
+    """Parsea Agent.modules_json y devuelve dict completo con defaults aplicados.
+
+    Si el JSON está vacío, malformado o le faltan claves, se rellenan con
+    DEFAULT_MODULES. Garantiza que el caller siempre recibe TODAS las claves
+    válidas — nunca KeyError.
+    """
+    result = dict(DEFAULT_MODULES)
+    if not modules_json:
+        return result
+    try:
+        parsed = json.loads(modules_json)
+        if isinstance(parsed, dict):
+            for k, v in parsed.items():
+                if k in DEFAULT_MODULES:
+                    result[k] = bool(v)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass  # devolvemos defaults si el JSON está roto
+    return result
+
+
+async def get_agent_modules(agent_id: int) -> dict[str, bool]:
+    """Devuelve el dict de módulos activos para un agente.
+
+    Si el agente no existe, devuelve DEFAULT_MODULES (todo OFF) para que
+    el caller no tenga que manejar None.
+    """
+    async with async_session() as session:
+        r = await session.execute(select(Agent).where(Agent.id == agent_id))
+        agent = r.scalar_one_or_none()
+        if not agent:
+            return dict(DEFAULT_MODULES)
+        return get_modules_from_json(agent.modules_json or "")
+
+
+async def set_agent_modules(agent_id: int, modules: dict[str, bool]) -> dict[str, bool]:
+    """Persiste los módulos del agente. Solo guarda claves válidas (en DEFAULT_MODULES).
+
+    Devuelve el dict normalizado guardado.
+    """
+    # Filtrar a claves válidas y normalizar a bool
+    sanitized = {k: bool(modules.get(k, DEFAULT_MODULES[k])) for k in DEFAULT_MODULES}
+    async with async_session() as session:
+        r = await session.execute(select(Agent).where(Agent.id == agent_id))
+        agent = r.scalar_one_or_none()
+        if not agent:
+            return dict(DEFAULT_MODULES)
+        agent.modules_json = json.dumps(sanitized)
+        await session.commit()
+        return sanitized
