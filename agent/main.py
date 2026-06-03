@@ -443,11 +443,17 @@ async def _procesar_carrito_unificado():
                 if lineas:
                     msg += f"\n\nMuchos clientes agregan:\n{lineas}"
 
-                # Flujo WhatsApp: reabrir catálogo nativo. Flujo web: URL de tienda.
+                # Flujo WhatsApp: reabrir catálogo nativo via product_list.
+                # (catalog_message removido: cuelga WB mobile en algunos Android.)
+                # Flujo web: URL de tienda como CTA.
                 enviado_seg = False
-                if flujo_wa and hasattr(proveedor, "enviar_catalog_message"):
+                if flujo_wa and hasattr(proveedor, "enviar_catalogo_productos"):
                     try:
-                        enviado_seg = await proveedor.enviar_catalog_message(telefono, msg)
+                        secciones = obtener_secciones_catalogo(None)
+                        if secciones:
+                            enviado_seg = await proveedor.enviar_catalogo_productos(
+                                telefono, "Catálogo Biotú 🌿", msg[:1024], secciones,
+                            )
                     except Exception:
                         pass
                 if not enviado_seg:
@@ -462,6 +468,8 @@ async def _procesar_carrito_unificado():
                             pass
                 if not enviado_seg:
                     await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
+                # Persistir el mensaje del seguimiento (se perdía en panel).
+                await guardar_mensaje(telefono, "assistant", msg)
 
             elif total < umbral_gratis:
                 # ── Estado 4: sobre el mínimo, bajo envío gratis ──────────
@@ -529,14 +537,21 @@ async def _procesar_carrito_unificado():
                         except Exception:
                             pass
                     if not botones_seg:
-                        # Fallback: catalog_message para agregar más
-                        if hasattr(proveedor, "enviar_catalog_message"):
+                        # Fallback: product_list para agregar más
+                        # (catalog_message removido: cuelga WB mobile en algunos Android)
+                        enviado_pl = False
+                        if hasattr(proveedor, "enviar_catalogo_productos"):
                             try:
-                                await proveedor.enviar_catalog_message(telefono, msg)
+                                secciones = obtener_secciones_catalogo(None)
+                                if secciones:
+                                    enviado_pl = await proveedor.enviar_catalogo_productos(
+                                        telefono, "Catálogo Biotú 🌿", msg[:1024], secciones,
+                                    )
                             except Exception:
-                                await proveedor.enviar_mensaje(telefono, msg)
-                        else:
+                                pass
+                        if not enviado_pl:
                             await proveedor.enviar_mensaje(telefono, msg)
+                        await guardar_mensaje(telefono, "assistant", msg)
                 else:
                     # Flujo web: CTA URL a la tienda
                     enviado_seg = False
@@ -1114,18 +1129,9 @@ async def webhook_handler(request: Request):
                 logger.info(f"[accion-btn] {msg.telefono} eligió: {accion}")
 
                 if accion == "act_envio_gratis" or accion == "act_ver_catalogo":
-                    # Reabrir catálogo nativo de WhatsApp
-                    enviado = False
-                    if hasattr(_proveedor_agente, "enviar_catalog_message"):
-                        try:
-                            enviado = await _proveedor_agente.enviar_catalog_message(
-                                msg.telefono,
-                                "🌿 Aquí está el catálogo — agrega los productos que quieras "
-                                "y se sumarán a tu pedido automáticamente."
-                            )
-                        except Exception as e:
-                            logger.warning(f"catalog_message en act_envio_gratis: {e}")
-                    if not enviado and hasattr(_proveedor_agente, "enviar_catalogo_productos"):
+                    # Reabrir catálogo nativo de WhatsApp via product_list
+                    # (catalog_message removido: cuelga WB mobile en algunos Android).
+                    if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
                         secciones = obtener_secciones_catalogo(None)
                         if secciones:
                             await _proveedor_agente.enviar_catalogo_productos(
@@ -1354,24 +1360,20 @@ async def webhook_handler(request: Request):
                             )
                             # Enviar SIEMPRE el texto primero
                             await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
+                            # Persistir en BD para que el operador vea este mensaje
+                            # en el panel de Conversaciones (antes se perdía).
+                            await guardar_mensaje(
+                                msg.telefono, "assistant", mensaje_minimo,
+                                agent_id=_agent_id,
+                            )
 
-                            # Luego intentar el botón "Ver catálogo" (UX más limpia)
-                            # Y como fallback, el product_list directo (más confiable)
+                            # Catalog_message removido: cuelga WhatsApp Business
+                            # app en algunos Android (Meta side bug). Vamos directo
+                            # al product_list que es estable en todos los devices
+                            # y ofrece el mismo botón "Ver catálogo" al final.
                             cat_btn_enviado = False
-                            if hasattr(_proveedor_agente, "enviar_catalog_message"):
-                                try:
-                                    cat_btn_enviado = await _proveedor_agente.enviar_catalog_message(
-                                        msg.telefono,
-                                        "Toca el botón para ver el catálogo y agregar más 🛒"
-                                    )
-                                    if cat_btn_enviado:
-                                        logger.info(f"[pedido-min] Botón catálogo enviado a {msg.telefono}")
-                                except Exception as e_btn:
-                                    logger.warning(f"[pedido-min] catalog_message falló: {e_btn}")
-
-                            # Fallback: enviar product_list directo (siempre que el botón falle)
                             if not cat_btn_enviado:
-                                logger.info(f"[pedido-min] Botón no disponible, enviando product_list a {msg.telefono}")
+                                logger.info(f"[pedido-min] Enviando product_list a {msg.telefono}")
                                 cat_reabierto = False
                                 if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
                                     secciones = obtener_secciones_catalogo(None)
@@ -1495,16 +1497,10 @@ async def webhook_handler(request: Request):
                                         f"¿Quieres agregar algo más antes de confirmar?\n"
                                         f"Toca el botón para ver el catálogo:"
                                     )
+                                # catalog_message removido — directo a product_list (estable en WB).
                                 cat_btn_ok = False
-                                if hasattr(_proveedor_agente, "enviar_catalog_message"):
-                                    try:
-                                        cat_btn_ok = await _proveedor_agente.enviar_catalog_message(
-                                            msg.telefono, mensaje_agregar
-                                        )
-                                    except Exception as e_cat:
-                                        logger.warning(f"catalog_message en mínimo+envío: {e_cat}")
                                 if not cat_btn_ok:
-                                    # Fallback: enviar product_list directo
+                                    # product_list directo
                                     if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
                                         secciones_loc = obtener_secciones_catalogo(None)
                                         if secciones_loc:
@@ -1518,6 +1514,10 @@ async def webhook_handler(request: Request):
                                                 pass
                                     if not cat_btn_ok:
                                         await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_agregar)
+                                        await guardar_mensaje(
+                                            msg.telefono, "assistant", mensaje_agregar,
+                                            agent_id=_agent_id,
+                                        )
 
                                 # ── Mensaje 2: confirmar pedido directo al checkout ──
                                 # Mensaje según zona de envío
@@ -1843,7 +1843,12 @@ async def webhook_handler(request: Request):
                             lineas.append(f"  • {prod_title} — desde ${precio_min:,}")
                         lineas.append("")
                     if lineas:
-                        await _proveedor_agente.enviar_mensaje(msg.telefono, "\n".join(lineas).strip())
+                        _texto_cat_fb = "\n".join(lineas).strip()
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, _texto_cat_fb)
+                        await guardar_mensaje(
+                            msg.telefono, "assistant", _texto_cat_fb,
+                            agent_id=_agent_id,
+                        )
 
             # Luego enviar mensajes interactivos
             if datos_botones and hasattr(_proveedor_agente, "enviar_botones"):
@@ -1887,7 +1892,12 @@ async def webhook_handler(request: Request):
                                 lineas.append(f"• {t}")
                     fallback_text = "\n".join(l for l in lineas if l)
                     if fallback_text.strip():
-                        await _proveedor_agente.enviar_mensaje(msg.telefono, fallback_text[:4000])
+                        _txt_fb = fallback_text[:4000]
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_fb)
+                        await guardar_mensaje(
+                            msg.telefono, "assistant", _txt_fb,
+                            agent_id=_agent_id,
+                        )
                         logger.info(f"Fallback texto de lista enviado a {msg.telefono}")
 
             # Cuando Andrea usa [[TIENDA:]] PRIORIZAR catálogo nativo de WhatsApp
@@ -1974,23 +1984,17 @@ async def webhook_handler(request: Request):
                     except Exception as e:
                         logger.warning(f"[TIENDA] product_list falló: {e}")
 
-                # ── INTENTO 2: catalog_message (botón "Ver catálogo") ──
-                if not enviado_catalogo_wa and hasattr(_proveedor_agente, "enviar_catalog_message"):
-                    try:
-                        enviado_catalogo_wa = await _proveedor_agente.enviar_catalog_message(
-                            msg.telefono, cuerpo_catalogo
-                        )
-                        if enviado_catalogo_wa:
-                            logger.info(f"[TIENDA→catalogo-WA] catalog_message enviado a {msg.telefono}")
-                    except Exception as e:
-                        logger.warning(f"[TIENDA] catalog_message falló: {e}")
+                # ── INTENTO 2 (catalog_message) removido ──
+                # catalog_message cuelga WhatsApp Business mobile en algunos
+                # Android (bug del cliente Meta). Si product_list falla,
+                # vamos directo al fallback de URL web.
 
-                # ── FALLBACK: URL de la tienda web (solo si lo anterior falló) ──
+                # ── FALLBACK: URL de la tienda web (solo si product_list falló) ──
                 if not enviado_catalogo_wa:
                     # Registrar falla + alerta al admin
                     await _registrar_falla_catalogo(
                         "tienda_catalogo_wa", msg.telefono,
-                        f"product_list y catalog_message fallaron (query='{tienda_query}')",
+                        f"product_list falló (query='{tienda_query}')",
                         agent_id=_agent_id,
                     )
                     logger.info(f"[TIENDA→FALLBACK-WEB] catálogo WA no disponible para {msg.telefono} — usando URL web")
