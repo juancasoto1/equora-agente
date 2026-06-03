@@ -401,15 +401,37 @@ async def _procesar_carrito_unificado():
             )
             continue
 
+        # ── Verificación VIVA del carrito antes de mandar ───────────────
+        # El loop captura items en `clientes_con_carrito_abandonado` y luego
+        # los procesa. Entre esos 2 momentos el cliente puede haber vaciado
+        # con [[VACIAR_CARRITO]] o confirmado pedido. Re-leer en vivo evita
+        # mandar mensajes obsoletos tipo "tienes $42k" cuando ya vació.
+        items_vivos = await obtener_carrito_activo(telefono)
+        if not items_vivos:
+            logger.info(f"[carrito-loop] {telefono} carrito vacío en BD viva — cancelando seguimiento")
+            continue
+        items = items_vivos
+        total = _calcular_total_carrito(items)
+        if total <= 0:
+            continue
+        # Re-calcular estado actual con el total vivo (puede haber cambiado)
+        estado_actual = 3 if total < PEDIDO_MINIMO else (4 if total < umbral_gratis else 5)
+
         nombres_en_carrito = {p.get("producto", "").lower() for p in items}
         total_fmt = f"{total:,}".replace(",", ".")
-        tienda_url = f"{EQUORA_BASE}/catalogo"
 
         # ── Detectar flujo activo del cliente ───────────────────────────
         # Si algún item tiene retailer_id, el cliente está en flujo WhatsApp
         # catálogo nativo → seguimientos deben respetar ese flujo.
         flujo_wa = any(p.get("retailer_id") for p in items)
         costo_envio_loc = obtener_costo_envio()
+
+        # Si no es flujo_wa pero llegó hasta acá → no tiene retailer_ids,
+        # probablemente carrito antiguo o de origen web. NO mandamos nada:
+        # mejor silencioso que mandar link a tienda y romper la coherencia.
+        if not flujo_wa:
+            logger.info(f"[carrito-loop] {telefono} sin retailer_ids (no nativo) — cancelando")
+            continue
 
         async def _crear_checkout_para_seguimiento() -> str | None:
             """Crea un checkout de Shopify a partir de los items del carrito
@@ -441,6 +463,9 @@ async def _procesar_carrito_unificado():
         try:
             if total < PEDIDO_MINIMO:
                 # ── Estado 3: bajo el mínimo ──────────────────────────────
+                # Mostrar el catálogo nativo de WhatsApp con un texto que
+                # incentiva alcanzar el mínimo. Si product_list falla, NO
+                # mandamos nada (seguimiento automático = no spam tickets).
                 falta = PEDIDO_MINIMO - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
                 sugeridos = _sugerir_productos(nombres_en_carrito)
@@ -452,32 +477,24 @@ async def _procesar_carrito_unificado():
                 if lineas:
                     msg += f"\n\nMuchos clientes agregan:\n{lineas}"
 
-                # Flujo WhatsApp: reabrir catálogo nativo via product_list.
-                # (catalog_message removido: cuelga WB mobile en algunos Android.)
-                # Flujo web: URL de tienda como CTA.
                 enviado_seg = False
-                if flujo_wa and hasattr(proveedor, "enviar_catalogo_productos"):
+                if hasattr(proveedor, "enviar_catalogo_productos"):
                     try:
-                        secciones = obtener_secciones_catalogo(None)
+                        from agent.tools import obtener_secciones_catalogo_async
+                        secciones = await obtener_secciones_catalogo_async(None)
                         if secciones:
                             enviado_seg = await proveedor.enviar_catalogo_productos(
                                 telefono, "Catálogo Biotú 🌿", msg[:1024], secciones,
                             )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"[carrito-est3] product_list falló: {e}")
                 if not enviado_seg:
-                    if hasattr(proveedor, "enviar_cta_url"):
-                        try:
-                            enviado_seg = await proveedor.enviar_cta_url(
-                                telefono, msg,
-                                "Ver catálogo 🌿" if flujo_wa else "Ver productos 🌿",
-                                tienda_url,
-                            )
-                        except Exception:
-                            pass
-                if not enviado_seg:
-                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
-                # Persistir el mensaje del seguimiento (se perdía en panel).
+                    # Silencio: NO mandar link a tienda web (rompe el flujo
+                    # del catálogo nativo). El cliente puede seguir interactuando
+                    # con Andrea por iniciativa propia.
+                    logger.info(f"[carrito-est3] {telefono} product_list no disponible — cancelando silencioso")
+                    continue
+                # Persistir el mensaje del seguimiento (panel lo necesita).
                 await guardar_mensaje(telefono, "assistant", msg)
 
             elif total < umbral_gratis:
@@ -530,49 +547,41 @@ async def _procesar_carrito_unificado():
                     if lineas:
                         msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
 
-                if flujo_wa:
-                    # Crear checkout y enviar 2 reply buttons
-                    checkout_url_seg = await _crear_checkout_para_seguimiento()
-                    botones_seg = False
-                    if checkout_url_seg and hasattr(proveedor, "enviar_botones_reply"):
+                # Solo flujo nativo (validado al inicio del loop con flujo_wa).
+                # Estrategia:
+                #   1) Crear checkout en Shopify para tener URL de pago lista.
+                #   2) Mandar 2 reply buttons "Envío gratis" + "Confirmar pedido".
+                #   3) Si fallan los botones → product_list (que abre catálogo nativo).
+                #   4) Si product_list también falla → silencio (no tienda web).
+                checkout_url_seg = await _crear_checkout_para_seguimiento()
+                botones_seg = False
+                if checkout_url_seg and hasattr(proveedor, "enviar_botones_reply"):
+                    try:
+                        botones_seg = await proveedor.enviar_botones_reply(
+                            telefono, msg,
+                            [
+                                {"id": "act_envio_gratis",     "title": "Envío gratis 🚚"},
+                                {"id": "act_confirmar_pedido", "title": "Confirmar pedido"},
+                            ],
+                        )
+                    except Exception as e:
+                        logger.warning(f"[carrito-est4] botones reply fallaron: {e}")
+                if not botones_seg:
+                    enviado_pl = False
+                    if hasattr(proveedor, "enviar_catalogo_productos"):
                         try:
-                            botones_seg = await proveedor.enviar_botones_reply(
-                                telefono, msg,
-                                [
-                                    {"id": "act_envio_gratis",     "title": "Envío gratis 🚚"},
-                                    {"id": "act_confirmar_pedido", "title": "Confirmar pedido"},
-                                ],
-                            )
-                        except Exception:
-                            pass
-                    if not botones_seg:
-                        # Fallback: product_list para agregar más
-                        # (catalog_message removido: cuelga WB mobile en algunos Android)
-                        enviado_pl = False
-                        if hasattr(proveedor, "enviar_catalogo_productos"):
-                            try:
-                                secciones = obtener_secciones_catalogo(None)
-                                if secciones:
-                                    enviado_pl = await proveedor.enviar_catalogo_productos(
-                                        telefono, "Catálogo Biotú 🌿", msg[:1024], secciones,
-                                    )
-                            except Exception:
-                                pass
-                        if not enviado_pl:
-                            await proveedor.enviar_mensaje(telefono, msg)
-                        await guardar_mensaje(telefono, "assistant", msg)
-                else:
-                    # Flujo web: CTA URL a la tienda
-                    enviado_seg = False
-                    if hasattr(proveedor, "enviar_cta_url"):
-                        try:
-                            enviado_seg = await proveedor.enviar_cta_url(
-                                telefono, msg, "Ir al carrito 🛒", tienda_url
-                            )
-                        except Exception:
-                            pass
-                    if not enviado_seg:
-                        await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
+                            from agent.tools import obtener_secciones_catalogo_async
+                            secciones = await obtener_secciones_catalogo_async(None)
+                            if secciones:
+                                enviado_pl = await proveedor.enviar_catalogo_productos(
+                                    telefono, "Catálogo Biotú 🌿", msg[:1024], secciones,
+                                )
+                        except Exception as e:
+                            logger.warning(f"[carrito-est4] product_list falló: {e}")
+                    if not enviado_pl:
+                        logger.info(f"[carrito-est4] {telefono} ningún canal nativo funcionó — cancelando silencioso")
+                        continue
+                await guardar_mensaje(telefono, "assistant", msg)
 
             else:
                 # ── Estado 5: pedido alto (envío gratis solo si está en zona local) ──
@@ -603,31 +612,30 @@ async def _procesar_carrito_unificado():
                         f"🎉 ¡Tu carrito tiene *${total_fmt}*!\n\n"
                         f"Toca el botón para confirmar tu dirección de entrega 👇"
                     )
-                if flujo_wa:
-                    # Crear checkout y enviar botón "Confirmar pedido" directo
-                    checkout_url_seg = await _crear_checkout_para_seguimiento()
-                    enviado_seg = False
-                    if checkout_url_seg and hasattr(proveedor, "enviar_cta_url"):
-                        try:
-                            enviado_seg = await proveedor.enviar_cta_url(
-                                telefono, msg, "Confirmar pedido", checkout_url_seg
-                            )
-                        except Exception:
-                            pass
-                    if not enviado_seg:
-                        await proveedor.enviar_mensaje(telefono,
-                            f"{msg}\n\n{('👉 ' + checkout_url_seg) if checkout_url_seg else ''}")
-                else:
-                    enviado_seg = False
-                    if hasattr(proveedor, "enviar_cta_url"):
-                        try:
-                            enviado_seg = await proveedor.enviar_cta_url(
-                                telefono, msg, "Confirmar pedido ✅", tienda_url
-                            )
-                        except Exception:
-                            pass
-                    if not enviado_seg:
-                        await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {tienda_url}")
+                # Estado 5: cliente ya está sobre el envío gratis o ya alcanzó
+                # el mínimo (no Cali). Crear checkout y mandarle el botón.
+                # El checkout_url ES Shopify pago — flujo legítimo, no es "tienda web".
+                checkout_url_seg = await _crear_checkout_para_seguimiento()
+                if not checkout_url_seg:
+                    # Sin checkout_url no podemos completar el pago — escalar
+                    logger.warning(f"[carrito-est5] {telefono} no se pudo crear checkout — escalando")
+                    await _escalar_meta_fallo(
+                        telefono,
+                        motivo_corto="no se pudo crear checkout",
+                        contexto_extra=f"Cliente con carrito de ${total_fmt} listo para pagar. Shopify checkout falló.",
+                    )
+                    continue
+                enviado_seg = False
+                if hasattr(proveedor, "enviar_cta_url"):
+                    try:
+                        enviado_seg = await proveedor.enviar_cta_url(
+                            telefono, msg, "Confirmar pedido", checkout_url_seg
+                        )
+                    except Exception as e:
+                        logger.warning(f"[carrito-est5] cta_url falló: {e}")
+                if not enviado_seg:
+                    # Fallback texto con la URL del checkout (sigue siendo Shopify pago)
+                    await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {checkout_url_seg}")
 
             await guardar_mensaje(telefono, "assistant", msg)
             _carrito_unif_cooldown[telefono] = ahora
@@ -742,6 +750,66 @@ async def _procesar_abandono_checkout():
             logger.info(f"Recuperación de checkout enviada a {telefono}")
         except Exception as e:
             logger.error(f"Error enviando recuperación de checkout a {telefono}: {e}")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Helper: escalar cuando Meta product_list falla en un flujo que requiere respuesta
+# ──────────────────────────────────────────────────────────────────────────────
+async def _escalar_meta_fallo(
+    telefono: str,
+    motivo_corto: str,
+    contexto_extra: str = "",
+    agent_id: int = 1,
+) -> None:
+    """Escala una conversación a humano cuando el catálogo nativo de WhatsApp
+    falla y el cliente está esperando una respuesta concreta AHORA.
+
+    Hace 3 cosas:
+      1. Manda mensaje cálido al cliente: 'Te conecto con un asesor...'
+      2. Crea ticket via _notificar_escalacion (que también pausa el bot
+         y avisa al equipo por WhatsApp + panel).
+      3. Persiste el mensaje en BD para que aparezca en panel.
+
+    Solo se usa en flujos donde NO mandar nada sería pésima UX:
+      - Cliente terminó pedido nativo bajo mínimo → product_list falló
+      - Andrea emitió [[TIENDA:]] → product_list falló
+    NO se usa en seguimientos automáticos (timers) — esos cancelan silencioso.
+    """
+    try:
+        # 1. Mensaje cálido al cliente
+        msg_cliente = (
+            "Para ayudarte mejor te conecto con un asesor "
+            "que te va a mostrar los productos. Ya viene 🌿"
+        )
+        await proveedor.enviar_mensaje(telefono, msg_cliente)
+        await guardar_mensaje(telefono, "assistant", msg_cliente, agent_id=agent_id)
+
+        # 2. Obtener nombre del cliente para el ticket (mejora UX panel)
+        try:
+            cli = await obtener_cliente(telefono, agent_id=agent_id)
+        except Exception:
+            cli = None
+        nombre = (cli.get("nombre") if cli else "") or ""
+
+        # 3. Crear ticket + pausar bot + notificar equipo
+        contexto_full = (
+            f"Cliente esperando catálogo. {contexto_extra}".strip()
+            if contexto_extra else
+            "Cliente esperando catálogo de productos."
+        )
+        await _notificar_escalacion(
+            telefono,
+            {
+                "motivo":         f"Catálogo no disponible — {motivo_corto}",
+                "urgencia":       "normal",
+                "nombre_cliente": nombre,
+                "contexto":       contexto_full,
+            },
+            agent_id=agent_id,
+        )
+        logger.info(f"[escalacion-meta] {telefono} escalado por: {motivo_corto}")
+    except Exception as e:
+        logger.error(f"[escalacion-meta] fallo escalando {telefono}: {e}")
 
 
 app = FastAPI(
@@ -1419,21 +1487,35 @@ async def webhook_handler(request: Request):
                                         logger.error(f"[pedido-min] product_list excepción: {e_pl}", exc_info=True)
                                 else:
                                     logger.warning(f"[pedido-min] secciones VACÍAS — no se mandó product_list")
-                            # Mensaje de cierre — siempre se envía (haya o no funcionado el product_list).
-                            # IMPORTANTE: NO mezclar universos de carrito. El carrito vive en el
-                            # catálogo nativo de WhatsApp; nada de link a tienda web (rompería el flujo).
+                            # Mensaje de cierre — depende de si el catálogo nativo se abrió o no:
+                            #   ✅ OK   → texto sugerente "escribe o explora el catálogo"
+                            #   ❌ Fail → ESCALAR a humano (el cliente esperaba una respuesta
+                            #             concreta; sin catálogo no podemos cerrar la venta).
+                            # NUNCA mandamos link a tienda web — eso rompería el flujo del
+                            # carrito nativo (universos separados que no se sincronizan).
                             if cat_reabierto:
                                 texto_final = (
                                     "Escríbeme qué más quieres agregar y te ayudo, "
                                     "o explora el catálogo en *Ver catálogo* 👆🌿"
                                 )
+                                await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
+                                await guardar_mensaje(
+                                    msg.telefono, "assistant", texto_final,
+                                    agent_id=_agent_id,
+                                )
                             else:
-                                texto_final = "Escríbeme qué más quieres agregar y te ayudo 🌿"
-                            await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
-                            await guardar_mensaje(
-                                msg.telefono, "assistant", texto_final,
-                                agent_id=_agent_id,
-                            )
+                                # Meta nativo no disponible → escalar
+                                await _escalar_meta_fallo(
+                                    msg.telefono,
+                                    motivo_corto="post-pedido bajo mínimo",
+                                    contexto_extra=(
+                                        f"Cliente cerró pedido por ${total:,} pero el mínimo es "
+                                        f"${pedido_min:,} (faltan ${falta:,}). Catálogo nativo no "
+                                        f"se pudo enviar para completar el pedido. Items actuales: "
+                                        + ", ".join(f"{p['producto']} x{p['cantidad']}" for p in productos)
+                                    ).replace(",", "."),
+                                    agent_id=_agent_id,
+                                )
                             logger.info(f"Pedido bajo mínimo: total={total}, min={pedido_min}, falta={falta} — items guardados para acumular")
                             continue  # No crear checkout
 
@@ -2036,43 +2118,28 @@ async def webhook_handler(request: Request):
                     except Exception as e:
                         logger.warning(f"[TIENDA] product_list falló: {e}")
 
-                # ── INTENTO 2 (catalog_message) removido ──
-                # catalog_message cuelga WhatsApp Business mobile en algunos
-                # Android (bug del cliente Meta). Si product_list falla,
-                # vamos directo al fallback de URL web.
-
-                # ── FALLBACK: URL de la tienda web (solo si product_list falló) ──
+                # ── FALLBACK: ESCALAR a humano ────────────────────────────
+                # Si product_list falla, NO mandamos link a tienda web — eso
+                # rompe el flujo del carrito nativo (universos separados que
+                # no se sincronizan). Escalar es mejor UX: un humano abre el
+                # catálogo manualmente con el cliente y cierra la venta.
                 if not enviado_catalogo_wa:
-                    # Registrar falla + alerta al admin
                     await _registrar_falla_catalogo(
                         "tienda_catalogo_wa", msg.telefono,
                         f"product_list falló (query='{tienda_query}')",
                         agent_id=_agent_id,
                     )
-                    logger.info(f"[TIENDA→FALLBACK-WEB] catálogo WA no disponible para {msg.telefono} — usando URL web")
-                    import urllib.parse
-                    tienda_url = _construir_url_tienda(tienda_query)
-                    tienda_url = _utm_andrea(tienda_url, content=tienda_query)
-                    tienda_url += f"&tel={urllib.parse.quote(msg.telefono)}"
-                    boton_label = "Ver producto 🌿" if tienda_query else "Ver catálogo 🌿"
-                    enviado_tienda = False
-                    if hasattr(_proveedor_agente, "enviar_cta_url"):
-                        try:
-                            enviado_tienda = await _proveedor_agente.enviar_cta_url(
-                                msg.telefono, cuerpo_catalogo, boton_label, tienda_url
-                            )
-                        except Exception as e:
-                            logger.error(f"Error enviando link tienda: {e}")
-                    if not enviado_tienda:
-                        await _proveedor_agente.enviar_mensaje(
-                            msg.telefono, f"{cuerpo_catalogo}\n\n👉 {tienda_url}"
-                        )
-                    # CAPI solo en caso web (atribución del Pixel)
-                    asyncio.create_task(capi_view_content(
+                    logger.info(f"[TIENDA→ESCALAR] catálogo WA no disponible para {msg.telefono}")
+                    await _escalar_meta_fallo(
                         msg.telefono,
-                        tienda_query or "catalogo",
-                        tienda_url,
-                    ))
+                        motivo_corto=f"[[TIENDA:{tienda_query or 'completo'}]] fallido",
+                        contexto_extra=(
+                            f"Cliente pidió ver catálogo "
+                            f"({'categoría: ' + tienda_query if tienda_query else 'general'}). "
+                            f"product_list nativo falló — necesita asesor para mostrar productos."
+                        ),
+                        agent_id=_agent_id,
+                    )
 
             # Enviar link de checkout de Shopify si se generó
             if checkout_url:
