@@ -483,8 +483,12 @@ async def _procesar_carrito_unificado():
                         from agent.tools import obtener_secciones_catalogo_async
                         secciones = await obtener_secciones_catalogo_async(None)
                         if secciones:
+                            # TODO multi-tenant: hoy seguimiento automatico asume
+                            # agent_id=1 (Equora). En Sprint B agregar agent_id a
+                            # clientes_con_carrito_abandonado y propagar.
+                            header_cat = await _catalogo_header_for_agent(1)
                             enviado_seg = await proveedor.enviar_catalogo_productos(
-                                telefono, "Catálogo Biotú 🌿", msg[:1024], secciones,
+                                telefono, header_cat, msg[:1024], secciones,
                             )
                     except Exception as e:
                         logger.warning(f"[carrito-est3] product_list falló: {e}")
@@ -573,8 +577,9 @@ async def _procesar_carrito_unificado():
                             from agent.tools import obtener_secciones_catalogo_async
                             secciones = await obtener_secciones_catalogo_async(None)
                             if secciones:
+                                header_cat = await _catalogo_header_for_agent(1)
                                 enviado_pl = await proveedor.enviar_catalogo_productos(
-                                    telefono, "Catálogo Biotú 🌿", msg[:1024], secciones,
+                                    telefono, header_cat, msg[:1024], secciones,
                                 )
                         except Exception as e:
                             logger.warning(f"[carrito-est4] product_list falló: {e}")
@@ -755,6 +760,48 @@ async def _procesar_abandono_checkout():
 # ──────────────────────────────────────────────────────────────────────────────
 # Helper: escalar cuando Meta product_list falla en un flujo que requiere respuesta
 # ──────────────────────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────────────────────
+# Helper SaaS: header del catálogo dinámico por agente
+# ──────────────────────────────────────────────────────────────────────────────
+# Cache simple en memoria — el nombre del agente no cambia en runtime normal.
+# Si cambia (rename desde panel), se refresca cuando el proceso se reinicia.
+_catalogo_header_cache: dict[int, str] = {}
+
+async def _catalogo_header_for_agent(agent_id: int) -> str:
+    """Devuelve el texto que va en el header del product_list de WhatsApp.
+
+    Prioridad:
+      1. config_value 'CATALOGO_HEADER' del agente (si el cliente lo personalizó)
+      2. Nombre del negocio del agente (Agent.name)
+      3. Genérico "Catálogo 🌿"
+
+    Esto reemplaza el "Catálogo Biotú 🌿" hardcoded que rompía SaaS multi-tenant.
+    """
+    if agent_id in _catalogo_header_cache:
+        return _catalogo_header_cache[agent_id]
+    try:
+        # 1. Override explícito desde config_values
+        custom = await get_config_value("CATALOGO_HEADER", agent_id)
+        if custom and custom.strip():
+            _catalogo_header_cache[agent_id] = custom.strip()[:60]
+            return _catalogo_header_cache[agent_id]
+        # 2. Nombre del negocio
+        from agent.memory import obtener_agente
+        agent = await obtener_agente(agent_id)
+        if agent:
+            nombre = (agent.get("name") or "").strip()
+            if nombre:
+                # "Catálogo {Nombre del negocio} 🌿" — corto a 60 chars (límite Meta)
+                header = f"Catálogo {nombre} 🌿"[:60]
+                _catalogo_header_cache[agent_id] = header
+                return header
+    except Exception as e:
+        logger.warning(f"[catalogo-header] fallback genérico (error: {e})")
+    # 3. Fallback genérico
+    _catalogo_header_cache[agent_id] = "Catálogo 🌿"
+    return "Catálogo 🌿"
+
+
 async def _escalar_meta_fallo(
     telefono: str,
     motivo_corto: str,
@@ -1226,8 +1273,9 @@ async def webhook_handler(request: Request):
                     if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
                         secciones = obtener_secciones_catalogo(None)
                         if secciones:
+                            header_cat = await _catalogo_header_for_agent(_agent_id)
                             await _proveedor_agente.enviar_catalogo_productos(
-                                msg.telefono, "Catálogo Biotú 🌿",
+                                msg.telefono, header_cat,
                                 "Agrega los productos que quieras — se suman a tu pedido.",
                                 secciones,
                             )
@@ -1952,7 +2000,7 @@ async def webhook_handler(request: Request):
                 secciones = obtener_secciones_catalogo(categoria)
                 cat_enviado = False
                 if secciones:
-                    header = categoria or "Catálogo Biotú 🌿"
+                    header = categoria or await _catalogo_header_for_agent(_agent_id)
                     cuerpo = "Selecciona los productos que quieres, ajusta las cantidades y confirma tu pedido."
                     cat_enviado = await _proveedor_agente.enviar_catalogo_productos(
                         msg.telefono, header, cuerpo, secciones
@@ -2107,7 +2155,7 @@ async def webhook_handler(request: Request):
                     try:
                         secciones = obtener_secciones_catalogo(categoria_solicitada)
                         if secciones:
-                            header_cat = categoria_solicitada or "Catálogo Biotú 🌿"
+                            header_cat = categoria_solicitada or await _catalogo_header_for_agent(_agent_id)
                             enviado_catalogo_wa = await _proveedor_agente.enviar_catalogo_productos(
                                 msg.telefono, header_cat,
                                 cuerpo_catalogo[:1024],
