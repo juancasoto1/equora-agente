@@ -613,27 +613,51 @@ async def _cargar_fb_catalog():
             f"_fb_items vacío de Graph API — construyendo desde _sku_map "
             f"(Shopify, {len(_sku_map)} entradas)"
         )
-        # Agrupar por nombre de producto: tomar UNA variante representante por
-        # producto (la más barata para mejor thumbnail/precio inicial).
-        # product_list mostrará N productos (no N×variantes); al tocar uno,
-        # Meta abre la vista nativa del producto que (si Shopify lo sincronizó
-        # con item_group_id) muestra TODAS las variantes agrupadas — UX igual
-        # al catálogo nativo que el cliente esperaba.
-        representante_por_producto: dict[str, dict] = {}
+        # Paso 1: agrupar por variant_id (cada variante única tiene hasta
+        # 2 entradas en _sku_map: una con SKU alfanumérico y otra con el
+        # variant_id numérico de Shopify). Necesitamos ambas para elegir
+        # el retailer_id que Meta reconoce.
+        variantes_unicas: dict[str, dict] = {}
         for rid, info in _sku_map.items():
-            # Solo variant_ids numéricos largos (los reconoce Meta como
-            # retailer_id sincronizado desde Shopify Sales Channel).
-            if not rid.isdigit() or len(rid) < 8:
+            if not rid:
                 continue
+            vid = info.get("variant_id", "")
+            if not vid:
+                continue
+            entry = variantes_unicas.setdefault(vid, {
+                "sku":        None,
+                "numeric_id": None,
+                "info":       info,
+            })
+            # Clasificar el rid: numérico largo = variant_id de Shopify;
+            # cualquier otra cosa = SKU configurado en Shopify.
+            if rid.isdigit() and len(rid) >= 8:
+                entry["numeric_id"] = rid
+            else:
+                entry["sku"] = rid
+
+        # Paso 2: por cada variante única, ELEGIR el retailer_id que
+        # Meta reconoce. Shopify Sales Channel sincroniza con Meta usando
+        # el SKU como retailer_id cuando existe; si no existe, usa el
+        # variant_id numérico. Esa misma prioridad replicamos acá.
+        # NOTA: si tu Meta Catalog usa otro esquema (poco común), este
+        # fallback igual entrega algo y el operador puede ajustar.
+        representante_por_producto: dict[str, dict] = {}
+        for vid, v in variantes_unicas.items():
+            info = v["info"]
             producto = info.get("producto", "")
             if not producto:
+                continue
+            # Preferencia: SKU > variant_id numérico
+            rid_meta = v["sku"] or v["numeric_id"]
+            if not rid_meta:
                 continue
             precio = info.get("precio_unitario", 0) or 0
             actual = representante_por_producto.get(producto)
             # Tomar la variante más barata como representante (atrae con precio bajo)
             if actual is None or precio < actual["precio"]:
                 representante_por_producto[producto] = {
-                    "retailer_id": rid,
+                    "retailer_id": rid_meta,
                     # Solo el nombre del producto en `name` — la presentación
                     # la verá el cliente al abrir la vista nativa de Meta.
                     "name":        producto,
@@ -643,9 +667,18 @@ async def _cargar_fb_catalog():
                     "categoria":   info.get("categoria") or _categoria_producto(producto),
                 }
         _fb_items.extend(representante_por_producto.values())
+        # Estadísticas para diagnóstico: cuántos usaron SKU vs numeric_id
+        usaron_sku = sum(
+            1 for vid, v in variantes_unicas.items()
+            if v["sku"] and any(
+                r["retailer_id"] == v["sku"]
+                for r in representante_por_producto.values()
+            )
+        )
         logger.info(
             f"_fb_items construido desde Shopify: {len(_fb_items)} productos "
-            f"(1 representante por producto de {len(_sku_map)} variantes) ✅"
+            f"de {len(variantes_unicas)} variantes únicas "
+            f"({usaron_sku} usan SKU, {len(_fb_items) - usaron_sku} usan variant_id) ✅"
         )
 
 
