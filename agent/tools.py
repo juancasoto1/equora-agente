@@ -30,6 +30,7 @@ SHOPIFY_GQL_QUERY = """
         title
         handle
         productType
+        tags
         collections(first: 5) {
           edges {
             node {
@@ -131,12 +132,12 @@ ORDEN_CATEGORIAS = [
 
 
 def _categoria_producto(titulo: str) -> str:
-    """Asigna la categoría de Equora a un producto por su título normalizado.
+    """[LEGACY] Asigna la categoría de Equora a un producto por su título.
 
-    Regla: TODAS las palabras del fragmento deben aparecer en el título.
-    Para palabras largas (>3 chars): la palabra del TÍTULO debe empezar
-    con la palabra del fragmento (tolera plurales: 'motor' matchea 'motores').
-    El orden en CATEGORIAS_EQUORA es crítico: específicos antes de generales.
+    Solo se usa como ÚLTIMO fallback cuando el producto de Shopify no tiene
+    collections, productType, ni tags. Para Voco SaaS la fuente de verdad
+    son las categorías que el cliente configura en Shopify — esta función
+    se mantiene para compatibilidad con el catálogo histórico de Equora.
     """
     titulo_n = _normalizar(titulo)
     palabras_titulo = titulo_n.split()
@@ -150,6 +151,48 @@ def _categoria_producto(titulo: str) -> str:
         ):
             return categoria
     return "Otros"
+
+
+def _categoria_desde_shopify(node: dict) -> str:
+    """Determina la categoría de un producto en cascada multi-tenant:
+
+      1. Shopify Collection (primera) — UX óptima, lo que recomendamos
+      2. Shopify Product Type — alternativa común si no usan collections
+      3. Shopify Tag (primero) — fallback liviano
+      4. Keywords de Equora (legacy) — solo si el producto matchea
+      5. "Catálogo" — bucket genérico cuando nada aplica
+
+    Esta cascada permite que CUALQUIER cliente Voco funcione sin configurar
+    nada: si el catálogo viene "sucio", todos los productos terminan en un
+    solo bucket "Catálogo" — sigue funcional, solo plano visualmente.
+    """
+    # 1. Collections de Shopify (la primera)
+    coll_edges = (node.get("collections") or {}).get("edges") or []
+    if coll_edges:
+        title = (coll_edges[0].get("node") or {}).get("title", "").strip()
+        if title:
+            return title
+
+    # 2. productType
+    ptype = (node.get("productType") or "").strip()
+    if ptype:
+        return ptype
+
+    # 3. Tags (el primero)
+    tags = node.get("tags") or []
+    if isinstance(tags, list) and tags:
+        first_tag = (tags[0] or "").strip()
+        if first_tag:
+            return first_tag
+
+    # 4. Keywords legacy de Equora
+    titulo = node.get("title", "")
+    cat_legacy = _categoria_producto(titulo)
+    if cat_legacy != "Otros":
+        return cat_legacy
+
+    # 5. Bucket genérico — todo cabe sin configurar nada
+    return "Catálogo"
 
 
 # Mapa de variantes para resolver merchandiseId al crear el checkout
@@ -339,8 +382,10 @@ async def obtener_catalogo_shopify() -> str:
             # node.get("handle", "") no es suficiente: si Shopify devuelve null, .get() retorna None
             _handle_map[_normalizar(node["title"])] = node.get("handle") or ""
 
-            # Categoría: siempre desde el mapa fijo de Equora (ignora colecciones Shopify)
-            categoria = _categoria_producto(node["title"])
+            # Categoría: cascada multi-tenant (Shopify-first, fallback legacy).
+            # Esto reemplaza el mapa fijo de Equora — funciona para cualquier
+            # cliente Voco sin configurar nada.
+            categoria = _categoria_desde_shopify(node)
             categorias.setdefault(categoria, []).append((node["title"], variantes, imagen))
 
             for v in variantes:
@@ -370,6 +415,7 @@ async def obtener_catalogo_shopify() -> str:
                             "producto": node["title"],
                             "presentacion": v["title"],
                             "precio_unitario": precio,
+                            "categoria": categoria,  # Sprint A: para fallback Shopify→_fb_items
                             "variant_id": gid,
                         }
 
@@ -552,28 +598,40 @@ async def _cargar_fb_catalog():
             f"_fb_items vacío de Graph API — construyendo desde _sku_map "
             f"(Shopify, {len(_sku_map)} entradas)"
         )
-        vistos: set[str] = set()
+        # Agrupar por nombre de producto: tomar UNA variante representante por
+        # producto (la más barata para mejor thumbnail/precio inicial).
+        # product_list mostrará N productos (no N×variantes); al tocar uno,
+        # Meta abre la vista nativa del producto que (si Shopify lo sincronizó
+        # con item_group_id) muestra TODAS las variantes agrupadas — UX igual
+        # al catálogo nativo que el cliente esperaba.
+        representante_por_producto: dict[str, dict] = {}
         for rid, info in _sku_map.items():
-            # Meta acepta retailer_ids alfanuméricos pero los IDs sincronizados
-            # desde Shopify suelen ser variant_ids numéricos largos (10+ chars).
-            # Filtramos por eso para evitar duplicados con SKUs cortos.
+            # Solo variant_ids numéricos largos (los reconoce Meta como
+            # retailer_id sincronizado desde Shopify Sales Channel).
             if not rid.isdigit() or len(rid) < 8:
                 continue
-            if rid in vistos:
-                continue
-            vistos.add(rid)
             producto = info.get("producto", "")
-            presentacion = info.get("presentacion", "")
-            name_completo = f"{producto} {presentacion}".strip() if presentacion else producto
-            if not name_completo:
+            if not producto:
                 continue
-            _fb_items.append({
-                "retailer_id": rid,
-                "name":        name_completo,
-                "precio":      info.get("precio_unitario", 0),
-                "categoria":   _categoria_producto(producto),
-            })
-        logger.info(f"_fb_items construido desde Shopify: {len(_fb_items)} items ✅")
+            precio = info.get("precio_unitario", 0) or 0
+            actual = representante_por_producto.get(producto)
+            # Tomar la variante más barata como representante (atrae con precio bajo)
+            if actual is None or precio < actual["precio"]:
+                representante_por_producto[producto] = {
+                    "retailer_id": rid,
+                    # Solo el nombre del producto en `name` — la presentación
+                    # la verá el cliente al abrir la vista nativa de Meta.
+                    "name":        producto,
+                    "precio":      precio,
+                    # Usar la categoría que se guardó al cargar Shopify
+                    # (collection > productType > tag > keyword > "Catálogo").
+                    "categoria":   info.get("categoria") or _categoria_producto(producto),
+                }
+        _fb_items.extend(representante_por_producto.values())
+        logger.info(
+            f"_fb_items construido desde Shopify: {len(_fb_items)} productos "
+            f"(1 representante por producto de {len(_sku_map)} variantes) ✅"
+        )
 
 
 async def obtener_secciones_catalogo_async(categoria: str | None = None) -> list[dict]:
@@ -595,8 +653,8 @@ def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
     Si se pasa categoría filtra solo esa; si no, devuelve todas.
 
     LÍMITES DE META: product_list admite max 30 items totales y max 10 secciones.
-    Si el catálogo excede 30, se recortan respetando el orden de categorías
-    (las primeras categorías de ORDEN_CATEGORIAS tienen prioridad).
+    Si el catálogo excede 30, se recortan: primero ORDEN_CATEGORIAS (preferencia
+    Equora), luego las categorías reales que vienen de Shopify en orden alfabético.
 
     NOTA: Si _fb_items está vacío, esta función SINCRÓNICA no puede cargarlo.
     En ese caso, usar obtener_secciones_catalogo_async() en el caller.
@@ -614,17 +672,29 @@ def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
         logger.warning(f"Sin items de Facebook para categoría '{categoria}'")
         return []
 
-    # Agrupar por categoría respetando el orden fijo
+    # Agrupar por categoría
     por_categoria: dict[str, list[str]] = {}
     for item in items_filtrados:
         cat = item["categoria"]
         por_categoria.setdefault(cat, []).append(item["retailer_id"])
 
+    # Orden de categorías:
+    #   - Si se pidió una específica → solo esa
+    #   - Si no → primero las de ORDEN_CATEGORIAS (Equora), luego el resto
+    #     en orden alfabético. Esto hace que un cliente Voco con colecciones
+    #     custom ("Pizzas", "Bebidas", ...) vea TODAS sus categorías aunque
+    #     no estén en ORDEN_CATEGORIAS.
+    if categoria:
+        orden = [categoria]
+    else:
+        ya_listadas = set(ORDEN_CATEGORIAS)
+        extra = sorted(c for c in por_categoria.keys() if c not in ya_listadas)
+        orden = list(ORDEN_CATEGORIAS) + extra
+
     META_MAX_ITEMS = 30      # Límite duro de Meta product_list
     META_MAX_SECCIONES = 10  # Límite duro de Meta product_list
     items_usados = 0
     secciones = []
-    orden = [categoria] if categoria else ORDEN_CATEGORIAS
     for cat_name in orden:
         if len(secciones) >= META_MAX_SECCIONES:
             break
