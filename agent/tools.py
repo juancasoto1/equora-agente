@@ -538,6 +538,43 @@ async def _cargar_fb_catalog():
     except Exception as e:
         logger.error(f"Error cargando catálogo Facebook: {e}")
 
+    # ──────────────────────────────────────────────────────────────────────
+    # FALLBACK Shopify-only: si Graph API no devolvió items (token sin
+    # permiso catalog_management, error de red, app sin App Review, etc.)
+    # construimos _fb_items desde _sku_map que YA está poblado desde Shopify.
+    #
+    # Esto funciona porque Shopify Sales Channel sincroniza con Meta Catalog
+    # usando el variant_id como retailer_id. Los IDs que pegamos al payload
+    # de product_list son reconocidos por Meta sin necesitar Graph API.
+    # ──────────────────────────────────────────────────────────────────────
+    if not _fb_items and _sku_map:
+        logger.info(
+            f"_fb_items vacío de Graph API — construyendo desde _sku_map "
+            f"(Shopify, {len(_sku_map)} entradas)"
+        )
+        vistos: set[str] = set()
+        for rid, info in _sku_map.items():
+            # Meta acepta retailer_ids alfanuméricos pero los IDs sincronizados
+            # desde Shopify suelen ser variant_ids numéricos largos (10+ chars).
+            # Filtramos por eso para evitar duplicados con SKUs cortos.
+            if not rid.isdigit() or len(rid) < 8:
+                continue
+            if rid in vistos:
+                continue
+            vistos.add(rid)
+            producto = info.get("producto", "")
+            presentacion = info.get("presentacion", "")
+            name_completo = f"{producto} {presentacion}".strip() if presentacion else producto
+            if not name_completo:
+                continue
+            _fb_items.append({
+                "retailer_id": rid,
+                "name":        name_completo,
+                "precio":      info.get("precio_unitario", 0),
+                "categoria":   _categoria_producto(producto),
+            })
+        logger.info(f"_fb_items construido desde Shopify: {len(_fb_items)} items ✅")
+
 
 async def obtener_secciones_catalogo_async(categoria: str | None = None) -> list[dict]:
     """Versión async: si _fb_items está vacío, intenta cargarlo antes de devolver.
