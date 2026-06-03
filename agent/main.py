@@ -1672,8 +1672,8 @@ async def webhook_handler(request: Request):
                                 if es_local_a is True:
                                     mensaje_agregar = (
                                         f"🎉 *¡Pedido confirmado por ${total_fmt_loc}!*\n\n"
-                                        f"🚚 *Agrega ${falta_g_fmt} más* y el envío es *gratis* "
-                                        f"(actualmente ${envio_fmt}).\n\n"
+                                        f"🚚 *Si estás en Cali, agrega ${falta_g_fmt} más* "
+                                        f"y el envío es *gratis*.\n\n"
                                         f"Toca el botón para ver el catálogo:"
                                     )
                                 elif es_local_a is False:
@@ -2111,7 +2111,10 @@ async def webhook_handler(request: Request):
             if abrir_tienda:
                 minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
                 gratis_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
-                pie_tienda = f"📦 Pedido mínimo ${minimo_fmt} | 🚚 Envío gratis > ${gratis_fmt}"
+                # NO mostramos el costo del envío — solo el mínimo y el umbral
+                # de envío gratis (que aplica solo en Cali). Para fuera de Cali
+                # el envío lo calcula la transportadora en el checkout.
+                pie_tienda = f"📦 Pedido mínimo ${minimo_fmt} | 🚚 Envío gratis en Cali > ${gratis_fmt}"
 
                 # ── Detectar si la query es una categoría conocida ──
                 # Si es categoría → product_list de esa categoría (mejor UX)
