@@ -1384,34 +1384,18 @@ async def webhook_handler(request: Request):
                                     except Exception as e_pl:
                                         logger.error(f"[pedido-min] product_list falló: {e_pl}")
                             if not cat_reabierto:
-                                # Fallback útil: CTA URL a la tienda web + persistir
-                                tienda_url = await get_config_value("TIENDA_URL", _agent_id) or os.getenv("TIENDA_URL", "")
-                                msg_fb = "Aquí está la tienda para agregar más productos 🌿"
-                                cta_enviado = False
-                                if tienda_url and hasattr(_proveedor_agente, "enviar_cta_url"):
-                                    try:
-                                        cta_enviado = await _proveedor_agente.enviar_cta_url(
-                                            msg.telefono, msg_fb, "Ver catálogo 🛒", tienda_url,
-                                        )
-                                    except Exception as e_cta:
-                                        logger.warning(f"[pedido-min] cta_url falló: {e_cta}")
-                                if cta_enviado:
-                                    await guardar_mensaje(
-                                        msg.telefono, "assistant", msg_fb,
-                                        agent_id=_agent_id,
-                                    )
-                                else:
-                                    # Último recurso: texto con URL embebida
-                                    texto_final = (
-                                        f"{msg_fb}\n\n👉 {tienda_url}"
-                                        if tienda_url else
-                                        "Escríbeme qué más quieres agregar y te ayudo 🌿"
-                                    )
-                                    await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
-                                    await guardar_mensaje(
-                                        msg.telefono, "assistant", texto_final,
-                                        agent_id=_agent_id,
-                                    )
+                                # IMPORTANTE: NO mezclar universos de carrito.
+                                # El carrito vive en el catálogo nativo de WhatsApp.
+                                # Si product_list falla, NO mandamos link a tienda web
+                                # (Shopify) porque rompe el flujo: el cliente terminaría
+                                # con un carrito en WA y otro en web sin merge posible.
+                                # Mejor: pedir a Andrea (al cliente) que escriba qué quiere.
+                                texto_final = "Escríbeme qué más quieres agregar y te ayudo 🌿"
+                                await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
+                                await guardar_mensaje(
+                                    msg.telefono, "assistant", texto_final,
+                                    agent_id=_agent_id,
+                                )
                             logger.info(f"Pedido bajo mínimo: total={total}, min={pedido_min}, falta={falta} — items guardados para acumular")
                             continue  # No crear checkout
 
