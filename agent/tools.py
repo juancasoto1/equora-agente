@@ -542,7 +542,12 @@ async def _cargar_fb_catalog():
 def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
     """Devuelve las secciones para un mensaje product_list de WhatsApp.
     Usa los retailer_ids REALES del catálogo de Facebook (no SKUs de Shopify).
-    Si se pasa categoría filtra solo esa; si no, devuelve todas."""
+    Si se pasa categoría filtra solo esa; si no, devuelve todas.
+
+    LÍMITES DE META: product_list admite max 30 items totales y max 10 secciones.
+    Si el catálogo excede 30, se recortan respetando el orden de categorías
+    (las primeras categorías de ORDEN_CATEGORIAS tienen prioridad).
+    """
     if not _fb_items:
         logger.warning("_fb_items vacío — catálogo Facebook aún no cargado")
         return []
@@ -562,15 +567,33 @@ def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
         cat = item["categoria"]
         por_categoria.setdefault(cat, []).append(item["retailer_id"])
 
+    META_MAX_ITEMS = 30      # Límite duro de Meta product_list
+    META_MAX_SECCIONES = 10  # Límite duro de Meta product_list
+    items_usados = 0
     secciones = []
     orden = [categoria] if categoria else ORDEN_CATEGORIAS
     for cat_name in orden:
+        if len(secciones) >= META_MAX_SECCIONES:
+            break
         rids = por_categoria.get(cat_name, [])
-        if rids:
-            secciones.append({
-                "title": cat_name[:24],
-                "product_items": [{"product_retailer_id": r} for r in rids],
-            })
+        if not rids:
+            continue
+        cupo = META_MAX_ITEMS - items_usados
+        if cupo <= 0:
+            break
+        rids_recortados = rids[:cupo]
+        secciones.append({
+            "title": cat_name[:24],
+            "product_items": [{"product_retailer_id": r} for r in rids_recortados],
+        })
+        items_usados += len(rids_recortados)
+
+    total_disponible = len(items_filtrados)
+    if items_usados < total_disponible:
+        logger.info(
+            f"product_list recortado: {items_usados}/{total_disponible} items "
+            f"({len(secciones)} secciones) — limite Meta 30 items"
+        )
     return secciones
 
 

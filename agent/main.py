@@ -1369,29 +1369,33 @@ async def webhook_handler(request: Request):
 
                             # Catalog_message removido: cuelga WhatsApp Business
                             # app en algunos Android (Meta side bug). Vamos directo
-                            # al product_list que es estable en todos los devices
-                            # y ofrece el mismo botón "Ver catálogo" al final.
-                            cat_btn_enviado = False
-                            if not cat_btn_enviado:
-                                logger.info(f"[pedido-min] Enviando product_list a {msg.telefono}")
-                                cat_reabierto = False
-                                if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
-                                    secciones = obtener_secciones_catalogo(None)
-                                    if secciones:
-                                        try:
-                                            cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
-                                                msg.telefono, "Agrega más productos 🌿",
-                                                "Tu carrito anterior está guardado — lo nuevo se suma automáticamente.",
-                                                secciones,
-                                            )
-                                        except Exception as e_pl:
-                                            logger.error(f"[pedido-min] product_list falló: {e_pl}")
-                                if not cat_reabierto:
-                                    # Último recurso: texto sugiriendo acción
-                                    await _proveedor_agente.enviar_mensaje(
-                                        msg.telefono,
-                                        "Escríbeme qué más quieres agregar y te ayudo 🌿"
-                                    )
+                            # al product_list que es estable en todos los devices.
+                            logger.info(f"[pedido-min] Enviando product_list a {msg.telefono}")
+                            cat_reabierto = False
+                            if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
+                                secciones = obtener_secciones_catalogo(None)
+                                if secciones:
+                                    try:
+                                        cat_reabierto = await _proveedor_agente.enviar_catalogo_productos(
+                                            msg.telefono, "Agrega más productos 🌿",
+                                            "Tu carrito anterior está guardado — lo nuevo se suma automáticamente.",
+                                            secciones,
+                                        )
+                                    except Exception as e_pl:
+                                        logger.error(f"[pedido-min] product_list falló: {e_pl}")
+                            if not cat_reabierto:
+                                # IMPORTANTE: NO mezclar universos de carrito.
+                                # El carrito vive en el catálogo nativo de WhatsApp.
+                                # Si product_list falla, NO mandamos link a tienda web
+                                # (Shopify) porque rompe el flujo: el cliente terminaría
+                                # con un carrito en WA y otro en web sin merge posible.
+                                # Mejor: pedir a Andrea (al cliente) que escriba qué quiere.
+                                texto_final = "Escríbeme qué más quieres agregar y te ayudo 🌿"
+                                await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
+                                await guardar_mensaje(
+                                    msg.telefono, "assistant", texto_final,
+                                    agent_id=_agent_id,
+                                )
                             logger.info(f"Pedido bajo mínimo: total={total}, min={pedido_min}, falta={falta} — items guardados para acumular")
                             continue  # No crear checkout
 
