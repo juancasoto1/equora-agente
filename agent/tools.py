@@ -153,25 +153,40 @@ def _categoria_producto(titulo: str) -> str:
     return "Otros"
 
 
+# Colecciones "automáticas" de Shopify que NO son categorías reales del
+# negocio — Shopify las crea por defecto (incluyen todos los productos)
+# o son la home page. Si las usamos como categoría, terminan tapando las
+# colecciones reales del cliente (Lavandería, Cocina, etc.).
+_SHOPIFY_AUTO_COLLECTIONS = {
+    "página de inicio", "pagina de inicio",
+    "home page", "homepage", "frontpage", "home",
+    "all", "all products", "todos", "todos los productos",
+}
+
+
 def _categoria_desde_shopify(node: dict) -> str:
     """Determina la categoría de un producto en cascada multi-tenant:
 
-      1. Shopify Collection (primera) — UX óptima, lo que recomendamos
-      2. Shopify Product Type — alternativa común si no usan collections
+      1. Shopify Collection REAL (saltando auto-collections de Shopify)
+      2. Shopify Product Type — alternativa si no usan collections
       3. Shopify Tag (primero) — fallback liviano
       4. Keywords de Equora (legacy) — solo si el producto matchea
       5. "Catálogo" — bucket genérico cuando nada aplica
 
     Esta cascada permite que CUALQUIER cliente Voco funcione sin configurar
-    nada: si el catálogo viene "sucio", todos los productos terminan en un
-    solo bucket "Catálogo" — sigue funcional, solo plano visualmente.
+    nada: si el catálogo viene "sucio", los productos caen en una categoría
+    útil — nunca en una catch-all como "Página de inicio" que esconde la
+    estructura real del catálogo.
     """
-    # 1. Collections de Shopify (la primera)
+    # 1. Collections REALES de Shopify (saltando "Página de inicio" y similares)
     coll_edges = (node.get("collections") or {}).get("edges") or []
-    if coll_edges:
-        title = (coll_edges[0].get("node") or {}).get("title", "").strip()
-        if title:
-            return title
+    for edge in coll_edges:
+        title = ((edge.get("node") or {}).get("title") or "").strip()
+        if not title:
+            continue
+        if title.lower() in _SHOPIFY_AUTO_COLLECTIONS:
+            continue  # saltar colecciones automáticas
+        return title
 
     # 2. productType
     ptype = (node.get("productType") or "").strip()

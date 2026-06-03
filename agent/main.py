@@ -525,13 +525,13 @@ async def _procesar_carrito_unificado():
                 if es_local_seg is True:
                     msg = (
                         f"🛒 Tienes *${total_fmt}* en tu carrito!\n\n"
-                        f"Agrega *${falta_fmt}* más y el envío es *gratis* 🚚🎉"
+                        f"Agrega *${falta_fmt}* más y *el envío es gratis en Cali* 🚚🎉"
                     )
                     if lineas:
                         msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
                     msg += (
                         f"\n\nO si prefieres, confirma tu pedido ahora "
-                        f"(envío *${costo_fmt_loc}*) 👇"
+                        f"(más costos de envío) 👇"
                     )
                 elif es_local_seg is False:
                     msg = (
@@ -541,7 +541,7 @@ async def _procesar_carrito_unificado():
                     )
                     if lineas:
                         msg += f"\n\nSugerencias:\n{lineas}"
-                    msg += "\n\nO si quieres confirmar tu pedido ahora 👇"
+                    msg += "\n\nO si quieres confirmar tu pedido ahora (más costos de envío) 👇"
                 else:
                     # Sin ciudad confirmada: mensaje neutro
                     msg = (
@@ -554,8 +554,8 @@ async def _procesar_carrito_unificado():
                 # Solo flujo nativo (validado al inicio del loop con flujo_wa).
                 # Estrategia:
                 #   1) Crear checkout en Shopify para tener URL de pago lista.
-                #   2) Mandar 2 reply buttons "Envío gratis" + "Confirmar pedido".
-                #   3) Si fallan los botones → product_list (que abre catálogo nativo).
+                #   2) Mandar 3 reply buttons: Envío gratis + Confirmar + Vaciar carrito.
+                #   3) Si fallan los botones → product_list (catálogo nativo).
                 #   4) Si product_list también falla → silencio (no tienda web).
                 checkout_url_seg = await _crear_checkout_para_seguimiento()
                 botones_seg = False
@@ -566,6 +566,7 @@ async def _procesar_carrito_unificado():
                             [
                                 {"id": "act_envio_gratis",     "title": "Envío gratis 🚚"},
                                 {"id": "act_confirmar_pedido", "title": "Confirmar pedido"},
+                                {"id": "act_vaciar_carrito",   "title": "Vaciar carrito 🗑"},
                             ],
                         )
                     except Exception as e:
@@ -1310,6 +1311,26 @@ async def webhook_handler(request: Request):
                         )
                     continue
 
+                if accion == "act_vaciar_carrito":
+                    # El cliente tocó el botón "Vaciar carrito" del seguimiento.
+                    # Vaciar directo en BD (sin depender del LLM) + confirmar.
+                    try:
+                        await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
+                        logger.info(f"[act_vaciar_carrito] carrito vaciado para {msg.telefono}")
+                    except Exception as e:
+                        logger.error(f"[act_vaciar_carrito] error vaciando: {e}")
+                    msg_confirmacion = (
+                        "🗑 *Listo, tu carrito quedó vacío.*\n\n"
+                        "Cuando quieras armar un pedido nuevo, escríbeme qué necesitas "
+                        "o pídeme el catálogo 🌿"
+                    )
+                    await _proveedor_agente.enviar_mensaje(msg.telefono, msg_confirmacion)
+                    await guardar_mensaje(
+                        msg.telefono, "assistant", msg_confirmacion,
+                        agent_id=_agent_id,
+                    )
+                    continue
+
                 # Acción desconocida: no hacer nada
                 continue
 
@@ -1692,11 +1713,12 @@ async def webhook_handler(request: Request):
                                         )
 
                                 # ── Mensaje 2: confirmar pedido directo al checkout ──
-                                # Mensaje según zona de envío
+                                # NO mostramos el costo exacto del envío aquí — en el checkout
+                                # el cliente lo ve calculado según su dirección (más confiable).
                                 if es_local_a is True:
                                     mensaje_confirmar = (
-                                        f"O si ya quieres cerrar tu pedido (con envío ${envio_fmt}), "
-                                        f"toca aquí 👇"
+                                        "O si ya quieres cerrar tu pedido (más costos de envío), "
+                                        "toca aquí 👇"
                                     )
                                 else:
                                     mensaje_confirmar = (
