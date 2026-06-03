@@ -894,12 +894,12 @@ html.dark{
 #back{background:none;border:none;color:var(--az);font-size:1.3rem;cursor:pointer;padding:4px 8px 4px 0;display:none}
 @media(max-width:720px){#back{display:block}}
 
-#mbar{background:#182229;padding:6px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid var(--bd)}
+#mbar{background:var(--hd);padding:6px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid var(--bd)}
 #mbar .lbl{font-size:.78rem;color:var(--ts)}
 .tog{position:relative;display:inline-block;width:40px;height:22px}
 .tog input{opacity:0;width:0;height:0}
-.sl{position:absolute;inset:0;background:#555;border-radius:22px;transition:.25s;cursor:pointer}
-.sl::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:var(--voco-card-bg);border-radius:50%;transition:.25s}
+.sl{position:absolute;inset:0;background:var(--bd);border-radius:22px;transition:.25s;cursor:pointer}
+.sl::before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.25s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 .tog input:checked+.sl{background:var(--red)}
 .tog input:checked+.sl::before{transform:translateX(18px)}
 #mlbl{font-size:.76rem;color:var(--red);font-weight:600;display:none}
@@ -917,7 +917,8 @@ html.dark .bot .mb,html.dark .usr .mb,html.dark .esc-bbl-bot,html.dark .esc-bbl-
 .mt{font-size:.67rem;color:var(--ts)}
 .bot .mt{align-self:flex-start}
 .usr .mt{align-self:flex-end}
-.msys{align-self:center;background:#182229;color:var(--ts);font-size:.72rem;padding:4px 14px;border-radius:8px;text-align:center;margin:4px 0}
+.msys{align-self:center;background:var(--hd);color:var(--ts);font-size:.72rem;padding:4px 14px;border-radius:8px;text-align:center;margin:4px 0;box-shadow:0 1px 0.5px rgba(11,20,26,.08)}
+html.dark .msys{box-shadow:none}
 
 #ib{background:var(--hd);padding:10px 16px;display:flex;gap:10px;align-items:flex-end;flex-shrink:0}
 #ti{flex:1;background:var(--sb);border:none;border-radius:10px;padding:10px 14px;color:var(--tx);
