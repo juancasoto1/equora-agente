@@ -597,7 +597,8 @@ async def clientes_con_checkout_abandonado(
 
 # ── Carrito activo (persistencia independiente del historial) ────────────────
 
-CARRITO_TTL_HORAS = 24  # El carrito expira si el cliente no vuelve en 24 h
+CARRITO_TTL_HORAS = 4  # El carrito expira si el cliente no vuelve en 4 h
+CARRITO_MERGE_HORAS = 2  # Si última actividad fue hace más, NO mergear (reemplazar)
 
 
 async def guardar_carrito_activo(telefono: str, items: list[dict], agent_id: int = 1):
@@ -638,6 +639,21 @@ async def limpiar_carrito_activo(telefono: str, agent_id: int = 1):
             cliente.carrito_activo_at = None
             cliente.actualizado = datetime.utcnow()
             await session.commit()
+
+
+async def carrito_es_fresco_para_merge(telefono: str, agent_id: int = 1) -> bool:
+    """Devuelve True si el carrito tiene actividad reciente (< CARRITO_MERGE_HORAS)
+    y por tanto es seguro hacer merge con una orden nueva.
+
+    Si False: el carrito anterior es muy viejo (entre CARRITO_MERGE_HORAS y
+    CARRITO_TTL_HORAS) o no existe. La orden nueva debe REEMPLAZAR no sumar —
+    evita acumular pedidos de días pasados que el cliente ya olvidó.
+    """
+    async with async_session() as session:
+        cliente = await _get_cliente(session, telefono, agent_id)
+        if not cliente or not cliente.carrito_activo or not cliente.carrito_activo_at:
+            return False
+        return (datetime.utcnow() - cliente.carrito_activo_at) <= timedelta(hours=CARRITO_MERGE_HORAS)
 
 
 async def _clientes_carrito_en_ventana(

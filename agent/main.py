@@ -25,6 +25,7 @@ from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial,
     guardar_cliente, obtener_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
     guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
+    carrito_es_fresco_para_merge,
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
@@ -501,6 +502,20 @@ async def _procesar_carrito_unificado():
                 # Persistir el mensaje del seguimiento (panel lo necesita).
                 await guardar_mensaje(telefono, "assistant", msg)
 
+                # Mensaje complementario con botones Ver/Vaciar carrito —
+                # SIEMPRE accesibles para el cliente (acciones determinísticas).
+                # (En Estado 3 no incluimos "Confirmar pedido" porque aún no
+                # alcanza el mínimo.)
+                if hasattr(proveedor, "enviar_botones_reply"):
+                    try:
+                        texto_botones = "¿Quieres gestionar tu carrito?"
+                        await proveedor.enviar_botones_reply(
+                            telefono, texto_botones,
+                            _botones_carrito_estandar(ofrece_confirmar=False),
+                        )
+                    except Exception as e:
+                        logger.warning(f"[carrito-est3] botones complementarios fallaron: {e}")
+
             elif total < umbral_gratis:
                 # ── Estado 4: sobre el mínimo, bajo envío gratis ──────────
                 falta = umbral_gratis - total
@@ -552,9 +567,11 @@ async def _procesar_carrito_unificado():
                         msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
 
                 # Solo flujo nativo (validado al inicio del loop con flujo_wa).
-                # Estrategia:
+                # Estrategia con carrito determinístico:
                 #   1) Crear checkout en Shopify para tener URL de pago lista.
-                #   2) Mandar 3 reply buttons: Envío gratis + Confirmar + Vaciar carrito.
+                #   2) Mandar 3 reply buttons SIEMPRE iguales: Confirmar + Ver + Vaciar.
+                #      (Quitamos "Envío gratis" porque "Ver carrito" da info equivalente
+                #       y queremos que SIEMPRE el cliente tenga botones para operar el carrito.)
                 #   3) Si fallan los botones → product_list (catálogo nativo).
                 #   4) Si product_list también falla → silencio (no tienda web).
                 checkout_url_seg = await _crear_checkout_para_seguimiento()
@@ -563,11 +580,7 @@ async def _procesar_carrito_unificado():
                     try:
                         botones_seg = await proveedor.enviar_botones_reply(
                             telefono, msg,
-                            [
-                                {"id": "act_envio_gratis",     "title": "Envío gratis 🚚"},
-                                {"id": "act_confirmar_pedido", "title": "Confirmar pedido"},
-                                {"id": "act_vaciar_carrito",   "title": "Vaciar carrito 🗑"},
-                            ],
+                            _botones_carrito_estandar(ofrece_confirmar=True),
                         )
                     except Exception as e:
                         logger.warning(f"[carrito-est4] botones reply fallaron: {e}")
@@ -642,6 +655,17 @@ async def _procesar_carrito_unificado():
                 if not enviado_seg:
                     # Fallback texto con la URL del checkout (sigue siendo Shopify pago)
                     await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {checkout_url_seg}")
+
+                # Mensaje complementario con botones Ver/Vaciar — el cliente
+                # SIEMPRE debe poder revisar/limpiar su carrito antes de pagar.
+                if hasattr(proveedor, "enviar_botones_reply"):
+                    try:
+                        await proveedor.enviar_botones_reply(
+                            telefono, "¿Quieres revisar antes de confirmar?",
+                            _botones_carrito_estandar(ofrece_confirmar=False),
+                        )
+                    except Exception as e:
+                        logger.warning(f"[carrito-est5] botones complementarios fallaron: {e}")
 
             await guardar_mensaje(telefono, "assistant", msg)
             _carrito_unif_cooldown[telefono] = ahora
@@ -801,6 +825,88 @@ async def _catalogo_header_for_agent(agent_id: int) -> str:
     # 3. Fallback genérico
     _catalogo_header_cache[agent_id] = "Catálogo 🌿"
     return "Catálogo 🌿"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Helpers de carrito determinístico (backend-managed, no LLM)
+# ──────────────────────────────────────────────────────────────────────────────
+def _botones_carrito_estandar(ofrece_confirmar: bool = False) -> list[dict]:
+    """Devuelve los reply buttons que SIEMPRE acompañan mensajes del sistema
+    cuando hay carrito activo. Garantiza que el cliente NUNCA dependa del LLM
+    para ver/vaciar — son acciones determinísticas del backend.
+
+    Si ofrece_confirmar=True (Estados 4-5) incluye el botón Confirmar pedido
+    como primero (mayor visibilidad para cerrar venta). Si False (Estado 3),
+    solo Ver + Vaciar.
+
+    Meta limita a 3 reply buttons por mensaje — respetamos ese tope.
+    """
+    botones = []
+    if ofrece_confirmar:
+        botones.append({"id": "act_confirmar_pedido", "title": "Confirmar pedido ✅"})
+    botones.append({"id": "act_ver_carrito",   "title": "Ver carrito 🛒"})
+    botones.append({"id": "act_vaciar_carrito", "title": "Vaciar carrito 🗑"})
+    return botones
+
+
+async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
+    """Lee el carrito_activo de BD y envía un resumen determinístico al cliente.
+    Se llama desde el handler act_ver_carrito. NUNCA delega al LLM — el backend
+    es el único source of truth del estado del carrito.
+
+    Returns: True si envió, False si carrito vacío (manda mensaje aparte).
+    """
+    carrito = await obtener_carrito_activo(telefono, agent_id=agent_id)
+    if not carrito:
+        msg_vacio = "🛒 Tu carrito está vacío en este momento.\n\nCuando agregues productos te lo confirmo aquí."
+        await proveedor.enviar_mensaje(telefono, msg_vacio)
+        await guardar_mensaje(telefono, "assistant", msg_vacio, agent_id=agent_id)
+        return False
+
+    lineas_items = []
+    total = 0
+    for item in carrito:
+        cantidad = int(item.get("cantidad", item.get("quantity", 1)))
+        producto = item.get("producto", "Producto")
+        presentacion = item.get("presentacion", "")
+        subtotal = int(item.get("subtotal", 0))
+        precio_u = int(item.get("precio_unitario", 0))
+        total += subtotal
+        if presentacion:
+            lineas_items.append(f"  • {cantidad}x {producto} / {presentacion} → ${subtotal:,}".replace(",", "."))
+        else:
+            lineas_items.append(f"  • {cantidad}x {producto} → ${subtotal:,}".replace(",", "."))
+
+    total_fmt = f"{total:,}".replace(",", ".")
+    resumen = (
+        "🛒 *Tu carrito actual:*\n\n"
+        + "\n".join(lineas_items)
+        + f"\n\n💰 *Total: ${total_fmt}*"
+    )
+    # Reply buttons (Confirmar si supera el mínimo, sino solo Ver/Vaciar)
+    pedido_min = 0
+    try:
+        pedido_min_str = await get_config_value("PEDIDO_MINIMO", agent_id) or os.getenv("PEDIDO_MINIMO", "0")
+        pedido_min = int(float(pedido_min_str)) if pedido_min_str else 0
+    except Exception:
+        pedido_min = 0
+    ofrece_confirmar = total >= pedido_min if pedido_min > 0 else True
+
+    enviado = False
+    if hasattr(proveedor, "enviar_botones_reply"):
+        try:
+            # Para "Ver carrito" mostramos solo 2 botones (sin duplicar "Ver" que ya están viendo)
+            botones = []
+            if ofrece_confirmar:
+                botones.append({"id": "act_confirmar_pedido", "title": "Confirmar pedido ✅"})
+            botones.append({"id": "act_vaciar_carrito", "title": "Vaciar carrito 🗑"})
+            enviado = await proveedor.enviar_botones_reply(telefono, resumen, botones)
+        except Exception as e:
+            logger.warning(f"[ver-carrito] botones fallaron: {e}")
+    if not enviado:
+        await proveedor.enviar_mensaje(telefono, resumen)
+    await guardar_mensaje(telefono, "assistant", resumen, agent_id=agent_id)
+    return True
 
 
 async def _escalar_meta_fallo(
@@ -1331,6 +1437,12 @@ async def webhook_handler(request: Request):
                     )
                     continue
 
+                if accion == "act_ver_carrito":
+                    # El cliente tocó "Ver carrito" — backend lee BD y envía resumen
+                    # determinístico (NO depende de Andrea/LLM).
+                    await _enviar_resumen_carrito(msg.telefono, agent_id=_agent_id)
+                    continue
+
                 # Acción desconocida: no hacer nada
                 continue
 
@@ -1391,12 +1503,22 @@ async def webhook_handler(request: Request):
                 logger.info(f"[orden-catalogo] Recibida orden de {msg.telefono}: {msg.texto[:500]}")
                 try:
                     items_raw = json.loads(msg.texto[len("__ORDEN_CATALOGO__:"):])
-                    # ── Acumular con carrito_activo previo (si existe) ──
-                    # Esto permite que el cliente arme el pedido en varios envíos
-                    # sin perder lo que ya tenía cuando no alcanzó el mínimo.
+                    # ── Merge inteligente: solo sumar si el carrito previo está
+                    # FRESCO (actividad < CARRITO_MERGE_HORAS = 2h). Si está viejo
+                    # entre 2h y 4h, REEMPLAZAR — evita acumular pedidos olvidados
+                    # de ayer. Si vacío o expirado (>4h), arrancar limpio.
                     carrito_previo = await obtener_carrito_activo(msg.telefono, agent_id=_agent_id)
+                    es_fresco = await carrito_es_fresco_para_merge(msg.telefono, agent_id=_agent_id)
+                    if carrito_previo and not es_fresco:
+                        logger.info(
+                            f"[orden-catalogo] Carrito previo encontrado pero NO fresco "
+                            f"({len(carrito_previo)} items) — REEMPLAZANDO (no merge)"
+                        )
+                        # Limpiar antes para que el guardado sea solo lo nuevo
+                        await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
+                        carrito_previo = []
                     if carrito_previo:
-                        logger.info(f"[orden-catalogo] Merge con carrito previo: {len(carrito_previo)} items")
+                        logger.info(f"[orden-catalogo] Merge con carrito previo (fresco): {len(carrito_previo)} items")
                         # Convertir items_raw a formato común para merge
                         items_combinados: dict[str, dict] = {}
                         # Primero el carrito previo
