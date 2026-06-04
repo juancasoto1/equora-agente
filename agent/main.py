@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from agent.brain import generar_respuesta
+from agent.markers import MarkerContext, aplicar_marcadores  # noqa: F401  # registra handlers
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial,
     guardar_cliente, obtener_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
@@ -2179,24 +2180,16 @@ async def webhook_handler(request: Request):
             await guardar_mensaje(msg.telefono, "assistant", respuesta, agent_id=_agent_id)
             await registrar_mensaje_asistente(msg.telefono, agent_id=_agent_id)
 
-            # Procesar marcador de carrito → persistir estado en BD
-            respuesta, items_carrito = extraer_marcador_carrito(respuesta)
-            if items_carrito is not None:
-                try:
-                    await guardar_carrito_activo(msg.telefono, items_carrito, agent_id=_agent_id)
-                    logger.info(f"Carrito actualizado para {msg.telefono}: {len(items_carrito)} items")
-                except Exception as e:
-                    logger.error(f"Error guardando carrito: {e}")
-
-            # Procesar marcador [[VACIAR_CARRITO]] → vaciar carrito en BD real.
-            # Antes Andrea decía "ya quedó vacío" pero el carrito_activo seguía lleno.
-            respuesta, vaciar = extraer_marcador_vaciar_carrito(respuesta)
-            if vaciar:
-                try:
-                    await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
-                    logger.info(f"[VACIAR_CARRITO] carrito vaciado para {msg.telefono}")
-                except Exception as e:
-                    logger.error(f"Error vaciando carrito de {msg.telefono}: {e}")
+            # Procesar marcadores stateless via dispatcher MARKER_HANDLERS
+            # (CARRITO, VACIAR_CARRITO, CIERRE_CONV). Los marcadores con side
+            # effects que producen estado consumido más adelante (PEDIDO,
+            # ESCALAR, etc.) aún se procesan inline más abajo — se migrarán
+            # en fases siguientes del refactor.
+            _marker_ctx = MarkerContext(
+                respuesta=respuesta, telefono=msg.telefono, agent_id=_agent_id,
+            )
+            _marker_ctx = await aplicar_marcadores(_marker_ctx)
+            respuesta = _marker_ctx.respuesta
 
             # Procesar marcador [[MOSTRAR_CARRITO]] → backend muestra resumen
             # determinístico con reply buttons. Antes Andrea solo decía "toca
@@ -2280,14 +2273,7 @@ async def webhook_handler(request: Request):
                     datos_escalacion = None
                 respuesta = re.sub(r'\s*\[\[ESCALAR:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
 
-            # Marcador de cierre de conversación → suprime futuros seguimientos
-            if '[[CIERRE_CONV:]]' in respuesta:
-                respuesta = respuesta.replace('[[CIERRE_CONV:]]', '').strip()
-                try:
-                    await marcar_cierre_enviado(msg.telefono, agent_id=_agent_id)
-                    logger.info(f"Conversación cerrada para {msg.telefono} — seguimientos suprimidos")
-                except Exception as e:
-                    logger.error(f"Error marcando cierre: {e}")
+            # [[CIERRE_CONV:]] ya fue procesado por MARKER_HANDLERS arriba.
 
             # Extraer marcadores interactivos ANTES de enviar el texto
             respuesta, datos_catalogo_cat = extraer_marcador_catalogo_cat(respuesta)
