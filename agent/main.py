@@ -756,15 +756,20 @@ async def _procesar_abandono_checkout():
         min_min=CHECKOUT_ABANDONO_MIN,
         max_min=CHECKOUT_ABANDONO_MAX,
     )
-    for telefono, checkout_url in clientes:
-        # Validación extra: si el URL guardado NO contiene /checkouts/, está
-        # corrupto (ej. solo la home) — no enviar, el cliente abriría la home.
-        if "/checkouts/" not in checkout_url and "/checkout/" not in checkout_url:
+    for telefono, checkout_url_raw in clientes:
+        # AUTOREPARAR si el URL guardado es corrupto (ej. solo la home).
+        # Antes: saltábamos silencioso, lo que dejaba al cliente sin botón.
+        # Ahora: recreamos checkout desde carrito_activo si está disponible.
+        if "/checkouts/" not in checkout_url_raw and "/checkout/" not in checkout_url_raw:
             logger.warning(
-                f"[checkout-abandono] URL corrupta para {telefono}: "
-                f"{checkout_url[:60]} — saltando"
+                f"[checkout-abandono] URL corrupta para {telefono} — intentando recrear"
             )
-            continue
+            checkout_url = await _obtener_o_recrear_checkout_url(telefono)
+            if not checkout_url:
+                logger.warning(f"[checkout-abandono] {telefono} sin checkout válido — saltando")
+                continue
+        else:
+            checkout_url = checkout_url_raw
         # Cooldown PERSISTENTE (BD, no memoria) — sobrevive deploys de Railway
         if not await puede_enviar_checkout_abandono(telefono, CHECKOUT_COOLDOWN_MIN):
             continue
@@ -917,6 +922,72 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
         await proveedor.enviar_mensaje(telefono, resumen)
     await guardar_mensaje(telefono, "assistant", resumen, agent_id=agent_id)
     return True
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Helper: obtener o recrear checkout URL válido
+# ──────────────────────────────────────────────────────────────────────────────
+async def _obtener_o_recrear_checkout_url(telefono: str, agent_id: int = 1) -> str | None:
+    """Devuelve un checkout_url VÁLIDO para el cliente. Si el guardado en BD
+    es corrupto (no contiene /checkouts/ — ej. solo la home de Shopify), lo
+    RECREA desde el carrito_activo actual y guarda el nuevo URL.
+
+    Esto resuelve el bug donde los botones 'Confirmar entrega'/'Terminar pedido'
+    llevaban a la home de Shopify en lugar del checkout. Si el URL en BD está
+    corrupto, se autoreparara generando uno nuevo desde el carrito vigente.
+
+    Returns: URL válida del checkout, o None si no se pudo (sin carrito).
+    """
+    cliente_data = await obtener_cliente(telefono, agent_id=agent_id)
+    if not cliente_data:
+        return None
+    url_guardado = (cliente_data.get("pedido_checkout_url") or "").strip()
+
+    # Si el URL guardado es válido (contiene /checkouts/), usarlo
+    if url_guardado and ("/checkouts/" in url_guardado or "/checkout/" in url_guardado):
+        return url_guardado
+
+    # URL guardado corrupto o vacío — recrear desde carrito_activo actual
+    if url_guardado:
+        logger.warning(
+            f"[checkout-url] URL corrupta para {telefono} ({url_guardado[:60]}) — recreando"
+        )
+    carrito = await obtener_carrito_activo(telefono, agent_id=agent_id)
+    if not carrito:
+        logger.warning(f"[checkout-url] {telefono} sin carrito_activo — no puedo recrear checkout")
+        return None
+    # Convertir items del carrito al formato esperado por crear_checkout_shopify
+    productos = []
+    total = 0
+    for item in carrito:
+        producto = item.get("producto", "")
+        presentacion = item.get("presentacion", "")
+        cantidad = int(item.get("cantidad", item.get("quantity", 1)))
+        precio_u = int(item.get("precio_unitario", 0))
+        subtotal = int(item.get("subtotal") or precio_u * cantidad)
+        if not producto or not precio_u:
+            continue
+        productos.append({
+            "producto": producto,
+            "presentacion": presentacion,
+            "cantidad": cantidad,
+            "precio_unitario": precio_u,
+            "subtotal": subtotal,
+        })
+        total += subtotal
+    if not productos:
+        return None
+    try:
+        nuevo_url = await crear_checkout_shopify(telefono, {"productos": productos, "total": total})
+        if nuevo_url and ("/checkouts/" in nuevo_url or "/checkout/" in nuevo_url):
+            await guardar_checkout_url(telefono, nuevo_url, agent_id=agent_id)
+            logger.info(f"[checkout-url] Recreado para {telefono}: {nuevo_url[:80]}")
+            return nuevo_url
+        logger.error(f"[checkout-url] crear_checkout_shopify devolvió URL inválida: {nuevo_url}")
+        return None
+    except Exception as e:
+        logger.error(f"[checkout-url] Error recreando checkout para {telefono}: {e}")
+        return None
 
 
 async def _escalar_meta_fallo(
@@ -1415,11 +1486,10 @@ async def webhook_handler(request: Request):
                     continue
 
                 if accion == "act_confirmar_pedido":
-                    # Buscar checkout_url guardado del cliente
-                    cliente_data = await obtener_cliente(msg.telefono, agent_id=_agent_id)
-                    checkout_url = ""
-                    if cliente_data:
-                        checkout_url = cliente_data.get("pedido_checkout_url", "") or ""
+                    # Obtener checkout_url VÁLIDO (recrea si el guardado está corrupto).
+                    # Antes: si BD tenía la home como pedido_checkout_url, el botón
+                    # llevaba a la home — ahora autoreparamos.
+                    checkout_url = await _obtener_o_recrear_checkout_url(msg.telefono, agent_id=_agent_id)
                     if checkout_url:
                         msg_checkout = (
                             "🎉 *¡Perfecto!*\n\n"
@@ -2446,7 +2516,12 @@ async def webhook_handler(request: Request):
                         agent_id=_agent_id,
                     )
 
-            # Enviar link de checkout de Shopify si se generó
+            # Enviar link de checkout de Shopify si se generó Y es válido
+            # (con /checkouts/ — no la home). Si es inválido, intentar
+            # autoreparar antes de mandar al cliente un botón muerto.
+            if checkout_url and ("/checkouts/" not in checkout_url and "/checkout/" not in checkout_url):
+                logger.warning(f"[PEDIDO] checkout_url corrupto: {checkout_url[:60]} — intentando recrear")
+                checkout_url = await _obtener_o_recrear_checkout_url(msg.telefono, agent_id=_agent_id)
             if checkout_url:
                 texto_checkout = (
                     "🧾 *Tu pedido está listo*\n\n"
