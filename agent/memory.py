@@ -582,33 +582,50 @@ async def guardar_checkout_url(telefono: str, checkout_url: str, agent_id: int =
     """Guarda la URL del checkout de Shopify para poder reenviarla si el cliente no termina.
 
     VALIDACIONES:
-      1) Solo aceptamos URLs con '/checkouts/' (no la home de la tienda).
-      2) NO DEGRADAR: si ya tenemos guardado un URL con tokens de auth
-         (?_r=, _s=, _y=) y la URL nueva NO los tiene, conservamos el
-         actual. Es el bug donde el webhook checkouts/create reemplazaba
-         el URL del Storefront API (con tokens) por uno sin tokens →
-         Shopify rechazaba la sesión y mostraba la home.
+      1) Aceptamos URLs de checkout reales — Shopify usa varios formatos:
+         - '/checkouts/cn/...' (webhook checkouts/create — SIN tokens de sesión)
+         - '/checkouts/...'    (formato clásico)
+         - '/cart/c/...?key=...&_s=...&_y=...' (Storefront API cartCreate — CON tokens)
+         Cualquier otro patrón (home, /products, etc.) se rechaza.
+      2) NO DEGRADAR: si ya hay un URL con tokens de sesión
+         (?_r=, _s=, _y= o ?key= en /cart/c/) y la nueva NO los tiene,
+         conservamos la actual. Es el bug donde el webhook checkouts/create
+         reemplazaba la URL del Storefront API (con tokens) por una sin
+         tokens → Shopify rechazaba la sesión y mostraba la home.
     """
     if not telefono or not checkout_url:
         return
     import logging
     log = logging.getLogger("agentkit")
+
+    def _es_checkout_url_valida(url: str) -> bool:
+        return ("/checkouts/" in url) or ("/checkout/" in url) or ("/cart/c/" in url)
+
+    def _tiene_sesion(url: str) -> bool:
+        """True si la URL trae tokens de sesión que Shopify necesita para no redirigir a home."""
+        return (
+            "_r=" in url
+            or "_s=" in url
+            or "_y=" in url
+            or ("/cart/c/" in url and "key=" in url)
+        )
+
     # Validar que sea una URL de checkout real, no la home de la tienda
-    if "/checkouts/" not in checkout_url and "/checkout/" not in checkout_url:
+    if not _es_checkout_url_valida(checkout_url):
         log.warning(
-            f"[guardar_checkout_url] URL inválida (sin /checkouts/) para {telefono}: "
+            f"[guardar_checkout_url] URL inválida (sin /checkouts/ ni /cart/c/) para {telefono}: "
             f"{checkout_url[:80]} — NO se guarda"
         )
         return
-    nueva_tiene_auth = "_r=" in checkout_url
+    nueva_tiene_auth = _tiene_sesion(checkout_url)
     async with async_session() as session:
         cliente = await _get_cliente(session, telefono, agent_id)
         if not cliente:
             cliente = Cliente(agent_id=agent_id, telefono=telefono)
             session.add(cliente)
-        # Anti-degradación: si ya hay un URL con auth y la nueva no, conservar
+        # Anti-degradación: si ya hay un URL con sesión y la nueva no, conservar la actual
         url_actual = (cliente.pedido_checkout_url or "").strip()
-        actual_tiene_auth = "_r=" in url_actual
+        actual_tiene_auth = _tiene_sesion(url_actual)
         if actual_tiene_auth and not nueva_tiene_auth:
             log.info(
                 f"[guardar_checkout_url] {telefono}: NO sobreescribir — "
