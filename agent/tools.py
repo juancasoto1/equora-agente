@@ -893,6 +893,7 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
     lines = []
     no_encontrados = []
     excede_stock = []  # [(producto, pedido, disponible)]
+    logger.info(f"[checkout] Procesando {len(productos)} items para {telefono}")
     for p in productos:
         clave = f"{_normalizar(p.get('producto', ''))}|{_normalizar(p.get('presentacion', ''))}"
         variante = _variant_map.get(clave)
@@ -904,39 +905,50 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
                 k_prod, k_pres = k.split("|", 1)
                 if pres_norm == k_pres and (prod_norm in k_prod or k_prod in prod_norm):
                     variante = v
+                    logger.info(f"[checkout] Match tolerante: '{clave}' → '{k}'")
                     break
         if not variante:
             no_encontrados.append(f"{p.get('producto', '')} - {p.get('presentacion', '')}")
+            logger.error(f"[checkout] Item sin match en _variant_map: clave='{clave}'")
             continue
 
         cantidad = int(p.get("cantidad", 1))
         stock = variante.get("stock")
-        # Si Shopify expone stock y la cantidad lo excede, recortamos al stock
-        if isinstance(stock, int) and stock >= 0 and cantidad > stock:
+        # FIX: Recortar SOLO si stock > 0 (positivo) y se excede.
+        # Si stock = 0 y el producto entró al catálogo (availableForSale=True),
+        # Shopify tiene "Vender sin existencias = SÍ" activado → permitir venta.
+        # Si stock = None → Shopify no expone inventario → permitir venta.
+        # ANTES con stock >= 0: si stock=0 recortaba cantidad a 0 → producto se
+        # descartaba → "No pude procesar tu pedido" cuando el cliente SÍ puede comprar.
+        if isinstance(stock, int) and stock > 0 and cantidad > stock:
             excede_stock.append((
                 f"{p.get('producto', '')} - {p.get('presentacion', '')}",
                 cantidad, stock,
             ))
             cantidad = stock
+            logger.warning(f"[checkout] Cantidad recortada por stock real: {p.get('producto')} pidió {p.get('cantidad')} → {stock}")
         if cantidad <= 0:
+            logger.warning(f"[checkout] Item descartado por cantidad <= 0: {p.get('producto')}")
             continue
 
         lines.append({
             "merchandiseId": variante["id"],
             "quantity": cantidad,
         })
+        logger.info(f"[checkout] Item OK: {p.get('producto')} / {p.get('presentacion')} × {cantidad}")
 
     if no_encontrados:
         logger.error(
             f"[checkout] Productos NO encontrados en variant_map: {no_encontrados}. "
-            f"Claves disponibles: {list(_variant_map.keys())[:10]}..."
+            f"Total entradas variant_map: {len(_variant_map)}. "
+            f"Primeras 15 claves: {list(_variant_map.keys())[:15]}"
         )
     if excede_stock:
-        logger.warning(f"[checkout] Cantidades recortadas por stock: {excede_stock}")
+        logger.warning(f"[checkout] Cantidades recortadas por stock real: {excede_stock}")
     if not lines:
         logger.error(
             f"[checkout] Ningún producto mapeado. variant_map tiene {len(_variant_map)} entradas. "
-            f"Pedido: {[(p.get('producto'), p.get('presentacion')) for p in productos]}"
+            f"Pedido: {[(p.get('producto'), p.get('presentacion'), p.get('cantidad')) for p in productos]}"
         )
         return None
 
