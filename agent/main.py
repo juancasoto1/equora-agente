@@ -1622,6 +1622,9 @@ async def webhook_handler(request: Request):
                     ya_agregados: dict[str, dict] = {}
 
                     # Paso 1: items_raw (la orden NUEVA que acaba de llegar)
+                    # CRÍTICO: cada item de productos lleva su retailer_id desde el inicio.
+                    # Sin esto, cuando se guarde en carrito_activo el rid quedaba "" para
+                    # items mergeados → siguiente merge los descartaba → bug del producto perdido.
                     for item in items_raw:
                         rid = item.get("product_retailer_id", "")
                         qty = int(item.get("quantity", 1))
@@ -1640,6 +1643,7 @@ async def webhook_handler(request: Request):
                                 "cantidad": qty,
                                 "precio_unitario": precio,
                                 "subtotal": precio * qty,
+                                "retailer_id": rid,   # ← clave para persistir y futuros merges
                             }
                             productos.append(item_full)
                             ya_agregados[rid] = item_full
@@ -1662,6 +1666,7 @@ async def webhook_handler(request: Request):
                             rid = prev.get("retailer_id") or prev.get("product_retailer_id") or ""
                             qty_prev = int(prev.get("quantity", prev.get("cantidad", 1)))
                             if not rid:
+                                logger.warning(f"[orden-catalogo] carrito_previo item sin retailer_id — descarto: {prev}")
                                 continue
                             if rid in ya_agregados:
                                 # Mismo producto en orden nueva — sumar cantidades
@@ -1696,6 +1701,7 @@ async def webhook_handler(request: Request):
                                     "cantidad": qty_prev,
                                     "precio_unitario": precio_prev,
                                     "subtotal": subt_prev,
+                                    "retailer_id": rid,   # ← preservar para persistir
                                 }
                                 productos.append(item_prev_full)
                                 ya_agregados[rid] = item_prev_full
@@ -1718,33 +1724,22 @@ async def webhook_handler(request: Request):
                         if pedido_min > 0 and total < pedido_min:
                             falta = pedido_min - total
                             # ── Guardar items en carrito_activo con info COMPLETA ──
-                            # Formato consistente con cart_orders en brain.py: producto,
-                            # presentacion, cantidad, subtotal, retailer_id. Esto permite
-                            # tanto el merge automático como que Andrea conozca el carrito.
-                            items_para_carrito = []
-                            # Construir mapa retailer_id → producto/presentacion para enriquecer
-                            rids_a_info = {}
-                            for item in items_raw:
-                                rid = item.get("product_retailer_id", "")
-                                if rid and rid not in rids_a_info:
-                                    info_rid = obtener_producto_por_retailer_id(rid)
-                                    if info_rid:
-                                        rids_a_info[rid] = info_rid
-                            for item in items_raw:
-                                rid = item.get("product_retailer_id", "")
-                                qty = int(item.get("quantity", 1))
-                                info_rid = rids_a_info.get(rid)
-                                if rid and info_rid:
-                                    precio_u = info_rid.get("precio_unitario", 0)
-                                    items_para_carrito.append({
-                                        "retailer_id":  rid,
-                                        "quantity":     qty,
-                                        "cantidad":     qty,
-                                        "producto":     info_rid.get("producto", ""),
-                                        "presentacion": info_rid.get("presentacion", ""),
-                                        "precio_unitario": precio_u,
-                                        "subtotal":     precio_u * qty,
-                                    })
+                            # FIX RAÍZ: usamos 'productos' (que YA tiene el merge completo
+                            # con retailer_ids correctos), NO 'items_raw' (solo orden nueva).
+                            # Antes, items del carrito previo se guardaban con rid="" y se
+                            # perdían en el próximo merge.
+                            items_para_carrito = [
+                                {
+                                    "retailer_id":     p.get("retailer_id", ""),
+                                    "quantity":        p["cantidad"],
+                                    "cantidad":        p["cantidad"],
+                                    "producto":        p["producto"],
+                                    "presentacion":    p["presentacion"],
+                                    "precio_unitario": p["precio_unitario"],
+                                    "subtotal":        p["subtotal"],
+                                }
+                                for p in productos
+                            ]
                             try:
                                 await guardar_carrito_activo(msg.telefono, items_para_carrito, agent_id=_agent_id)
                                 logger.info(f"[orden-catalogo] Guardado en carrito_activo: {len(items_para_carrito)} items completos")
@@ -1848,27 +1843,25 @@ async def webhook_handler(request: Request):
                             # IMPORTANTE: NO limpiar carrito_activo aquí — el cliente puede
                             # agregar más productos para alcanzar envío gratis. El carrito
                             # se limpia cuando llega webhook orders/paid de Shopify (pago
-                            # confirmado) o cuando expira el TTL de 24h.
-                            # Guardar también el carrito con info completa para que el
-                            # próximo __ORDEN_CATALOGO__ pueda hacer merge.
-                            items_carrito_full = []
-                            for p in productos:
-                                # Necesitamos retailer_id para el merge — lo buscamos en items_raw
-                                rid_p = ""
-                                for ir in items_raw:
-                                    info_ir = obtener_producto_por_retailer_id(ir.get("product_retailer_id", ""))
-                                    if info_ir and info_ir.get("producto") == p["producto"] and info_ir.get("presentacion") == p["presentacion"]:
-                                        rid_p = ir.get("product_retailer_id", "")
-                                        break
-                                items_carrito_full.append({
-                                    "retailer_id":     rid_p,
+                            # confirmado) o cuando expira el TTL de 4h.
+                            #
+                            # FIX RAÍZ: 'productos' YA tiene retailer_id de cada item
+                            # (paso 1 y paso 2 del merge lo agregaron). Usamos eso
+                            # directamente — antes buscábamos rids en items_raw lo cual
+                            # solo encontraba el rid del último pedido, dejando los items
+                            # mergeados con rid="" y perdiéndolos en el siguiente pedido.
+                            items_carrito_full = [
+                                {
+                                    "retailer_id":     p.get("retailer_id", ""),
                                     "quantity":        p["cantidad"],
                                     "cantidad":        p["cantidad"],
                                     "producto":        p["producto"],
                                     "presentacion":    p["presentacion"],
                                     "precio_unitario": p["precio_unitario"],
                                     "subtotal":        p["subtotal"],
-                                })
+                                }
+                                for p in productos
+                            ]
                             try:
                                 await guardar_carrito_activo(msg.telefono, items_carrito_full, agent_id=_agent_id)
                             except Exception as e_c:
