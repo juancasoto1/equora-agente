@@ -927,14 +927,17 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
 # ──────────────────────────────────────────────────────────────────────────────
 # Helper: obtener o recrear checkout URL válido
 # ──────────────────────────────────────────────────────────────────────────────
-async def _obtener_o_recrear_checkout_url(telefono: str, agent_id: int = 1) -> str | None:
-    """Devuelve un checkout_url VÁLIDO para el cliente. Si el guardado en BD
-    es corrupto (no contiene /checkouts/ — ej. solo la home de Shopify), lo
-    RECREA desde el carrito_activo actual y guarda el nuevo URL.
+async def _obtener_o_recrear_checkout_url(
+    telefono: str, agent_id: int = 1, forzar_recrear: bool = False,
+) -> str | None:
+    """Devuelve un checkout_url VÁLIDO para el cliente.
 
-    Esto resuelve el bug donde los botones 'Confirmar entrega'/'Terminar pedido'
-    llevaban a la home de Shopify en lugar del checkout. Si el URL en BD está
-    corrupto, se autoreparara generando uno nuevo desde el carrito vigente.
+    - Si forzar_recrear=True: SIEMPRE recrea desde carrito_activo actual.
+      Úsalo cuando el cliente toca "Confirmar pedido" — el carrito puede
+      haber cambiado desde el último checkout creado (nuevos items, etc.).
+    - Si forzar_recrear=False (default): usa el URL guardado si tiene
+      /checkouts/. Solo recrea si está corrupto. Úsalo en timers como el
+      recordatorio de checkout abandonado.
 
     Returns: URL válida del checkout, o None si no se pudo (sin carrito).
     """
@@ -943,14 +946,22 @@ async def _obtener_o_recrear_checkout_url(telefono: str, agent_id: int = 1) -> s
         return None
     url_guardado = (cliente_data.get("pedido_checkout_url") or "").strip()
 
-    # Si el URL guardado es válido (contiene /checkouts/), usarlo
-    if url_guardado and ("/checkouts/" in url_guardado or "/checkout/" in url_guardado):
+    # Si NO forzamos y el URL guardado es válido, usarlo (caso normal del timer)
+    if not forzar_recrear and url_guardado and (
+        "/checkouts/" in url_guardado or "/checkout/" in url_guardado
+    ):
         return url_guardado
 
-    # URL guardado corrupto o vacío — recrear desde carrito_activo actual
-    if url_guardado:
+    # Recrear desde carrito_activo actual:
+    #   - forzar_recrear=True (cliente activamente confirmando)
+    #   - O URL corrupta/vacía
+    if url_guardado and not forzar_recrear:
         logger.warning(
             f"[checkout-url] URL corrupta para {telefono} ({url_guardado[:60]}) — recreando"
+        )
+    elif forzar_recrear:
+        logger.info(
+            f"[checkout-url] Recreando checkout para {telefono} (forzado por confirmación de pedido)"
         )
     carrito = await obtener_carrito_activo(telefono, agent_id=agent_id)
     if not carrito:
@@ -1486,10 +1497,14 @@ async def webhook_handler(request: Request):
                     continue
 
                 if accion == "act_confirmar_pedido":
-                    # Obtener checkout_url VÁLIDO (recrea si el guardado está corrupto).
-                    # Antes: si BD tenía la home como pedido_checkout_url, el botón
-                    # llevaba a la home — ahora autoreparamos.
-                    checkout_url = await _obtener_o_recrear_checkout_url(msg.telefono, agent_id=_agent_id)
+                    # SIEMPRE recrear desde carrito_activo actual cuando el cliente
+                    # confirma. El checkout_url guardado puede ser viejo (creado con
+                    # menos items antes de que el cliente agregara más). Forzar
+                    # recreación garantiza que el checkout incluya TODO lo que está
+                    # en el carrito ahora mismo.
+                    checkout_url = await _obtener_o_recrear_checkout_url(
+                        msg.telefono, agent_id=_agent_id, forzar_recrear=True
+                    )
                     if checkout_url:
                         msg_checkout = (
                             "🎉 *¡Perfecto!*\n\n"
