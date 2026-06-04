@@ -175,8 +175,7 @@ MENSAJE_CIERRE = (
 
 MENSAJE_CHECKOUT_ABANDONO = (
     "Hola 👋 Vimos que iniciaste tu pedido pero no terminaste el proceso.\n\n"
-    "Tu carrito está guardado — solo falta confirmar y listo 🎉\n"
-    "Recuerda: *pago contraentrega*, no pagas nada online."
+    "Tu carrito está guardado — solo falta confirmar y listo 🎉"
 )
 
 # ── Cross-selling desde mini-tienda ─────────────────────────────────────────
@@ -1397,8 +1396,7 @@ async def webhook_handler(request: Request):
                     if checkout_url:
                         msg_checkout = (
                             "🎉 *¡Perfecto!*\n\n"
-                            "Toca el botón para confirmar tu dirección de entrega. "
-                            "El pago es *contra entrega*. 🌿"
+                            "Toca el botón para confirmar tu dirección de entrega 🌿"
                         )
                         ok_cta = False
                         if hasattr(_proveedor_agente, "enviar_cta_url"):
@@ -1687,7 +1685,7 @@ async def webhook_handler(request: Request):
                             if cat_reabierto:
                                 texto_final = (
                                     "Escríbeme qué más quieres agregar y te ayudo, "
-                                    "o explora el catálogo en *Ver catálogo* 👆🌿"
+                                    "o explora el catálogo en *Ver artículos* 👆🌿"
                                 )
                                 await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
                                 await guardar_mensaje(
@@ -1829,10 +1827,13 @@ async def webhook_handler(request: Request):
                                                 pass
                                     if not cat_btn_ok:
                                         await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_agregar)
-                                        await guardar_mensaje(
-                                            msg.telefono, "assistant", mensaje_agregar,
-                                            agent_id=_agent_id,
-                                        )
+                                # Siempre persistir el texto del mensaje (sea por product_list o por
+                                # fallback). El cuerpo del product_list NO se guarda automáticamente
+                                # — sin esto el operador NO ve el "¡Pedido confirmado!" en el panel.
+                                await guardar_mensaje(
+                                    msg.telefono, "assistant", mensaje_agregar,
+                                    agent_id=_agent_id,
+                                )
 
                                 # ── Mensaje 2: confirmar pedido directo al checkout ──
                                 # NO mostramos el costo exacto del envío aquí — en el checkout
@@ -1856,6 +1857,21 @@ async def webhook_handler(request: Request):
                                     await _proveedor_agente.enviar_mensaje(
                                         msg.telefono, f"{mensaje_confirmar}\n\n👉 {checkout_url}"
                                     )
+                                # Persistir el mensaje en BD (panel lo necesita).
+                                await guardar_mensaje(
+                                    msg.telefono, "assistant", mensaje_confirmar,
+                                    agent_id=_agent_id,
+                                )
+                                # Botones determinísticos del carrito (Ver/Vaciar)
+                                # — el cliente SIEMPRE debe poder gestionar antes de pagar.
+                                if hasattr(_proveedor_agente, "enviar_botones_reply"):
+                                    try:
+                                        await _proveedor_agente.enviar_botones_reply(
+                                            msg.telefono, "¿O prefieres revisar tu carrito antes?",
+                                            _botones_carrito_estandar(ofrece_confirmar=False),
+                                        )
+                                    except Exception as e:
+                                        logger.warning(f"[pedido-min] botones carrito fallaron: {e}")
                                 continue  # No pasar por Claude
 
                             # CASO B: alcanza mínimo Y envío gratis (en zona local)
@@ -1884,8 +1900,7 @@ async def webhook_handler(request: Request):
                                 texto_checkout = (
                                     f"🎉 *¡Pedido recibido por ${total_fmt_loc}!*\n\n"
                                     "🚚 Envío gratis incluido 🎉\n\n"
-                                    "Toca el botón para confirmar tu dirección de entrega. "
-                                    "El pago es *contra entrega*. 🌿"
+                                    "Toca el botón para confirmar tu dirección de entrega 🌿"
                                 )
                             elif es_zona_local is False:
                                 # Cliente confirmado fuera de zona local → envío por transportadora
@@ -1911,18 +1926,30 @@ async def webhook_handler(request: Request):
                                 await _proveedor_agente.enviar_mensaje(
                                     msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
                                 )
-                        else:
-                            await _proveedor_agente.enviar_mensaje(
-                                msg.telefono,
-                                "😔 No pude procesar tu pedido. Algunos productos "
-                                "pueden haberse agotado. ¿Quieres que lo revisemos juntos?"
+                            # Persistir el mensaje (panel lo necesita)
+                            await guardar_mensaje(
+                                msg.telefono, "assistant", texto_checkout,
+                                agent_id=_agent_id,
                             )
+                            # Botones determinísticos del carrito
+                            if hasattr(_proveedor_agente, "enviar_botones_reply"):
+                                try:
+                                    await _proveedor_agente.enviar_botones_reply(
+                                        msg.telefono, "¿O prefieres revisar tu carrito antes?",
+                                        _botones_carrito_estandar(ofrece_confirmar=False),
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"[caso-B] botones carrito fallaron: {e}")
+                        else:
+                            _txt_err = ("😔 No pude procesar tu pedido. Algunos productos "
+                                       "pueden haberse agotado. ¿Quieres que lo revisemos juntos?")
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_err)
+                            await guardar_mensaje(msg.telefono, "assistant", _txt_err, agent_id=_agent_id)
                     else:
-                        await _proveedor_agente.enviar_mensaje(
-                            msg.telefono,
-                            "😔 No reconocí los productos de tu pedido. "
-                            "¿Puedes escribirme qué quieres y te ayudo?"
-                        )
+                        _txt_err2 = ("😔 No reconocí los productos de tu pedido. "
+                                    "¿Puedes escribirme qué quieres y te ayudo?")
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_err2)
+                        await guardar_mensaje(msg.telefono, "assistant", _txt_err2, agent_id=_agent_id)
                 except Exception as e:
                     logger.error(f"Error procesando orden catálogo: {e}")
                     await _proveedor_agente.enviar_mensaje(
@@ -2341,8 +2368,8 @@ async def webhook_handler(request: Request):
                 texto_checkout = (
                     "🧾 *Tu pedido está listo*\n\n"
                     "Toca el botón para confirmar tu dirección de entrega. "
-                    "El pago se realiza *contra entrega*. En cuanto registres tus datos, "
-                    "te confirmo aquí mismo el número de tu pedido. 🌿"
+                    "En cuanto registres tus datos, te confirmo aquí mismo el "
+                    "número de tu pedido 🌿"
                 )
                 enviado_cta = False
                 if hasattr(_proveedor_agente, "enviar_cta_url"):
@@ -6076,22 +6103,21 @@ async def shopify_webhook(request: Request):
         mensaje = (
             f"🚚 *¡Tu pedido está listo y va en camino!*\n\n"
             f"Pedido *{nombre_orden}* preparado y despachado.{extra_tracking}\n\n"
-            f"Recuerda tener los *${total_int:,}* listos para el pago contra entrega. "
-            f"¡Gracias por confiar en Equora! 🌿"
+            f"Total del pedido: *${total_int:,}*. ¡Gracias por confiar en nosotros! 🌿"
         )
     elif topic == "orders/paid":
         mensaje = (
             f"💰 *¡Pago registrado!*\n\n"
             f"Pedido: *{nombre_orden}*  ·  Total: *${total_int:,}*\n\n"
-            f"Pronto sale en camino. ¡Gracias por confiar en Equora! 🌿"
+            f"Pronto sale en camino. ¡Gracias por confiar en nosotros! 🌿"
         )
     else:
         mensaje = (
             f"✅ *¡Pedido confirmado!*\n\n"
             f"🧾 Número de pedido: *{nombre_orden}*\n"
-            f"💰 Total: *${total_int:,}*  (pago contra entrega)\n\n"
+            f"💰 Total: *${total_int:,}*\n\n"
             f"Ya estamos preparando tu pedido. Te avisamos cuando vaya en camino. "
-            f"¡Gracias por confiar en Equora! 🌿"
+            f"¡Gracias por confiar en nosotros! 🌿"
         )
 
     try:
