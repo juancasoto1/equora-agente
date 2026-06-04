@@ -1829,16 +1829,25 @@ async def obtener_series_metricas(
 
 
 async def obtener_historial_con_timestamps(telefono: str, limite: int = 150, agent_id: int = 1) -> list[dict]:
-    """Historial completo con timestamps para el inbox."""
+    """Historial reciente con timestamps para el inbox.
+
+    Devuelve los últimos `limite` mensajes en orden cronológico (los más
+    antiguos primero, los más recientes al final). Antes ordenaba ASC y
+    aplicaba LIMIT, lo que traía los 150 más VIEJOS — los más recientes
+    nunca llegaban al panel cuando la conversación superaba ese tope.
+    Ahora ordena DESC + LIMIT (los más recientes) y revierte para mostrar
+    cronológicamente. Mismo patrón que obtener_historial() para Claude.
+    """
     async with async_session() as session:
         query = (
             select(Mensaje)
             .where(Mensaje.telefono == telefono, Mensaje.agent_id == agent_id)
-            .order_by(Mensaje.timestamp.asc())
+            .order_by(Mensaje.timestamp.desc())
             .limit(limite)
         )
         result = await session.execute(query)
         mensajes = result.scalars().all()
+        mensajes = list(reversed(mensajes))
         return [
             {
                 "role": msg.role,
