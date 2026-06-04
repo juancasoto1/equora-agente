@@ -1515,59 +1515,95 @@ async def webhook_handler(request: Request):
                         # Limpiar antes para que el guardado sea solo lo nuevo
                         await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
                         carrito_previo = []
-                    if carrito_previo:
-                        logger.info(f"[orden-catalogo] Merge con carrito previo (fresco): {len(carrito_previo)} items")
-                        # Convertir items_raw a formato común para merge
-                        items_combinados: dict[str, dict] = {}
-                        # Primero el carrito previo
-                        for prev in carrito_previo:
-                            rid = prev.get("retailer_id") or prev.get("product_retailer_id")
-                            if rid:
-                                items_combinados[rid] = {
-                                    "product_retailer_id": rid,
-                                    "quantity": int(prev.get("quantity", prev.get("cantidad", 1))),
-                                }
-                        # Sumar lo nuevo
-                        for item in items_raw:
-                            rid = item.get("product_retailer_id", "")
-                            qty = int(item.get("quantity", 1))
-                            if not rid:
-                                continue
-                            if rid in items_combinados:
-                                items_combinados[rid]["quantity"] += qty
-                            else:
-                                items_combinados[rid] = {"product_retailer_id": rid, "quantity": qty}
-                        items_raw = list(items_combinados.values())
-                        logger.info(f"[orden-catalogo] Total después de merge: {len(items_raw)} items")
+                    # ── Construir 'productos' UNIFICANDO carrito_previo + items_raw nuevos.
+                    # El método anterior descartaba la info completa del carrito_previo
+                    # cuando lookup en _sku_map fallaba — por eso a veces faltaban items
+                    # en el checkout. Ahora preservamos la info: si el lookup falla,
+                    # usamos la info del carrito_previo que ya está completa.
                     productos = []
                     no_encontrados = []
+                    ya_agregados: dict[str, dict] = {}
+
+                    # Paso 1: items_raw (la orden NUEVA que acaba de llegar)
                     for item in items_raw:
                         rid = item.get("product_retailer_id", "")
                         qty = int(item.get("quantity", 1))
+                        if not rid:
+                            continue
                         info = obtener_producto_por_retailer_id(rid)
                         if not info:
-                            # Catálogo puede no estar cargado aún — recargar y reintentar
                             logger.warning(f"[orden-catalogo] rid '{rid}' no en _sku_map — recargando catálogo")
                             await obtener_catalogo_shopify()
                             info = obtener_producto_por_retailer_id(rid)
                         if info:
                             precio = info["precio_unitario"]
-                            productos.append({
+                            item_full = {
                                 "producto": info["producto"],
                                 "presentacion": info["presentacion"],
                                 "cantidad": qty,
                                 "precio_unitario": precio,
                                 "subtotal": precio * qty,
-                            })
-                            logger.info(f"[orden-catalogo] rid={rid} → {info['producto']} · {info['presentacion']} × {qty}")
+                            }
+                            productos.append(item_full)
+                            ya_agregados[rid] = item_full
+                            logger.info(f"[orden-catalogo-nuevo] rid={rid} → {info['producto']} · {info['presentacion']} × {qty}")
                         else:
                             no_encontrados.append(rid)
                             from agent.tools import _sku_map
-                            keys_disponibles = list(_sku_map.keys())[:20]
                             logger.error(
-                                f"[orden-catalogo] rid '{rid}' NO existe en _sku_map. "
-                                f"Total entradas: {len(_sku_map)}. Primeras 20 keys: {keys_disponibles}"
+                                f"[orden-catalogo] rid '{rid}' NO existe en _sku_map (entradas: {len(_sku_map)})"
                             )
+
+                    # Paso 2: carrito_previo (items del pedido anterior, info ya completa
+                    # en BD). Si un rid ya viene en items_raw, sumamos cantidades. Si NO
+                    # estaba, agregamos como item NUEVO usando la info persistida —
+                    # crítico: aunque _sku_map ya no lo conozca, el carrito_previo SÍ tiene
+                    # la info completa (producto, presentación, precio) → checkout completo.
+                    if carrito_previo:
+                        logger.info(f"[orden-catalogo] Mergeando con carrito previo (fresco): {len(carrito_previo)} items")
+                        for prev in carrito_previo:
+                            rid = prev.get("retailer_id") or prev.get("product_retailer_id") or ""
+                            qty_prev = int(prev.get("quantity", prev.get("cantidad", 1)))
+                            if not rid:
+                                continue
+                            if rid in ya_agregados:
+                                # Mismo producto en orden nueva — sumar cantidades
+                                ya_agregados[rid]["cantidad"] += qty_prev
+                                ya_agregados[rid]["subtotal"] = (
+                                    ya_agregados[rid]["cantidad"]
+                                    * ya_agregados[rid]["precio_unitario"]
+                                )
+                            else:
+                                # Item del carrito previo NO viene en la nueva orden —
+                                # preservarlo (no descartar). Si tiene info completa
+                                # persistida usar esa; si no, intentar lookup último recurso.
+                                prod_prev = prev.get("producto", "")
+                                pres_prev = prev.get("presentacion", "")
+                                precio_prev = prev.get("precio_unitario", 0) or 0
+                                subt_prev = prev.get("subtotal") or (precio_prev * qty_prev)
+                                if not prod_prev:
+                                    info_prev = obtener_producto_por_retailer_id(rid)
+                                    if info_prev:
+                                        prod_prev = info_prev["producto"]
+                                        pres_prev = info_prev["presentacion"]
+                                        precio_prev = info_prev["precio_unitario"]
+                                        subt_prev = precio_prev * qty_prev
+                                    else:
+                                        logger.warning(
+                                            f"[orden-catalogo] carrito_previo rid='{rid}' sin info — descarto"
+                                        )
+                                        continue
+                                item_prev_full = {
+                                    "producto": prod_prev,
+                                    "presentacion": pres_prev,
+                                    "cantidad": qty_prev,
+                                    "precio_unitario": precio_prev,
+                                    "subtotal": subt_prev,
+                                }
+                                productos.append(item_prev_full)
+                                ya_agregados[rid] = item_prev_full
+                                logger.info(f"[orden-catalogo-previo] rid={rid} → {prod_prev} · {pres_prev} × {qty_prev}")
+                        logger.info(f"[orden-catalogo] Total después de merge: {len(productos)} items")
 
                     if no_encontrados:
                         logger.error(f"[orden-catalogo] IDs sin mapear ({len(no_encontrados)}/{len(items_raw)}): {no_encontrados}")
@@ -1899,7 +1935,7 @@ async def webhook_handler(request: Request):
                                 # Cliente confirmado en zona local → envío gratis aplica
                                 texto_checkout = (
                                     f"🎉 *¡Pedido recibido por ${total_fmt_loc}!*\n\n"
-                                    "🚚 Envío gratis incluido 🎉\n\n"
+                                    "🚚 *Envío gratis en Cali incluido* 🎉\n\n"
                                     "Toca el botón para confirmar tu dirección de entrega 🌿"
                                 )
                             elif es_zona_local is False:
@@ -2030,9 +2066,17 @@ async def webhook_handler(request: Request):
                         await guardar_pedido_pendiente(
                             msg.telefono, datos_pedido.get("productos", []), agent_id=_agent_id
                         )
-                        # El carrito activo se vacía: el pedido ya fue generado
-                        await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
-                        logger.info(f"Checkout Shopify creado para {msg.telefono}")
+                        # NO vaciar carrito_activo aquí. El carrito persiste hasta:
+                        #   1) Webhook orders/paid de Shopify (pago confirmado)
+                        #   2) Expira el TTL (CARRITO_TTL_HORAS)
+                        # Antes se vaciaba inmediatamente al crear checkout, lo que
+                        # hacía que si el cliente NO completaba el pago, perdía todo.
+                        # Guardar checkout_url para que el cliente pueda volver a confirmar.
+                        try:
+                            await guardar_checkout_url(msg.telefono, checkout_url, agent_id=_agent_id)
+                        except Exception as e_url:
+                            logger.warning(f"No pude guardar checkout_url: {e_url}")
+                        logger.info(f"Checkout Shopify creado para {msg.telefono} — carrito persiste hasta orders/paid")
                     else:
                         checkout_fallo = True
                         logger.error(f"No se pudo crear checkout Shopify para {msg.telefono}")
@@ -6071,18 +6115,26 @@ async def shopify_webhook(request: Request):
                     ]
                     await guardar_pedido_pendiente(telefono, productos)
                 await guardar_checkout_url(telefono, checkout_url)
-                await limpiar_carrito_activo(telefono)
-                logger.info(f"Checkout creado para {telefono}: {checkout_url}")
+                # NO vaciar carrito_activo aquí — el cliente abrió el checkout pero
+                # puede abandonarlo. Solo vaciamos cuando llega orders/create o
+                # orders/paid (pedido cerrado realmente).
+                logger.info(f"Checkout creado para {telefono}: {checkout_url} — carrito persiste hasta orders/paid")
             except Exception as e:
                 logger.error(f"Error guardando checkout create para {telefono}: {e}")
         return {"status": "ok"}
 
-    # Cliente completó el checkout → ya no hay carrito pendiente
+    # Cliente completó el checkout → ya no hay carrito pendiente NI activo
     if topic in ("orders/create", "orders/paid"):
         try:
             await limpiar_pedido_pendiente(telefono)
         except Exception as e:
             logger.error(f"Error limpiando pedido pendiente: {e}")
+        # Vaciar carrito_activo al CERRAR el pedido (no antes)
+        try:
+            await limpiar_carrito_activo(telefono)
+            logger.info(f"Carrito activo vaciado para {telefono} tras {topic}")
+        except Exception as e:
+            logger.error(f"Error limpiando carrito_activo tras {topic}: {e}")
 
     if topic == "orders/fulfilled":
         # Shopify fulfillment puede traer tracking — si está, lo incluimos
