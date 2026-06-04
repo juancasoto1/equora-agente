@@ -439,6 +439,26 @@ async def _get_cliente(session: AsyncSession, telefono: str, agent_id: int) -> "
     return result.scalar_one_or_none()
 
 
+async def obtener_agent_ids_por_telefono(telefono: str) -> list[int]:
+    """Devuelve TODOS los agent_ids bajo los que existe el cliente con ese teléfono.
+
+    Útil para webhooks externos (Shopify, etc.) que llegan SIN contexto de
+    agent_id — en multi-tenant un mismo número podría existir bajo varios
+    agents si el mismo cliente compra a varios negocios usando la plataforma.
+    El caller itera y aplica el efecto (limpiar, actualizar) en cada uno.
+
+    Si el teléfono no está en BD, devuelve lista vacía — el caller decide
+    fallback (ej. asumir agent_id=1 por compatibilidad legacy).
+    """
+    if not telefono:
+        return []
+    async with async_session() as session:
+        result = await session.execute(
+            select(Cliente.agent_id).where(Cliente.telefono == telefono).distinct()
+        )
+        return [row[0] for row in result.all()]
+
+
 async def guardar_cliente(
     telefono: str, datos: dict, agent_id: int = 1, incrementar_pedidos: bool = False
 ):
@@ -646,7 +666,16 @@ async def clientes_con_checkout_abandonado(
     Devuelve (telefono, checkout_url) de clientes que iniciaron checkout
     pero no lo completaron (pedido_pendiente_at entre min_min y max_min minutos atrás
     y Shopify aún no disparó orders/create para limpiar el pedido_pendiente).
+
+    DEFENSA: descartamos clientes cuyo `actualizado > pedido_pendiente_at`.
+    Si el cliente fue actualizado DESPUÉS de marcar el pedido pendiente,
+    algo pasó después — típicamente el webhook orders/create se procesó
+    correctamente (y actualizó el cliente) pero por alguna razón el
+    pedido_pendiente quedó colgado. Evita el bug "mensaje de carrito
+    abandonado llega después de confirmar pedido".
     """
+    import logging
+    log = logging.getLogger("agentkit")
     ahora = datetime.utcnow()
     cutoff_reciente = ahora - timedelta(minutes=min_min)   # al menos min_min min de antigüedad
     cutoff_viejo = ahora - timedelta(minutes=max_min)      # no más de max_min min
@@ -661,9 +690,23 @@ async def clientes_con_checkout_abandonado(
         )
         result = await session.execute(q)
         clientes = result.scalars().all()
+        # Defensa post-query: si actualizado > pedido_pendiente_at + ~30s,
+        # hubo actividad posterior — el pedido probablemente se completó pero
+        # algo no limpió. NO enviar recordatorio (cinturón ante limpiar fallido).
+        clientes_filtrados = []
+        for c in clientes:
+            if c.actualizado and c.pedido_pendiente_at:
+                if c.actualizado > c.pedido_pendiente_at + timedelta(seconds=30):
+                    log.info(
+                        f"[checkout-abandono] {c.telefono} saltado — actualizado "
+                        f"({c.actualizado.isoformat()}) > pedido_pendiente_at "
+                        f"({c.pedido_pendiente_at.isoformat()}) — probable pedido completado"
+                    )
+                    continue
+            clientes_filtrados.append(c)
         return [
             (c.telefono, c.pedido_checkout_url)
-            for c in clientes
+            for c in clientes_filtrados
             if c.pedido_checkout_url
         ]
 

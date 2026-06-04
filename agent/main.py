@@ -25,6 +25,7 @@ from agent.markers import MarkerContext, aplicar_marcadores  # noqa: F401  # reg
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial,
     guardar_cliente, obtener_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
+    obtener_agent_ids_por_telefono,
     guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
     carrito_es_fresco_para_merge,
     puede_enviar_checkout_abandono, marcar_checkout_abandono_enviado,
@@ -6215,18 +6216,29 @@ async def shopify_webhook(request: Request):
                 logger.error(f"Error guardando checkout create para {telefono}: {e}")
         return {"status": "ok"}
 
-    # Cliente completó el checkout → ya no hay carrito pendiente NI activo
+    # Cliente completó el checkout → ya no hay carrito pendiente NI activo.
+    # IMPORTANTE: resolver TODOS los agent_ids bajo los cuales existe el cliente
+    # y limpiar para cada uno. Sin esto, asumíamos agent_id=1 por default —
+    # rompía multi-tenant y causaba el bug "checkout abandonado" enviado
+    # DESPUÉS de confirmar pedido (el limpiar no aplicaba al agent correcto).
     if topic in ("orders/create", "orders/paid"):
-        try:
-            await limpiar_pedido_pendiente(telefono)
-        except Exception as e:
-            logger.error(f"Error limpiando pedido pendiente: {e}")
-        # Vaciar carrito_activo al CERRAR el pedido (no antes)
-        try:
-            await limpiar_carrito_activo(telefono)
-            logger.info(f"Carrito activo vaciado para {telefono} tras {topic}")
-        except Exception as e:
-            logger.error(f"Error limpiando carrito_activo tras {topic}: {e}")
+        agent_ids = await obtener_agent_ids_por_telefono(telefono)
+        if not agent_ids:
+            agent_ids = [1]  # fallback legacy si el cliente no existe en BD
+            logger.warning(
+                f"[shopify-webhook] {telefono} no encontrado en BD — fallback agent_id=1"
+            )
+        for aid in agent_ids:
+            try:
+                await limpiar_pedido_pendiente(telefono, agent_id=aid)
+                logger.info(f"[shopify-webhook] pedido_pendiente limpiado para {telefono} (agent_id={aid}) tras {topic}")
+            except Exception as e:
+                logger.error(f"Error limpiando pedido pendiente para {telefono} (agent_id={aid}): {e}")
+            try:
+                await limpiar_carrito_activo(telefono, agent_id=aid)
+                logger.info(f"[shopify-webhook] carrito_activo vaciado para {telefono} (agent_id={aid}) tras {topic}")
+            except Exception as e:
+                logger.error(f"Error limpiando carrito_activo para {telefono} (agent_id={aid}) tras {topic}: {e}")
 
     if topic == "orders/fulfilled":
         # Shopify fulfillment puede traer tracking — si está, lo incluimos
