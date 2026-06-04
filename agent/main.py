@@ -967,9 +967,11 @@ async def _obtener_o_recrear_checkout_url(
     if not carrito:
         logger.warning(f"[checkout-url] {telefono} sin carrito_activo — no puedo recrear checkout")
         return None
+    logger.info(f"[checkout-url] carrito_activo de {telefono} tiene {len(carrito)} items")
     # Convertir items del carrito al formato esperado por crear_checkout_shopify
     productos = []
     total = 0
+    descartados = []
     for item in carrito:
         producto = item.get("producto", "")
         presentacion = item.get("presentacion", "")
@@ -977,6 +979,7 @@ async def _obtener_o_recrear_checkout_url(
         precio_u = int(item.get("precio_unitario", 0))
         subtotal = int(item.get("subtotal") or precio_u * cantidad)
         if not producto or not precio_u:
+            descartados.append(f"{producto or '?'}/{presentacion or '?'} (precio={precio_u})")
             continue
         productos.append({
             "producto": producto,
@@ -986,7 +989,15 @@ async def _obtener_o_recrear_checkout_url(
             "subtotal": subtotal,
         })
         total += subtotal
+    if descartados:
+        logger.warning(f"[checkout-url] items descartados de {telefono}: {descartados}")
+    logger.info(f"[checkout-url] {telefono} → {len(productos)} productos válidos, total ${total:,}")
     if not productos:
+        logger.warning(f"[checkout-url] carrito_activo de {telefono} sin productos válidos")
+        # Fallback: si tenemos URL guardada válida, usarla mejor que None
+        if url_guardado and ("/checkouts/" in url_guardado or "/checkout/" in url_guardado):
+            logger.info(f"[checkout-url] usando URL guardada como fallback")
+            return url_guardado
         return None
     try:
         nuevo_url = await crear_checkout_shopify(telefono, {"productos": productos, "total": total})
@@ -994,10 +1005,24 @@ async def _obtener_o_recrear_checkout_url(
             await guardar_checkout_url(telefono, nuevo_url, agent_id=agent_id)
             logger.info(f"[checkout-url] Recreado para {telefono}: {nuevo_url[:80]}")
             return nuevo_url
-        logger.error(f"[checkout-url] crear_checkout_shopify devolvió URL inválida: {nuevo_url}")
+        # ── Recreación falló — usar URL guardada como FALLBACK ──
+        # Esto evita que el cliente quede sin botón cuando crear_checkout_shopify
+        # no encuentra alguna variante (ej. "Default Title" que no matchea).
+        # Mejor un checkout que ya existía con casi todos los items que NINGUNO.
+        logger.error(
+            f"[checkout-url] crear_checkout_shopify devolvió URL inválida: {nuevo_url} — "
+            f"usando URL guardada como fallback (si existe)"
+        )
+        if url_guardado and ("/checkouts/" in url_guardado or "/checkout/" in url_guardado):
+            logger.info(f"[checkout-url] fallback OK: {url_guardado[:80]}")
+            return url_guardado
         return None
     except Exception as e:
         logger.error(f"[checkout-url] Error recreando checkout para {telefono}: {e}")
+        # Mismo fallback ante excepción
+        if url_guardado and ("/checkouts/" in url_guardado or "/checkout/" in url_guardado):
+            logger.info(f"[checkout-url] fallback tras excepción: {url_guardado[:80]}")
+            return url_guardado
         return None
 
 
