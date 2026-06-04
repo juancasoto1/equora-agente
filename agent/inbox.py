@@ -7331,7 +7331,7 @@ function _appendMsg(role, text, ts) {
       time = d.toLocaleTimeString('es-CO', {hour:'2-digit', minute:'2-digit'});
     } catch(e) {}
   }
-  div.innerHTML = _nl2br(he(text)) +
+  div.innerHTML = _nl2br(he(_stripMarkers(text))) +
     (time ? '<div class="chat-msg-time">' + time + '</div>' : '');
   box.appendChild(div);
 }
@@ -7507,6 +7507,25 @@ function _escRenderLista(tickets) {
 }
 
 function _escEsc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* Limpia marcadores internos del LLM ([[TIENDA:]], [[PEDIDO:...]], etc.)
+   antes de mostrar texto en el panel. El cliente real nunca los vio porque
+   el parser los quita antes de enviar a WhatsApp, pero el histórico de BD
+   los guarda crudos. Esto evita que aparezcan literales en el panel. */
+function _stripMarkers(s) {
+  if (!s) return s;
+  return s
+    // [[CARRITO:[...]]] tiene un array adentro → requiere 3 ] al cierre
+    .replace(/\[\[CARRITO:\[[\s\S]*?\]\]\]/g, '')
+    // Marcadores con payload JSON (lazy hasta primer ]] — igual que el parser backend)
+    .replace(/\[\[(?:PEDIDO|ESCALAR|BOTONES|LISTA|CATALOGO_CAT):[\s\S]*?\]\]/g, '')
+    // Variantes tolerantes para vaciar/mostrar carrito
+    .replace(/\[\[(?:VACIAR|LIMPIAR)[_ ]?CARRITO\]\]/gi, '')
+    .replace(/\[\[(?:MOSTRAR|VER)[_ ]?CARRITO\]\]/gi, '')
+    // Catch-all: cualquier [[NOMBRE]] o [[NOMBRE:valor corto]] sin [ ] saltos adentro
+    .replace(/\[\[[A-Z_]+(?::[^\[\]\n]{0,300})?\]\]/g, '')
+    .replace(/^\s+|\s+$/g, '');
+}
 
 function _escTiempoRelativo(iso) {
   if (!iso) return '';
@@ -8019,7 +8038,7 @@ function renderMediaOrText(content) {
         lineas.join('<br>') + '</div>';
     } catch(e) { return he(content); }
   }
-  return he(content);
+  return he(_stripMarkers(content));
 }
 
 function renderMediaBurbuja(d) {
