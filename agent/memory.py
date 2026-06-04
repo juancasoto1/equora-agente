@@ -100,6 +100,10 @@ class Cliente(Base):
     pedido_checkout_url: Mapped[str] = mapped_column(Text, default="")  # URL Shopify checkout
     carrito_activo: Mapped[str] = mapped_column(Text, default="")        # JSON del carrito en curso
     carrito_activo_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    # Cooldown persistente del aviso de checkout abandonado.
+    # Antes vivía en _checkout_abandono_notif (memoria) y se reseteaba con cada
+    # deploy a Railway → se duplicaban mensajes. Ahora persiste en BD.
+    checkout_abandono_notif_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     actualizado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -274,6 +278,7 @@ async def inicializar_db():
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_pendiente_at TIMESTAMP",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS carrito_activo TEXT DEFAULT ''",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS carrito_activo_at TIMESTAMP",
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS checkout_abandono_notif_at TIMESTAMP",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_checkout_url TEXT DEFAULT ''",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             "ALTER TABLE estado_conversacion ADD COLUMN IF NOT EXISTS modo_humano INTEGER DEFAULT 0",
@@ -550,9 +555,47 @@ async def limpiar_pedido_pendiente(telefono: str, agent_id: int = 1):
             await session.commit()
 
 
+async def puede_enviar_checkout_abandono(
+    telefono: str, cooldown_min: int, agent_id: int = 1
+) -> bool:
+    """Verifica si pasó el cooldown desde el último aviso de checkout abandonado.
+    Persistente en BD (no en memoria) — sobrevive a deploys de Railway."""
+    async with async_session() as session:
+        cliente = await _get_cliente(session, telefono, agent_id)
+        if not cliente or not cliente.checkout_abandono_notif_at:
+            return True
+        delta = datetime.utcnow() - cliente.checkout_abandono_notif_at
+        return delta >= timedelta(minutes=cooldown_min)
+
+
+async def marcar_checkout_abandono_enviado(telefono: str, agent_id: int = 1):
+    """Marca el timestamp del último aviso para respetar el cooldown."""
+    async with async_session() as session:
+        cliente = await _get_cliente(session, telefono, agent_id)
+        if not cliente:
+            return
+        cliente.checkout_abandono_notif_at = datetime.utcnow()
+        await session.commit()
+
+
 async def guardar_checkout_url(telefono: str, checkout_url: str, agent_id: int = 1):
-    """Guarda la URL del checkout de Shopify para poder reenviarla si el cliente no termina."""
+    """Guarda la URL del checkout de Shopify para poder reenviarla si el cliente no termina.
+
+    VALIDACIÓN: solo aceptamos URLs que contengan '/checkouts/' en el path
+    — si recibimos la home de la tienda (ej. 'https://equora-6.myshopify.com/')
+    significa que algo falló al construir el URL del checkout. Guardarla
+    causaría el bug donde el botón 'Terminar pedido' lleva a la home y no
+    al carrito real.
+    """
     if not telefono or not checkout_url:
+        return
+    # Validar que sea una URL de checkout real, no la home de la tienda
+    if "/checkouts/" not in checkout_url and "/checkout/" not in checkout_url:
+        import logging
+        logging.getLogger("agentkit").warning(
+            f"[guardar_checkout_url] URL inválida (sin /checkouts/) para {telefono}: "
+            f"{checkout_url[:80]} — NO se guarda"
+        )
         return
     async with async_session() as session:
         cliente = await _get_cliente(session, telefono, agent_id)

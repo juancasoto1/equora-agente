@@ -26,6 +26,7 @@ from agent.memory import (
     guardar_cliente, obtener_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
     guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
     carrito_es_fresco_para_merge,
+    puede_enviar_checkout_abandono, marcar_checkout_abandono_enviado,
     registrar_mensaje_usuario, registrar_mensaje_asistente,
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
@@ -751,14 +752,21 @@ async def _procesar_abandono_checkout():
     Shopify limpia pedido_pendiente cuando dispara orders/create o orders/paid.
     """
     import urllib.parse
-    ahora = time.time()
     clientes = await clientes_con_checkout_abandonado(
         min_min=CHECKOUT_ABANDONO_MIN,
         max_min=CHECKOUT_ABANDONO_MAX,
     )
     for telefono, checkout_url in clientes:
-        ultimo = _checkout_abandono_notif.get(telefono, 0)
-        if ahora - ultimo < CHECKOUT_ABANDONO_COOLDOWN_SEG:
+        # Validación extra: si el URL guardado NO contiene /checkouts/, está
+        # corrupto (ej. solo la home) — no enviar, el cliente abriría la home.
+        if "/checkouts/" not in checkout_url and "/checkout/" not in checkout_url:
+            logger.warning(
+                f"[checkout-abandono] URL corrupta para {telefono}: "
+                f"{checkout_url[:60]} — saltando"
+            )
+            continue
+        # Cooldown PERSISTENTE (BD, no memoria) — sobrevive deploys de Railway
+        if not await puede_enviar_checkout_abandono(telefono, CHECKOUT_COOLDOWN_MIN):
             continue
         try:
             enviado = False
@@ -778,7 +786,7 @@ async def _procesar_abandono_checkout():
                     f"{MENSAJE_CHECKOUT_ABANDONO}\n\n👉 {checkout_url}"
                 )
             await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKOUT_ABANDONO)
-            _checkout_abandono_notif[telefono] = ahora
+            await marcar_checkout_abandono_enviado(telefono)
             logger.info(f"Recuperación de checkout enviada a {telefono}")
         except Exception as e:
             logger.error(f"Error enviando recuperación de checkout a {telefono}: {e}")
