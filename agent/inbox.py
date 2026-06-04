@@ -847,6 +847,11 @@ html.dark{
 
   /* Ocultar columnas no esenciales en tablas */
   .mob-hide{display:none!important}
+
+  /* Emoji picker: ocultar en móvil — el teclado del SO ya trae emojis
+     nativos y el botón ocupa espacio crítico del input bar. Quitarlo
+     evita además romper el flex layout en pantallas angostas. */
+  .voco-emoji-trigger{display:none!important}
 }
 
 /* sidebar header */
