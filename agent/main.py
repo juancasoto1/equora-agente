@@ -147,7 +147,10 @@ CARRITO_UNIF_COOLDOWN_SEG = CARRITO_COOLDOWN_MIN * 60
 # Estado 2: checkout abandonado (cliente llegó a Shopify pero no terminó)
 CHECKOUT_ABANDONO_MIN      = int(os.getenv("CHECKOUT_ABANDONO_MIN", 20))   # min antes del aviso
 CHECKOUT_ABANDONO_MAX      = int(os.getenv("CHECKOUT_ABANDONO_MAX", 120))  # ventana máxima
-CHECKOUT_COOLDOWN_MIN      = int(os.getenv("CHECKOUT_COOLDOWN_MIN", 120))  # min entre avisos
+CHECKOUT_COOLDOWN_MIN      = int(os.getenv("CHECKOUT_COOLDOWN_MIN", 360))  # min entre avisos (6h)
+# Nota: el cooldown vive en memoria (_checkout_abandono_notif). Si Railway
+# reinicia entre avisos, el dict se borra y puede duplicar. Para evitar
+# eso completamente habría que persistirlo en BD — backlog Sprint A día 2.
 CHECKOUT_ABANDONO_COOLDOWN_SEG = CHECKOUT_COOLDOWN_MIN * 60
 
 # Loop general
@@ -616,7 +619,7 @@ async def _procesar_carrito_unificado():
 
                 if es_local_5 is True:
                     msg = (
-                        f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* incluido!\n\n"
+                        f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* _(aplica solo Cali)_!\n\n"
                         f"Solo confirma tu dirección de entrega 👇"
                     )
                 elif es_local_5 is False:
@@ -1056,6 +1059,22 @@ def extraer_marcador_vaciar_carrito(respuesta: str) -> tuple[str, bool]:
     [[LIMPIAR CARRITO]] — tolerante a errores del LLM.
     """
     patron = r'\[\[(?:VACIAR|LIMPIAR)[_ ]?CARRITO\]\]'
+    if not re.search(patron, respuesta, flags=re.IGNORECASE):
+        return respuesta, False
+    texto_limpio = re.sub(patron, '', respuesta, flags=re.IGNORECASE).strip()
+    return texto_limpio, True
+
+
+def extraer_marcador_mostrar_carrito(respuesta: str) -> tuple[str, bool]:
+    """Extrae [[MOSTRAR_CARRITO]] — el agente lo emite cuando el cliente pide
+    ver/mostrar su carrito por TEXTO (no botón). El parser ejecuta el handler
+    determinístico _enviar_resumen_carrito() que lee BD y muestra resumen +
+    botones reply, garantizando consistencia. Sin esto, Andrea inventaba el
+    texto del carrito basado en su contexto sin reply buttons.
+
+    Acepta variantes: [[MOSTRAR_CARRITO]], [[VER_CARRITO]], [[VER CARRITO]].
+    """
+    patron = r'\[\[(?:MOSTRAR|VER)[_ ]?CARRITO\]\]'
     if not re.search(patron, respuesta, flags=re.IGNORECASE):
         return respuesta, False
     texto_limpio = re.sub(patron, '', respuesta, flags=re.IGNORECASE).strip()
@@ -1935,7 +1954,7 @@ async def webhook_handler(request: Request):
                                 # Cliente confirmado en zona local → envío gratis aplica
                                 texto_checkout = (
                                     f"🎉 *¡Pedido recibido por ${total_fmt_loc}!*\n\n"
-                                    "🚚 *Envío gratis en Cali incluido* 🎉\n\n"
+                                    "🚚 *Envío gratis* _(aplica solo Cali)_ 🎉\n\n"
                                     "Toca el botón para confirmar tu dirección de entrega 🌿"
                                 )
                             elif es_zona_local is False:
@@ -2051,6 +2070,18 @@ async def webhook_handler(request: Request):
                     logger.info(f"[VACIAR_CARRITO] carrito vaciado para {msg.telefono}")
                 except Exception as e:
                     logger.error(f"Error vaciando carrito de {msg.telefono}: {e}")
+
+            # Procesar marcador [[MOSTRAR_CARRITO]] → backend muestra resumen
+            # determinístico con reply buttons. Antes Andrea solo decía "toca
+            # Ver carrito abajo" pero no había botón si el cliente había
+            # escrito en texto (no tocado un botón).
+            respuesta, mostrar = extraer_marcador_mostrar_carrito(respuesta)
+            if mostrar:
+                try:
+                    await _enviar_resumen_carrito(msg.telefono, agent_id=_agent_id)
+                    logger.info(f"[MOSTRAR_CARRITO] resumen enviado a {msg.telefono}")
+                except Exception as e:
+                    logger.error(f"Error mostrando carrito de {msg.telefono}: {e}")
 
             # Procesar marcador de pedido → crear checkout en Shopify
             checkout_url = None
@@ -6082,19 +6113,28 @@ async def shopify_webhook(request: Request):
             or ""
         )
         if not checkout_url:
-            # Fallback: construir desde el token con formato correcto de Shopify
+            # Fallback: construir desde el token con formato correcto de Shopify.
+            # Usar SHOPIFY_STORE configurado (multi-tenant) en lugar de hardcoded.
             token = payload.get("token") or ""
             if token:
-                checkout_url = f"https://equoradistribuciones.com/checkouts/cn/{token}/es"
-        # Normalizar dominio: reemplazar myshopify.com por el dominio del cliente
-        # y limpiar parámetros de preview/tracking innecesarios
+                from agent.tools import SHOPIFY_STORE
+                tienda = SHOPIFY_STORE or "equora-6.myshopify.com"
+                checkout_url = f"https://{tienda}/checkouts/cn/{token}/es"
+        # Normalizar dominio: si el cliente configuró SHOPIFY_CUSTOM_DOMAIN
+        # (con la ruta /checkouts correctamente apuntada), usarlo. Si no,
+        # dejar el dominio myshopify.com original — funciona SIEMPRE y evita
+        # el 404 cuando el dominio personalizado no tiene esa ruta.
         if checkout_url:
             import re as _re
-            checkout_url = _re.sub(
-                r"https://[^/]*\.myshopify\.com/",
-                "https://equoradistribuciones.com/",
-                checkout_url,
-            )
+            custom_dom = os.getenv("SHOPIFY_CUSTOM_DOMAIN", "").strip()
+            if custom_dom:
+                # Limpiar custom_dom (sin https:// ni trailing slash)
+                custom_dom = custom_dom.replace("https://", "").replace("http://", "").rstrip("/")
+                checkout_url = _re.sub(
+                    r"https://[^/]*\.myshopify\.com/",
+                    f"https://{custom_dom}/",
+                    checkout_url,
+                )
             # Quitar preview_theme_id (solo aparece en modo preview, confunde al cliente)
             checkout_url = _re.sub(r"[&?]preview_theme_id=[^&]*", "", checkout_url)
             checkout_url = checkout_url.rstrip("?&")
