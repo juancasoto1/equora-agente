@@ -581,27 +581,40 @@ async def marcar_checkout_abandono_enviado(telefono: str, agent_id: int = 1):
 async def guardar_checkout_url(telefono: str, checkout_url: str, agent_id: int = 1):
     """Guarda la URL del checkout de Shopify para poder reenviarla si el cliente no termina.
 
-    VALIDACIÓN: solo aceptamos URLs que contengan '/checkouts/' en el path
-    — si recibimos la home de la tienda (ej. 'https://equora-6.myshopify.com/')
-    significa que algo falló al construir el URL del checkout. Guardarla
-    causaría el bug donde el botón 'Terminar pedido' lleva a la home y no
-    al carrito real.
+    VALIDACIONES:
+      1) Solo aceptamos URLs con '/checkouts/' (no la home de la tienda).
+      2) NO DEGRADAR: si ya tenemos guardado un URL con tokens de auth
+         (?_r=, _s=, _y=) y la URL nueva NO los tiene, conservamos el
+         actual. Es el bug donde el webhook checkouts/create reemplazaba
+         el URL del Storefront API (con tokens) por uno sin tokens →
+         Shopify rechazaba la sesión y mostraba la home.
     """
     if not telefono or not checkout_url:
         return
+    import logging
+    log = logging.getLogger("agentkit")
     # Validar que sea una URL de checkout real, no la home de la tienda
     if "/checkouts/" not in checkout_url and "/checkout/" not in checkout_url:
-        import logging
-        logging.getLogger("agentkit").warning(
+        log.warning(
             f"[guardar_checkout_url] URL inválida (sin /checkouts/) para {telefono}: "
             f"{checkout_url[:80]} — NO se guarda"
         )
         return
+    nueva_tiene_auth = "_r=" in checkout_url
     async with async_session() as session:
         cliente = await _get_cliente(session, telefono, agent_id)
         if not cliente:
             cliente = Cliente(agent_id=agent_id, telefono=telefono)
             session.add(cliente)
+        # Anti-degradación: si ya hay un URL con auth y la nueva no, conservar
+        url_actual = (cliente.pedido_checkout_url or "").strip()
+        actual_tiene_auth = "_r=" in url_actual
+        if actual_tiene_auth and not nueva_tiene_auth:
+            log.info(
+                f"[guardar_checkout_url] {telefono}: NO sobreescribir — "
+                f"actual tiene tokens de auth, nueva no (evita bug Shopify home)"
+            )
+            return
         cliente.pedido_checkout_url = checkout_url
         cliente.actualizado = datetime.utcnow()
         await session.commit()
