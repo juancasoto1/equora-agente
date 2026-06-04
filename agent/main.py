@@ -2180,100 +2180,34 @@ async def webhook_handler(request: Request):
             await guardar_mensaje(msg.telefono, "assistant", respuesta, agent_id=_agent_id)
             await registrar_mensaje_asistente(msg.telefono, agent_id=_agent_id)
 
-            # Procesar marcadores stateless via dispatcher MARKER_HANDLERS
-            # (CARRITO, VACIAR_CARRITO, CIERRE_CONV). Los marcadores con side
-            # effects que producen estado consumido más adelante (PEDIDO,
-            # ESCALAR, etc.) aún se procesan inline más abajo — se migrarán
-            # en fases siguientes del refactor.
+            # Procesar marcadores via dispatcher MARKER_HANDLERS:
+            #   [[CARRITO:[...]]], [[VACIAR_CARRITO]], [[MOSTRAR_CARRITO]],
+            #   [[ESCALAR:...]], [[PEDIDO:...]], [[CIERRE_CONV:]]
+            #
+            # Los marcadores interactivos (BOTONES, LISTA, TIENDA, PRODUCTO,
+            # CATALOGO_CAT) aún se procesan inline más abajo — se migrarán
+            # en la fase E del refactor.
             _marker_ctx = MarkerContext(
                 respuesta=respuesta, telefono=msg.telefono, agent_id=_agent_id,
             )
             _marker_ctx = await aplicar_marcadores(_marker_ctx)
-            respuesta = _marker_ctx.respuesta
+            respuesta        = _marker_ctx.respuesta
+            checkout_url     = _marker_ctx.checkout_url
+            checkout_fallo   = _marker_ctx.checkout_fallo
+            datos_escalacion = _marker_ctx.datos_escalacion
 
-            # Procesar marcador [[MOSTRAR_CARRITO]] → backend muestra resumen
-            # determinístico con reply buttons. Antes Andrea solo decía "toca
-            # Ver carrito abajo" pero no había botón si el cliente había
-            # escrito en texto (no tocado un botón).
-            respuesta, mostrar = extraer_marcador_mostrar_carrito(respuesta)
-            if mostrar:
+            # [[MOSTRAR_CARRITO]] requiere envío inmediato — _enviar_resumen_carrito
+            # vive en main.py (necesita acceso al proveedor de WhatsApp), por
+            # eso el handler solo levanta un flag y aquí ejecutamos la acción.
+            if _marker_ctx.mostrar_carrito_pendiente:
                 try:
                     await _enviar_resumen_carrito(msg.telefono, agent_id=_agent_id)
                     logger.info(f"[MOSTRAR_CARRITO] resumen enviado a {msg.telefono}")
                 except Exception as e:
                     logger.error(f"Error mostrando carrito de {msg.telefono}: {e}")
 
-            # Procesar marcador de pedido → crear checkout en Shopify
-            checkout_url = None
-            checkout_fallo = False
-            match_pedido = re.search(r'\[\[PEDIDO:(.*?)\]\]', respuesta, re.DOTALL)
-            if match_pedido:
-                try:
-                    datos_pedido = json.loads(match_pedido.group(1))
-                    checkout_url = await crear_checkout_shopify(msg.telefono, datos_pedido)
-                    if checkout_url:
-                        await guardar_cliente(msg.telefono, datos_pedido, agent_id=_agent_id)
-                        # Guardamos el carrito como pendiente: lo limpia el webhook de Shopify
-                        await guardar_pedido_pendiente(
-                            msg.telefono, datos_pedido.get("productos", []), agent_id=_agent_id
-                        )
-                        # NO vaciar carrito_activo aquí. El carrito persiste hasta:
-                        #   1) Webhook orders/paid de Shopify (pago confirmado)
-                        #   2) Expira el TTL (CARRITO_TTL_HORAS)
-                        # Antes se vaciaba inmediatamente al crear checkout, lo que
-                        # hacía que si el cliente NO completaba el pago, perdía todo.
-                        # Guardar checkout_url para que el cliente pueda volver a confirmar.
-                        try:
-                            await guardar_checkout_url(msg.telefono, checkout_url, agent_id=_agent_id)
-                        except Exception as e_url:
-                            logger.warning(f"No pude guardar checkout_url: {e_url}")
-                        logger.info(f"Checkout Shopify creado para {msg.telefono} — carrito persiste hasta orders/paid")
-                    else:
-                        checkout_fallo = True
-                        logger.error(f"No se pudo crear checkout Shopify para {msg.telefono}")
-                except Exception as e:
-                    checkout_fallo = True
-                    logger.error(f"Error procesando pedido: {e}")
-                respuesta = re.sub(r'\s*\[\[PEDIDO:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
-
-            # Procesar marcador de escalación → notificar al equipo.
-            # Andrea idealmente escribe JSON, pero a veces se desvía y escribe texto
-            # plano. Lo aceptamos en ambos formatos para no perder escalaciones reales.
-            datos_escalacion = None
-            match_escalar = re.search(r'\[\[ESCALAR:(.*?)\]\]', respuesta, re.DOTALL)
-            if match_escalar:
-                contenido_raw = match_escalar.group(1).strip()
-                # Intento 1: parsear como JSON (formato canónico)
-                try:
-                    datos_escalacion = json.loads(contenido_raw)
-                except Exception:
-                    # Intento 2: texto plano "motivo - cliente: X - contexto: Y"
-                    # Detectar campos por keywords comunes que Andrea suele usar
-                    logger.warning(f"ESCALAR recibido como texto plano: {contenido_raw[:200]}")
-                    datos_escalacion = {
-                        "motivo":         "Escalación solicitada",
-                        "urgencia":       "normal",
-                        "nombre_cliente": "",
-                        "contexto":       contenido_raw[:500],
-                    }
-                    # Extraer campos si Andrea los marcó explícitamente
-                    m_nombre = re.search(r'cliente:\s*([^-\n]+)', contenido_raw, re.IGNORECASE)
-                    if m_nombre:
-                        datos_escalacion["nombre_cliente"] = m_nombre.group(1).strip()[:200]
-                    # El motivo es la parte antes del primer " - " o el contenido completo
-                    primera_parte = contenido_raw.split(" - ")[0].strip()
-                    if primera_parte and len(primera_parte) < 100:
-                        datos_escalacion["motivo"] = primera_parte
-                    # Urgencia explícita
-                    if re.search(r'\b(urgente|urgencia\s*:?\s*alta|alta)\b', contenido_raw, re.IGNORECASE):
-                        datos_escalacion["urgencia"] = "alta"
-                # Validar que tenga estructura mínima
-                if not isinstance(datos_escalacion, dict):
-                    logger.error(f"ESCALAR sin estructura válida — se ignora: {contenido_raw[:200]}")
-                    datos_escalacion = None
-                respuesta = re.sub(r'\s*\[\[ESCALAR:.*?\]\]', '', respuesta, flags=re.DOTALL).strip()
-
-            # [[CIERRE_CONV:]] ya fue procesado por MARKER_HANDLERS arriba.
+            # [[MOSTRAR_CARRITO]], [[PEDIDO:...]], [[ESCALAR:...]] y
+            # [[CIERRE_CONV:]] ya fueron procesados por MARKER_HANDLERS arriba.
 
             # Extraer marcadores interactivos ANTES de enviar el texto
             respuesta, datos_catalogo_cat = extraer_marcador_catalogo_cat(respuesta)

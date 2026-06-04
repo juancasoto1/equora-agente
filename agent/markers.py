@@ -31,9 +31,13 @@ from typing import Awaitable, Callable
 
 from agent.memory import (
     guardar_carrito_activo,
+    guardar_checkout_url,
+    guardar_cliente,
+    guardar_pedido_pendiente,
     limpiar_carrito_activo,
     marcar_cierre_enviado,
 )
+from agent.tools import crear_checkout_shopify
 
 logger = logging.getLogger("agentkit")
 
@@ -70,6 +74,7 @@ class MarkerContext:
     checkout_url: str | None = None
     checkout_fallo: bool = False
     datos_escalacion: dict | None = None
+    mostrar_carrito_pendiente: bool = False
     abrir_tienda: bool = False
     tienda_query: str = ""
     productos_mencionados: list[str] = field(default_factory=list)
@@ -172,6 +177,118 @@ async def handle_vaciar_carrito(ctx: MarkerContext) -> MarkerContext:
         logger.info(f"[VACIAR_CARRITO] carrito vaciado para {ctx.telefono}")
     except Exception as e:
         logger.error(f"Error vaciando carrito de {ctx.telefono}: {e}")
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[MOSTRAR_CARRITO]] — pedir a main.py que envíe el resumen con reply buttons
+# ──────────────────────────────────────────────────────────────────────────────
+# Acepta variantes [[MOSTRAR_CARRITO]], [[VER_CARRITO]], [[VER CARRITO]].
+# El handler NO envía el resumen directamente (eso requiere acceso al proveedor
+# de WhatsApp + a _enviar_resumen_carrito, que viven en main.py). Solo levanta
+# el flag `mostrar_carrito_pendiente`; main.py lo consume al salir del
+# dispatcher para invocar el handler determinístico que lee BD y manda botones.
+@register_marker("MOSTRAR_CARRITO")
+async def handle_mostrar_carrito(ctx: MarkerContext) -> MarkerContext:
+    patron = r"\[\[(?:MOSTRAR|VER)[_ ]?CARRITO\]\]"
+    if not re.search(patron, ctx.respuesta, flags=re.IGNORECASE):
+        return ctx
+    ctx.respuesta = re.sub(patron, "", ctx.respuesta, flags=re.IGNORECASE).strip()
+    ctx.mostrar_carrito_pendiente = True
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[ESCALAR:...]] — solicitud de notificar al equipo humano
+# ──────────────────────────────────────────────────────────────────────────────
+# Andrea idealmente escribe JSON ({"motivo":"...", "urgencia":"...", ...}),
+# pero a veces se desvía y escribe texto plano. Aceptamos ambos formatos para
+# no perder escalaciones reales. El resultado va a ctx.datos_escalacion; main.py
+# lo consume al final con _notificar_escalacion().
+@register_marker("ESCALAR")
+async def handle_escalar(ctx: MarkerContext) -> MarkerContext:
+    match = re.search(r"\[\[ESCALAR:(.*?)\]\]", ctx.respuesta, re.DOTALL)
+    if not match:
+        return ctx
+    contenido_raw = match.group(1).strip()
+    datos: dict | None = None
+    # Intento 1: parsear como JSON (formato canónico)
+    try:
+        datos = json.loads(contenido_raw)
+    except Exception:
+        # Intento 2: texto plano "motivo - cliente: X - contexto: Y"
+        logger.warning(f"ESCALAR recibido como texto plano: {contenido_raw[:200]}")
+        datos = {
+            "motivo":         "Escalación solicitada",
+            "urgencia":       "normal",
+            "nombre_cliente": "",
+            "contexto":       contenido_raw[:500],
+        }
+        m_nombre = re.search(r"cliente:\s*([^-\n]+)", contenido_raw, re.IGNORECASE)
+        if m_nombre:
+            datos["nombre_cliente"] = m_nombre.group(1).strip()[:200]
+        primera_parte = contenido_raw.split(" - ")[0].strip()
+        if primera_parte and len(primera_parte) < 100:
+            datos["motivo"] = primera_parte
+        if re.search(r"\b(urgente|urgencia\s*:?\s*alta|alta)\b", contenido_raw, re.IGNORECASE):
+            datos["urgencia"] = "alta"
+    # Validar estructura mínima
+    if not isinstance(datos, dict):
+        logger.error(f"ESCALAR sin estructura válida — se ignora: {contenido_raw[:200]}")
+        datos = None
+    ctx.respuesta = re.sub(r"\s*\[\[ESCALAR:.*?\]\]", "", ctx.respuesta, flags=re.DOTALL).strip()
+    ctx.datos_escalacion = datos
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[PEDIDO:{...}]] — crear checkout en Shopify
+# ──────────────────────────────────────────────────────────────────────────────
+# Andrea emite este marcador con el JSON del pedido. El handler:
+#   1. Llama crear_checkout_shopify() → URL de checkout
+#   2. Persiste cliente + pedido_pendiente + checkout_url
+#   3. Setea ctx.checkout_url y ctx.checkout_fallo
+#
+# main.py consume ctx.checkout_url más abajo para enviar el cta_url
+# (botón "Confirmar entrega") y consume checkout_fallo para avisar al
+# cliente si algo falló (stock agotado, producto no mapeado, etc.).
+#
+# IMPORTANTE: NO vaciar carrito_activo aquí. El carrito persiste hasta:
+#   1) Webhook orders/paid de Shopify (pago confirmado)
+#   2) Expira el TTL (CARRITO_TTL_HORAS)
+# Antes se vaciaba inmediatamente al crear checkout — si el cliente NO
+# completaba el pago, perdía todo el carrito.
+@register_marker("PEDIDO")
+async def handle_pedido(ctx: MarkerContext) -> MarkerContext:
+    match = re.search(r"\[\[PEDIDO:(.*?)\]\]", ctx.respuesta, re.DOTALL)
+    if not match:
+        return ctx
+    try:
+        datos_pedido = json.loads(match.group(1))
+        checkout_url = await crear_checkout_shopify(ctx.telefono, datos_pedido)
+        if checkout_url:
+            ctx.checkout_url = checkout_url
+            await guardar_cliente(ctx.telefono, datos_pedido, agent_id=ctx.agent_id)
+            await guardar_pedido_pendiente(
+                ctx.telefono, datos_pedido.get("productos", []), agent_id=ctx.agent_id,
+            )
+            try:
+                await guardar_checkout_url(ctx.telefono, checkout_url, agent_id=ctx.agent_id)
+            except Exception as e_url:
+                logger.warning(f"No pude guardar checkout_url: {e_url}")
+            logger.info(
+                f"Checkout Shopify creado para {ctx.telefono} — "
+                f"carrito persiste hasta orders/paid"
+            )
+        else:
+            ctx.checkout_fallo = True
+            logger.error(f"No se pudo crear checkout Shopify para {ctx.telefono}")
+    except Exception as e:
+        ctx.checkout_fallo = True
+        logger.error(f"Error procesando pedido: {e}")
+    ctx.respuesta = re.sub(
+        r"\s*\[\[PEDIDO:.*?\]\]", "", ctx.respuesta, flags=re.DOTALL,
+    ).strip()
     return ctx
 
 
