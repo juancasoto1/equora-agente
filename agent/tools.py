@@ -449,10 +449,26 @@ async def obtener_catalogo_shopify() -> str:
         # Guardar categorías para armar secciones del catálogo nativo
         _categorias_cache.update(categorias)
 
-        # Construir texto del catálogo respetando el orden fijo de categorías Equora
-        cats_con_productos = [c for c in ORDEN_CATEGORIAS if c in categorias]
+        # Construir texto del catálogo: respetar orden de ORDEN_CATEGORIAS para
+        # categorías conocidas y agregar AL FINAL todas las categorías nuevas
+        # del cliente (Combos, Más vendidos, Talleres e Industrial, etc.).
+        # ANTES: solo se listaban las de ORDEN_CATEGORIAS → productos en
+        # categorías nuevas quedaban INVISIBLES para Andrea y ella inventaba
+        # "no está disponible" — bug critico que perdía ventas.
+        ya_listadas = set(ORDEN_CATEGORIAS)
+        cats_extra = sorted(c for c in categorias.keys() if c not in ya_listadas)
+        cats_con_productos = [c for c in ORDEN_CATEGORIAS if c in categorias] + cats_extra
+
         lineas = ["## Catálogo de productos actualizado (Shopify)\n"]
         lineas.append("Categorías disponibles: " + ", ".join(cats_con_productos) + "\n")
+        # Importante: indicarle a Andrea que NUNCA invente "no disponible"
+        # — todo lo que esté listado abajo está vendible.
+        lineas.append(
+            "IMPORTANTE: TODOS los productos listados a continuación están "
+            "disponibles para vender. NUNCA digas que un producto 'no está "
+            "disponible' si aparece en esta lista. Si el cliente pregunta "
+            "por algo de esta lista, ofrécelo activamente.\n"
+        )
         for categoria in cats_con_productos:
             productos_cat = categorias.get(categoria, [])
             lineas.append(f"### {categoria}")
@@ -461,9 +477,14 @@ async def obtener_catalogo_shopify() -> str:
                 for v in variantes:
                     precio = int(float(v["price"]["amount"]))
                     stock = v.get("quantityAvailable")
+                    # Mostrar stock solo si es un número conocido > 0
+                    # (Storefront API a veces devuelve None si el cliente no
+                    # tiene activado "mostrar inventario al público")
                     if isinstance(stock, int) and stock > 0:
                         lineas.append(f"  {v['title']} → ${precio:,}  ({stock} disponibles)")
                     else:
+                        # NO indicar "agotado" — el cliente puede tener
+                        # "vender sin existencias=SÍ" en Shopify y igual debe venderse.
                         lineas.append(f"  {v['title']} → ${precio:,}")
                 lineas.append("")
             lineas.append("")
