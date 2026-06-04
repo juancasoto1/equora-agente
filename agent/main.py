@@ -760,7 +760,7 @@ async def _procesar_abandono_checkout():
         # AUTOREPARAR si el URL guardado es corrupto (ej. solo la home).
         # Antes: saltábamos silencioso, lo que dejaba al cliente sin botón.
         # Ahora: recreamos checkout desde carrito_activo si está disponible.
-        if "/checkouts/" not in checkout_url_raw and "/checkout/" not in checkout_url_raw:
+        if not _es_url_checkout_valida(checkout_url_raw):
             logger.warning(
                 f"[checkout-abandono] URL corrupta para {telefono} — intentando recrear"
             )
@@ -927,6 +927,20 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
 # ──────────────────────────────────────────────────────────────────────────────
 # Helper: obtener o recrear checkout URL válido
 # ──────────────────────────────────────────────────────────────────────────────
+def _es_url_checkout_valida(url: str) -> bool:
+    """True si la URL es un checkout real de Shopify (no la home).
+
+    Acepta los formatos actuales del Storefront API y de los webhooks:
+      - '/checkouts/cn/...' y '/checkouts/...'  (webhook checkouts/create, formato clásico)
+      - '/checkout/...'                          (alias usado por algunos endpoints)
+      - '/cart/c/{id}?key=...&_s=...&_y=...'    (Storefront API cartCreate — CON tokens
+        de sesión; este es el formato que Shopify devuelve ahora).
+    """
+    if not url:
+        return False
+    return ("/checkouts/" in url) or ("/checkout/" in url) or ("/cart/c/" in url)
+
+
 async def _obtener_o_recrear_checkout_url(
     telefono: str, agent_id: int = 1, forzar_recrear: bool = False,
 ) -> str | None:
@@ -947,9 +961,7 @@ async def _obtener_o_recrear_checkout_url(
     url_guardado = (cliente_data.get("pedido_checkout_url") or "").strip()
 
     # Si NO forzamos y el URL guardado es válido, usarlo (caso normal del timer)
-    if not forzar_recrear and url_guardado and (
-        "/checkouts/" in url_guardado or "/checkout/" in url_guardado
-    ):
+    if not forzar_recrear and url_guardado and _es_url_checkout_valida(url_guardado):
         return url_guardado
 
     # Recrear desde carrito_activo actual:
@@ -995,13 +1007,13 @@ async def _obtener_o_recrear_checkout_url(
     if not productos:
         logger.warning(f"[checkout-url] carrito_activo de {telefono} sin productos válidos")
         # Fallback: si tenemos URL guardada válida, usarla mejor que None
-        if url_guardado and ("/checkouts/" in url_guardado or "/checkout/" in url_guardado):
+        if url_guardado and _es_url_checkout_valida(url_guardado):
             logger.info(f"[checkout-url] usando URL guardada como fallback")
             return url_guardado
         return None
     try:
         nuevo_url = await crear_checkout_shopify(telefono, {"productos": productos, "total": total})
-        if nuevo_url and ("/checkouts/" in nuevo_url or "/checkout/" in nuevo_url):
+        if nuevo_url and _es_url_checkout_valida(nuevo_url):
             await guardar_checkout_url(telefono, nuevo_url, agent_id=agent_id)
             logger.info(f"[checkout-url] Recreado para {telefono}: {nuevo_url[:80]}")
             return nuevo_url
@@ -1013,14 +1025,14 @@ async def _obtener_o_recrear_checkout_url(
             f"[checkout-url] crear_checkout_shopify devolvió URL inválida: {nuevo_url} — "
             f"usando URL guardada como fallback (si existe)"
         )
-        if url_guardado and ("/checkouts/" in url_guardado or "/checkout/" in url_guardado):
+        if url_guardado and _es_url_checkout_valida(url_guardado):
             logger.info(f"[checkout-url] fallback OK: {url_guardado[:80]}")
             return url_guardado
         return None
     except Exception as e:
         logger.error(f"[checkout-url] Error recreando checkout para {telefono}: {e}")
         # Mismo fallback ante excepción
-        if url_guardado and ("/checkouts/" in url_guardado or "/checkout/" in url_guardado):
+        if url_guardado and _es_url_checkout_valida(url_guardado):
             logger.info(f"[checkout-url] fallback tras excepción: {url_guardado[:80]}")
             return url_guardado
         return None
@@ -2556,7 +2568,7 @@ async def webhook_handler(request: Request):
             # Enviar link de checkout de Shopify si se generó Y es válido
             # (con /checkouts/ — no la home). Si es inválido, intentar
             # autoreparar antes de mandar al cliente un botón muerto.
-            if checkout_url and ("/checkouts/" not in checkout_url and "/checkout/" not in checkout_url):
+            if checkout_url and not _es_url_checkout_valida(checkout_url):
                 logger.warning(f"[PEDIDO] checkout_url corrupto: {checkout_url[:60]} — intentando recrear")
                 checkout_url = await _obtener_o_recrear_checkout_url(msg.telefono, agent_id=_agent_id)
             if checkout_url:
