@@ -1789,6 +1789,9 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               <textarea id="ti" rows="1" placeholder="Escribe un mensaje y presiona Enter…"
                 aria-label="Escribe un mensaje"
                 onkeydown="onKey(event)" oninput="autoResize()"></textarea>
+              <button type="button" class="voco-emoji-trigger" onclick="vocoEmojiToggle('ti')"
+                aria-label="Insertar emoji" title="Insertar emoji"
+                style="background:none;border:none;font-size:1.25rem;padding:0 8px;cursor:pointer;line-height:1">😊</button>
               <button id="sendbtn" onclick="sendMsg()" aria-label="Enviar mensaje">➤</button>
             </div>
 
@@ -2901,6 +2904,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                       style="flex:1;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.85rem;
                       resize:none;height:60px;outline:none;font-family:inherit"
                       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();escEnviarRespuesta();}"></textarea>
+                    <button type="button" class="voco-emoji-trigger" onclick="vocoEmojiToggle('esc-reply-input')"
+                      aria-label="Insertar emoji" title="Insertar emoji"
+                      style="background:none;border:1px solid var(--voco-border);border-radius:8px;
+                      font-size:1.1rem;padding:0 10px;cursor:pointer;align-self:flex-end;height:36px">😊</button>
                     <button class="btn-primary" style="align-self:flex-end;padding:8px 14px" onclick="escEnviarRespuesta()">Enviar</button>
                   </div>
                   <div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:4px">Enter para enviar · Shift+Enter nueva línea</div>
@@ -2921,6 +2928,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                       style="flex:1;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:.83rem;
                       resize:none;height:56px;outline:none;font-family:inherit;background:#fffbeb"
                       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();escGuardarNota();}"></textarea>
+                    <button type="button" class="voco-emoji-trigger" onclick="vocoEmojiToggle('esc-nota-input')"
+                      aria-label="Insertar emoji" title="Insertar emoji"
+                      style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;
+                      font-size:1.05rem;padding:0 10px;cursor:pointer;align-self:flex-end;height:34px">😊</button>
                     <button style="align-self:flex-end;padding:8px 12px;background:#eab308;border:none;border-radius:7px;color:#fff;font-weight:700;cursor:pointer;font-size:.84rem" onclick="escGuardarNota()">Guardar</button>
                   </div>
                 </div>
@@ -4220,6 +4231,107 @@ function autoResize() {
   var ti = document.getElementById('ti');
   ti.style.height = 'auto';
   ti.style.height = Math.min(ti.scrollHeight, 120) + 'px';
+}
+
+/* ══════════════════════════════════════════════════════
+   EMOJI PICKER — reutilizable para cualquier <textarea>/<input>
+   ══════════════════════════════════════════════════════
+   Uso: agrega un botón cerca del campo con
+     <button onclick="vocoEmojiToggle('miTextareaId')">😊</button>
+   y dale class="voco-emoji-trigger" para que el click no cierre el popover.
+*/
+var VOCO_EMOJIS = [
+  // Saludos / expresiones
+  '👋','😊','🙂','😄','🙋','🤗','😉','😎','🥰','😘',
+  // Aprobación / positivo
+  '✅','👍','💯','🎉','🌟','⭐','✨','🙌','👏','🥳',
+  // Comunicación
+  '💬','📞','📱','📧','✉️','🔔','📩','📨','💭','🗣️',
+  // Comercio
+  '🛒','💰','🎁','📦','🚚','🏷️','💳','🧾','💸','🛍️',
+  // Naturaleza / eco
+  '🌿','🌱','🍃','🌳','♻️','🌸','🌻','🌺','🌷','🌍',
+  // Hogar / limpieza
+  '🧼','🧴','🧽','🧹','🚿','🛁','🧺','🪣','💧','✨',
+  // Emociones
+  '❤️','💚','💙','💛','💜','🧡','🤍','🙏','😢','😅',
+  // Negocio / admin
+  '📋','📝','✏️','💼','📊','📈','📅','⏰','⏳','🕐'
+];
+
+var _vocoEmojiTarget = null;
+var _vocoEmojiClickBound = false;
+
+function _vocoEmojiBuildPop() {
+  var pop = document.getElementById('voco-emoji-pop');
+  if (pop) return pop;
+  pop = document.createElement('div');
+  pop.id = 'voco-emoji-pop';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Selector de emoji');
+  pop.style.cssText = [
+    'position:absolute', 'z-index:9999', 'display:none',
+    'background:var(--voco-card-bg,#fff)',
+    'border:1px solid var(--voco-border,#e5e7eb)',
+    'border-radius:10px', 'padding:8px',
+    'box-shadow:0 8px 24px rgba(0,0,0,.12)',
+    'grid-template-columns:repeat(10,minmax(0,1fr))',
+    'gap:2px', 'max-width:300px'
+  ].join(';');
+  pop.innerHTML = VOCO_EMOJIS.map(function(e) {
+    return '<button type="button" class="voco-emoji-trigger"'
+      + ' onclick="vocoEmojiInsert(\'' + e + '\')"'
+      + ' style="background:none;border:none;padding:3px 4px;font-size:1.2rem;'
+      + 'cursor:pointer;border-radius:5px;line-height:1"'
+      + ' onmouseover="this.style.background=\'var(--voco-nav-bg-hover,#f3f4f6)\'"'
+      + ' onmouseout="this.style.background=\'none\'"'
+      + ' title="' + e + '">' + e + '</button>';
+  }).join('');
+  document.body.appendChild(pop);
+  if (!_vocoEmojiClickBound) {
+    document.addEventListener('click', function(ev) {
+      if (!pop || pop.style.display === 'none') return;
+      if (ev.target.classList && ev.target.classList.contains('voco-emoji-trigger')) return;
+      if (pop.contains(ev.target)) return;
+      pop.style.display = 'none';
+    });
+    _vocoEmojiClickBound = true;
+  }
+  return pop;
+}
+
+function vocoEmojiToggle(targetId) {
+  var ta = document.getElementById(targetId);
+  if (!ta) return;
+  var pop = _vocoEmojiBuildPop();
+  _vocoEmojiTarget = ta;
+  // Si ya estaba abierto sobre el mismo target → cerrar
+  if (pop.style.display === 'grid' && pop.dataset.target === targetId) {
+    pop.style.display = 'none';
+    return;
+  }
+  pop.dataset.target = targetId;
+  var rect = ta.getBoundingClientRect();
+  // Posicionar arriba del campo (para no tapar el botón Enviar de abajo)
+  pop.style.display = 'grid';
+  var popH = pop.offsetHeight || 220;
+  var top = window.scrollY + rect.top - popH - 6;
+  if (top < window.scrollY + 8) top = window.scrollY + rect.bottom + 6;
+  pop.style.left = (window.scrollX + rect.left) + 'px';
+  pop.style.top  = top + 'px';
+}
+
+function vocoEmojiInsert(emoji) {
+  var ta = _vocoEmojiTarget;
+  if (!ta) return;
+  var start = ta.selectionStart || 0;
+  var end   = ta.selectionEnd   || 0;
+  ta.value = ta.value.slice(0, start) + emoji + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + emoji.length;
+  ta.focus();
+  // Disparar eventos para que listeners como autoResize() reaccionen
+  if (typeof ta.oninput === 'function') ta.oninput();
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 /* ══════════════════════════════════════════════════════
