@@ -3003,6 +3003,107 @@ async def inbox_activar_agente(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# #43 — Promoción post-venta (código descuento tras pago)
+# ──────────────────────────────────────────────────────────────────────────────
+async def _verificar_acceso_agente(user: dict, agent_id: int) -> bool:
+    """True si el usuario puede modificar este agente.
+
+    Permitido: admin (todos) o owner del agente. Usuarios internos sin
+    rol admin solo pueden tocar el agente que poseen.
+    """
+    if not user:
+        return False
+    if user.get("rol") == "admin" or user.get("id", 0) == 0:
+        return True  # admins ven/editan todo
+    from agent.memory import obtener_agente
+    agente = await obtener_agente(agent_id)
+    if not agente:
+        return False
+    # owner_id None = admin-owned (legacy); owner_id == user.id = suyo
+    return agente.get("owner_id") in (None, user.get("id"))
+
+
+@app.get("/inbox/api/agents/{agent_id_param}/descuento")
+async def api_obtener_descuento(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Devuelve la config de descuento post-venta del agente.
+
+    Siempre retorna el shape completo (activo + 4 campos), aunque esté
+    desactivado — el form del panel necesita rellenar los inputs.
+    """
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if not await _verificar_acceso_agente(user, agent_id_param):
+        raise HTTPException(status_code=403, detail="Sin acceso a este agente")
+    from agent.memory import obtener_descuento_promo_config, DESCUENTO_MENSAJE_DEFAULT
+    config = await obtener_descuento_promo_config(agent_id_param)
+    # Exponemos también el default para que la UI pueda mostrarlo como placeholder
+    config["mensaje_default"] = DESCUENTO_MENSAJE_DEFAULT
+    return JSONResponse(content=config)
+
+
+@app.put("/inbox/api/agents/{agent_id_param}/descuento")
+async def api_guardar_descuento(
+    agent_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Guarda la config de descuento post-venta del agente.
+
+    Body esperado:
+      {
+        "activo":  bool,
+        "umbral":  int,    # COP, sin envío
+        "codigo":  str,    # se normaliza a MAYÚSCULAS
+        "pct":     int,    # 1-100
+        "mensaje": str     # template con {codigo} {pct} {umbral} — opcional
+      }
+
+    Validaciones en memory.guardar_descuento_promo(): umbral >= 1000,
+    código [A-Z0-9_-]{2,30}, pct 1-100, mensaje debe contener {codigo}.
+    Si activo=false, los demás campos se persisten igual para permitir
+    reactivar más tarde sin perder la configuración.
+    """
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if not await _verificar_acceso_agente(user, agent_id_param):
+        raise HTTPException(status_code=403, detail="Sin acceso a este agente")
+    from agent.memory import guardar_descuento_promo
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "JSON inválido"})
+
+    activo  = bool(body.get("activo"))
+    try:
+        umbral = int(body.get("umbral") or 0)
+        pct    = int(body.get("pct") or 0)
+    except (TypeError, ValueError):
+        return JSONResponse(status_code=400, content={"ok": False, "error": "umbral y pct deben ser números enteros"})
+    codigo  = str(body.get("codigo") or "").strip()
+    mensaje = str(body.get("mensaje") or "").strip()
+
+    ok, error = await guardar_descuento_promo(
+        agent_id_param, activo, umbral, codigo, pct, mensaje,
+    )
+    if not ok:
+        return JSONResponse(status_code=400, content={"ok": False, "error": error})
+    logger.info(
+        f"[descuento] agent_id={agent_id_param} actualizado por user={user.get('id')} "
+        f"(activo={activo}, codigo={codigo}, umbral={umbral}, pct={pct})"
+    )
+    return JSONResponse(content={"ok": True})
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Sprint A — Módulos por agente (modules_json)
 # ──────────────────────────────────────────────────────────────────────────────
 @app.get("/inbox/api/agents/{agent_id_param}/modules")
