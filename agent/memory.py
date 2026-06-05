@@ -2474,6 +2474,8 @@ async def listar_mensajes_agente(agent_id: int) -> list[dict]:
             "placeholders_requeridos": list(getattr(meta, "placeholders_requeridos", ()) or ()),
             "max_length":     getattr(meta, "max_length", 4000),
             "puede_desactivarse": bool(getattr(meta, "puede_desactivarse", True)),
+            "aviso_setup":    getattr(meta, "aviso_setup", "") or "",
+            "aviso_setup_url": getattr(meta, "aviso_setup_url", "") or "",
             "content":        (override.content if override and override.content else meta.default),
             "personalizado":  bool(override and override.content),
             "activo":         bool(override.activo) if override else True,

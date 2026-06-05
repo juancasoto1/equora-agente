@@ -8926,6 +8926,23 @@ function _msjRenderItem(m) {
       + '</div></div>';
   }
 
+  // Banner de aviso si requiere setup externo (ej. webhook Shopify).
+  // Procesamos markdown mínimo (*negrita* → <b>) sin escapar el HTML
+  // generado para que la negrita se renderice como tal.
+  var avisoHtml = '';
+  if (m.aviso_setup) {
+    var avisoBody = _msjEscapeHtml(m.aviso_setup).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<b>$1</b>');
+    var linkHtml = m.aviso_setup_url
+      ? ' <a href="' + _msjEscapeHtml(m.aviso_setup_url) + '" target="_blank" rel="noopener" style="color:#92400e;font-weight:600;text-decoration:underline;white-space:nowrap"><i data-lucide="external-link" style="width:11px;height:11px;vertical-align:-1px;margin-right:2px"></i>Ver guía</a>'
+      : '';
+    avisoHtml = '<div style="background:#fef3c7;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:6px;padding:9px 12px;margin-bottom:10px;font-size:.78rem;color:#78350f;line-height:1.5">'
+      + '<i data-lucide="alert-triangle" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px;color:#b45309"></i>'
+      + '<b>Requiere configuración externa:</b> '
+      + avisoBody
+      + linkHtml
+      + '</div>';
+  }
+
   // Card completa con layout 2 cols (editor + preview)
   return ''
     + '<div style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px;margin-bottom:12px"' + (!m.activo ? ' class="msj-card-off"' : '') + '>'
@@ -8940,6 +8957,7 @@ function _msjRenderItem(m) {
     +     '</div>'
     +     '<div style="flex-shrink:0">' + toggleHtml + '</div>'
     +   '</div>'
+    +   avisoHtml
     +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">'
     +     '<div>'  /* col izquierda — editor */
     +       '<textarea id="' + id + '" rows="' + rows + '" maxlength="' + maxLen + '" data-key="' + _msjEscapeHtml(m.key) + '"'

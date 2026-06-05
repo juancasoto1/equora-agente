@@ -84,6 +84,16 @@ class MensajeMeta:
                     mensajes ESENCIALES sin los cuales el flujo se rompe
                     (ej. el botón del checkout — sin él no hay forma de
                     completar la compra).
+
+      aviso_setup:  Texto informativo que se muestra como banner amarillo
+                    arriba del editor en el panel. Úsalo para mensajes que
+                    requieren configuración EXTERNA para que se disparen
+                    (ej. los de Shopify necesitan webhook configurado).
+                    Default vacío (sin aviso).
+
+      aviso_setup_url:
+                    URL opcional con instrucciones detalladas (ej. docs).
+                    Aparece como link 'Ver guía' al lado del aviso.
     """
     key: str
     categoria: str
@@ -95,6 +105,8 @@ class MensajeMeta:
     placeholders_requeridos: tuple[str, ...] = field(default_factory=tuple)
     max_length: int = 4000
     puede_desactivarse: bool = True
+    aviso_setup: str = ""
+    aviso_setup_url: str = ""
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -235,6 +247,13 @@ MENSAJES: dict[str, MensajeMeta] = {
         placeholders=("numero_pedido", "total", "negocio"),
         placeholders_requeridos=(),
         puede_desactivarse=False,  # esencial: sin esto el cliente no sabe el estado del pedido
+        aviso_setup=(
+            "Para que este mensaje se envíe, tu tienda Shopify debe tener "
+            "configurado el webhook **orders/create** apuntando a tu cuenta Voco. "
+            "Sin webhook, el agente nunca se entera de los pedidos nuevos y "
+            "este mensaje no se dispara."
+        ),
+        aviso_setup_url="https://help.shopify.com/en/manual/orders/notifications/webhooks",
     ),
     "shopify.order_paid": MensajeMeta(
         key="shopify.order_paid",
@@ -255,6 +274,13 @@ MENSAJES: dict[str, MensajeMeta] = {
         placeholders=("numero_pedido", "total", "negocio"),
         placeholders_requeridos=(),
         puede_desactivarse=False,  # esencial: notificación del pago confirmado
+        aviso_setup=(
+            "Requiere webhook **orders/paid** configurado en tu tienda Shopify "
+            "apuntando a tu cuenta Voco. Si vendes contra-entrega, este evento "
+            "no se dispara automáticamente — solo cuando el pago queda registrado "
+            "en Shopify (online inmediato o marcado manualmente al recibir el efectivo)."
+        ),
+        aviso_setup_url="https://help.shopify.com/en/manual/orders/notifications/webhooks",
     ),
     "shopify.order_fulfilled": MensajeMeta(
         key="shopify.order_fulfilled",
@@ -279,6 +305,13 @@ MENSAJES: dict[str, MensajeMeta] = {
         # Sí desactivable: hay negocios que no quieren saturar con avisos de envío
         # (especialmente si tienen tracking en email aparte). Pero ojo: si lo
         # apagas, el cliente NO recibe aviso por WhatsApp del despacho.
+        aviso_setup=(
+            "Requiere webhook **orders/fulfilled** configurado en Shopify. "
+            "Este evento se dispara cuando marcas el pedido como despachado "
+            "en Shopify Admin (manual) o cuando tu integración de envíos lo "
+            "marca automáticamente. Sin webhook, este mensaje no se envía."
+        ),
+        aviso_setup_url="https://help.shopify.com/en/manual/orders/notifications/webhooks",
     ),
     # ── Mensajes de error (categoría "error") ────────────────────────────────
     # Todos esenciales — el cliente necesita saber cuándo algo falló para no
