@@ -25,7 +25,7 @@ from agent.markers import MarkerContext, aplicar_marcadores  # noqa: F401  # reg
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial,
     guardar_cliente, obtener_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
-    obtener_agent_ids_por_telefono, obtener_descuento_promo,
+    obtener_agent_ids_por_telefono, obtener_descuento_promo, obtener_mensaje,
     guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
     carrito_es_fresco_para_merge,
     puede_enviar_checkout_abandono, marcar_checkout_abandono_enviado,
@@ -168,21 +168,25 @@ _carrito_unif_cooldown: dict[str, float] = {}
 _carrito_ultimo_estado: dict[str, int] = {}   # phone → último estado enviado (3, 4 ó 5)
 _checkout_abandono_notif: dict[str, float] = {}
 
-MENSAJE_FOLLOWUP = (
-    "Hola de nuevo 😊 Veo que andas un poco ocupado/a. "
-    "¿Sigues por aquí o prefieres que continuemos en otro momento? "
-    "No hay afán, retomamos cuando puedas."
-)
+# Mensajes del sistema — ahora configurables por agente desde el panel.
+# Defaults en agent/mensajes.py:MENSAJES. Cada agente puede personalizarlos
+# desde Configuración → Mensajes sin tocar código.
+# Keys:
+#   system.followup          ← era MENSAJE_FOLLOWUP
+#   system.cierre            ← era MENSAJE_CIERRE
+#   system.checkout_abandono ← era MENSAJE_CHECKOUT_ABANDONO
 
-MENSAJE_CIERRE = (
-    "Te dejo descansar 🤗 Cuando quieras retomar, escríbeme y "
-    "seguimos donde nos quedamos. ¡Que tengas un excelente día! 🌿"
-)
 
-MENSAJE_CHECKOUT_ABANDONO = (
-    "Hola 👋 Vimos que iniciaste tu pedido pero no terminaste el proceso.\n\n"
-    "Tu carrito está guardado — solo falta confirmar y listo 🎉"
-)
+async def _resolver_agent_id_principal(telefono: str) -> int:
+    """Resuelve el agent_id principal de un cliente para enviar mensajes.
+
+    Si el cliente existe bajo varios agents, retorna el primero (estable
+    por ID). Si no existe en BD aún, fallback a 1 (legacy/seed). En
+    flujos verdaderamente multi-tenant, el caller debería pasar agent_id
+    explícito en lugar de invocar este helper.
+    """
+    aids = await obtener_agent_ids_por_telefono(telefono)
+    return aids[0] if aids else 1
 
 # ── Cross-selling desde mini-tienda ─────────────────────────────────────────
 # Las tarifas se cargan desde Shopify Admin API al arrancar (lifespan).
@@ -690,8 +694,10 @@ async def _procesar_followups():
             logger.info(f"[followup] {telefono} en modo humano — saltando")
             continue
         try:
-            await proveedor.enviar_mensaje(telefono, MENSAJE_FOLLOWUP)
-            await guardar_mensaje(telefono, "assistant", MENSAJE_FOLLOWUP)
+            aid = await _resolver_agent_id_principal(telefono)
+            texto = await obtener_mensaje(aid, "system.followup")
+            await proveedor.enviar_mensaje(telefono, texto)
+            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid)
             await marcar_followup_enviado(telefono)
             logger.info(f"Follow-up enviado a {telefono}")
         except Exception as e:
@@ -707,8 +713,10 @@ async def _procesar_cierres():
             logger.info(f"[cierre] {telefono} en modo humano — saltando")
             continue
         try:
-            await proveedor.enviar_mensaje(telefono, MENSAJE_CIERRE)
-            await guardar_mensaje(telefono, "assistant", MENSAJE_CIERRE)
+            aid = await _resolver_agent_id_principal(telefono)
+            texto = await obtener_mensaje(aid, "system.cierre")
+            await proveedor.enviar_mensaje(telefono, texto)
+            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid)
             await marcar_cierre_enviado(telefono)
             logger.info(f"Cierre enviado a {telefono}")
         except Exception as e:
@@ -776,12 +784,14 @@ async def _procesar_abandono_checkout():
         if not await puede_enviar_checkout_abandono(telefono, CHECKOUT_COOLDOWN_MIN):
             continue
         try:
+            aid = await _resolver_agent_id_principal(telefono)
+            texto = await obtener_mensaje(aid, "system.checkout_abandono")
             enviado = False
             if hasattr(proveedor, "enviar_cta_url"):
                 try:
                     enviado = await proveedor.enviar_cta_url(
                         telefono,
-                        MENSAJE_CHECKOUT_ABANDONO,
+                        texto,
                         "Terminar pedido ✅",
                         checkout_url,
                     )
@@ -790,9 +800,9 @@ async def _procesar_abandono_checkout():
             if not enviado:
                 await proveedor.enviar_mensaje(
                     telefono,
-                    f"{MENSAJE_CHECKOUT_ABANDONO}\n\n👉 {checkout_url}"
+                    f"{texto}\n\n👉 {checkout_url}"
                 )
-            await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKOUT_ABANDONO)
+            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid)
             await marcar_checkout_abandono_enviado(telefono)
             logger.info(f"Recuperación de checkout enviada a {telefono}")
         except Exception as e:
