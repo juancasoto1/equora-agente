@@ -2965,6 +2965,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()"><i data-lucide="flask-conical" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar</div>
             <div class="cfg-tab" onclick="cfgTab('equipo',this);cargarEquipo()"><i data-lucide="users" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Equipo</div>
             <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Templates</div>
+            <div class="cfg-tab" onclick="cfgTab('mensajes',this);cargarMensajes()"><i data-lucide="message-square-text" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Mensajes</div>
             <div class="cfg-tab" onclick="cfgTab('promociones',this);cargarPromocion()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Promociones</div>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)"><i data-lucide="book-open" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Documentación</div>
           </div>
@@ -3699,6 +3700,29 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               <div style="padding:14px;color:var(--voco-text-muted);font-size:.85rem;text-align:center">Cargando templates…</div>
             </div>
           </div><!-- /pane templates -->
+
+          <!-- ── Pane: Mensajes (sistema, configurables por agente — #28) ── -->
+          <div class="cfg-pane" id="cfg-pane-mensajes" style="padding:24px;overflow-y:auto">
+            <div style="max-width:780px">
+              <h2 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem">
+                <i data-lucide="message-square-text" style="width:18px;height:18px;vertical-align:-3px;margin-right:6px;color:var(--voco-brand)"></i>
+                Mensajes del sistema
+              </h2>
+              <p style="margin:0 0 22px;color:var(--voco-text-muted);font-size:.86rem;line-height:1.55">
+                Personaliza los mensajes que Voco envía automáticamente a tus clientes
+                (seguimientos, confirmaciones, etc). Si no editas un mensaje, se usa
+                el texto por defecto. Cada cambio aplica solo a este agente — otros
+                agentes de la plataforma no se ven afectados.
+              </p>
+
+              <!-- Estado de carga / lista de mensajes (se rellena via JS) -->
+              <div id="msj-lista">
+                <div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">
+                  Cargando mensajes…
+                </div>
+              </div>
+            </div>
+          </div><!-- /pane mensajes -->
 
           <!-- ── Pane: Promociones (código descuento post-venta) ── -->
           <div class="cfg-pane" id="cfg-pane-promociones" style="padding:24px;overflow-y:auto">
@@ -8659,6 +8683,151 @@ document.addEventListener('click', function(e) {
     picker.style.display = 'none';
   }
 });
+
+/* ── Mensajes del sistema configurables por agente (#28) ────────
+   Renderiza el catálogo agrupado por categoría. Cada mensaje tiene su
+   propio textarea + botones Guardar / Restaurar. El catálogo viene del
+   backend (autogenerado a partir de agent/mensajes.py:MENSAJES) — la UI
+   se auto-puebla, no hay que tocar HTML al agregar mensajes nuevos. */
+function _msjEscapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function cargarMensajes() {
+  var cont = document.getElementById('msj-lista');
+  if (!cont) return;
+  var ag = _escAgentId || 1;
+  cont.innerHTML = '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">Cargando mensajes…</div>';
+  try {
+    var r = await fetch('/inbox/api/agents/' + ag + '/mensajes', {credentials:'include'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    var categorias = d.categorias || {};
+    var mensajes   = d.mensajes   || [];
+    if (!mensajes.length) {
+      cont.innerHTML = '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">No hay mensajes configurables todavía.</div>';
+      return;
+    }
+    // Agrupar por categoria
+    var porCat = {};
+    mensajes.forEach(function(m) {
+      (porCat[m.categoria] = porCat[m.categoria] || []).push(m);
+    });
+    // Render ordenado por meta.orden
+    var slugs = Object.keys(categorias).sort(function(a, b) {
+      return (categorias[a].orden || 999) - (categorias[b].orden || 999);
+    });
+    var html = '';
+    slugs.forEach(function(slug) {
+      var items = porCat[slug] || [];
+      if (!items.length) return;
+      var meta = categorias[slug] || {};
+      html += '<div style="margin-bottom:28px">'
+        + '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;padding-bottom:8px;border-bottom:1px solid var(--voco-border)">'
+        +   '<h3 style="margin:0;color:var(--voco-text);font-size:.95rem;font-weight:700">' + _msjEscapeHtml(meta.label || slug) + '</h3>'
+        +   '<span style="color:var(--voco-text-muted);font-size:.78rem">' + _msjEscapeHtml(meta.descripcion || '') + '</span>'
+        + '</div>';
+      items.forEach(function(m) {
+        html += _msjRenderItem(m);
+      });
+      html += '</div>';
+    });
+    cont.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+  } catch (e) {
+    cont.innerHTML = '<div style="padding:24px;color:#dc2626;font-size:.85rem">Error cargando mensajes: ' + _msjEscapeHtml(e.message) + '</div>';
+  }
+}
+
+function _msjRenderItem(m) {
+  var id = 'msj-' + m.key.replace(/[^a-z0-9]/gi, '_');
+  var pillPers = m.personalizado
+    ? '<span style="background:#dbeafe;color:#1e40af;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:8px">Personalizado</span>'
+    : '<span style="background:var(--voco-content-bg-alt);color:var(--voco-text-muted);font-size:.68rem;font-weight:500;padding:2px 8px;border-radius:10px;margin-left:8px">Default</span>';
+  var phHtml = '';
+  if (m.placeholders && m.placeholders.length) {
+    phHtml = '<div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:6px">'
+      + 'Placeholders: '
+      + m.placeholders.map(function(p) {
+          return '<code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px;margin-right:3px">{' + _msjEscapeHtml(p) + '}</code>';
+        }).join('')
+      + '</div>';
+  }
+  return ''
+    + '<div style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px;margin-bottom:12px">'
+    +   '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">'
+    +     '<div style="flex:1">'
+    +       '<div style="display:flex;align-items:center;flex-wrap:wrap">'
+    +         '<span style="font-weight:600;color:var(--voco-text);font-size:.9rem">' + _msjEscapeHtml(m.titulo) + '</span>'
+    +         pillPers
+    +       '</div>'
+    +       '<div style="color:var(--voco-text-muted);font-size:.78rem;margin-top:2px;line-height:1.45">' + _msjEscapeHtml(m.descripcion) + '</div>'
+    +       (m.cuando ? '<div style="color:var(--voco-text-muted);font-size:.72rem;margin-top:2px"><i data-lucide="clock" style="width:11px;height:11px;vertical-align:-1px;margin-right:3px"></i>' + _msjEscapeHtml(m.cuando) + '</div>' : '')
+    +     '</div>'
+    +   '</div>'
+    +   '<textarea id="' + id + '" rows="3" maxlength="4000" data-key="' + _msjEscapeHtml(m.key) + '"'
+    +     ' style="width:100%;margin-top:10px;padding:9px 11px;border:1px solid var(--voco-border);border-radius:7px;background:var(--voco-content-bg-alt);color:var(--voco-text);font-size:.86rem;outline:none;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:68px;line-height:1.4">'
+    +     _msjEscapeHtml(m.content)
+    +   '</textarea>'
+    +   phHtml
+    +   '<div style="display:flex;gap:8px;align-items:center;margin-top:10px">'
+    +     '<button class="btn-primary" style="padding:6px 14px;font-size:.78rem" onclick="guardarMensaje(\'' + _msjEscapeHtml(m.key) + '\')">'
+    +       '<i data-lucide="check" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Guardar'
+    +     '</button>'
+    +     '<button class="btn-secondary" style="padding:6px 14px;font-size:.78rem" onclick="restaurarMensaje(\'' + _msjEscapeHtml(m.key) + '\')">'
+    +       '<i data-lucide="rotate-ccw" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Restaurar default'
+    +     '</button>'
+    +     '<span class="msj-status" id="' + id + '-status" style="font-size:.76rem;color:var(--voco-text-muted)"></span>'
+    +   '</div>'
+    + '</div>';
+}
+
+async function guardarMensaje(key) {
+  var id = 'msj-' + key.replace(/[^a-z0-9]/gi, '_');
+  var ta = document.getElementById(id);
+  var st = document.getElementById(id + '-status');
+  if (!ta || !st) return;
+  var content = ta.value;
+  st.textContent = 'Guardando…'; st.style.color = 'var(--voco-text-muted)';
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/agents/' + ag + '/mensajes/' + encodeURIComponent(key), {
+      method: 'PUT', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: content}),
+    });
+    var d = await r.json();
+    if (!r.ok || !d.ok) {
+      st.textContent = d.error || 'Error al guardar';
+      st.style.color = '#dc2626';
+      return;
+    }
+    st.textContent = '✓ Guardado';
+    st.style.color = '#16a34a';
+    setTimeout(function() { cargarMensajes(); }, 600);  // refrescar para que el pill cambie a Personalizado
+  } catch (e) {
+    st.textContent = 'Error: ' + e.message;
+    st.style.color = '#dc2626';
+  }
+}
+
+async function restaurarMensaje(key) {
+  if (!confirm('¿Restaurar este mensaje al texto por defecto? Tu personalización se perderá.')) return;
+  var id = 'msj-' + key.replace(/[^a-z0-9]/gi, '_');
+  var st = document.getElementById(id + '-status');
+  if (st) { st.textContent = 'Restaurando…'; st.style.color = 'var(--voco-text-muted)'; }
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/agents/' + ag + '/mensajes/' + encodeURIComponent(key), {
+      method: 'DELETE', credentials: 'include',
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await cargarMensajes();  // re-render con el default
+  } catch (e) {
+    if (st) { st.textContent = 'Error: ' + e.message; st.style.color = '#dc2626'; }
+  }
+}
 
 /* ── Promociones — código de descuento post-venta (#43) ─────────
    Lee y guarda la config del agente activo (_escAgentId). El preview
