@@ -280,6 +280,94 @@ MENSAJES: dict[str, MensajeMeta] = {
         # (especialmente si tienen tracking en email aparte). Pero ojo: si lo
         # apagas, el cliente NO recibe aviso por WhatsApp del despacho.
     ),
+    # ── Mensajes de error (categoría "error") ────────────────────────────────
+    # Todos esenciales — el cliente necesita saber cuándo algo falló para no
+    # quedarse esperando. Defaults BYTE-IDÉNTICOS a strings hardcoded previos.
+    "error.checkout_no_encontrado": MensajeMeta(
+        key="error.checkout_no_encontrado",
+        categoria="error",
+        titulo="No se encontró pedido al confirmar",
+        descripcion=(
+            "Se envía cuando el cliente toca 'Confirmar pedido' pero su carrito "
+            "se vació o expiró. Invítalo a armar uno nuevo."
+        ),
+        cuando="Al tocar el botón Confirmar pedido sin carrito activo válido",
+        default="🤔 No encontré tu pedido. Vuelve a abrir el catálogo y arma tu pedido de nuevo 🌿",
+        placeholders=("negocio",),
+        placeholders_requeridos=(),
+        puede_desactivarse=False,
+    ),
+    "error.procesar_pedido_fallo": MensajeMeta(
+        key="error.procesar_pedido_fallo",
+        categoria="error",
+        titulo="No se pudo procesar el pedido (productos agotados)",
+        descripcion=(
+            "Se envía cuando el sistema no logra crear el pedido en la tienda. "
+            "Causa frecuente: stock agotado mientras el cliente armaba el carrito."
+        ),
+        cuando="Al fallar la creación del pedido en Shopify desde el catálogo nativo",
+        default=(
+            "😔 No pude procesar tu pedido. Algunos productos "
+            "pueden haberse agotado. ¿Quieres que lo revisemos juntos?"
+        ),
+        placeholders=("negocio",),
+        placeholders_requeridos=(),
+        puede_desactivarse=False,
+    ),
+    "error.productos_no_reconocidos": MensajeMeta(
+        key="error.productos_no_reconocidos",
+        categoria="error",
+        titulo="No se reconocieron los productos del pedido",
+        descripcion=(
+            "Se envía cuando los items del pedido no se pudieron mapear a "
+            "productos válidos del catálogo. Pide al cliente que aclare qué quiere."
+        ),
+        cuando="Al recibir un pedido del catálogo con productos que no coinciden",
+        default=(
+            "😔 No reconocí los productos de tu pedido. "
+            "¿Puedes escribirme qué quieres y te ayudo?"
+        ),
+        placeholders=("negocio",),
+        placeholders_requeridos=(),
+        puede_desactivarse=False,
+    ),
+    "error.excepcion_pedido": MensajeMeta(
+        key="error.excepcion_pedido",
+        categoria="error",
+        titulo="Error general procesando un pedido",
+        descripcion=(
+            "Mensaje genérico cuando ocurre un error inesperado procesando "
+            "el pedido del cliente. Invítalo a reintentar de forma conversacional."
+        ),
+        cuando="Al capturar una excepción inesperada en el flujo de pedido",
+        default=(
+            "😔 Tuve un problema procesando tu pedido. "
+            "¿Me puedes decir qué quieres y te ayudo enseguida?"
+        ),
+        placeholders=("negocio",),
+        placeholders_requeridos=(),
+        puede_desactivarse=False,
+    ),
+    "error.checkout_no_generado": MensajeMeta(
+        key="error.checkout_no_generado",
+        categoria="error",
+        titulo="No se pudo generar el pago",
+        descripcion=(
+            "Se envía cuando Andrea generó el pedido pero el checkout de "
+            "Shopify falló (por ejemplo, producto agotado entre tanto). "
+            "Invita al cliente a revisar el catálogo nuevamente."
+        ),
+        cuando="Cuando Andrea emite el pedido pero el checkout no se puede crear",
+        default=(
+            "😔 Disculpa, no pude generar tu pedido en este momento. "
+            "Es posible que algún producto del carrito se haya agotado "
+            "mientras conversábamos. ¿Quieres que revisemos juntos qué "
+            "hay disponible ahora?"
+        ),
+        placeholders=("negocio",),
+        placeholders_requeridos=(),
+        puede_desactivarse=False,
+    ),
     "cart.bienvenida_catalogo": MensajeMeta(
         key="cart.bienvenida_catalogo",
         categoria="cart",

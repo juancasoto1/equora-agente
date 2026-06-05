@@ -1615,10 +1615,10 @@ async def webhook_handler(request: Request):
                                 msg.telefono, f"{msg_checkout}\n\n👉 {checkout_url}"
                             )
                     else:
-                        await _proveedor_agente.enviar_mensaje(
-                            msg.telefono,
-                            "🤔 No encontré tu pedido. Vuelve a abrir el catálogo y arma tu pedido de nuevo 🌿"
-                        )
+                        _txt_no_enc = await obtener_mensaje(_agent_id, "error.checkout_no_encontrado")
+                        if _txt_no_enc:
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_no_enc)
+                            await guardar_mensaje(msg.telefono, "assistant", _txt_no_enc, agent_id=_agent_id)
                     continue
 
                 if accion == "act_vaciar_carrito":
@@ -2134,22 +2134,20 @@ async def webhook_handler(request: Request):
                                 except Exception as e:
                                     logger.warning(f"[caso-B] botones carrito fallaron: {e}")
                         else:
-                            _txt_err = ("😔 No pude procesar tu pedido. Algunos productos "
-                                       "pueden haberse agotado. ¿Quieres que lo revisemos juntos?")
-                            await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_err)
-                            await guardar_mensaje(msg.telefono, "assistant", _txt_err, agent_id=_agent_id)
+                            _txt_err = await obtener_mensaje(_agent_id, "error.procesar_pedido_fallo")
+                            if _txt_err:
+                                await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_err)
+                                await guardar_mensaje(msg.telefono, "assistant", _txt_err, agent_id=_agent_id)
                     else:
-                        _txt_err2 = ("😔 No reconocí los productos de tu pedido. "
-                                    "¿Puedes escribirme qué quieres y te ayudo?")
-                        await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_err2)
-                        await guardar_mensaje(msg.telefono, "assistant", _txt_err2, agent_id=_agent_id)
+                        _txt_err2 = await obtener_mensaje(_agent_id, "error.productos_no_reconocidos")
+                        if _txt_err2:
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_err2)
+                            await guardar_mensaje(msg.telefono, "assistant", _txt_err2, agent_id=_agent_id)
                 except Exception as e:
                     logger.error(f"Error procesando orden catálogo: {e}")
-                    await _proveedor_agente.enviar_mensaje(
-                        msg.telefono,
-                        "😔 Tuve un problema procesando tu pedido. "
-                        "¿Me puedes decir qué quieres y te ayudo enseguida?"
-                    )
+                    _txt_exc = await obtener_mensaje(_agent_id, "error.excepcion_pedido")
+                    if _txt_exc:
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_exc)
                 continue  # No pasa por Claude
 
             # Cliente respondió → resetea timers de seguimiento
@@ -2533,13 +2531,9 @@ async def webhook_handler(request: Request):
             # Si la creación del checkout falló (stock agotado, producto no
             # mapeado, etc.) avísale al cliente en vez de quedarnos mudos
             if checkout_fallo:
-                await _proveedor_agente.enviar_mensaje(
-                    msg.telefono,
-                    "😔 Disculpa, no pude generar tu pedido en este momento. "
-                    "Es posible que algún producto del carrito se haya agotado "
-                    "mientras conversábamos. ¿Quieres que revisemos juntos qué "
-                    "hay disponible ahora?"
-                )
+                _txt_chk_fail = await obtener_mensaje(_agent_id, "error.checkout_no_generado")
+                if _txt_chk_fail:
+                    await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_chk_fail)
 
             # Notificar al equipo si Andrea decidió escalar
             if datos_escalacion:
