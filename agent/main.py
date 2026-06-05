@@ -6502,23 +6502,51 @@ async def shopify_webhook(request: Request):
             tracking_num = f0.get("tracking_number") or ""
             tracking_url = f0.get("tracking_url") or ""
 
+        # Tracking opcional — se forma según lo que Shopify mande, se inyecta
+        # como placeholder {tracking} en el template configurable.
         extra_tracking = ""
         if tracking_num:
             extra_tracking = f"\n📦 Guía: *{tracking_num}*"
         if tracking_url:
             extra_tracking += f"\n🔗 Seguimiento: {tracking_url}"
 
-        mensaje = (
-            f"🚚 *¡Tu pedido está listo y va en camino!*\n\n"
-            f"Pedido *{nombre_orden}* preparado y despachado.{extra_tracking}\n\n"
-            f"Total del pedido: *${total_int:,}*. ¡Gracias por confiar en nosotros! 🌿"
+        # Resolver agent_id para leer el mensaje configurable del agente correcto.
+        # Si no se resolvió antes en este handler, lo hacemos ahora.
+        try:
+            _aid_shopify = agent_ids[0]  # ya resuelto arriba en orders/create|paid
+        except (NameError, IndexError):
+            _aids_tmp = await obtener_agent_ids_por_telefono(telefono)
+            _aid_shopify = _aids_tmp[0] if _aids_tmp else 1
+        from agent.mensajes import format_seguro as _fmt_shopify
+        _ctx_shopify = await construir_contexto_placeholders(_aid_shopify)
+        _ctx_shopify["numero_pedido"] = nombre_orden
+        _ctx_shopify["total"] = f"{total_int:,}"
+        _ctx_shopify["tracking"] = extra_tracking
+        mensaje = _fmt_shopify(
+            await obtener_mensaje(_aid_shopify, "shopify.order_fulfilled"),
+            _ctx_shopify,
         )
+        if not mensaje:
+            # Cliente desactivó este aviso desde el panel — no enviamos nada.
+            logger.info(f"[shopify-webhook] orders/fulfilled desactivado para agent={_aid_shopify} — saltando")
+            return {"status": "ok"}
     elif topic == "orders/paid":
-        mensaje = (
-            f"💰 *¡Pago registrado!*\n\n"
-            f"Pedido: *{nombre_orden}*  ·  Total: *${total_int:,}*\n\n"
-            f"Pronto sale en camino. ¡Gracias por confiar en nosotros! 🌿"
+        try:
+            _aid_shopify = agent_ids[0]
+        except (NameError, IndexError):
+            _aids_tmp = await obtener_agent_ids_por_telefono(telefono)
+            _aid_shopify = _aids_tmp[0] if _aids_tmp else 1
+        from agent.mensajes import format_seguro as _fmt_shopify
+        _ctx_shopify = await construir_contexto_placeholders(_aid_shopify)
+        _ctx_shopify["numero_pedido"] = nombre_orden
+        _ctx_shopify["total"] = f"{total_int:,}"
+        mensaje = _fmt_shopify(
+            await obtener_mensaje(_aid_shopify, "shopify.order_paid"),
+            _ctx_shopify,
         )
+        if not mensaje:
+            logger.info(f"[shopify-webhook] orders/paid desactivado para agent={_aid_shopify} — saltando")
+            return {"status": "ok"}
         # ── Promoción post-venta configurable por agente ──────────────────
         # Si el cliente está bajo un agent con promoción activa Y el subtotal
         # (sin envío) supera el umbral configurado, anexamos el código de
@@ -6579,13 +6607,23 @@ async def shopify_webhook(request: Request):
             )
             break  # ya enviamos para uno — no duplicar si está en varios agents
     else:
-        mensaje = (
-            f"✅ *¡Pedido confirmado!*\n\n"
-            f"🧾 Número de pedido: *{nombre_orden}*\n"
-            f"💰 Total: *${total_int:,}*\n\n"
-            f"Ya estamos preparando tu pedido. Te avisamos cuando vaya en camino. "
-            f"¡Gracias por confiar en nosotros! 🌿"
+        # orders/create (y cualquier otro topic no manejado explícitamente)
+        try:
+            _aid_shopify = agent_ids[0]
+        except (NameError, IndexError):
+            _aids_tmp = await obtener_agent_ids_por_telefono(telefono)
+            _aid_shopify = _aids_tmp[0] if _aids_tmp else 1
+        from agent.mensajes import format_seguro as _fmt_shopify
+        _ctx_shopify = await construir_contexto_placeholders(_aid_shopify)
+        _ctx_shopify["numero_pedido"] = nombre_orden
+        _ctx_shopify["total"] = f"{total_int:,}"
+        mensaje = _fmt_shopify(
+            await obtener_mensaje(_aid_shopify, "shopify.order_created"),
+            _ctx_shopify,
         )
+        if not mensaje:
+            logger.info(f"[shopify-webhook] orders/create desactivado para agent={_aid_shopify} — saltando")
+            return {"status": "ok"}
 
     try:
         await proveedor.enviar_mensaje(telefono, mensaje)

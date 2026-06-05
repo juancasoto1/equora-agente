@@ -211,6 +211,75 @@ MENSAJES: dict[str, MensajeMeta] = {
         placeholders_requeridos=(),
         puede_desactivarse=False,  # esencial — sin texto el botón CTA no se puede enviar
     ),
+    # ── Confirmaciones de Shopify (categoría "shopify") ──────────────────────
+    # Cada uno se envía al recibir el evento correspondiente del webhook.
+    # Los defaults son IDÉNTICOS a los strings que vivían hardcoded en el
+    # handler — comportamiento sin personalizar = comportamiento previo.
+    "shopify.order_created": MensajeMeta(
+        key="shopify.order_created",
+        categoria="shopify",
+        titulo="Confirmación cuando se crea el pedido",
+        descripcion=(
+            "Mensaje que se envía cuando Shopify registra que el pedido fue "
+            "creado (orders/create). Avísale al cliente que su pedido ya "
+            "está en proceso, con el número y el total."
+        ),
+        cuando="Apenas Shopify confirma que el pedido fue creado",
+        default=(
+            "✅ *¡Pedido confirmado!*\n\n"
+            "🧾 Número de pedido: *{numero_pedido}*\n"
+            "💰 Total: *${total}*\n\n"
+            "Ya estamos preparando tu pedido. Te avisamos cuando vaya en camino. "
+            "¡Gracias por confiar en nosotros! 🌿"
+        ),
+        placeholders=("numero_pedido", "total", "negocio"),
+        placeholders_requeridos=(),
+        puede_desactivarse=False,  # esencial: sin esto el cliente no sabe el estado del pedido
+    ),
+    "shopify.order_paid": MensajeMeta(
+        key="shopify.order_paid",
+        categoria="shopify",
+        titulo="Confirmación cuando se registra el pago",
+        descripcion=(
+            "Mensaje que se envía cuando Shopify registra el pago "
+            "(orders/paid). Si tienes promoción activa con código de descuento, "
+            "el bono se anexa automáticamente DESPUÉS de este mensaje "
+            "(cuando el subtotal supera el umbral configurado)."
+        ),
+        cuando="Cuando Shopify confirma que el pago se procesó",
+        default=(
+            "💰 *¡Pago registrado!*\n\n"
+            "Pedido: *{numero_pedido}*  ·  Total: *${total}*\n\n"
+            "Pronto sale en camino. ¡Gracias por confiar en nosotros! 🌿"
+        ),
+        placeholders=("numero_pedido", "total", "negocio"),
+        placeholders_requeridos=(),
+        puede_desactivarse=False,  # esencial: notificación del pago confirmado
+    ),
+    "shopify.order_fulfilled": MensajeMeta(
+        key="shopify.order_fulfilled",
+        categoria="shopify",
+        titulo="Aviso cuando el pedido va en camino",
+        descripcion=(
+            "Mensaje que se envía cuando Shopify marca el pedido como "
+            "despachado (orders/fulfilled). Si Shopify trae datos de guía "
+            "de envío, se anexan automáticamente con el placeholder {tracking} "
+            "— déjalo donde quieras que aparezcan."
+        ),
+        cuando="Cuando se marca el pedido como despachado en Shopify",
+        default=(
+            "🚚 *¡Tu pedido está listo y va en camino!*\n\n"
+            "Pedido *{numero_pedido}* preparado y despachado.{tracking}\n\n"
+            "Total del pedido: *${total}*. ¡Gracias por confiar en nosotros! 🌿"
+        ),
+        # {tracking} se forma en código: "" si no hay datos, o
+        # "\n📦 Guía: *<num>*\n🔗 Seguimiento: <url>" si los hay.
+        placeholders=("numero_pedido", "total", "tracking", "negocio"),
+        placeholders_requeridos=(),
+        # Sí desactivable: hay negocios que no quieren saturar con avisos de envío
+        # (especialmente si tienen tracking en email aparte). Pero ojo: si lo
+        # apagas, el cliente NO recibe aviso por WhatsApp del despacho.
+    ),
     "cart.bienvenida_catalogo": MensajeMeta(
         key="cart.bienvenida_catalogo",
         categoria="cart",
