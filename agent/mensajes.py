@@ -368,6 +368,42 @@ MENSAJES: dict[str, MensajeMeta] = {
         placeholders_requeridos=(),
         puede_desactivarse=False,
     ),
+    "cart.estado3_falta_minimo": MensajeMeta(
+        key="cart.estado3_falta_minimo",
+        categoria="cart",
+        titulo="Recordatorio cuando falta para el pedido mínimo",
+        descripcion=(
+            "Mensaje del seguimiento automático cuando el cliente tiene "
+            "productos en el carrito pero aún no alcanza tu pedido mínimo. "
+            "Si tu negocio no maneja pedido mínimo, puedes apagarlo."
+        ),
+        cuando="A los pocos minutos de que el cliente deja el carrito por debajo del mínimo",
+        default=(
+            "Hola 😊 Tienes ${total} en tu carrito, ¡casi llegas!\n\n"
+            "Te faltan *${falta}* para el pedido mínimo de *${minimo}*."
+        ),
+        placeholders=("total", "falta", "minimo", "negocio"),
+        placeholders_requeridos=(),
+        # Sí desactivable — algunos negocios no quieren insistir si no llega al mínimo
+    ),
+    "cart.estado4_timer": MensajeMeta(
+        key="cart.estado4_timer",
+        categoria="cart",
+        titulo="Recordatorio cuando el carrito ya alcanzó el mínimo (seguimiento)",
+        descripcion=(
+            "Recordatorio automático cuando el cliente tiene un carrito "
+            "que supera el pedido mínimo pero no lo confirmó. Es la oportunidad "
+            "de invitarlo a cerrar la compra o agregar más productos."
+        ),
+        cuando="Tras unos minutos de inactividad con un carrito sobre el mínimo",
+        default="🛒 Tienes *${total}* en tu carrito!\n\n¿Quieres agregar algo más o confirmar tu pedido?",
+        placeholders=(
+            "total", "minimo", "envio_gratis", "falta_envio_gratis",
+            "descuento_codigo", "descuento_pct", "descuento_umbral", "negocio",
+        ),
+        placeholders_requeridos=(),
+        # Sí desactivable — algunos negocios no quieren seguimiento automático
+    ),
     "cart.bienvenida_catalogo": MensajeMeta(
         key="cart.bienvenida_catalogo",
         categoria="cart",

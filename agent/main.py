@@ -505,17 +505,26 @@ async def _procesar_carrito_unificado():
         try:
             if total < PEDIDO_MINIMO:
                 # ── Estado 3: bajo el mínimo ──────────────────────────────
-                # Mostrar el catálogo nativo de WhatsApp con un texto que
-                # incentiva alcanzar el mínimo. Si product_list falla, NO
-                # mandamos nada (seguimiento automático = no spam tickets).
+                # Texto configurable por agente (puede apagarse si el negocio
+                # no maneja pedido mínimo). Si está desactivado, no enviamos
+                # nada — el cliente no es interrumpido.
                 falta = PEDIDO_MINIMO - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
                 sugeridos = _sugerir_productos(nombres_en_carrito)
                 lineas = "\n".join(f"✅ {s}" for s in sugeridos)
-                msg = (
-                    f"Hola 😊 Tienes ${total_fmt} en tu carrito, ¡casi llegas!\n\n"
-                    f"Te faltan *${falta_fmt}* para el pedido mínimo de *${minimo_fmt}*."
+                from agent.mensajes import format_seguro as _fmt_est3
+                _aid_est3 = await _resolver_agent_id_principal(telefono)
+                _ctx_est3 = await construir_contexto_placeholders(_aid_est3)
+                _ctx_est3["total"]  = total_fmt
+                _ctx_est3["falta"]  = falta_fmt
+                _ctx_est3["minimo"] = minimo_fmt
+                msg = _fmt_est3(
+                    await obtener_mensaje(_aid_est3, "cart.estado3_falta_minimo"),
+                    _ctx_est3,
                 )
+                if not msg:
+                    logger.info(f"[carrito-est3] {telefono} desactivado para agent={_aid_est3} — saltando")
+                    continue
                 if lineas:
                     msg += f"\n\nMuchos clientes agregan:\n{lineas}"
 
@@ -558,54 +567,30 @@ async def _procesar_carrito_unificado():
                         logger.warning(f"[carrito-est3] botones complementarios fallaron: {e}")
 
             elif total < umbral_gratis:
-                # ── Estado 4: sobre el mínimo, bajo envío gratis ──────────
+                # ── Estado 4 (timer seguimiento): sobre el mínimo, recordar ──
+                # Mensaje configurable por agente con placeholders dinámicos.
+                # Eliminamos las 3 ramas condicionales por ciudad — el cliente
+                # personaliza su template según su modelo de negocio (zonas,
+                # envío gratis, transportadora, etc.). El default es neutral
+                # equivalente al caso "sin ciudad confirmada" del código previo.
                 falta = umbral_gratis - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
-                costo_fmt_loc = f"{costo_envio_loc:,}".replace(",", ".") if costo_envio_loc else "0"
                 sugeridos = _sugerir_productos(nombres_en_carrito)
                 lineas = "\n".join(f"✅ {s}" for s in sugeridos)
-
-                # Detectar ciudad del cliente para mensaje correcto sobre envío
-                try:
-                    cli_seg = await obtener_cliente(telefono)
-                except Exception:
-                    cli_seg = None
-                ciudad_seg = (cli_seg.get("ciudad") if cli_seg else "") or ""
-                ciudad_seg = ciudad_seg.strip().lower()
-                ciudades_loc_raw_s = os.getenv("CIUDADES_ENVIO_PROPIO", "cali")
-                ciudades_loc_s = {
-                    c.strip().lower() for c in ciudades_loc_raw_s.split(",") if c.strip()
-                }
-                es_local_seg = ciudad_seg in ciudades_loc_s if ciudad_seg else None
-
-                if es_local_seg is True:
-                    msg = (
-                        f"🛒 Tienes *${total_fmt}* en tu carrito!\n\n"
-                        f"Agrega *${falta_fmt}* más y *el envío es gratis en Cali* 🚚🎉"
-                    )
-                    if lineas:
-                        msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
-                    msg += (
-                        f"\n\nO si prefieres, confirma tu pedido ahora "
-                        f"(más costos de envío) 👇"
-                    )
-                elif es_local_seg is False:
-                    msg = (
-                        f"🛒 Tienes *${total_fmt}* en tu carrito!\n\n"
-                        f"📦 Para tu ciudad el envío lo calcula la transportadora "
-                        f"según tu dirección. ¿Quieres agregar algo más?"
-                    )
-                    if lineas:
-                        msg += f"\n\nSugerencias:\n{lineas}"
-                    msg += "\n\nO si quieres confirmar tu pedido ahora (más costos de envío) 👇"
-                else:
-                    # Sin ciudad confirmada: mensaje neutro
-                    msg = (
-                        f"🛒 Tienes *${total_fmt}* en tu carrito!\n\n"
-                        f"¿Quieres agregar algo más o confirmar tu pedido?"
-                    )
-                    if lineas:
-                        msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
+                from agent.mensajes import format_seguro as _fmt_est4t
+                _aid_est4t = await _resolver_agent_id_principal(telefono)
+                _ctx_est4t = await construir_contexto_placeholders(_aid_est4t)
+                _ctx_est4t["total"] = total_fmt
+                _ctx_est4t["falta_envio_gratis"] = falta_fmt
+                msg = _fmt_est4t(
+                    await obtener_mensaje(_aid_est4t, "cart.estado4_timer"),
+                    _ctx_est4t,
+                )
+                if not msg:
+                    logger.info(f"[carrito-est4-timer] {telefono} desactivado para agent={_aid_est4t} — saltando")
+                    continue
+                if lineas:
+                    msg += f"\n\nMuchos clientes también llevan:\n{lineas}"
 
                 # Solo flujo nativo (validado al inicio del loop con flujo_wa).
                 # Estrategia con carrito determinístico:
