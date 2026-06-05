@@ -703,7 +703,19 @@ html.dark{
   height:56px;background:var(--voco-nav-bg);display:flex;align-items:center;
   padding:0 20px;gap:14px;flex-shrink:0;
   border-bottom:1px solid var(--voco-nav-border);
+  position:relative;  /* ancla del dropdown del selector de agente (#45) */
 }
+/* Item de la lista de agentes en el dropdown */
+.agent-opt{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;
+  cursor:pointer;transition:background .12s;color:var(--voco-text);font-size:.86rem}
+.agent-opt:hover{background:var(--voco-nav-bg-hover)}
+.agent-opt.active{background:var(--voco-nav-bg-active);font-weight:600}
+.agent-opt-ic{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;
+  justify-content:center;font-size:1rem;color:#fff;flex-shrink:0}
+.agent-opt-info{flex:1;min-width:0}
+.agent-opt-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent-opt-sub{font-size:.72rem;color:var(--voco-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.agent-opt-check{color:var(--voco-brand);flex-shrink:0}
 #topbar .logo{display:flex;align-items:center;gap:8px}
 #topbar .logo-ic{width:32px;height:32px;background:var(--voco-brand);border-radius:8px;
   display:flex;align-items:center;justify-content:center;font-size:1rem;color:#fff}
@@ -1610,10 +1622,22 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
   <!-- ── TOPBAR ── -->
   <div id="topbar">
-    <div class="logo">
-      <div class="logo-ic">🤖</div>
-      <span class="logo-txt">Andrea</span>
-      <span class="logo-sub">Equora Distribuciones</span>
+    <!-- Selector del agente activo (#45 multi-tenant).
+         Render dinámico vía inicializarSelectorAgente():
+         · Si el usuario tiene 1 agente: pill con avatar+nombre (sin dropdown).
+         · Si tiene >1 agentes: botón clickeable que abre dropdown.
+         Estado inicial: skeleton mientras carga la lista. -->
+    <div id="agent-selector" class="logo" style="cursor:default">
+      <div class="logo-ic" id="agent-emoji">🤖</div>
+      <span class="logo-txt" id="agent-name">Cargando…</span>
+      <span class="logo-sub" id="agent-business"></span>
+      <i id="agent-caret" data-lucide="chevron-down" style="width:14px;height:14px;display:none;color:var(--voco-text-muted);margin-left:2px"></i>
+    </div>
+    <!-- Dropdown (oculto por default; se abre al click si hay >1 agentes) -->
+    <div id="agent-dropdown" role="menu" aria-label="Cambiar agente"
+         style="display:none;position:absolute;top:50px;left:18px;background:var(--voco-card-bg);
+                border:1px solid var(--voco-border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);
+                min-width:260px;max-width:320px;z-index:1500;padding:6px;max-height:400px;overflow-y:auto">
     </div>
     <div class="topbar-spacer"></div>
     <button id="logout-top" onclick="location.href='/inbox/logout'">Salir →</button>
@@ -4187,6 +4211,152 @@ function showSec(id) {
 }
 
 /* ══════════════════════════════════════════════════════
+   #45 — Selector de agentes (multi-tenant)
+   ══════════════════════════════════════════════════════
+   El user puede tener acceso a 1 o más agentes (admins ven todos).
+   El selector vive en el topbar — si solo hay 1 agente muestra pill
+   sin dropdown; si hay >1 abre menú con switch.
+
+   La selección persiste en localStorage. Al cambiar:
+   1. Actualiza _escAgentId
+   2. Persiste en localStorage
+   3. Resetea _secCargadas (forza recarga de la sección visible)
+   4. Recarga las cargas globales (conversaciones, módulos, badges)
+
+   Defaults seguros: si el fetch falla, se queda con _escAgentId=1
+   (Equora legacy) y muestra fallback. */
+var _agentesAccesibles = [];
+var _agenteActivoInfo  = null;
+
+async function inicializarSelectorAgente() {
+  try {
+    var r = await fetch('/inbox/api/agents', {credentials:'include'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    _agentesAccesibles = d.agents || [];
+  } catch (e) {
+    console.warn('[agent-selector] fallback _escAgentId=1:', e.message);
+    _agentesAccesibles = [];
+  }
+  var stored = null;
+  try { stored = parseInt(localStorage.getItem('voco-agent-id') || '', 10); } catch(e) {}
+  var activo = null;
+  if (stored && _agentesAccesibles.some(function(a) { return a.id === stored; })) {
+    activo = _agentesAccesibles.find(function(a) { return a.id === stored; });
+  } else if (_agentesAccesibles.length) {
+    activo = _agentesAccesibles[0];
+  }
+  if (activo) {
+    _escAgentId = activo.id;
+    _agenteActivoInfo = activo;
+  } else {
+    _escAgentId = 1;
+    _agenteActivoInfo = null;
+  }
+  _renderSelectorAgente();
+}
+
+function _renderSelectorAgente() {
+  var emojiEl = document.getElementById('agent-emoji');
+  var nameEl  = document.getElementById('agent-name');
+  var subEl   = document.getElementById('agent-business');
+  var caretEl = document.getElementById('agent-caret');
+  var selEl   = document.getElementById('agent-selector');
+  if (!emojiEl || !nameEl || !selEl) return;
+  var a = _agenteActivoInfo;
+  if (!a) {
+    emojiEl.textContent = '🤖';
+    nameEl.textContent  = 'Agente';
+    if (subEl) subEl.textContent = '';
+    return;
+  }
+  emojiEl.textContent = a.emoji || '🤖';
+  if (a.color) emojiEl.style.background = a.color;
+  nameEl.textContent = a.agent_name || a.name || 'Agente';
+  if (subEl) subEl.textContent = a.name || '';
+  if (_agentesAccesibles.length > 1) {
+    selEl.style.cursor = 'pointer';
+    selEl.onclick = _toggleDropdownAgente;
+    if (caretEl) caretEl.style.display = 'inline';
+  } else {
+    selEl.style.cursor = 'default';
+    selEl.onclick = null;
+    if (caretEl) caretEl.style.display = 'none';
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function _toggleDropdownAgente(ev) {
+  if (ev) ev.stopPropagation();
+  var dd = document.getElementById('agent-dropdown');
+  if (!dd) return;
+  if (dd.style.display === 'block') { dd.style.display = 'none'; return; }
+  var html = '';
+  _agentesAccesibles.forEach(function(a) {
+    var activo = a.id === _escAgentId;
+    var color  = a.color || '#6366f1';
+    html += '<div class="agent-opt' + (activo ? ' active' : '') + '" role="menuitem" '
+      + 'onclick="cambiarAgenteActivo(' + a.id + ')">'
+      +   '<div class="agent-opt-ic" style="background:' + _msjEscapeHtml(color) + '">'
+      +     _msjEscapeHtml(a.emoji || '🤖')
+      +   '</div>'
+      +   '<div class="agent-opt-info">'
+      +     '<div class="agent-opt-name">' + _msjEscapeHtml(a.agent_name || a.name || 'Agente') + '</div>'
+      +     '<div class="agent-opt-sub">' + _msjEscapeHtml(a.name || '') + '</div>'
+      +   '</div>'
+      +   (activo ? '<i data-lucide="check" class="agent-opt-check" style="width:16px;height:16px"></i>' : '')
+      + '</div>';
+  });
+  dd.innerHTML = html;
+  dd.style.display = 'block';
+  if (window.lucide) window.lucide.createIcons();
+  setTimeout(function() {
+    document.addEventListener('click', _cerrarDropdownAgente, {once: true});
+  }, 0);
+}
+
+function _cerrarDropdownAgente(ev) {
+  var dd = document.getElementById('agent-dropdown');
+  if (dd && !dd.contains(ev.target)) dd.style.display = 'none';
+}
+
+async function cambiarAgenteActivo(nuevoId) {
+  if (nuevoId === _escAgentId) {
+    document.getElementById('agent-dropdown').style.display = 'none';
+    return;
+  }
+  var nuevo = _agentesAccesibles.find(function(a) { return a.id === nuevoId; });
+  if (!nuevo) return;
+  _escAgentId = nuevoId;
+  _agenteActivoInfo = nuevo;
+  try { localStorage.setItem('voco-agent-id', String(nuevoId)); } catch(e) {}
+  document.getElementById('agent-dropdown').style.display = 'none';
+  _renderSelectorAgente();
+  for (var k in _secCargadas) delete _secCargadas[k];
+  await cargarModulosAgente();
+  if (typeof loadConvs === 'function') loadConvs();
+  if (typeof _escActualizarBadges === 'function') _escActualizarBadges();
+  var sec = _secActual || 'conversaciones';
+  var loaders = {
+    difusiones:    function(){ if(typeof cargarTemplates==='function')cargarTemplates(); if(typeof cargarHistorialDif==='function')cargarHistorialDif(); },
+    plantillas:    function(){ if(typeof cargarTablaPlantillas==='function')cargarTablaPlantillas(); if(typeof actualizarSubcat==='function')actualizarSubcat(); },
+    metricas:      function(){ if(typeof cargarMetricas==='function')cargarMetricas(); },
+    clientes:      function(){ if(typeof cargarClientes==='function')cargarClientes(); },
+    configuracion: function(){ if(typeof cargarConfiguracion==='function')cargarConfiguracion(); if(typeof cargarEstadoSistema==='function')cargarEstadoSistema(); },
+    escalaciones:  function(){ if(typeof escCargarLista==='function')escCargarLista(); },
+  };
+  if (loaders[sec]) {
+    try { loaders[sec](); } catch(e) { console.warn('[agent-selector] recarga falló:', e); }
+    _secCargadas[sec] = true;
+  }
+  if (sec === 'configuracion') {
+    if (typeof cargarMensajes === 'function')  cargarMensajes();
+    if (typeof cargarPromocion === 'function') cargarPromocion();
+  }
+  console.info('[agent-selector] cambiado a agent_id=' + nuevoId + ' (' + nuevo.name + ')');
+}
+
+/* ══════════════════════════════════════════════════════
    #30 — Visibilidad condicional del sidebar por módulos
    ══════════════════════════════════════════════════════
    Cada entrada del nav-item que pertenece a un módulo opcional lleva el
@@ -4893,10 +5063,13 @@ async function enviarPlantilla() {
 loadConvs();
 _convTimer = setInterval(loadConvs, 8000);
 
-/* #30 — Carga inicial de módulos del agente activo. Ejecuta una sola vez
-   al arrancar el panel. Cuando se agregue el selector de agentes (#45),
-   esta función deberá re-ejecutarse al cambiar de agente. */
-cargarModulosAgente();
+/* #45 — Selector de agentes (multi-tenant). Resuelve el agente activo
+   leyendo localStorage o el primero accesible. Se ejecuta antes que
+   cargarModulosAgente() porque _escAgentId debe estar resuelto primero. */
+(async function() {
+  await inicializarSelectorAgente();
+  await cargarModulosAgente();
+})();
 
 
 /* ══════════════════════════════════════════════════════
