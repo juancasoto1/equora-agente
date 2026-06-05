@@ -189,6 +189,37 @@ async def _resolver_agent_id_principal(telefono: str) -> int:
     aids = await obtener_agent_ids_por_telefono(telefono)
     return aids[0] if aids else 1
 
+
+async def _total_carrito_fmt(telefono: str, agent_id: int) -> str:
+    """Suma los subtotales del carrito_activo del cliente y devuelve string
+    formateado tipo COP ('45.700'), o vacío si no hay carrito.
+
+    Útil para inyectar {total} en el contexto de mensajes que se envían
+    desde handlers de botón (donde no tenemos el total dinámico calculado
+    de antemano como sí lo tenemos en los Estados 4/5 del flujo principal).
+    """
+    try:
+        from agent.memory import obtener_carrito_activo
+        items = await obtener_carrito_activo(telefono, agent_id=agent_id)
+    except Exception:
+        return ""
+    if not items:
+        return ""
+    total = 0
+    for it in items:
+        sub = it.get("subtotal")
+        if sub is None:
+            qty = int(it.get("cantidad", it.get("quantity", 1)) or 1)
+            pu  = int(it.get("precio_unitario", 0) or 0)
+            sub = qty * pu
+        try:
+            total += int(sub)
+        except (TypeError, ValueError):
+            pass
+    if total <= 0:
+        return ""
+    return f"{total:,}".replace(",", ".")
+
 # ── Cross-selling desde mini-tienda ─────────────────────────────────────────
 # Las tarifas se cargan desde Shopify Admin API al arrancar (lifespan).
 # Acceder siempre via obtener_umbral_envio_gratis() y obtener_costo_envio()
@@ -1561,9 +1592,13 @@ async def webhook_handler(request: Request):
                     if checkout_url:
                         # Mensaje y label del botón configurables por agente
                         # (#28 fase 2.6). El cliente personaliza en
-                        # Configuración → Mensajes → "Carrito y checkout".
+                        # Configuración → Mensajes → "Flujo de compra".
                         from agent.mensajes import format_seguro
                         _ctx_ph = await construir_contexto_placeholders(_agent_id)
+                        # Inyectar {total} desde el carrito_activo actual
+                        # (sin esto, el placeholder queda vacío y se muestra
+                        # "Tu pedido está listo por valor de $").
+                        _ctx_ph["total"] = await _total_carrito_fmt(msg.telefono, _agent_id)
                         msg_checkout = format_seguro(
                             await obtener_mensaje(_agent_id, "cart.checkout_listo_texto"),
                             _ctx_ph,
@@ -2474,6 +2509,9 @@ async def webhook_handler(request: Request):
                 # Mensaje y label del botón configurables por agente (#28 fase 2.6)
                 from agent.mensajes import format_seguro
                 _ctx_ph = await construir_contexto_placeholders(_agent_id)
+                # Inyectar {total} — primero intentamos del carrito_activo
+                # (autoridad de la verdad). Si está vacío, fallback a 0.
+                _ctx_ph["total"] = await _total_carrito_fmt(msg.telefono, _agent_id)
                 texto_checkout = format_seguro(
                     await obtener_mensaje(_agent_id, "cart.checkout_listo_texto"),
                     _ctx_ph,
