@@ -67,6 +67,16 @@ class Agent(Base):
     # (todos OFF para agentes existentes). Ver get_modules() / set_modules() abajo.
     modules_json: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
+    # Promoción post-venta: código de descuento que se envía al cliente
+    # tras confirmar el pago (webhook orders/paid de Shopify) si el subtotal
+    # (SIN envío) supera el umbral. Configurable 100% desde el panel Voco —
+    # nada hardcoded por agente. Default: desactivado.
+    descuento_activo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    descuento_umbral: Mapped[int] = mapped_column(Integer, default=0, nullable=False)      # COP, subtotal sin envío
+    descuento_codigo: Mapped[str] = mapped_column(String(50), default="", nullable=False)  # Ej: GRACIAS5
+    descuento_pct: Mapped[int] = mapped_column(Integer, default=0, nullable=False)         # 1-100
+    descuento_mensaje: Mapped[str] = mapped_column(Text, default="", nullable=False)       # Template con {codigo} {pct} {umbral}
+
 
 class Mensaje(Base):
     __tablename__ = "mensajes"
@@ -318,6 +328,14 @@ async def inicializar_db():
             # ─── Sprint A — Pipeline + Soporte ─────────────────────────
             # Agregar modules_json al Agent (default empty = todos OFF)
             "ALTER TABLE agents ADD COLUMN IF NOT EXISTS modules_json TEXT DEFAULT ''",
+            # ─── Promoción post-venta configurable por agente ──────────
+            # Default: desactivado para todos los agents existentes.
+            # Cero hardcodes — cada cliente SaaS configura desde el panel.
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_activo BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_umbral INTEGER DEFAULT 0",
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_codigo VARCHAR(50) DEFAULT ''",
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_pct INTEGER DEFAULT 0",
+            "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_mensaje TEXT DEFAULT ''",
             # Índices para las nuevas tablas (create_all ya las creó si no existían)
             "CREATE INDEX IF NOT EXISTS ix_pipelines_agent       ON pipelines           (agent_id)",
             "CREATE INDEX IF NOT EXISTS ix_deals_agent           ON deals               (agent_id)",
@@ -2060,6 +2078,113 @@ async def actualizar_agente(agent_id: int, **kwargs) -> bool:
                 setattr(agente, campo, valor)
         await session.commit()
         return True
+
+
+# ── Promoción post-venta configurable por agente ─────────────────────────────
+# Subsystem aislado para encapsular validación. NO se expone vía actualizar_agente()
+# para que un cambio accidental en otro endpoint no rompa promociones activas.
+
+DESCUENTO_MENSAJE_DEFAULT = (
+    "🎁 Como agradecimiento, en tu próxima compra usa el código *{codigo}* "
+    "y obtén *{pct}% de descuento* 😊"
+)
+
+
+async def obtener_descuento_promo(agent_id: int) -> dict | None:
+    """Devuelve la config de promoción activa del agente, o None si no aplica.
+
+    None significa: NO enviar mensaje de descuento. Esto ocurre cuando:
+      - El agente no existe
+      - descuento_activo = False
+      - Falta alguno de los campos críticos (codigo vacío, umbral <= 0, pct <= 0)
+
+    El caller debe interpretar None como "no hacer nada" (no enviar mensaje).
+    """
+    async with async_session() as session:
+        result = await session.execute(select(Agent).where(Agent.id == agent_id))
+        agente = result.scalar_one_or_none()
+        if not agente or not agente.descuento_activo:
+            return None
+        codigo = (agente.descuento_codigo or "").strip()
+        umbral = int(agente.descuento_umbral or 0)
+        pct    = int(agente.descuento_pct or 0)
+        # Validación defensiva — si la config quedó incompleta por algún edge case,
+        # NO enviamos nada (mejor silencio que mensaje roto al cliente).
+        if not codigo or umbral <= 0 or pct <= 0 or pct > 100:
+            return None
+        mensaje = (agente.descuento_mensaje or "").strip() or DESCUENTO_MENSAJE_DEFAULT
+        return {
+            "umbral":  umbral,
+            "codigo":  codigo,
+            "pct":     pct,
+            "mensaje": mensaje,
+        }
+
+
+async def guardar_descuento_promo(
+    agent_id: int,
+    activo: bool,
+    umbral: int = 0,
+    codigo: str = "",
+    pct: int = 0,
+    mensaje: str = "",
+) -> tuple[bool, str]:
+    """Guarda la configuración de promoción del agente.
+
+    Retorna (ok, mensaje_error). Si ok=False, no se guardó nada y mensaje_error
+    explica el problema. Validaciones:
+      - Si activo=True: umbral >= 1000, codigo no vacío y solo [A-Z0-9_-], pct 1-100
+      - Si activo=False: se permite guardar los otros campos (para preservar lo
+        que el cliente ya tenía configurado y poder reactivar luego)
+
+    El template del mensaje puede usar {codigo}, {pct} y {umbral} como placeholders.
+    """
+    import re as _re
+
+    if activo:
+        if umbral < 1000:
+            return False, "El umbral debe ser al menos $1.000"
+        if not codigo or not _re.match(r"^[A-Z0-9_-]{2,30}$", codigo):
+            return False, "El código debe tener entre 2 y 30 caracteres y solo letras MAYÚSCULAS, números, guion o guion bajo"
+        if pct < 1 or pct > 100:
+            return False, "El porcentaje debe estar entre 1 y 100"
+        # Mensaje vacío usa default; si viene, debe contener al menos {codigo}
+        if mensaje and "{codigo}" not in mensaje:
+            return False, "El mensaje debe incluir el placeholder {codigo} para que el cliente vea el código"
+
+    async with async_session() as session:
+        result = await session.execute(select(Agent).where(Agent.id == agent_id))
+        agente = result.scalar_one_or_none()
+        if not agente:
+            return False, "Agente no encontrado"
+        agente.descuento_activo  = bool(activo)
+        agente.descuento_umbral  = int(umbral or 0)
+        agente.descuento_codigo  = (codigo or "").strip().upper()
+        agente.descuento_pct     = int(pct or 0)
+        agente.descuento_mensaje = (mensaje or "").strip()
+        await session.commit()
+        return True, ""
+
+
+async def obtener_descuento_promo_config(agent_id: int) -> dict:
+    """Devuelve los valores actuales del agente para mostrar en el panel.
+
+    A diferencia de obtener_descuento_promo() que retorna None cuando no aplica,
+    esta función SIEMPRE devuelve un dict con los campos (vacíos si no se ha
+    configurado) — la UI necesita mostrar el form aunque esté desactivado.
+    """
+    async with async_session() as session:
+        result = await session.execute(select(Agent).where(Agent.id == agent_id))
+        agente = result.scalar_one_or_none()
+        if not agente:
+            return {"activo": False, "umbral": 0, "codigo": "", "pct": 0, "mensaje": ""}
+        return {
+            "activo":  bool(agente.descuento_activo),
+            "umbral":  int(agente.descuento_umbral or 0),
+            "codigo":  agente.descuento_codigo or "",
+            "pct":     int(agente.descuento_pct or 0),
+            "mensaje": agente.descuento_mensaje or "",
+        }
 
 
 # ── Usuario / Sesiones (Sprint 1 — SaaS multi-tenant) ───────────────────────
