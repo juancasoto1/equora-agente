@@ -25,7 +25,7 @@ from agent.markers import MarkerContext, aplicar_marcadores  # noqa: F401  # reg
 from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial,
     guardar_cliente, obtener_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
-    obtener_agent_ids_por_telefono,
+    obtener_agent_ids_por_telefono, obtener_descuento_promo,
     guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
     carrito_es_fresco_para_merge,
     puede_enviar_checkout_abandono, marcar_checkout_abandono_enviado,
@@ -6267,6 +6267,65 @@ async def shopify_webhook(request: Request):
             f"Pedido: *{nombre_orden}*  ·  Total: *${total_int:,}*\n\n"
             f"Pronto sale en camino. ¡Gracias por confiar en nosotros! 🌿"
         )
+        # ── Promoción post-venta configurable por agente ──────────────────
+        # Si el cliente está bajo un agent con promoción activa Y el subtotal
+        # (sin envío) supera el umbral configurado, anexamos el código de
+        # descuento. CERO defaults — si el agent no lo configuró en el panel,
+        # no enviamos nada. Multi-tenant: cada agent tiene su propia promo.
+        subtotal_raw = (
+            payload.get("subtotal_price")
+            or payload.get("current_subtotal_price")
+            or total  # fallback solo si Shopify no expone subtotal
+        )
+        try:
+            subtotal_int = int(float(subtotal_raw))
+        except Exception:
+            subtotal_int = total_int
+
+        # Reutilizamos los agent_ids ya resueltos arriba para limpieza de
+        # carrito — evitamos otro round-trip a BD. Si por alguna razón no
+        # se resolvieron, los buscamos ahora.
+        try:
+            promo_agent_ids = agent_ids  # se resolvió antes en este mismo handler
+        except NameError:
+            promo_agent_ids = await obtener_agent_ids_por_telefono(telefono)
+
+        for aid in promo_agent_ids:
+            try:
+                promo = await obtener_descuento_promo(aid)
+            except Exception as e:
+                logger.error(f"[descuento] error leyendo promo agent={aid}: {e}")
+                continue
+            if not promo:
+                continue  # agent sin promo activa o config inválida
+            if subtotal_int < promo["umbral"]:
+                logger.info(
+                    f"[descuento] {telefono} (agent={aid}) subtotal ${subtotal_int:,} "
+                    f"< umbral ${promo['umbral']:,} → no enviar"
+                )
+                continue
+            # Sustituir placeholders del template del cliente
+            try:
+                anuncio = promo["mensaje"].format(
+                    codigo=promo["codigo"],
+                    pct=promo["pct"],
+                    umbral=f"{promo['umbral']:,}".replace(",", "."),
+                )
+            except (KeyError, IndexError) as e:
+                logger.error(
+                    f"[descuento] template inválido para agent={aid}: {e} — "
+                    f"usando default"
+                )
+                anuncio = (
+                    f"🎁 Como agradecimiento, usa el código *{promo['codigo']}* "
+                    f"en tu próxima compra y obtén *{promo['pct']}% de descuento* 😊"
+                )
+            mensaje += f"\n\n{anuncio}"
+            logger.info(
+                f"[descuento] {telefono} (agent={aid}) subtotal ${subtotal_int:,} "
+                f">= ${promo['umbral']:,} → enviado código {promo['codigo']}"
+            )
+            break  # ya enviamos para uno — no duplicar si está en varios agents
     else:
         mensaje = (
             f"✅ *¡Pedido confirmado!*\n\n"
