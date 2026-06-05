@@ -1647,6 +1647,15 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
            onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')">
         <span class="ni" aria-hidden="true"><i data-lucide="bar-chart-3" style="width:16px;height:16px;vertical-align:-3px"></i></span> Métricas
       </div>
+      <!-- Entradas condicionales por módulo (#30). Marcadas con data-module="X";
+           el JS aplicarVisibilidadModulos() las muestra/oculta según
+           Agent.modules_json. Por default OFF para no romper UX de agentes
+           que no usan estas features. -->
+      <div class="nav-item" role="button" tabindex="0" data-sec="pipeline" data-module="pipeline"
+           style="display:none"
+           onclick="showSec('pipeline')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('pipeline')">
+        <span class="ni" aria-hidden="true"><i data-lucide="trending-up" style="width:16px;height:16px;vertical-align:-3px"></i></span> Pipeline
+      </div>
       <div class="nav-item" role="button" tabindex="0" data-sec="escalaciones"
            onclick="showSec('escalaciones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('escalaciones')">
         <span class="ni" aria-hidden="true"><i data-lucide="alert-circle" style="width:16px;height:16px;vertical-align:-3px"></i></span> Escalaciones
@@ -2947,6 +2956,37 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       </div><!-- /sec-escalaciones -->
 
       <!-- ═══════════════════════════════════════
+           SECCIÓN: PIPELINE (#30 — módulo opcional)
+           Solo se muestra cuando Agent.modules_json.pipeline=true.
+           El nav-item correspondiente está oculto por default; el JS
+           aplicarVisibilidadModulos() lo activa al iniciar el panel.
+           ═══════════════════════════════════════ -->
+      <div class="sec sec-light" id="sec-pipeline">
+        <div class="sec-hdr">
+          <div>
+            <h1 style="display:flex;align-items:center;gap:10px">
+              <i data-lucide="trending-up" style="width:22px;height:22px"></i> Pipeline de ventas
+            </h1>
+            <p style="margin:6px 0 0;color:var(--voco-text-muted);font-size:.86rem">
+              Gestiona deals, etapas y kanban para calificar leads y mover oportunidades.
+            </p>
+          </div>
+        </div>
+        <div style="padding:60px 24px;text-align:center;color:var(--voco-text-muted)">
+          <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:18px;background:var(--voco-content-bg-alt);margin-bottom:16px">
+            <i data-lucide="construction" style="width:32px;height:32px;color:var(--voco-brand)"></i>
+          </div>
+          <h2 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem;font-weight:700">Módulo en construcción</h2>
+          <p style="margin:0 auto;max-width:420px;font-size:.86rem;line-height:1.55">
+            La interfaz del pipeline (kanban, deals, etapas) llegará en una próxima
+            entrega. El backend ya está listo: tablas <code>pipelines</code>, <code>deals</code>
+            y <code>deal_activities</code> existen en la BD y son accesibles desde marcadores
+            del LLM como <code>[[STAGE:]]</code>, <code>[[DEAL:]]</code>.
+          </p>
+        </div>
+      </div><!-- /sec-pipeline -->
+
+      <!-- ═══════════════════════════════════════
            SECCIÓN: CONFIGURACIÓN
            ═══════════════════════════════════════ -->
       <div class="sec sec-light" id="sec-configuracion">
@@ -4114,12 +4154,23 @@ var _secCargadas = {};
 
 function showSec(id) {
   if (_secActual === id) return;
+  // Bloquear navegación a secciones de módulos desactivados — defensa.
+  // Si el módulo está OFF pero el usuario llega por hash (deep-link), no
+  // mostramos la sección y volvemos a Conversaciones.
+  var ni = document.querySelector('.nav-item[data-sec="' + id + '"]');
+  if (ni) {
+    var mod = ni.getAttribute('data-module');
+    if (mod && !_modulosActivos[mod]) {
+      console.warn('[modules] sección "' + id + '" bloqueada — módulo "' + mod + '" inactivo');
+      id = 'conversaciones';
+    }
+  }
   document.querySelectorAll('.sec').forEach(function(s) { s.classList.remove('active'); });
   document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
   var sec = document.getElementById('sec-' + id);
   if (sec) sec.classList.add('active');
-  var ni = document.querySelector('.nav-item[data-sec="' + id + '"]');
-  if (ni) ni.classList.add('active');
+  var niActivo = document.querySelector('.nav-item[data-sec="' + id + '"]');
+  if (niActivo) niActivo.classList.add('active');
   _secActual = id;
   // Cargar datos de la sección si es la primera vez
   if (!_secCargadas[id]) {
@@ -4133,6 +4184,42 @@ function showSec(id) {
   }
   // Reflejar sección en el hash de la URL para deep-linking
   try { history.replaceState(null, '', '#' + id); } catch(e) {}
+}
+
+/* ══════════════════════════════════════════════════════
+   #30 — Visibilidad condicional del sidebar por módulos
+   ══════════════════════════════════════════════════════
+   Cada entrada del nav-item que pertenece a un módulo opcional lleva el
+   atributo data-module="X" (ej. pipeline, calendly, sendgrid). La función
+   aplicarVisibilidadModulos() consulta Agent.modules_json del agente
+   activo y muestra/oculta las entradas correspondientes.
+
+   Defaults seguros: si el agente no tiene modules_json o falla el fetch,
+   todos los módulos quedan OFF — el sidebar conserva sus 7 entradas core.
+   Esto garantiza que agentes que no usan estas features (como Equora hoy)
+   tengan una UX limpia sin opciones que no entienden. */
+var _modulosActivos = {};  // { pipeline: true, calendly: false, ... }
+
+async function cargarModulosAgente() {
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/agents/' + ag + '/modules', {credentials:'include'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    _modulosActivos = d.modules || {};
+  } catch (e) {
+    console.warn('[modules] no pude cargar módulos — defaults OFF:', e.message);
+    _modulosActivos = {};
+  }
+  aplicarVisibilidadModulos();
+}
+
+function aplicarVisibilidadModulos() {
+  document.querySelectorAll('[data-module]').forEach(function(el) {
+    var mod = el.getAttribute('data-module');
+    var activo = !!_modulosActivos[mod];
+    el.style.display = activo ? '' : 'none';
+  });
 }
 
 /* ══════════════════════════════════════════════════════
@@ -4805,6 +4892,11 @@ async function enviarPlantilla() {
 /* ── INIT conversaciones ── */
 loadConvs();
 _convTimer = setInterval(loadConvs, 8000);
+
+/* #30 — Carga inicial de módulos del agente activo. Ejecuta una sola vez
+   al arrancar el panel. Cuando se agregue el selector de agentes (#45),
+   esta función deberá re-ejecutarse al cambiar de agente. */
+cargarModulosAgente();
 
 
 /* ══════════════════════════════════════════════════════
