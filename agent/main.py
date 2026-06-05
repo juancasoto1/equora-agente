@@ -3047,6 +3047,103 @@ async def api_obtener_descuento(
     return JSONResponse(content=config)
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# #28 — Mensajes del sistema configurables por agente
+# ──────────────────────────────────────────────────────────────────────────────
+@app.get("/inbox/api/agents/{agent_id_param}/mensajes")
+async def api_listar_mensajes(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Devuelve el catálogo COMPLETO de mensajes con el valor actual de cada
+    uno y la metadata para que la UI lo pueda renderizar agrupado por
+    categoría sin hacer queries adicionales.
+
+    Response shape:
+      {
+        "categorias": {<slug>: {<label>, <descripcion>, <orden>}, ...},
+        "mensajes":   [{<key>, <categoria>, <titulo>, <descripcion>, <cuando>,
+                        <default>, <placeholders>, <content>, <personalizado>,
+                        <updated_at>}, ...]
+      }
+    """
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if not await _verificar_acceso_agente(user, agent_id_param):
+        raise HTTPException(status_code=403, detail="Sin acceso a este agente")
+    from agent.memory import listar_mensajes_agente
+    from agent.mensajes import CATEGORIAS
+    mensajes = await listar_mensajes_agente(agent_id_param)
+    return JSONResponse(content={
+        "categorias": CATEGORIAS,
+        "mensajes":   mensajes,
+    })
+
+
+@app.put("/inbox/api/agents/{agent_id_param}/mensajes/{key}")
+async def api_guardar_mensaje(
+    agent_id_param: int,
+    key: str,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Guarda el override del mensaje. Body: {"content": "..."}.
+
+    Validaciones en memory.guardar_mensaje_agente: key del catálogo,
+    no vacío, <=4000 chars, placeholders requeridos presentes.
+    """
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if not await _verificar_acceso_agente(user, agent_id_param):
+        raise HTTPException(status_code=403, detail="Sin acceso a este agente")
+    from agent.memory import guardar_mensaje_agente
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "JSON inválido"})
+    content = str(body.get("content") or "")
+    ok, error = await guardar_mensaje_agente(agent_id_param, key, content)
+    if not ok:
+        return JSONResponse(status_code=400, content={"ok": False, "error": error})
+    logger.info(
+        f"[mensajes] agent_id={agent_id_param} actualizó {key!r} "
+        f"({len(content)} chars) — user={user.get('id')}"
+    )
+    return JSONResponse(content={"ok": True})
+
+
+@app.delete("/inbox/api/agents/{agent_id_param}/mensajes/{key}")
+async def api_restaurar_mensaje(
+    agent_id_param: int,
+    key: str,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Restaura el mensaje al default — borra el override del agente.
+
+    Idempotente: si no había override, devuelve ok=true sin cambios.
+    """
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if not await _verificar_acceso_agente(user, agent_id_param):
+        raise HTTPException(status_code=403, detail="Sin acceso a este agente")
+    from agent.memory import restaurar_mensaje_agente
+    existia = await restaurar_mensaje_agente(agent_id_param, key)
+    logger.info(
+        f"[mensajes] agent_id={agent_id_param} restauró {key!r} "
+        f"(habia_override={existia}) — user={user.get('id')}"
+    )
+    return JSONResponse(content={"ok": True, "habia_override": existia})
+
+
 @app.put("/inbox/api/agents/{agent_id_param}/descuento")
 async def api_guardar_descuento(
     agent_id_param: int,
