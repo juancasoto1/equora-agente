@@ -124,6 +124,22 @@ CAMPOS_CLIENTE = (
 )
 
 
+class AgentMessage(Base):
+    """Override de un mensaje del sistema por agente.
+
+    Si no hay row para (agent_id, key), se usa el default declarado en
+    agent/mensajes.py:MENSAJES. Si hay row, su `content` reemplaza al default.
+    Borrar la row equivale a restaurar el default.
+    """
+    __tablename__ = "agent_messages"
+    __table_args__ = (PrimaryKeyConstraint("agent_id", "key"),)
+
+    agent_id:   Mapped[int] = mapped_column(Integer)
+    key:        Mapped[str] = mapped_column(String(80))          # ej. "system.followup"
+    content:    Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class PlantillaBorrador(Base):
     """Borradores de plantillas guardados localmente antes de enviar a Meta."""
     __tablename__ = "plantillas_borradores"
@@ -336,6 +352,10 @@ async def inicializar_db():
             "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_codigo VARCHAR(50) DEFAULT ''",
             "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_pct INTEGER DEFAULT 0",
             "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_mensaje TEXT DEFAULT ''",
+            # ─── #28 — Mensajes del sistema configurables por agente ───
+            # La tabla agent_messages la crea Base.metadata.create_all.
+            # Solo agregamos índice por agent_id para listados rápidos.
+            "CREATE INDEX IF NOT EXISTS ix_agent_messages_agent ON agent_messages (agent_id)",
             # Índices para las nuevas tablas (create_all ya las creó si no existían)
             "CREATE INDEX IF NOT EXISTS ix_pipelines_agent       ON pipelines           (agent_id)",
             "CREATE INDEX IF NOT EXISTS ix_deals_agent           ON deals               (agent_id)",
@@ -2185,6 +2205,152 @@ async def obtener_descuento_promo_config(agent_id: int) -> dict:
             "pct":     int(agente.descuento_pct or 0),
             "mensaje": agente.descuento_mensaje or "",
         }
+
+
+# ── Mensajes del sistema configurables por agente (#28) ─────────────────────
+# Cada mensaje tiene un default en agent/mensajes.py:MENSAJES. Si el agente lo
+# personalizó, su override vive en la tabla agent_messages. La función
+# obtener_mensaje() resuelve esto transparentemente — el código que envía
+# mensajes no necesita saber si hay override o no.
+
+async def obtener_mensaje(agent_id: int, key: str) -> str:
+    """Devuelve el texto del mensaje para ese agente.
+
+    Resolución:
+      1. Si el agente tiene override en agent_messages → usar ese
+      2. Si no, usar el default declarado en agent/mensajes.py:MENSAJES
+      3. Si la key no existe en el catálogo, devolver string vacío
+         (el caller debe manejar este caso — significa bug en código)
+    """
+    from agent.mensajes import obtener_default, obtener_meta
+    if not obtener_meta(key):
+        # Key desconocida — log defensivo, el caller debe revisar su código
+        import logging
+        logging.getLogger("agentkit").error(
+            f"[mensajes] key desconocida solicitada: {key!r} (agent_id={agent_id})"
+        )
+        return ""
+    async with async_session() as session:
+        result = await session.execute(
+            select(AgentMessage).where(
+                AgentMessage.agent_id == agent_id,
+                AgentMessage.key == key,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row and row.content:
+            return row.content
+    # Fallback al default
+    return obtener_default(key)
+
+
+async def guardar_mensaje_agente(
+    agent_id: int, key: str, content: str,
+) -> tuple[bool, str]:
+    """Guarda el override del mensaje para ese agente.
+
+    Validaciones:
+      - La key debe existir en el catálogo
+      - El contenido no puede ser vacío (para eso usar restaurar_mensaje_agente)
+      - Longitud máxima 4000 chars (límite WhatsApp con margen)
+      - Si el catálogo declara placeholders, todos deben estar presentes en
+        el override (la lógica del backend depende de ellos)
+
+    Retorna (ok, mensaje_error).
+    """
+    from agent.mensajes import obtener_meta
+    meta = obtener_meta(key)
+    if not meta:
+        return False, f"Mensaje desconocido: {key}"
+    content = (content or "").strip()
+    if not content:
+        return False, "El mensaje no puede estar vacío. Para volver al default usa el botón 'Restaurar'."
+    if len(content) > 4000:
+        return False, f"El mensaje es muy largo ({len(content)} caracteres). Máximo 4000."
+    # Validar que todos los placeholders requeridos estén presentes
+    faltantes = [
+        f"{{{p}}}" for p in meta.placeholders if f"{{{p}}}" not in content
+    ]
+    if faltantes:
+        return False, (
+            "Faltan placeholders obligatorios para este mensaje: "
+            + ", ".join(faltantes)
+            + ". Cópialos tal cual al texto donde quieras que aparezca el valor."
+        )
+    async with async_session() as session:
+        result = await session.execute(
+            select(AgentMessage).where(
+                AgentMessage.agent_id == agent_id,
+                AgentMessage.key == key,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.content = content
+            row.updated_at = datetime.utcnow()
+        else:
+            session.add(AgentMessage(
+                agent_id=agent_id, key=key,
+                content=content, updated_at=datetime.utcnow(),
+            ))
+        await session.commit()
+        return True, ""
+
+
+async def restaurar_mensaje_agente(agent_id: int, key: str) -> bool:
+    """Borra el override del mensaje — vuelve a usar el default.
+
+    Retorna True si existía y se borró, False si no había override (no error,
+    simplemente ya estaba en default).
+    """
+    async with async_session() as session:
+        result = await session.execute(
+            select(AgentMessage).where(
+                AgentMessage.agent_id == agent_id,
+                AgentMessage.key == key,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            return False
+        await session.delete(row)
+        await session.commit()
+        return True
+
+
+async def listar_mensajes_agente(agent_id: int) -> list[dict]:
+    """Devuelve la lista completa del catálogo con el valor actual de cada uno.
+
+    Para cada mensaje del catálogo:
+      - Si el agente tiene override → content = override, personalizado = True
+      - Si no → content = default, personalizado = False
+
+    Incluye toda la metadata (categoría, descripción, placeholders) para que
+    la UI no tenga que cruzar con otro endpoint.
+    """
+    from agent.mensajes import MENSAJES
+    # Una sola query para los overrides de ese agente
+    async with async_session() as session:
+        result = await session.execute(
+            select(AgentMessage).where(AgentMessage.agent_id == agent_id)
+        )
+        overrides = {row.key: row for row in result.scalars().all()}
+    items: list[dict] = []
+    for key, meta in MENSAJES.items():
+        override = overrides.get(key)
+        items.append({
+            "key":            meta.key,
+            "categoria":      meta.categoria,
+            "titulo":         meta.titulo,
+            "descripcion":    meta.descripcion,
+            "cuando":         meta.cuando,
+            "default":        meta.default,
+            "placeholders":   list(meta.placeholders),
+            "content":        override.content if override else meta.default,
+            "personalizado":  bool(override),
+            "updated_at":     override.updated_at.isoformat() if override and override.updated_at else "",
+        })
+    return items
 
 
 # ── Usuario / Sesiones (Sprint 1 — SaaS multi-tenant) ───────────────────────
