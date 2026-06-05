@@ -248,10 +248,9 @@ MENSAJES: dict[str, MensajeMeta] = {
         placeholders_requeridos=(),
         puede_desactivarse=False,  # esencial: sin esto el cliente no sabe el estado del pedido
         aviso_setup=(
-            "Para que este mensaje se envíe, tu tienda Shopify debe tener "
-            "configurado el webhook **orders/create** apuntando a tu cuenta Voco. "
-            "Sin webhook, el agente nunca se entera de los pedidos nuevos y "
-            "este mensaje no se dispara."
+            "Este mensaje se dispara cuando Shopify avisa que se creó un pedido nuevo. "
+            "Para que llegue ese aviso, debes registrar el webhook **orders/create** "
+            "en tu tienda apuntando a la URL de abajo."
         ),
         aviso_setup_url="https://help.shopify.com/en/manual/orders/notifications/webhooks",
     ),
@@ -275,10 +274,10 @@ MENSAJES: dict[str, MensajeMeta] = {
         placeholders_requeridos=(),
         puede_desactivarse=False,  # esencial: notificación del pago confirmado
         aviso_setup=(
-            "Requiere webhook **orders/paid** configurado en tu tienda Shopify "
-            "apuntando a tu cuenta Voco. Si vendes contra-entrega, este evento "
-            "no se dispara automáticamente — solo cuando el pago queda registrado "
-            "en Shopify (online inmediato o marcado manualmente al recibir el efectivo)."
+            "Debes registrar el webhook **orders/paid** en tu tienda apuntando a la URL "
+            "de abajo.\n\nSi vendes contra-entrega, este evento solo se dispara cuando "
+            "marcas manualmente el pedido como pagado en Shopify Admin (al recibir el "
+            "efectivo). Para pagos online se dispara automáticamente."
         ),
         aviso_setup_url="https://help.shopify.com/en/manual/orders/notifications/webhooks",
     ),
@@ -306,10 +305,10 @@ MENSAJES: dict[str, MensajeMeta] = {
         # (especialmente si tienen tracking en email aparte). Pero ojo: si lo
         # apagas, el cliente NO recibe aviso por WhatsApp del despacho.
         aviso_setup=(
-            "Requiere webhook **orders/fulfilled** configurado en Shopify. "
-            "Este evento se dispara cuando marcas el pedido como despachado "
-            "en Shopify Admin (manual) o cuando tu integración de envíos lo "
-            "marca automáticamente. Sin webhook, este mensaje no se envía."
+            "Debes registrar el webhook **orders/fulfilled** en tu tienda apuntando "
+            "a la URL de abajo.\n\nEste evento se dispara cuando marcas el pedido como "
+            "despachado en Shopify Admin o cuando tu integración de envíos lo marca "
+            "automáticamente."
         ),
         aviso_setup_url="https://help.shopify.com/en/manual/orders/notifications/webhooks",
     ),

@@ -8926,20 +8926,59 @@ function _msjRenderItem(m) {
       + '</div></div>';
   }
 
-  // Banner de aviso si requiere setup externo (ej. webhook Shopify).
-  // Procesamos markdown mínimo (*negrita* → <b>) sin escapar el HTML
-  // generado para que la negrita se renderice como tal.
-  var avisoHtml = '';
+  // Pill de aviso si el mensaje requiere setup externo (ej. webhook
+  // Shopify). Click para expandir el detalle (instrucciones + URL del
+  // webhook copiable + link a la guía oficial). Estilo similar al pill
+  // "Conectado" pero invertido — color rojo indica acción pendiente.
+  var avisoPill = '';
+  var avisoDetalle = '';
   if (m.aviso_setup) {
-    var avisoBody = _msjEscapeHtml(m.aviso_setup).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<b>$1</b>');
-    var linkHtml = m.aviso_setup_url
-      ? ' <a href="' + _msjEscapeHtml(m.aviso_setup_url) + '" target="_blank" rel="noopener" style="color:#92400e;font-weight:600;text-decoration:underline;white-space:nowrap"><i data-lucide="external-link" style="width:11px;height:11px;vertical-align:-1px;margin-right:2px"></i>Ver guía</a>'
+    var avisoBody = _msjEscapeHtml(m.aviso_setup)
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+      .replace(/\*(.+?)\*/g, '<b>$1</b>')
+      .replace(/\n\n/g, '</p><p style="margin:8px 0 0">')
+      .replace(/\n/g, '<br>');
+    avisoBody = '<p style="margin:0">' + avisoBody + '</p>';
+    // Para mensajes de categoría shopify, el frontend conoce el endpoint
+    // del webhook (/shopify-webhook) y lo arma con el dominio actual.
+    // Así el cliente ve exactamente la URL a pegar en Shopify Admin.
+    var webhookBox = '';
+    if (m.categoria === 'shopify') {
+      var webhookUrl = window.location.origin + '/shopify-webhook';
+      webhookBox = '<div style="margin-top:10px">'
+        + '<div style="font-size:.7rem;font-weight:600;color:#7f1d1d;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">URL del webhook para Shopify</div>'
+        + '<div style="display:flex;gap:6px;align-items:stretch">'
+        +   '<code style="flex:1;background:#fff;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;font-size:.78rem;color:#7f1d1d;word-break:break-all;font-family:monospace">'
+        +     _msjEscapeHtml(webhookUrl)
+        +   '</code>'
+        +   '<button type="button" onclick="msjCopiarWebhook(this, \'' + _msjEscapeHtml(webhookUrl) + '\')" '
+        +     'style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:0 12px;cursor:pointer;font-size:.76rem;font-weight:600;white-space:nowrap;flex-shrink:0">'
+        +     '<i data-lucide="copy" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Copiar'
+        +   '</button>'
+        + '</div>'
+        + '<div style="font-size:.7rem;color:#7f1d1d;margin-top:4px;opacity:.8">Pega esta URL en Shopify Admin → Settings → Notifications → Webhooks</div>'
+        + '</div>';
+    }
+    var linkBtn = m.aviso_setup_url
+      ? '<a href="' + _msjEscapeHtml(m.aviso_setup_url) + '" target="_blank" rel="noopener" '
+        + 'style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #fecaca;color:#7f1d1d;'
+        + 'border-radius:6px;padding:6px 12px;font-size:.76rem;font-weight:600;text-decoration:none;margin-top:10px">'
+        + '<i data-lucide="external-link" style="width:12px;height:12px"></i>Ver guía oficial</a>'
       : '';
-    avisoHtml = '<div style="background:#fef3c7;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:6px;padding:9px 12px;margin-bottom:10px;font-size:.78rem;color:#78350f;line-height:1.5">'
-      + '<i data-lucide="alert-triangle" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px;color:#b45309"></i>'
-      + '<b>Requiere configuración externa:</b> '
-      + avisoBody
-      + linkHtml
+    var detalleId = id + '-aviso-detalle';
+    avisoPill = '<button type="button" onclick="msjToggleAviso(\'' + detalleId + '\', this)" '
+      + 'style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;'
+      + 'padding:2px 9px;font-size:.68rem;font-weight:700;margin-left:6px;cursor:pointer;'
+      + 'display:inline-flex;align-items:center;gap:4px;line-height:1.5">'
+      + '<i data-lucide="alert-circle" style="width:11px;height:11px"></i>'
+      + 'Requiere configuración'
+      + '<i data-lucide="chevron-down" style="width:11px;height:11px" class="msj-chevron"></i>'
+      + '</button>';
+    avisoDetalle = '<div id="' + detalleId + '" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;'
+      + 'border-radius:6px;padding:12px 14px;margin-bottom:10px;font-size:.8rem;color:#7f1d1d;line-height:1.55">'
+      + '<div>' + avisoBody + '</div>'
+      + webhookBox
+      + (linkBtn ? '<div>' + linkBtn + '</div>' : '')
       + '</div>';
   }
 
@@ -8951,13 +8990,14 @@ function _msjRenderItem(m) {
     +       '<div style="display:flex;align-items:center;flex-wrap:wrap">'
     +         '<span style="font-weight:600;color:var(--voco-text);font-size:.9rem">' + _msjEscapeHtml(m.titulo) + '</span>'
     +         pills
+    +         avisoPill
     +       '</div>'
     +       '<div style="color:var(--voco-text-muted);font-size:.78rem;margin-top:2px;line-height:1.45">' + _msjEscapeHtml(m.descripcion) + '</div>'
     +       (m.cuando ? '<div style="color:var(--voco-text-muted);font-size:.72rem;margin-top:3px"><i data-lucide="clock" style="width:11px;height:11px;vertical-align:-1px;margin-right:3px"></i>' + _msjEscapeHtml(m.cuando) + '</div>' : '')
     +     '</div>'
     +     '<div style="flex-shrink:0">' + toggleHtml + '</div>'
     +   '</div>'
-    +   avisoHtml
+    +   avisoDetalle
     +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">'
     +     '<div>'  /* col izquierda — editor */
     +       '<textarea id="' + id + '" rows="' + rows + '" maxlength="' + maxLen + '" data-key="' + _msjEscapeHtml(m.key) + '"'
@@ -8981,6 +9021,46 @@ function _msjRenderItem(m) {
     +     '</div>'
     +   '</div>'
     + '</div>';
+}
+
+/* Toggle del detalle expandible del aviso "Requiere configuración".
+   Click en el pill abre/cierra la sección. Rota el chevron para
+   feedback visual del estado. */
+function msjToggleAviso(detalleId, btn) {
+  var el = document.getElementById(detalleId);
+  if (!el) return;
+  var abierto = el.style.display !== 'none';
+  el.style.display = abierto ? 'none' : 'block';
+  // Rotar chevron
+  var chev = btn.querySelector('.msj-chevron');
+  if (chev) chev.style.transform = abierto ? 'rotate(0deg)' : 'rotate(180deg)';
+}
+
+/* Copia la URL del webhook al clipboard con feedback visual.
+   Cambia el botón temporalmente a "✓ Copiado" por 1.5s. */
+function msjCopiarWebhook(btn, url) {
+  if (!navigator.clipboard) {
+    // Fallback inseguro para navegadores muy viejos
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (e) { return; }
+  } else {
+    navigator.clipboard.writeText(url);
+  }
+  var orig = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="check" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Copiado';
+  btn.style.background = '#16a34a';
+  if (window.lucide) window.lucide.createIcons();
+  setTimeout(function() {
+    btn.innerHTML = orig;
+    btn.style.background = '#dc2626';
+    if (window.lucide) window.lucide.createIcons();
+  }, 1500);
 }
 
 /* Actualiza el preview en vivo a medida que el usuario edita el textarea. */
