@@ -2965,6 +2965,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()"><i data-lucide="flask-conical" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar</div>
             <div class="cfg-tab" onclick="cfgTab('equipo',this);cargarEquipo()"><i data-lucide="users" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Equipo</div>
             <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Templates</div>
+            <div class="cfg-tab" onclick="cfgTab('promociones',this);cargarPromocion()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Promociones</div>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)"><i data-lucide="book-open" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Documentación</div>
           </div>
 
@@ -3698,6 +3699,102 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               <div style="padding:14px;color:var(--voco-text-muted);font-size:.85rem;text-align:center">Cargando templates…</div>
             </div>
           </div><!-- /pane templates -->
+
+          <!-- ── Pane: Promociones (código descuento post-venta) ── -->
+          <div class="cfg-pane" id="cfg-pane-promociones" style="padding:24px;overflow-y:auto">
+            <div style="max-width:680px">
+              <h2 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem">
+                <i data-lucide="gift" style="width:18px;height:18px;vertical-align:-3px;margin-right:6px;color:var(--voco-brand)"></i>
+                Código de descuento tras pago
+              </h2>
+              <p style="margin:0 0 22px;color:var(--voco-text-muted);font-size:.86rem;line-height:1.55">
+                Cuando un cliente complete el pago en Shopify (webhook
+                <code style="background:var(--voco-content-bg-alt);padding:1px 6px;border-radius:4px;font-size:.78rem">orders/paid</code>)
+                y el subtotal (sin envío) supere el umbral, el agente le enviará el
+                código de descuento para su próxima compra. El código debe existir
+                previamente en
+                <a href="https://admin.shopify.com/store/discounts" target="_blank" style="color:var(--voco-brand);text-decoration:none">Shopify → Discounts</a>
+                con las reglas que prefieras (límite de usos, expiración, etc).
+              </p>
+
+              <!-- Toggle activo -->
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);border-radius:10px;margin-bottom:22px">
+                <label class="switch" style="margin:0">
+                  <input type="checkbox" id="promo-activo" onchange="promoUpdatePreview()">
+                  <span class="slider"></span>
+                </label>
+                <div style="flex:1">
+                  <div style="font-weight:600;color:var(--voco-text);font-size:.92rem">Activar promoción</div>
+                  <div style="font-size:.78rem;color:var(--voco-text-muted);margin-top:2px">Mientras esté desactivada, no se enviará ningún código al cliente.</div>
+                </div>
+              </div>
+
+              <!-- Form grid -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+                <div>
+                  <label style="display:block;font-size:.78rem;font-weight:600;color:var(--voco-text);margin-bottom:5px">
+                    Umbral mínimo <span style="color:var(--voco-text-muted);font-weight:400">(COP, sin envío)</span>
+                  </label>
+                  <input type="number" id="promo-umbral" min="1000" step="1000" placeholder="80000"
+                    oninput="promoUpdatePreview()"
+                    style="width:100%;padding:9px 12px;border:1px solid var(--voco-border);border-radius:8px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;outline:none;box-sizing:border-box;font-family:inherit">
+                  <div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:4px">Mínimo $1.000</div>
+                </div>
+                <div>
+                  <label style="display:block;font-size:.78rem;font-weight:600;color:var(--voco-text);margin-bottom:5px">
+                    Porcentaje de descuento <span style="color:var(--voco-text-muted);font-weight:400">(1-100)</span>
+                  </label>
+                  <input type="number" id="promo-pct" min="1" max="100" step="1" placeholder="5"
+                    oninput="promoUpdatePreview()"
+                    style="width:100%;padding:9px 12px;border:1px solid var(--voco-border);border-radius:8px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;outline:none;box-sizing:border-box;font-family:inherit">
+                  <div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:4px">Debe coincidir con el descuento configurado en Shopify</div>
+                </div>
+              </div>
+
+              <div style="margin-bottom:14px">
+                <label style="display:block;font-size:.78rem;font-weight:600;color:var(--voco-text);margin-bottom:5px">
+                  Código del descuento
+                </label>
+                <input type="text" id="promo-codigo" maxlength="30" placeholder="GRACIAS5"
+                  oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9_-]/g,'');promoUpdatePreview()"
+                  style="width:100%;padding:9px 12px;border:1px solid var(--voco-border);border-radius:8px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;outline:none;box-sizing:border-box;font-family:monospace;letter-spacing:.5px">
+                <div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:4px">2-30 caracteres. Solo MAYÚSCULAS, números, guion (-) y guion bajo (_)</div>
+              </div>
+
+              <div style="margin-bottom:22px">
+                <label style="display:block;font-size:.78rem;font-weight:600;color:var(--voco-text);margin-bottom:5px">
+                  Mensaje al cliente <span style="color:var(--voco-text-muted);font-weight:400">(opcional)</span>
+                </label>
+                <textarea id="promo-mensaje" rows="3" maxlength="500"
+                  oninput="promoUpdatePreview()"
+                  style="width:100%;padding:9px 12px;border:1px solid var(--voco-border);border-radius:8px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.86rem;outline:none;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:64px"></textarea>
+                <div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:4px">
+                  Placeholders disponibles:
+                  <code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px">{codigo}</code>
+                  <code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px;margin-left:3px">{pct}</code>
+                  <code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px;margin-left:3px">{umbral}</code>
+                  · Si dejas vacío usaremos el mensaje por defecto. Debe contener al menos <code>{codigo}</code>.
+                </div>
+              </div>
+
+              <!-- Preview en vivo -->
+              <div style="margin-bottom:24px">
+                <div style="font-size:.78rem;font-weight:600;color:var(--voco-text);margin-bottom:8px">Vista previa de lo que recibirá el cliente:</div>
+                <div style="background:#dcf8c6;color:#111b21;padding:11px 14px;border-radius:8px 8px 0 8px;font-size:.88rem;line-height:1.45;max-width:480px;white-space:pre-wrap;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;box-shadow:0 1px 0.5px rgba(11,20,26,.13)">
+                  <div id="promo-preview" style="color:#111b21">Ajusta los campos arriba para ver la vista previa…</div>
+                </div>
+              </div>
+
+              <!-- Acciones -->
+              <div style="display:flex;gap:10px;align-items:center">
+                <button class="btn-primary" onclick="guardarPromocion()" id="promo-save-btn" style="padding:9px 18px">
+                  <i data-lucide="check" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"></i>
+                  Guardar promoción
+                </button>
+                <span id="promo-save-status" style="font-size:.82rem;color:var(--voco-text-muted)"></span>
+              </div>
+            </div>
+          </div><!-- /pane promociones -->
 
           <!-- ── Pane: Documentación ── -->
           <div class="cfg-pane" id="cfg-pane-documentacion">
@@ -8562,6 +8659,98 @@ document.addEventListener('click', function(e) {
     picker.style.display = 'none';
   }
 });
+
+/* ── Promociones — código de descuento post-venta (#43) ─────────
+   Lee y guarda la config del agente activo (_escAgentId). El preview
+   se actualiza en vivo a medida que el usuario edita los campos. */
+var _promoMsgDefault = '';     // template default del backend (placeholder)
+var _promoSaveTimer  = null;
+
+function _promoFmtCop(n) {
+  n = parseInt(n, 10);
+  if (!n || isNaN(n)) return '';
+  return n.toLocaleString('es-CO').replace(/,/g, '.');
+}
+
+function promoUpdatePreview() {
+  var prev   = document.getElementById('promo-preview');
+  if (!prev) return;
+  var codigo = (document.getElementById('promo-codigo').value || '').trim();
+  var umbral = parseInt(document.getElementById('promo-umbral').value || '0', 10);
+  var pct    = parseInt(document.getElementById('promo-pct').value || '0', 10);
+  var mensaje = (document.getElementById('promo-mensaje').value || '').trim() || _promoMsgDefault;
+
+  if (!codigo || umbral <= 0 || pct <= 0) {
+    prev.textContent = 'Completa código, umbral y porcentaje para ver la vista previa…';
+    prev.style.color = '#6b7280';
+    return;
+  }
+  var sustituido = mensaje
+    .replace(/\{codigo\}/g, codigo)
+    .replace(/\{pct\}/g,    String(pct))
+    .replace(/\{umbral\}/g, _promoFmtCop(umbral));
+  prev.textContent = sustituido;
+  prev.style.color = '#111b21';
+}
+
+async function cargarPromocion() {
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/agents/' + ag + '/descuento', {credentials:'include'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    _promoMsgDefault = d.mensaje_default || '';
+    document.getElementById('promo-activo').checked  = !!d.activo;
+    document.getElementById('promo-umbral').value    = d.umbral || '';
+    document.getElementById('promo-codigo').value    = d.codigo || '';
+    document.getElementById('promo-pct').value       = d.pct    || '';
+    var ta = document.getElementById('promo-mensaje');
+    ta.value = d.mensaje || '';
+    ta.placeholder = _promoMsgDefault;
+    promoUpdatePreview();
+  } catch (e) {
+    var st = document.getElementById('promo-save-status');
+    if (st) { st.textContent = 'Error cargando: ' + e.message; st.style.color = '#dc2626'; }
+  }
+}
+
+async function guardarPromocion() {
+  var btn = document.getElementById('promo-save-btn');
+  var st  = document.getElementById('promo-save-status');
+  if (!btn || !st) return;
+  var ag = _escAgentId || 1;
+  var body = {
+    activo:  document.getElementById('promo-activo').checked,
+    umbral:  parseInt(document.getElementById('promo-umbral').value || '0', 10) || 0,
+    codigo:  (document.getElementById('promo-codigo').value || '').trim(),
+    pct:     parseInt(document.getElementById('promo-pct').value || '0', 10) || 0,
+    mensaje: (document.getElementById('promo-mensaje').value || '').trim(),
+  };
+  btn.disabled = true; st.textContent = 'Guardando…'; st.style.color = 'var(--voco-text-muted)';
+  try {
+    var r = await fetch('/inbox/api/agents/' + ag + '/descuento', {
+      method: 'PUT', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    var d = await r.json();
+    if (!r.ok || !d.ok) {
+      st.textContent = d.error || 'Error al guardar';
+      st.style.color = '#dc2626';
+      return;
+    }
+    st.textContent = '✓ Guardado correctamente';
+    st.style.color = '#16a34a';
+    // Limpiar el mensaje a los 3s
+    if (_promoSaveTimer) clearTimeout(_promoSaveTimer);
+    _promoSaveTimer = setTimeout(function() { st.textContent = ''; }, 3000);
+  } catch (e) {
+    st.textContent = 'Error: ' + e.message;
+    st.style.color = '#dc2626';
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 /* ── Gestión de templates desde Configuración ────────────────── */
 async function cargarTemplatesRapidos() {
