@@ -125,11 +125,14 @@ CAMPOS_CLIENTE = (
 
 
 class AgentMessage(Base):
-    """Override de un mensaje del sistema por agente.
+    """Override y/o flag activo de un mensaje del sistema por agente.
 
-    Si no hay row para (agent_id, key), se usa el default declarado en
-    agent/mensajes.py:MENSAJES. Si hay row, su `content` reemplaza al default.
-    Borrar la row equivale a restaurar el default.
+    Resolución en runtime:
+      - Sin row: usar default del catálogo (mensaje activo por defecto).
+      - Con row + activo=True: usar content (o default si content vacío).
+      - Con row + activo=False: NO enviar nada en ese punto del flujo.
+
+    Borrar la row = restaurar default + reactivar.
     """
     __tablename__ = "agent_messages"
     __table_args__ = (PrimaryKeyConstraint("agent_id", "key"),)
@@ -137,6 +140,7 @@ class AgentMessage(Base):
     agent_id:   Mapped[int] = mapped_column(Integer)
     key:        Mapped[str] = mapped_column(String(80))          # ej. "system.followup"
     content:    Mapped[str] = mapped_column(Text, default="")
+    activo:     Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -354,8 +358,11 @@ async def inicializar_db():
             "ALTER TABLE agents ADD COLUMN IF NOT EXISTS descuento_mensaje TEXT DEFAULT ''",
             # ─── #28 — Mensajes del sistema configurables por agente ───
             # La tabla agent_messages la crea Base.metadata.create_all.
-            # Solo agregamos índice por agent_id para listados rápidos.
+            # Agregamos índice por agent_id para listados rápidos.
             "CREATE INDEX IF NOT EXISTS ix_agent_messages_agent ON agent_messages (agent_id)",
+            # Flag activo (#28 fase 2.7): permite desactivar un mensaje sin
+            # borrarlo. Default TRUE para preservar comportamiento existente.
+            "ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE",
             # Índices para las nuevas tablas (create_all ya las creó si no existían)
             "CREATE INDEX IF NOT EXISTS ix_pipelines_agent       ON pipelines           (agent_id)",
             "CREATE INDEX IF NOT EXISTS ix_deals_agent           ON deals               (agent_id)",
@@ -2217,14 +2224,17 @@ async def obtener_mensaje(agent_id: int, key: str) -> str:
     """Devuelve el texto del mensaje para ese agente.
 
     Resolución:
-      1. Si el agente tiene override en agent_messages → usar ese
-      2. Si no, usar el default declarado en agent/mensajes.py:MENSAJES
-      3. Si la key no existe en el catálogo, devolver string vacío
-         (el caller debe manejar este caso — significa bug en código)
+      1. Si la key no existe en el catálogo → "" + log defensivo
+      2. Si el agente tiene override con activo=False → "" (señal de skip)
+      3. Si el agente tiene override con content no vacío → ese content
+      4. Si no, default del catálogo
+
+    El caller DEBE chequear `if not texto: skip` para manejar el caso
+    desactivado correctamente. Devolver "" es deliberadamente uniforme
+    con "key desconocida" — ambos son "no enviar nada".
     """
     from agent.mensajes import obtener_default, obtener_meta
     if not obtener_meta(key):
-        # Key desconocida — log defensivo, el caller debe revisar su código
         import logging
         logging.getLogger("agentkit").error(
             f"[mensajes] key desconocida solicitada: {key!r} (agent_id={agent_id})"
@@ -2238,25 +2248,31 @@ async def obtener_mensaje(agent_id: int, key: str) -> str:
             )
         )
         row = result.scalar_one_or_none()
-        if row and row.content:
-            return row.content
-    # Fallback al default
+        if row:
+            # Override existe: respetar el flag activo
+            if not row.activo:
+                return ""  # desactivado por el cliente — no enviar
+            if row.content:
+                return row.content
+            # activo pero sin content → caer al default
     return obtener_default(key)
 
 
 async def guardar_mensaje_agente(
     agent_id: int, key: str, content: str,
 ) -> tuple[bool, str]:
-    """Guarda el override del mensaje para ese agente.
+    """Guarda el override del CONTENIDO del mensaje para ese agente.
+
+    Solo modifica el content — el flag activo se preserva (default True
+    si la row no existía). Para activar/desactivar usar set_mensaje_activo.
 
     Validaciones:
       - La key debe existir en el catálogo
-      - El contenido no puede ser vacío (para eso usar restaurar_mensaje_agente)
-      - Longitud máxima 4000 chars (límite WhatsApp con margen)
-      - Si el catálogo declara placeholders, todos deben estar presentes en
-        el override (la lógica del backend depende de ellos)
-
-    Retorna (ok, mensaje_error).
+      - El contenido no puede ser vacío (para eso usar restaurar_mensaje_agente
+        o set_mensaje_activo(activo=False))
+      - Longitud máxima según meta.max_length (default 4000)
+      - Placeholders REQUERIDOS deben estar presentes (los demás son
+        sugeridos/opcionales)
     """
     from agent.mensajes import obtener_meta
     meta = obtener_meta(key)
@@ -2265,13 +2281,9 @@ async def guardar_mensaje_agente(
     content = (content or "").strip()
     if not content:
         return False, "El mensaje no puede estar vacío. Para volver al default usa el botón 'Restaurar'."
-    # Cada mensaje declara su propio max_length (botón CTA tiene 20, mensajes ~4000)
     max_len = getattr(meta, "max_length", 4000) or 4000
     if len(content) > max_len:
         return False, f"El mensaje es muy largo ({len(content)} caracteres). Máximo {max_len}."
-    # Validar que los placeholders REQUERIDOS estén presentes. Los demás
-    # (declarados en `placeholders` pero no en `placeholders_requeridos`)
-    # son sugeridos/opcionales — el cliente decide cuáles usar.
     requeridos = getattr(meta, "placeholders_requeridos", ()) or ()
     faltantes = [
         f"{{{p}}}" for p in requeridos if f"{{{p}}}" not in content
@@ -2296,7 +2308,54 @@ async def guardar_mensaje_agente(
         else:
             session.add(AgentMessage(
                 agent_id=agent_id, key=key,
-                content=content, updated_at=datetime.utcnow(),
+                content=content, activo=True,
+                updated_at=datetime.utcnow(),
+            ))
+        await session.commit()
+        return True, ""
+
+
+async def set_mensaje_activo(
+    agent_id: int, key: str, activo: bool,
+) -> tuple[bool, str]:
+    """Activa o desactiva un mensaje sin tocar su contenido.
+
+    Cuando activo=False, obtener_mensaje retorna "" — el código que envía
+    ese mensaje hace skip y no se envía nada en ese punto del flujo.
+
+    Validaciones:
+      - La key debe existir en el catálogo
+      - Si el mensaje está marcado como puede_desactivarse=False (esencial),
+        NO permitimos desactivar — sería romper el flujo.
+
+    Si la row no existe y activo=False, la creamos con content="" (el
+    default del catálogo se ignorará en runtime porque activo=False).
+    """
+    from agent.mensajes import obtener_meta
+    meta = obtener_meta(key)
+    if not meta:
+        return False, f"Mensaje desconocido: {key}"
+    if not activo and not getattr(meta, "puede_desactivarse", True):
+        return False, (
+            "Este mensaje es esencial para el flujo y no se puede desactivar. "
+            "Solo puedes cambiar su contenido."
+        )
+    async with async_session() as session:
+        result = await session.execute(
+            select(AgentMessage).where(
+                AgentMessage.agent_id == agent_id,
+                AgentMessage.key == key,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.activo = bool(activo)
+            row.updated_at = datetime.utcnow()
+        else:
+            session.add(AgentMessage(
+                agent_id=agent_id, key=key,
+                content="", activo=bool(activo),
+                updated_at=datetime.utcnow(),
             ))
         await session.commit()
         return True, ""
@@ -2414,8 +2473,10 @@ async def listar_mensajes_agente(agent_id: int) -> list[dict]:
             "placeholders":   list(meta.placeholders),
             "placeholders_requeridos": list(getattr(meta, "placeholders_requeridos", ()) or ()),
             "max_length":     getattr(meta, "max_length", 4000),
-            "content":        override.content if override else meta.default,
-            "personalizado":  bool(override),
+            "puede_desactivarse": bool(getattr(meta, "puede_desactivarse", True)),
+            "content":        (override.content if override and override.content else meta.default),
+            "personalizado":  bool(override and override.content),
+            "activo":         bool(override.activo) if override else True,
             "updated_at":     override.updated_at.isoformat() if override and override.updated_at else "",
         })
     return items

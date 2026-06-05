@@ -682,6 +682,10 @@ async def _procesar_followups():
         try:
             aid = await _resolver_agent_id_principal(telefono)
             texto = await obtener_mensaje(aid, "system.followup")
+            if not texto:
+                # El agente desactivó este mensaje desde el panel — no insistir
+                logger.info(f"[followup] {telefono} mensaje desactivado para agent={aid} — saltando")
+                continue
             await proveedor.enviar_mensaje(telefono, texto)
             await guardar_mensaje(telefono, "assistant", texto, agent_id=aid)
             await marcar_followup_enviado(telefono)
@@ -701,6 +705,11 @@ async def _procesar_cierres():
         try:
             aid = await _resolver_agent_id_principal(telefono)
             texto = await obtener_mensaje(aid, "system.cierre")
+            if not texto:
+                logger.info(f"[cierre] {telefono} mensaje desactivado para agent={aid} — saltando")
+                # Aún así marcar como cerrado para que el timer no vuelva a evaluarlo
+                await marcar_cierre_enviado(telefono)
+                continue
             await proveedor.enviar_mensaje(telefono, texto)
             await guardar_mensaje(telefono, "assistant", texto, agent_id=aid)
             await marcar_cierre_enviado(telefono)
@@ -772,6 +781,11 @@ async def _procesar_abandono_checkout():
         try:
             aid = await _resolver_agent_id_principal(telefono)
             texto = await obtener_mensaje(aid, "system.checkout_abandono")
+            if not texto:
+                logger.info(f"[checkout-abandono] {telefono} mensaje desactivado para agent={aid} — saltando")
+                # Marcar como enviado para evitar reintentos dentro del cooldown
+                await marcar_checkout_abandono_enviado(telefono)
+                continue
             enviado = False
             if hasattr(proveedor, "enviar_cta_url"):
                 try:
@@ -1986,10 +2000,11 @@ async def webhook_handler(request: Request):
                                     await obtener_mensaje(_agent_id, "cart.estado4_cross_sell"),
                                     _ctx_estado4,
                                 )
-                                # catalog_message removido — directo a product_list (estable en WB).
-                                cat_btn_ok = False
-                                if not cat_btn_ok:
-                                    # product_list directo
+                                # Si el agente desactivó el cross-sell, no enviamos sugerencia ni
+                                # catálogo extra — saltamos directo al CTA de pago abajo.
+                                if mensaje_agregar:
+                                    # catalog_message removido — directo a product_list (estable en WB).
+                                    cat_btn_ok = False
                                     if hasattr(_proveedor_agente, "enviar_catalogo_productos"):
                                         secciones_loc = obtener_secciones_catalogo(None)
                                         if secciones_loc:
@@ -2003,13 +2018,13 @@ async def webhook_handler(request: Request):
                                                 pass
                                     if not cat_btn_ok:
                                         await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_agregar)
-                                # Siempre persistir el texto del mensaje (sea por product_list o por
-                                # fallback). El cuerpo del product_list NO se guarda automáticamente
-                                # — sin esto el operador NO ve el "¡Pedido confirmado!" en el panel.
-                                await guardar_mensaje(
-                                    msg.telefono, "assistant", mensaje_agregar,
-                                    agent_id=_agent_id,
-                                )
+                                    # Siempre persistir el texto del mensaje (sea por product_list o por
+                                    # fallback). El cuerpo del product_list NO se guarda automáticamente
+                                    # — sin esto el operador NO ve el "¡Pedido confirmado!" en el panel.
+                                    await guardar_mensaje(
+                                        msg.telefono, "assistant", mensaje_agregar,
+                                        agent_id=_agent_id,
+                                    )
 
                                 # ── Mensaje 2: CTA al checkout (texto + botón configurables) ──
                                 mensaje_confirmar = format_seguro(
@@ -2395,18 +2410,18 @@ async def webhook_handler(request: Request):
                         except Exception as e:
                             logger.warning(f"[TIENDA→PRODUCTO] error: {e}")
 
-                # Construir texto/cuerpo del catálogo
+                # Construir texto/cuerpo del catálogo. Si el agente desactivó
+                # el mensaje de bienvenida (pie_tienda == ""), se envía solo
+                # la parte de invitación sin pie — limpio, sin saltos vacíos.
+                _pie_sufijo = ("\n" + pie_tienda) if pie_tienda else ""
                 if _texto_absorbido_por_cta:
-                    cuerpo_catalogo = respuesta.strip() + "\n\n" + pie_tienda
+                    cuerpo_catalogo = respuesta.strip() + ("\n\n" + pie_tienda if pie_tienda else "")
                 elif tienda_query:
-                    cuerpo_catalogo = (
-                        f"🛒 *Aquí está lo que tenemos:*\n"
-                        + pie_tienda
-                    )
+                    cuerpo_catalogo = "🛒 *Aquí está lo que tenemos:*" + _pie_sufijo
                 else:
                     cuerpo_catalogo = (
-                        "🛒 *Aquí está nuestro catálogo completo — arma tu pedido sin salir de WhatsApp:*\n"
-                        + pie_tienda
+                        "🛒 *Aquí está nuestro catálogo completo — arma tu pedido sin salir de WhatsApp:*"
+                        + _pie_sufijo
                     )
 
                 # ── INTENTO 1: product_list de la categoría (o general) ──
@@ -3081,6 +3096,42 @@ async def api_guardar_mensaje(
         f"({len(content)} chars) — user={user.get('id')}"
     )
     return JSONResponse(content={"ok": True})
+
+
+@app.patch("/inbox/api/agents/{agent_id_param}/mensajes/{key}/activo")
+async def api_set_mensaje_activo(
+    agent_id_param: int,
+    key: str,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Activa o desactiva un mensaje sin modificar su contenido.
+
+    Body: {"activo": bool}
+    Si el mensaje del catálogo está marcado como esencial (puede_desactivarse=False),
+    se rechaza con 400.
+    """
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if not await _verificar_acceso_agente(user, agent_id_param):
+        raise HTTPException(status_code=403, detail="Sin acceso a este agente")
+    from agent.memory import set_mensaje_activo
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "JSON inválido"})
+    activo = bool(body.get("activo"))
+    ok, error = await set_mensaje_activo(agent_id_param, key, activo)
+    if not ok:
+        return JSONResponse(status_code=400, content={"ok": False, "error": error})
+    logger.info(
+        f"[mensajes] agent_id={agent_id_param} {key!r} → activo={activo} "
+        f"— user={user.get('id')}"
+    )
+    return JSONResponse(content={"ok": True, "activo": activo})
 
 
 @app.delete("/inbox/api/agents/{agent_id_param}/mensajes/{key}")

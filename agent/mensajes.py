@@ -25,23 +25,23 @@ from dataclasses import dataclass, field
 # ──────────────────────────────────────────────────────────────────────────────
 CATEGORIAS: dict[str, dict] = {
     "system": {
-        "label": "Sistema",
-        "descripcion": "Seguimientos automáticos y despedidas",
+        "label": "Seguimientos automáticos",
+        "descripcion": "Mensajes que se envían si el cliente deja de responder",
         "orden": 1,
+    },
+    "cart": {
+        "label": "Flujo de compra",
+        "descripcion": "Mensajes mientras el cliente arma su pedido y lo confirma",
+        "orden": 2,
     },
     "shopify": {
         "label": "Confirmaciones de pedido",
-        "descripcion": "Mensajes enviados al cliente cuando Shopify dispara eventos",
-        "orden": 2,
-    },
-    "cart": {
-        "label": "Carrito y checkout",
-        "descripcion": "Mensajes durante el flujo de compra",
+        "descripcion": "Mensajes que se envían cuando se procesa una compra",
         "orden": 3,
     },
     "error": {
-        "label": "Errores y fallbacks",
-        "descripcion": "Mensajes cuando algo falla en el flujo",
+        "label": "Mensajes de error",
+        "descripcion": "Qué decir cuando algo falla",
         "orden": 4,
     },
 }
@@ -75,7 +75,15 @@ class MensajeMeta:
 
       max_length:   máximo de caracteres permitido en el texto. Default 4000
                     (límite cómodo para mensajes WhatsApp). Útil para botones
-                    CTA (máximo 20 chars en Meta) y labels cortos.
+                    (máximo 20 chars en Meta) y textos cortos.
+
+      puede_desactivarse:
+                    Si True (default), el agente puede apagar este mensaje
+                    desde el panel — cuando está OFF, el código no envía
+                    nada en ese punto del flujo. Marcar False solo para
+                    mensajes ESENCIALES sin los cuales el flujo se rompe
+                    (ej. el botón del checkout — sin él no hay forma de
+                    completar la compra).
     """
     key: str
     categoria: str
@@ -86,6 +94,7 @@ class MensajeMeta:
     placeholders: tuple[str, ...] = field(default_factory=tuple)
     placeholders_requeridos: tuple[str, ...] = field(default_factory=tuple)
     max_length: int = 4000
+    puede_desactivarse: bool = True
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -98,9 +107,9 @@ MENSAJES: dict[str, MensajeMeta] = {
     "system.followup": MensajeMeta(
         key="system.followup",
         categoria="system",
-        titulo="Recordatorio de inactividad",
-        descripcion="Se envía al cliente si lleva varios minutos sin responder.",
-        cuando="Tras ~10 min sin respuesta",
+        titulo="Recordatorio si el cliente no responde",
+        descripcion="Mensaje amable para retomar la conversación cuando el cliente lleva un rato sin escribir. Si tu negocio no quiere insistir, puedes apagarlo.",
+        cuando="Se envía aproximadamente 10 minutos después del último mensaje del cliente",
         default=(
             "Hola de nuevo 😊 Veo que andas un poco ocupado/a. "
             "¿Sigues por aquí o prefieres que continuemos en otro momento? "
@@ -111,9 +120,9 @@ MENSAJES: dict[str, MensajeMeta] = {
     "system.cierre": MensajeMeta(
         key="system.cierre",
         categoria="system",
-        titulo="Despedida por inactividad",
-        descripcion="Se envía cuando el cliente no respondió al recordatorio. Cierra la conversación con un mensaje amable.",
-        cuando="Tras ~5 min sin responder al recordatorio",
+        titulo="Despedida si el cliente sigue sin responder",
+        descripcion="Cierra la conversación cuando el cliente no respondió ni al recordatorio. Útil para liberar el espacio mental sin sonar abandonado.",
+        cuando="Se envía aproximadamente 5 minutos después del recordatorio sin respuesta",
         default=(
             "Te dejo descansar 🤗 Cuando quieras retomar, escríbeme y "
             "seguimos donde nos quedamos. ¡Que tengas un excelente día! 🌿"
@@ -123,9 +132,9 @@ MENSAJES: dict[str, MensajeMeta] = {
     "system.checkout_abandono": MensajeMeta(
         key="system.checkout_abandono",
         categoria="system",
-        titulo="Recuperación de checkout abandonado",
-        descripcion="Se envía al cliente que abrió el formulario de pago de Shopify pero no completó. Incluye un botón con el link del checkout para retomar.",
-        cuando="Entre 15 y 40 min después de iniciar el checkout sin completar",
+        titulo="Recordatorio si el cliente no terminó el pago",
+        descripcion="Mensaje que recupera al cliente que abrió el formulario de pago pero no lo completó. Se envía con el botón para retomar exactamente donde se quedó.",
+        cuando="Se envía entre 15 y 40 minutos después de abrir el pago sin completarlo",
         default=(
             "Hola 👋 Vimos que iniciaste tu pedido pero no terminaste el proceso.\n\n"
             "Tu carrito está guardado — solo falta confirmar y listo 🎉"
@@ -135,107 +144,91 @@ MENSAJES: dict[str, MensajeMeta] = {
     "cart.checkout_listo_texto": MensajeMeta(
         key="cart.checkout_listo_texto",
         categoria="cart",
-        titulo="Mensaje del checkout listo",
+        titulo="Mensaje cuando el pedido está listo para pagar",
         descripcion=(
-            "Aparece arriba del botón final cuando el pedido está listo para "
-            "pagar. Se usa en varios puntos del flujo: cuando el cliente toca "
-            "'Confirmar pedido' después de ver el carrito, cuando completa un "
-            "carrito desde el catálogo nativo, o cuando Andrea emite el pedido."
+            "Texto que aparece justo encima del botón de pago. Se usa cada "
+            "vez que el cliente está listo para confirmar."
         ),
-        cuando="Justo antes de enviar el botón con el link del checkout",
+        cuando="Justo antes de enviar el botón con el link del pago",
         default=(
             "🧾 *Tu pedido está listo*\n\n"
             "Toca el botón para confirmar tu pedido y completar el pago."
         ),
         placeholders=(
-            "total",             # total del carrito formateado ("$45.000")
-            "descuento_codigo",  # código vigente, o vacío
-            "descuento_pct",     # porcentaje del descuento, o vacío
-            "descuento_umbral",  # umbral del descuento, o vacío
-            "negocio",
+            "total", "descuento_codigo", "descuento_pct", "descuento_umbral", "negocio",
         ),
         placeholders_requeridos=(),
+        puede_desactivarse=False,  # esencial — sin texto el botón CTA no se puede enviar
     ),
     "cart.checkout_listo_boton": MensajeMeta(
         key="cart.checkout_listo_boton",
         categoria="cart",
-        titulo="Botón del checkout (label)",
+        titulo="Texto del botón para pagar",
         descripcion=(
-            "Texto del botón que abre el link del checkout. Cámbialo según "
-            "tu negocio: 'Pagar pedido', 'Confirmar entrega', 'Reservar', "
-            "'Comprar ahora', etc. Máximo 20 caracteres (límite de WhatsApp)."
+            "Texto que aparece dentro del botón verde que abre el pago. "
+            "Cámbialo según tu negocio: 'Pagar pedido', 'Reservar', "
+            "'Comprar ahora', 'Pagar póliza', etc. Máximo 20 caracteres."
         ),
-        cuando="Aparece dentro del botón CTA del checkout",
+        cuando="Aparece como label del botón principal en cada checkout",
         default="Confirmar pedido",
-        placeholders=(),   # sin placeholders — es solo un label corto
-        max_length=20,     # límite WhatsApp para botón CTA URL
+        placeholders=(),
+        max_length=20,
+        puede_desactivarse=False,  # ESENCIAL — sin botón no hay forma de pagar
     ),
     "cart.estado4_cross_sell": MensajeMeta(
         key="cart.estado4_cross_sell",
         categoria="cart",
-        titulo="Mensaje cuando el carrito alcanzó el pedido mínimo",
+        titulo="Sugerencia de agregar más al alcanzar el monto mínimo",
         descripcion=(
-            "Aparece cuando el cliente armó un carrito que cumple el pedido "
-            "mínimo. Es el momento ideal para sugerirle agregar algo más. "
-            "Si tu negocio premia comprar más (envío gratis, bono, descuento), "
-            "menciónalo aquí con los placeholders."
+            "Mensaje que se envía cuando el carrito ya cumple tu pedido mínimo. "
+            "Es el momento ideal para sugerir agregar más productos (cross-sell). "
+            "Si tu negocio no maneja pedido mínimo o no quieres hacer cross-sell, "
+            "puedes apagarlo y se pasará directo al botón de pagar."
         ),
-        cuando="Cuando el total del carrito alcanza el pedido mínimo",
+        cuando="Cuando el total del carrito alcanza el monto mínimo configurado",
         default=(
             "🎉 *¡Pedido confirmado por ${total}!*\n\n"
             "¿Quieres agregar algo más antes de cerrar tu pedido?\n"
             "Toca el botón para ver el catálogo:"
         ),
         placeholders=(
-            "total",              # total actual del carrito formateado
-            "minimo",             # pedido mínimo configurado
-            "envio_gratis",       # umbral envío gratis (si aplica)
-            "falta_envio_gratis", # cuánto falta para envío gratis (dinámico, "" si no aplica)
-            "descuento_codigo",
-            "descuento_pct",
-            "descuento_umbral",
-            "negocio",
+            "total", "minimo", "envio_gratis", "falta_envio_gratis",
+            "descuento_codigo", "descuento_pct", "descuento_umbral", "negocio",
         ),
         placeholders_requeridos=(),
     ),
     "cart.estado4_cta_texto": MensajeMeta(
         key="cart.estado4_cta_texto",
         categoria="cart",
-        titulo="Texto del CTA para cerrar pedido (Estado 4)",
+        titulo="Acompañante del botón cuando ofreces cerrar el pedido",
         descripcion=(
-            "Mensaje corto que acompaña al botón cuando el cliente ya alcanzó "
-            "el mínimo pero le ofrecemos también cerrar el pedido directamente. "
-            "Se envía justo después del mensaje anterior."
+            "Mensaje corto que va junto al botón de pago cuando el cliente "
+            "alcanzó el mínimo pero le ofrecemos también cerrar el pedido."
         ),
-        cuando="Justo después del cross-sell, junto con el botón del checkout",
+        cuando="Inmediatamente después del mensaje de sugerencia, con el botón de pagar",
         default="O si ya quieres cerrar tu pedido, toca aquí 👇",
         placeholders=("total", "negocio"),
         placeholders_requeridos=(),
+        puede_desactivarse=False,  # esencial — sin texto el botón CTA no se puede enviar
     ),
     "cart.bienvenida_catalogo": MensajeMeta(
         key="cart.bienvenida_catalogo",
         categoria="cart",
-        titulo="Mensaje de bienvenida del catálogo",
+        titulo="Bienvenida al mostrar el catálogo",
         descripcion=(
-            "Texto que aparece como pie/encabezado cuando Andrea muestra el "
-            "catálogo de productos en WhatsApp. Puedes usar los placeholders "
-            "para que el texto refleje SIEMPRE tu configuración actual "
-            "(pedido mínimo, promoción vigente, etc.) sin tener que reescribirlo."
+            "Texto que aparece junto al catálogo de productos. Puedes usar "
+            "los placeholders para que el texto refleje SIEMPRE tu "
+            "configuración actual (pedido mínimo, promoción vigente, etc.) "
+            "sin tener que reescribirlo cada vez que cambies algo."
         ),
-        cuando="Cada vez que se envía el catálogo nativo o se procesa [[TIENDA:]]",
+        cuando="Cada vez que el agente muestra el catálogo al cliente",
         default="📦 Pedido mínimo ${minimo}",
-        # Todos OPCIONALES — el cliente decide qué incluir. Si usa uno que
-        # no aplica (ej. {descuento_codigo} sin descuento activo), queda
-        # vacío y el resto del texto se mantiene.
         placeholders=(
-            "minimo",            # PEDIDO_MINIMO del config (formateado: "25.000")
-            "envio_gratis",      # umbral envío gratis del config (formateado), o vacío si 0
-            "descuento_codigo",  # código de la promoción activa (#43), o vacío
-            "descuento_pct",     # porcentaje del descuento, o vacío
-            "descuento_umbral",  # umbral del descuento (formateado), o vacío
-            "negocio",           # nombre del negocio (Agent.name)
+            "minimo", "envio_gratis",
+            "descuento_codigo", "descuento_pct", "descuento_umbral",
+            "negocio",
         ),
-        placeholders_requeridos=(),  # ninguno obligatorio
+        placeholders_requeridos=(),
     ),
 }
 
