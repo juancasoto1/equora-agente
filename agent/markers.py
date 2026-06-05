@@ -292,6 +292,117 @@ async def handle_pedido(ctx: MarkerContext) -> MarkerContext:
     return ctx
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# FASE E (#27) — Marcadores interactivos
+# ══════════════════════════════════════════════════════════════════════════════
+# Los siguientes 5 handlers solo EXTRAEN y populan el contexto. El envío real
+# (single_product, product_list, reply_buttons, interactive_list, cta_url) sigue
+# en main.py porque la lógica de ORDEN y FALLBACKS depende de variables locales
+# del webhook (_proveedor_agente, _agent_id, msg.telefono) y tiene encadenamientos
+# delicados que NO conviene mover sin un refactor mayor del envío.
+#
+# Comportamiento: defaults byte-idénticos a los extractores originales que
+# vivían en main.py — cero regresión esperada.
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[CATALOGO_CAT:{"categoria":"X"}]] — abre catálogo nativo de WhatsApp
+# ──────────────────────────────────────────────────────────────────────────────
+@register_marker("CATALOGO_CAT")
+async def handle_catalogo_cat(ctx: MarkerContext) -> MarkerContext:
+    match = re.search(r"\[\[CATALOGO_CAT:(.*?)\]\]", ctx.respuesta, re.DOTALL)
+    if not match:
+        return ctx
+    try:
+        datos = json.loads(match.group(1))
+    except Exception:
+        datos = None
+    ctx.respuesta = re.sub(
+        r"\s*\[\[CATALOGO_CAT:.*?\]\]", "", ctx.respuesta, flags=re.DOTALL
+    ).strip()
+    ctx.datos_catalogo_cat = datos
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[BOTONES:{...}]] — reply buttons de WhatsApp (máx 3)
+# ──────────────────────────────────────────────────────────────────────────────
+@register_marker("BOTONES")
+async def handle_botones(ctx: MarkerContext) -> MarkerContext:
+    match = re.search(r"\[\[BOTONES:(.*?)\]\]", ctx.respuesta, re.DOTALL)
+    if not match:
+        return ctx
+    try:
+        datos = json.loads(match.group(1))
+    except Exception:
+        datos = None
+    ctx.respuesta = re.sub(
+        r"\s*\[\[BOTONES:.*?\]\]", "", ctx.respuesta, flags=re.DOTALL
+    ).strip()
+    ctx.datos_botones = datos
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[LISTA:{...}]] — interactive list de WhatsApp con secciones
+# ──────────────────────────────────────────────────────────────────────────────
+@register_marker("LISTA")
+async def handle_lista(ctx: MarkerContext) -> MarkerContext:
+    match = re.search(r"\[\[LISTA:(.*?)\]\]", ctx.respuesta, re.DOTALL)
+    if not match:
+        return ctx
+    try:
+        datos = json.loads(match.group(1))
+    except Exception:
+        datos = None
+    ctx.respuesta = re.sub(
+        r"\s*\[\[LISTA:.*?\]\]", "", ctx.respuesta, flags=re.DOTALL
+    ).strip()
+    ctx.datos_lista = datos
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[TIENDA:]] o [[TIENDA:término]] — abre catálogo/tienda con query opcional
+# ──────────────────────────────────────────────────────────────────────────────
+@register_marker("TIENDA")
+async def handle_tienda(ctx: MarkerContext) -> MarkerContext:
+    # Forma con término de búsqueda: [[TIENDA:nombre producto]]
+    m = re.search(r"\[\[TIENDA:([^\]]+)\]\]", ctx.respuesta)
+    if m:
+        query = m.group(1).strip()
+        ctx.respuesta = re.sub(
+            r"\s*\[\[TIENDA:[^\]]*\]\]", "", ctx.respuesta
+        ).strip()
+        ctx.abrir_tienda = True
+        ctx.tienda_query = query
+        return ctx
+    # Forma sin término: [[TIENDA:]]
+    if "[[TIENDA:]]" in ctx.respuesta:
+        ctx.respuesta = re.sub(
+            r"\s*\[\[TIENDA:\]\]", "", ctx.respuesta
+        ).strip()
+        ctx.abrir_tienda = True
+        ctx.tienda_query = ""
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[PRODUCTO:nombre|presentacion]] — single_product del catálogo (uno o más)
+# ──────────────────────────────────────────────────────────────────────────────
+@register_marker("PRODUCTO")
+async def handle_producto(ctx: MarkerContext) -> MarkerContext:
+    matches = re.findall(r"\[\[PRODUCTO:([^\]]+)\]\]", ctx.respuesta)
+    if not matches:
+        return ctx
+    ctx.respuesta = re.sub(
+        r"\s*\[\[PRODUCTO:[^\]]+\]\]", "", ctx.respuesta
+    ).strip()
+    productos = [m.strip() for m in matches if m.strip()]
+    ctx.productos_mencionados = productos
+    return ctx
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # [[CIERRE_CONV:]] — marcar conversación cerrada (suprime seguimientos)
 # ──────────────────────────────────────────────────────────────────────────────

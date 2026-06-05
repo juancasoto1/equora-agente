@@ -2201,13 +2201,19 @@ async def webhook_handler(request: Request):
 
             # [[MOSTRAR_CARRITO]], [[PEDIDO:...]], [[ESCALAR:...]] y
             # [[CIERRE_CONV:]] ya fueron procesados por MARKER_HANDLERS arriba.
-
-            # Extraer marcadores interactivos ANTES de enviar el texto
-            respuesta, datos_catalogo_cat = extraer_marcador_catalogo_cat(respuesta)
-            respuesta, datos_botones = extraer_marcador_botones(respuesta)
-            respuesta, datos_lista = extraer_marcador_lista(respuesta)
-            respuesta, abrir_tienda, tienda_query = extraer_marcador_tienda(respuesta)
-            respuesta, productos_mencionados = extraer_marcador_producto(respuesta)
+            # Los 5 marcadores interactivos (CATALOGO_CAT, BOTONES, LISTA,
+            # TIENDA, PRODUCTO) también — solo extraemos los resultados del
+            # contexto. El ENVÍO de cada uno sigue inline acá abajo porque
+            # tiene dependencias de orden, fallbacks y estado local
+            # (_proveedor_agente, _agent_id) que no conviene mover sin un
+            # refactor mayor del bloque de envío.
+            respuesta              = _marker_ctx.respuesta
+            datos_catalogo_cat     = _marker_ctx.datos_catalogo_cat
+            datos_botones          = _marker_ctx.datos_botones
+            datos_lista            = _marker_ctx.datos_lista
+            abrir_tienda           = _marker_ctx.abrir_tienda
+            tienda_query           = _marker_ctx.tienda_query
+            productos_mencionados  = _marker_ctx.productos_mencionados
 
             # Enviar texto primero
             # Excepción: si hay CTA de catálogo general (sin query), el texto de Andrea
