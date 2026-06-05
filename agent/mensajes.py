@@ -170,6 +170,48 @@ MENSAJES: dict[str, MensajeMeta] = {
         placeholders=(),   # sin placeholders — es solo un label corto
         max_length=20,     # límite WhatsApp para botón CTA URL
     ),
+    "cart.estado4_cross_sell": MensajeMeta(
+        key="cart.estado4_cross_sell",
+        categoria="cart",
+        titulo="Mensaje cuando el carrito alcanzó el pedido mínimo",
+        descripcion=(
+            "Aparece cuando el cliente armó un carrito que cumple el pedido "
+            "mínimo. Es el momento ideal para sugerirle agregar algo más. "
+            "Si tu negocio premia comprar más (envío gratis, bono, descuento), "
+            "menciónalo aquí con los placeholders."
+        ),
+        cuando="Cuando el total del carrito alcanza el pedido mínimo",
+        default=(
+            "🎉 *¡Pedido confirmado por ${total}!*\n\n"
+            "¿Quieres agregar algo más antes de cerrar tu pedido?\n"
+            "Toca el botón para ver el catálogo:"
+        ),
+        placeholders=(
+            "total",              # total actual del carrito formateado
+            "minimo",             # pedido mínimo configurado
+            "envio_gratis",       # umbral envío gratis (si aplica)
+            "falta_envio_gratis", # cuánto falta para envío gratis (dinámico, "" si no aplica)
+            "descuento_codigo",
+            "descuento_pct",
+            "descuento_umbral",
+            "negocio",
+        ),
+        placeholders_requeridos=(),
+    ),
+    "cart.estado4_cta_texto": MensajeMeta(
+        key="cart.estado4_cta_texto",
+        categoria="cart",
+        titulo="Texto del CTA para cerrar pedido (Estado 4)",
+        descripcion=(
+            "Mensaje corto que acompaña al botón cuando el cliente ya alcanzó "
+            "el mínimo pero le ofrecemos también cerrar el pedido directamente. "
+            "Se envía justo después del mensaje anterior."
+        ),
+        cuando="Justo después del cross-sell, junto con el botón del checkout",
+        default="O si ya quieres cerrar tu pedido, toca aquí 👇",
+        placeholders=("total", "negocio"),
+        placeholders_requeridos=(),
+    ),
     "cart.bienvenida_catalogo": MensajeMeta(
         key="cart.bienvenida_catalogo",
         categoria="cart",

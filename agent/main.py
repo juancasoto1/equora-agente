@@ -613,34 +613,19 @@ async def _procesar_carrito_unificado():
                 await guardar_mensaje(telefono, "assistant", msg)
 
             else:
-                # ── Estado 5: pedido alto (envío gratis solo si está en zona local) ──
-                # Detectar ciudad para no prometer envío gratis fuera de Cali
-                try:
-                    cli_seg5 = await obtener_cliente(telefono)
-                except Exception:
-                    cli_seg5 = None
-                ciudad_seg5 = (cli_seg5.get("ciudad") if cli_seg5 else "") or ""
-                ciudad_seg5 = ciudad_seg5.strip().lower()
-                ciudades_loc_raw_5 = os.getenv("CIUDADES_ENVIO_PROPIO", "cali")
-                ciudades_loc_5 = {c.strip().lower() for c in ciudades_loc_raw_5.split(",") if c.strip()}
-                es_local_5 = ciudad_seg5 in ciudades_loc_5 if ciudad_seg5 else None
-
-                if es_local_5 is True:
-                    msg = (
-                        f"🎉 ¡Tu carrito tiene *${total_fmt}* con *envío gratis* _(aplica solo Cali)_!\n\n"
-                        f"Solo confirma tu dirección de entrega 👇"
-                    )
-                elif es_local_5 is False:
-                    msg = (
-                        f"🎉 ¡Tu carrito tiene *${total_fmt}*!\n\n"
-                        f"📦 El envío a tu ciudad lo calcula la transportadora al "
-                        f"confirmar tu dirección. Toca el botón para continuar 👇"
-                    )
-                else:
-                    msg = (
-                        f"🎉 ¡Tu carrito tiene *${total_fmt}*!\n\n"
-                        f"Toca el botón para confirmar tu dirección de entrega 👇"
-                    )
+                # ── Estado 5 (timer de seguimiento): pedido alto, invitar a pagar ──
+                # Mismo enfoque que el flujo en vivo: mensaje configurable por agente.
+                # Eliminamos las 3 ramas condicionales por ciudad — el cliente personaliza
+                # su template según su modelo (si quiere distinguir por zona, usa
+                # placeholders en el texto; si no, mensaje único).
+                from agent.mensajes import format_seguro
+                aid_seg = await _resolver_agent_id_principal(telefono)
+                _ctx_seg = await construir_contexto_placeholders(aid_seg)
+                _ctx_seg["total"] = total_fmt
+                msg = format_seguro(
+                    await obtener_mensaje(aid_seg, "cart.checkout_listo_texto"),
+                    _ctx_seg,
+                )
                 # Estado 5: cliente ya está sobre el envío gratis o ya alcanzó
                 # el mínimo (no Cali). Crear checkout y mandarle el botón.
                 # El checkout_url ES Shopify pago — flujo legítimo, no es "tienda web".
@@ -1987,30 +1972,20 @@ async def webhook_handler(request: Request):
                                 }
                                 es_local_a = ciudad_a in ciudades_loc if ciudad_a else None
 
-                                # ── Mensaje 1: invitar a agregar más ──
-                                # Solo prometer envío gratis si el cliente está en zona local
-                                # o si NO sabemos su ciudad (mensaje genérico que no engaña).
-                                if es_local_a is True:
-                                    mensaje_agregar = (
-                                        f"🎉 *¡Pedido confirmado por ${total_fmt_loc}!*\n\n"
-                                        f"🚚 *Si estás en Cali, agrega ${falta_g_fmt} más* "
-                                        f"y el envío es *gratis*.\n\n"
-                                        f"Toca el botón para ver el catálogo:"
-                                    )
-                                elif es_local_a is False:
-                                    # Fuera de zona local: no prometer gratis
-                                    mensaje_agregar = (
-                                        f"🎉 *¡Pedido confirmado por ${total_fmt_loc}!*\n\n"
-                                        f"📦 El envío a tu ciudad lo calcula la transportadora. "
-                                        f"Si quieres agregar más productos:"
-                                    )
-                                else:
-                                    # Sin ciudad confirmada: genérico
-                                    mensaje_agregar = (
-                                        f"🎉 *¡Pedido confirmado por ${total_fmt_loc}!*\n\n"
-                                        f"¿Quieres agregar algo más antes de confirmar?\n"
-                                        f"Toca el botón para ver el catálogo:"
-                                    )
+                                # ── Mensaje 1: invitar a agregar más (configurable por agente) ──
+                                # El template del cliente decide qué decir: si quiere mencionar
+                                # zonas de envío gratis, descuento, etc., usa los placeholders
+                                # dinámicos {total} {falta_envio_gratis} {descuento_codigo} etc.
+                                # Eliminamos la rama por "es_local_a" — el cliente personaliza
+                                # su mensaje según su modelo de negocio, no asumimos nada.
+                                from agent.mensajes import format_seguro
+                                _ctx_estado4 = await construir_contexto_placeholders(_agent_id)
+                                _ctx_estado4["total"] = total_fmt_loc
+                                _ctx_estado4["falta_envio_gratis"] = falta_g_fmt if falta_g_fmt else ""
+                                mensaje_agregar = format_seguro(
+                                    await obtener_mensaje(_agent_id, "cart.estado4_cross_sell"),
+                                    _ctx_estado4,
+                                )
                                 # catalog_message removido — directo a product_list (estable en WB).
                                 cat_btn_ok = False
                                 if not cat_btn_ok:
@@ -2036,23 +2011,18 @@ async def webhook_handler(request: Request):
                                     agent_id=_agent_id,
                                 )
 
-                                # ── Mensaje 2: confirmar pedido directo al checkout ──
-                                # NO mostramos el costo exacto del envío aquí — en el checkout
-                                # el cliente lo ve calculado según su dirección (más confiable).
-                                if es_local_a is True:
-                                    mensaje_confirmar = (
-                                        "O si ya quieres cerrar tu pedido (más costos de envío), "
-                                        "toca aquí 👇"
-                                    )
-                                else:
-                                    mensaje_confirmar = (
-                                        "O si ya quieres cerrar tu pedido, toca aquí 👇 "
-                                        "(el envío se calcula al confirmar tu dirección)"
-                                    )
+                                # ── Mensaje 2: CTA al checkout (texto + botón configurables) ──
+                                mensaje_confirmar = format_seguro(
+                                    await obtener_mensaje(_agent_id, "cart.estado4_cta_texto"),
+                                    _ctx_estado4,
+                                )
+                                _boton_label = (
+                                    await obtener_mensaje(_agent_id, "cart.checkout_listo_boton")
+                                ).strip() or "Confirmar pedido"
                                 if hasattr(_proveedor_agente, "enviar_cta_url"):
                                     await _proveedor_agente.enviar_cta_url(
                                         msg.telefono, mensaje_confirmar,
-                                        "Confirmar pedido ✅", checkout_url,
+                                        _boton_label, checkout_url,
                                     )
                                 else:
                                     await _proveedor_agente.enviar_mensaje(
@@ -2075,53 +2045,25 @@ async def webhook_handler(request: Request):
                                         logger.warning(f"[pedido-min] botones carrito fallaron: {e}")
                                 continue  # No pasar por Claude
 
-                            # CASO B: alcanza mínimo Y envío gratis (en zona local)
-                            # Detectar ciudad del cliente para no dar info falsa.
-                            try:
-                                cliente_info = await obtener_cliente(msg.telefono, agent_id=_agent_id)
-                            except Exception:
-                                cliente_info = None
-                            ciudad_cliente = ""
-                            if cliente_info:
-                                ciudad_cliente = (cliente_info.get("ciudad") or "").strip().lower()
-
-                            # Lista de ciudades con envío propio configurable por agente
-                            # (BUSINESS_VARS.CIUDADES_ENVIO_PROPIO = "cali,jamundi,palmira" o env var)
-                            ciudades_locales_raw = (
-                                await get_config_value("CIUDADES_ENVIO_PROPIO", _agent_id)
-                                or os.getenv("CIUDADES_ENVIO_PROPIO", "cali")
+                            # CASO B: carrito >= umbral envío gratis (o agent que no usa zonas)
+                            # Mensaje + botón 100% configurables. El cliente decide qué decir
+                            # según su modelo de envío (gratis a una zona, transportadora,
+                            # solo pickup, etc.). Reutilizamos los mismos mensajes que el
+                            # flujo de checkout directo para mantener UX consistente.
+                            from agent.mensajes import format_seguro
+                            _ctx_estado5 = await construir_contexto_placeholders(_agent_id)
+                            _ctx_estado5["total"] = total_fmt_loc
+                            texto_checkout = format_seguro(
+                                await obtener_mensaje(_agent_id, "cart.checkout_listo_texto"),
+                                _ctx_estado5,
                             )
-                            ciudades_locales = {
-                                c.strip().lower() for c in ciudades_locales_raw.split(",") if c.strip()
-                            }
-                            es_zona_local = ciudad_cliente in ciudades_locales if ciudad_cliente else None
-
-                            if es_zona_local is True:
-                                # Cliente confirmado en zona local → envío gratis aplica
-                                texto_checkout = (
-                                    f"🎉 *¡Pedido recibido por ${total_fmt_loc}!*\n\n"
-                                    "🚚 *Envío gratis* _(aplica solo Cali)_ 🎉\n\n"
-                                    "Toca el botón para confirmar tu dirección de entrega 🌿"
-                                )
-                            elif es_zona_local is False:
-                                # Cliente confirmado fuera de zona local → envío por transportadora
-                                texto_checkout = (
-                                    f"🎉 *¡Pedido recibido por ${total_fmt_loc}!*\n\n"
-                                    "📦 Para tu ciudad el envío se realiza por transportadora. "
-                                    "El valor se calcula al confirmar tu dirección.\n\n"
-                                    "Toca el botón para continuar 🌿"
-                                )
-                            else:
-                                # No sabemos la ciudad → mensaje neutral SIN prometer envío gratis
-                                texto_checkout = (
-                                    f"🎉 *¡Pedido recibido por ${total_fmt_loc}!*\n\n"
-                                    "Toca el botón para confirmar tu dirección de entrega. "
-                                    "El costo de envío se calculará según tu ubicación. 🌿"
-                                )
+                            _boton_label_b = (
+                                await obtener_mensaje(_agent_id, "cart.checkout_listo_boton")
+                            ).strip() or "Confirmar pedido"
                             if hasattr(_proveedor_agente, "enviar_cta_url"):
                                 await _proveedor_agente.enviar_cta_url(
                                     msg.telefono, texto_checkout,
-                                    "Confirmar pedido", checkout_url
+                                    _boton_label_b, checkout_url
                                 )
                             else:
                                 await _proveedor_agente.enviar_mensaje(
