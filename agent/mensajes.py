@@ -72,6 +72,10 @@ class MensajeMeta:
                     el texto al guardar. Default: tupla vacía (todo opcional).
                     Útil para casos donde la lógica depende del placeholder
                     (ej. mensaje de descuento debe incluir {codigo}).
+
+      max_length:   máximo de caracteres permitido en el texto. Default 4000
+                    (límite cómodo para mensajes WhatsApp). Útil para botones
+                    CTA (máximo 20 chars en Meta) y labels cortos.
     """
     key: str
     categoria: str
@@ -81,6 +85,7 @@ class MensajeMeta:
     default: str
     placeholders: tuple[str, ...] = field(default_factory=tuple)
     placeholders_requeridos: tuple[str, ...] = field(default_factory=tuple)
+    max_length: int = 4000
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -126,6 +131,44 @@ MENSAJES: dict[str, MensajeMeta] = {
             "Tu carrito está guardado — solo falta confirmar y listo 🎉"
         ),
         placeholders=(),
+    ),
+    "cart.checkout_listo_texto": MensajeMeta(
+        key="cart.checkout_listo_texto",
+        categoria="cart",
+        titulo="Mensaje del checkout listo",
+        descripcion=(
+            "Aparece arriba del botón final cuando el pedido está listo para "
+            "pagar. Se usa en varios puntos del flujo: cuando el cliente toca "
+            "'Confirmar pedido' después de ver el carrito, cuando completa un "
+            "carrito desde el catálogo nativo, o cuando Andrea emite el pedido."
+        ),
+        cuando="Justo antes de enviar el botón con el link del checkout",
+        default=(
+            "🧾 *Tu pedido está listo*\n\n"
+            "Toca el botón para confirmar tu pedido y completar el pago."
+        ),
+        placeholders=(
+            "total",             # total del carrito formateado ("$45.000")
+            "descuento_codigo",  # código vigente, o vacío
+            "descuento_pct",     # porcentaje del descuento, o vacío
+            "descuento_umbral",  # umbral del descuento, o vacío
+            "negocio",
+        ),
+        placeholders_requeridos=(),
+    ),
+    "cart.checkout_listo_boton": MensajeMeta(
+        key="cart.checkout_listo_boton",
+        categoria="cart",
+        titulo="Botón del checkout (label)",
+        descripcion=(
+            "Texto del botón que abre el link del checkout. Cámbialo según "
+            "tu negocio: 'Pagar pedido', 'Confirmar entrega', 'Reservar', "
+            "'Comprar ahora', etc. Máximo 20 caracteres (límite de WhatsApp)."
+        ),
+        cuando="Aparece dentro del botón CTA del checkout",
+        default="Confirmar pedido",
+        placeholders=(),   # sin placeholders — es solo un label corto
+        max_length=20,     # límite WhatsApp para botón CTA URL
     ),
     "cart.bienvenida_catalogo": MensajeMeta(
         key="cart.bienvenida_catalogo",

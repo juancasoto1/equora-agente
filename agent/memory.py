@@ -2265,8 +2265,10 @@ async def guardar_mensaje_agente(
     content = (content or "").strip()
     if not content:
         return False, "El mensaje no puede estar vacío. Para volver al default usa el botón 'Restaurar'."
-    if len(content) > 4000:
-        return False, f"El mensaje es muy largo ({len(content)} caracteres). Máximo 4000."
+    # Cada mensaje declara su propio max_length (botón CTA tiene 20, mensajes ~4000)
+    max_len = getattr(meta, "max_length", 4000) or 4000
+    if len(content) > max_len:
+        return False, f"El mensaje es muy largo ({len(content)} caracteres). Máximo {max_len}."
     # Validar que los placeholders REQUERIDOS estén presentes. Los demás
     # (declarados en `placeholders` pero no en `placeholders_requeridos`)
     # son sugeridos/opcionales — el cliente decide cuáles usar.
@@ -2410,6 +2412,8 @@ async def listar_mensajes_agente(agent_id: int) -> list[dict]:
             "cuando":         meta.cuando,
             "default":        meta.default,
             "placeholders":   list(meta.placeholders),
+            "placeholders_requeridos": list(getattr(meta, "placeholders_requeridos", ()) or ()),
+            "max_length":     getattr(meta, "max_length", 4000),
             "content":        override.content if override else meta.default,
             "personalizado":  bool(override),
             "updated_at":     override.updated_at.isoformat() if override and override.updated_at else "",

@@ -1560,15 +1560,21 @@ async def webhook_handler(request: Request):
                         msg.telefono, agent_id=_agent_id, forzar_recrear=False
                     )
                     if checkout_url:
-                        msg_checkout = (
-                            "🎉 *¡Perfecto!*\n\n"
-                            "Toca el botón para confirmar tu dirección de entrega 🌿"
+                        # Mensaje y label del botón configurables por agente
+                        # (#28 fase 2.6). El cliente personaliza en
+                        # Configuración → Mensajes → "Carrito y checkout".
+                        from agent.mensajes import format_seguro
+                        _ctx_ph = await construir_contexto_placeholders(_agent_id)
+                        msg_checkout = format_seguro(
+                            await obtener_mensaje(_agent_id, "cart.checkout_listo_texto"),
+                            _ctx_ph,
                         )
+                        boton_label = (await obtener_mensaje(_agent_id, "cart.checkout_listo_boton")).strip() or "Confirmar pedido"
                         ok_cta = False
                         if hasattr(_proveedor_agente, "enviar_cta_url"):
                             ok_cta = await _proveedor_agente.enviar_cta_url(
                                 msg.telefono, msg_checkout,
-                                "Confirmar entrega", checkout_url,
+                                boton_label, checkout_url,
                             )
                         if not ok_cta:
                             await _proveedor_agente.enviar_mensaje(
@@ -2508,17 +2514,19 @@ async def webhook_handler(request: Request):
                 logger.warning(f"[PEDIDO] checkout_url corrupto: {checkout_url[:60]} — intentando recrear")
                 checkout_url = await _obtener_o_recrear_checkout_url(msg.telefono, agent_id=_agent_id)
             if checkout_url:
-                texto_checkout = (
-                    "🧾 *Tu pedido está listo*\n\n"
-                    "Toca el botón para confirmar tu dirección de entrega. "
-                    "En cuanto registres tus datos, te confirmo aquí mismo el "
-                    "número de tu pedido 🌿"
+                # Mensaje y label del botón configurables por agente (#28 fase 2.6)
+                from agent.mensajes import format_seguro
+                _ctx_ph = await construir_contexto_placeholders(_agent_id)
+                texto_checkout = format_seguro(
+                    await obtener_mensaje(_agent_id, "cart.checkout_listo_texto"),
+                    _ctx_ph,
                 )
+                boton_label = (await obtener_mensaje(_agent_id, "cart.checkout_listo_boton")).strip() or "Confirmar pedido"
                 enviado_cta = False
                 if hasattr(_proveedor_agente, "enviar_cta_url"):
                     try:
                         enviado_cta = await _proveedor_agente.enviar_cta_url(
-                            msg.telefono, texto_checkout, "Confirmar entrega", checkout_url
+                            msg.telefono, texto_checkout, boton_label, checkout_url
                         )
                     except Exception as e:
                         logger.error(f"Error enviando cta_url: {e}")

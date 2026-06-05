@@ -8754,6 +8754,8 @@ function _msjRenderItem(m) {
         }).join('')
       + '</div>';
   }
+  var maxLen = m.max_length || 4000;
+  var rows   = maxLen <= 50 ? 1 : 3;  // inputs cortos (botones) en 1 línea
   return ''
     + '<div style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px;margin-bottom:12px">'
     +   '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">'
@@ -8766,7 +8768,7 @@ function _msjRenderItem(m) {
     +       (m.cuando ? '<div style="color:var(--voco-text-muted);font-size:.72rem;margin-top:2px"><i data-lucide="clock" style="width:11px;height:11px;vertical-align:-1px;margin-right:3px"></i>' + _msjEscapeHtml(m.cuando) + '</div>' : '')
     +     '</div>'
     +   '</div>'
-    +   '<textarea id="' + id + '" rows="3" maxlength="4000" data-key="' + _msjEscapeHtml(m.key) + '"'
+    +   '<textarea id="' + id + '" rows="' + rows + '" maxlength="' + maxLen + '" data-key="' + _msjEscapeHtml(m.key) + '"'
     +     ' style="width:100%;margin-top:10px;padding:9px 11px;border:1px solid var(--voco-border);border-radius:7px;background:var(--voco-content-bg-alt);color:var(--voco-text);font-size:.86rem;outline:none;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:68px;line-height:1.4">'
     +     _msjEscapeHtml(m.content)
     +   '</textarea>'
