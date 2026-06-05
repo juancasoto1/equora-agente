@@ -2267,9 +2267,12 @@ async def guardar_mensaje_agente(
         return False, "El mensaje no puede estar vacío. Para volver al default usa el botón 'Restaurar'."
     if len(content) > 4000:
         return False, f"El mensaje es muy largo ({len(content)} caracteres). Máximo 4000."
-    # Validar que todos los placeholders requeridos estén presentes
+    # Validar que los placeholders REQUERIDOS estén presentes. Los demás
+    # (declarados en `placeholders` pero no en `placeholders_requeridos`)
+    # son sugeridos/opcionales — el cliente decide cuáles usar.
+    requeridos = getattr(meta, "placeholders_requeridos", ()) or ()
     faltantes = [
-        f"{{{p}}}" for p in meta.placeholders if f"{{{p}}}" not in content
+        f"{{{p}}}" for p in requeridos if f"{{{p}}}" not in content
     ]
     if faltantes:
         return False, (
@@ -2316,6 +2319,67 @@ async def restaurar_mensaje_agente(agent_id: int, key: str) -> bool:
         await session.delete(row)
         await session.commit()
         return True
+
+
+async def construir_contexto_placeholders(agent_id: int) -> dict:
+    """Construye el dict de placeholders dinámicos para el agente.
+
+    Reúne en un solo dict toda la configuración del agente que puede usarse
+    como placeholder en mensajes (pedido mínimo, umbral envío gratis,
+    descuento activo, nombre del negocio, etc.).
+
+    Si un valor NO está configurado, se devuelve string vacío — junto con
+    format_seguro() del módulo mensajes garantiza que un placeholder no
+    aplicable quede vacío en lugar de romper el mensaje.
+
+    Valores devueltos:
+      minimo:           pedido mínimo formateado ("25.000") o "" si 0
+      envio_gratis:     umbral envío gratis formateado o "" si 0/no aplica
+      descuento_codigo: código de la promoción activa o ""
+      descuento_pct:    porcentaje del descuento o ""
+      descuento_umbral: umbral del descuento formateado o ""
+      negocio:          Agent.name o ""
+    """
+    ctx: dict[str, str] = {
+        "minimo": "", "envio_gratis": "",
+        "descuento_codigo": "", "descuento_pct": "", "descuento_umbral": "",
+        "negocio": "",
+    }
+    # Datos del agente (nombre del negocio)
+    async with async_session() as session:
+        result = await session.execute(select(Agent).where(Agent.id == agent_id))
+        agente = result.scalar_one_or_none()
+        if agente:
+            ctx["negocio"] = agente.name or ""
+            # Descuento — solo si está activo
+            if agente.descuento_activo and agente.descuento_codigo:
+                ctx["descuento_codigo"] = agente.descuento_codigo
+                ctx["descuento_pct"]    = str(agente.descuento_pct or "")
+                if agente.descuento_umbral > 0:
+                    ctx["descuento_umbral"] = f"{int(agente.descuento_umbral):,}".replace(",", ".")
+    # Pedido mínimo desde config_value (con fallback a env var por compatibilidad)
+    pedido_min_raw = await get_config_value("PEDIDO_MINIMO", agent_id)
+    if not pedido_min_raw:
+        import os as _os
+        pedido_min_raw = _os.getenv("PEDIDO_MINIMO", "0")
+    try:
+        pedido_min_int = int(float(pedido_min_raw))
+        if pedido_min_int > 0:
+            ctx["minimo"] = f"{pedido_min_int:,}".replace(",", ".")
+    except (TypeError, ValueError):
+        pass
+    # Umbral envío gratis desde config_value
+    envio_raw = await get_config_value("ENVIO_GRATIS_DESDE", agent_id)
+    if not envio_raw:
+        import os as _os
+        envio_raw = _os.getenv("ENVIO_GRATIS_DESDE", "0")
+    try:
+        envio_int = int(float(envio_raw))
+        if envio_int > 0:
+            ctx["envio_gratis"] = f"{envio_int:,}".replace(",", ".")
+    except (TypeError, ValueError):
+        pass
+    return ctx
 
 
 async def listar_mensajes_agente(agent_id: int) -> list[dict]:

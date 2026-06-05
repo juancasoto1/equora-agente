@@ -26,6 +26,7 @@ from agent.memory import (
     inicializar_db, guardar_mensaje, obtener_historial, limpiar_historial,
     guardar_cliente, obtener_cliente, guardar_pedido_pendiente, limpiar_pedido_pendiente,
     obtener_agent_ids_por_telefono, obtener_descuento_promo, obtener_mensaje,
+    construir_contexto_placeholders,
     guardar_carrito_activo, limpiar_carrito_activo, obtener_carrito_activo,
     carrito_es_fresco_para_merge,
     puede_enviar_checkout_abandono, marcar_checkout_abandono_enviado,
@@ -2391,12 +2392,16 @@ async def webhook_handler(request: Request):
             # catálogo nativo falla (API caída, sin catalog_id, etc.) caemos
             # al fallback de URL a la tienda web.
             if abrir_tienda:
-                minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
-                gratis_fmt = f"{obtener_umbral_envio_gratis():,}".replace(",", ".")
-                # NO mostramos el costo del envío — solo el mínimo y el umbral
-                # de envío gratis (que aplica solo en Cali). Para fuera de Cali
-                # el envío lo calcula la transportadora en el checkout.
-                pie_tienda = f"📦 Pedido mínimo ${minimo_fmt} | 🚚 Envío gratis en Cali > ${gratis_fmt}"
+                # Pie del catálogo — configurable por agente desde el panel
+                # (Configuración → Mensajes → "Mensaje de bienvenida del catálogo").
+                # Los placeholders {minimo}, {envio_gratis}, {descuento_*}, {negocio}
+                # se resuelven en runtime contra la config actual del agente —
+                # cuando cambia el pedido mínimo en el panel, se refleja en el
+                # próximo envío sin redeploy.
+                from agent.mensajes import format_seguro
+                _pie_template = await obtener_mensaje(_agent_id, "cart.bienvenida_catalogo")
+                _ctx_ph = await construir_contexto_placeholders(_agent_id)
+                pie_tienda = format_seguro(_pie_template, _ctx_ph)
 
                 # ── Detectar si la query es una categoría conocida ──
                 # Si es categoría → product_list de esa categoría (mejor UX)

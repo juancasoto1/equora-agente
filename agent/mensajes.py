@@ -61,7 +61,17 @@ class MensajeMeta:
       descripcion:  qué hace este mensaje (1-2 líneas)
       cuando:       cuándo se dispara (línea adicional de contexto)
       default:      texto que se envía si el agente no lo personaliza
-      placeholders: tupla de placeholders {nombre} soportados. Vacía si no.
+
+      placeholders: tupla de placeholders {nombre} DISPONIBLES (sugeridos en UI).
+                    El cliente puede usar 0, 1 o varios — son opcionales.
+                    Si usa un placeholder que NO existe en el contexto resuelto
+                    en runtime, se sustituye por string vacío (sin error).
+
+      placeholders_requeridos:
+                    subset de `placeholders` que SÍ deben estar presentes en
+                    el texto al guardar. Default: tupla vacía (todo opcional).
+                    Útil para casos donde la lógica depende del placeholder
+                    (ej. mensaje de descuento debe incluir {codigo}).
     """
     key: str
     categoria: str
@@ -70,6 +80,7 @@ class MensajeMeta:
     cuando: str
     default: str
     placeholders: tuple[str, ...] = field(default_factory=tuple)
+    placeholders_requeridos: tuple[str, ...] = field(default_factory=tuple)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -116,7 +127,66 @@ MENSAJES: dict[str, MensajeMeta] = {
         ),
         placeholders=(),
     ),
+    "cart.bienvenida_catalogo": MensajeMeta(
+        key="cart.bienvenida_catalogo",
+        categoria="cart",
+        titulo="Mensaje de bienvenida del catálogo",
+        descripcion=(
+            "Texto que aparece como pie/encabezado cuando Andrea muestra el "
+            "catálogo de productos en WhatsApp. Puedes usar los placeholders "
+            "para que el texto refleje SIEMPRE tu configuración actual "
+            "(pedido mínimo, promoción vigente, etc.) sin tener que reescribirlo."
+        ),
+        cuando="Cada vez que se envía el catálogo nativo o se procesa [[TIENDA:]]",
+        default="📦 Pedido mínimo ${minimo}",
+        # Todos OPCIONALES — el cliente decide qué incluir. Si usa uno que
+        # no aplica (ej. {descuento_codigo} sin descuento activo), queda
+        # vacío y el resto del texto se mantiene.
+        placeholders=(
+            "minimo",            # PEDIDO_MINIMO del config (formateado: "25.000")
+            "envio_gratis",      # umbral envío gratis del config (formateado), o vacío si 0
+            "descuento_codigo",  # código de la promoción activa (#43), o vacío
+            "descuento_pct",     # porcentaje del descuento, o vacío
+            "descuento_umbral",  # umbral del descuento (formateado), o vacío
+            "negocio",           # nombre del negocio (Agent.name)
+        ),
+        placeholders_requeridos=(),  # ninguno obligatorio
+    ),
 }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Sustitución segura de placeholders
+# ──────────────────────────────────────────────────────────────────────────────
+class _SafeDict(dict):
+    """Dict que devuelve '' (no KeyError) cuando falta una key.
+
+    Permite hacer template.format_map(contexto) sin temer a placeholders
+    desconocidos. Si el cliente escribió `{xyz}` en su mensaje y `xyz` no
+    está en el contexto resuelto, queda como string vacío. Esto es
+    deliberado: priorizar que el mensaje llegue al cliente sobre estricta
+    validación del template (la validación se hace al guardar).
+    """
+    def __missing__(self, key):
+        return ""
+
+
+def format_seguro(template: str, contexto: dict) -> str:
+    """Sustituye {placeholders} en `template` usando `contexto`.
+
+    Si el template tiene placeholders no definidos en contexto, quedan
+    vacíos (no lanza KeyError). Si tiene llaves literales que no son
+    placeholders válidos (ej. `{` suelta sin cierre), las preservamos
+    sin romper el envío.
+    """
+    if not template:
+        return ""
+    try:
+        return template.format_map(_SafeDict(contexto or {}))
+    except (ValueError, IndexError):
+        # Template con llaves mal balanceadas o índices numéricos {0} —
+        # devolvemos el template tal cual para no perder el mensaje.
+        return template
 
 
 # ──────────────────────────────────────────────────────────────────────────────
