@@ -3703,17 +3703,29 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
           <!-- ── Pane: Mensajes (sistema, configurables por agente — #28) ── -->
           <div class="cfg-pane" id="cfg-pane-mensajes" style="padding:24px;overflow-y:auto">
-            <div style="max-width:780px">
+            <div style="max-width:900px">
               <h2 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem">
                 <i data-lucide="message-square-text" style="width:18px;height:18px;vertical-align:-3px;margin-right:6px;color:var(--voco-brand)"></i>
                 Mensajes del sistema
               </h2>
-              <p style="margin:0 0 22px;color:var(--voco-text-muted);font-size:.86rem;line-height:1.55">
-                Personaliza los mensajes que Voco envía automáticamente a tus clientes
-                (seguimientos, confirmaciones, etc). Si no editas un mensaje, se usa
-                el texto por defecto. Cada cambio aplica solo a este agente — otros
-                agentes de la plataforma no se ven afectados.
+              <p style="margin:0 0 18px;color:var(--voco-text-muted);font-size:.86rem;line-height:1.55">
+                Personaliza los mensajes que tu agente envía automáticamente
+                a tus clientes. Si tu negocio no necesita alguno (por ejemplo,
+                no manejas pedido mínimo o no quieres enviar recordatorios),
+                puedes <b>desactivarlo</b> con el interruptor — el agente no
+                lo enviará.
               </p>
+
+              <!-- Barra de filtros: chips por categoría + búsqueda -->
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+                <div id="msj-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+                <div style="flex:1;min-width:180px;position:relative">
+                  <i data-lucide="search" style="width:14px;height:14px;position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--voco-text-muted)"></i>
+                  <input id="msj-buscar" type="text" placeholder="Buscar mensaje…"
+                    oninput="msjFiltrar()"
+                    style="width:100%;padding:8px 12px 8px 30px;border:1px solid var(--voco-border);border-radius:8px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.82rem;outline:none;box-sizing:border-box">
+                </div>
+              </div>
 
               <!-- Estado de carga / lista de mensajes (se rellena via JS) -->
               <div id="msj-lista">
@@ -8685,13 +8697,64 @@ document.addEventListener('click', function(e) {
 });
 
 /* ── Mensajes del sistema configurables por agente (#28) ────────
-   Renderiza el catálogo agrupado por categoría. Cada mensaje tiene su
-   propio textarea + botones Guardar / Restaurar. El catálogo viene del
-   backend (autogenerado a partir de agent/mensajes.py:MENSAJES) — la UI
-   se auto-puebla, no hay que tocar HTML al agregar mensajes nuevos. */
+   El catálogo viene del backend (autogenerado a partir de
+   agent/mensajes.py:MENSAJES) — la UI se auto-puebla con cualquier
+   mensaje nuevo que se agregue al catálogo, sin tocar HTML/JS.
+
+   Estado local: _msjData (cache del último fetch), _msjFiltro (categoría
+   activa, default 'all'), _msjQuery (texto de búsqueda).
+*/
+var _msjData    = { categorias: {}, mensajes: [] };
+var _msjFiltro  = 'all';
+var _msjQuery   = '';
+
 function _msjEscapeHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
                        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _msjFmtCop(n) {
+  n = parseInt(n, 10);
+  if (!n || isNaN(n)) return '';
+  return n.toLocaleString('es-CO').replace(/,/g, '.');
+}
+
+/* Contexto de placeholders para preview en vivo. Datos de ejemplo
+   neutros — el cliente decide qué placeholders usar realmente. */
+function _msjContextoPreview() {
+  return {
+    total:              '45.000',
+    minimo:             '25.000',
+    envio_gratis:       '80.000',
+    falta_envio_gratis: '35.000',
+    descuento_codigo:   'GRACIAS5',
+    descuento_pct:      '5',
+    descuento_umbral:   '80.000',
+    negocio:            'Tu negocio',
+  };
+}
+
+/* Sustituye {placeholders} en el template para el preview. Igual que
+   format_seguro del backend: placeholder desconocido = vacío, sin error. */
+function _msjFormatPreview(tpl) {
+  if (!tpl) return '';
+  var ctx = _msjContextoPreview();
+  return tpl.replace(/\{(\w+)\}/g, function(_, k) {
+    return ctx[k] != null ? ctx[k] : '';
+  });
+}
+
+/* Convierte markdown WhatsApp (*negrita*, _cursiva_, ~tachado~, `mono`)
+   a HTML simple para el preview. NO procesa el {placeholder} que ya fue
+   sustituido — solo formato. */
+function _msjMarkdownWA(s) {
+  if (!s) return '';
+  return _msjEscapeHtml(s)
+    .replace(/\n/g, '<br>')
+    .replace(/\*(.+?)\*/g, '<b>$1</b>')
+    .replace(/_(.+?)_/g,   '<i>$1</i>')
+    .replace(/~(.+?)~/g,   '<s>$1</s>')
+    .replace(/`(.+?)`/g,   '<code style="background:rgba(0,0,0,.06);padding:0 3px;border-radius:3px">$1</code>');
 }
 
 async function cargarMensajes() {
@@ -8703,86 +8766,218 @@ async function cargarMensajes() {
     var r = await fetch('/inbox/api/agents/' + ag + '/mensajes', {credentials:'include'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var d = await r.json();
-    var categorias = d.categorias || {};
-    var mensajes   = d.mensajes   || [];
-    if (!mensajes.length) {
-      cont.innerHTML = '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">No hay mensajes configurables todavía.</div>';
-      return;
-    }
-    // Agrupar por categoria
-    var porCat = {};
-    mensajes.forEach(function(m) {
-      (porCat[m.categoria] = porCat[m.categoria] || []).push(m);
-    });
-    // Render ordenado por meta.orden
-    var slugs = Object.keys(categorias).sort(function(a, b) {
-      return (categorias[a].orden || 999) - (categorias[b].orden || 999);
-    });
-    var html = '';
-    slugs.forEach(function(slug) {
-      var items = porCat[slug] || [];
-      if (!items.length) return;
-      var meta = categorias[slug] || {};
-      html += '<div style="margin-bottom:28px">'
-        + '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;padding-bottom:8px;border-bottom:1px solid var(--voco-border)">'
-        +   '<h3 style="margin:0;color:var(--voco-text);font-size:.95rem;font-weight:700">' + _msjEscapeHtml(meta.label || slug) + '</h3>'
-        +   '<span style="color:var(--voco-text-muted);font-size:.78rem">' + _msjEscapeHtml(meta.descripcion || '') + '</span>'
-        + '</div>';
-      items.forEach(function(m) {
-        html += _msjRenderItem(m);
-      });
-      html += '</div>';
-    });
-    cont.innerHTML = html;
-    if (window.lucide) window.lucide.createIcons();
+    _msjData.categorias = d.categorias || {};
+    _msjData.mensajes   = d.mensajes   || [];
+    _msjRenderChips();
+    _msjFiltrar();  // primera render con filtros actuales
   } catch (e) {
     cont.innerHTML = '<div style="padding:24px;color:#dc2626;font-size:.85rem">Error cargando mensajes: ' + _msjEscapeHtml(e.message) + '</div>';
   }
 }
 
+/* Renderiza los chips de filtro por categoría arriba. */
+function _msjRenderChips() {
+  var cont = document.getElementById('msj-chips');
+  if (!cont) return;
+  var slugs = Object.keys(_msjData.categorias).sort(function(a, b) {
+    return (_msjData.categorias[a].orden || 999) - (_msjData.categorias[b].orden || 999);
+  });
+  // Contar cuántos mensajes hay por categoría
+  var conteo = {};
+  _msjData.mensajes.forEach(function(m) {
+    conteo[m.categoria] = (conteo[m.categoria] || 0) + 1;
+  });
+  function chip(slug, label, count) {
+    var activo = _msjFiltro === slug;
+    var bg = activo ? 'var(--voco-brand)' : 'var(--voco-content-bg-alt)';
+    var col = activo ? '#fff' : 'var(--voco-text)';
+    var border = activo ? 'var(--voco-brand)' : 'var(--voco-border)';
+    return '<button type="button" onclick="msjSetFiltro(\'' + slug + '\')"'
+      + ' style="background:' + bg + ';color:' + col + ';border:1px solid ' + border
+      + ';border-radius:18px;padding:5px 12px;font-size:.78rem;font-weight:600;cursor:pointer;'
+      + 'transition:.15s">'
+      + _msjEscapeHtml(label)
+      + (count != null ? ' <span style="opacity:.7;font-weight:400">· ' + count + '</span>' : '')
+      + '</button>';
+  }
+  var html = chip('all', 'Todos', _msjData.mensajes.length);
+  slugs.forEach(function(slug) {
+    var meta = _msjData.categorias[slug] || {};
+    html += chip(slug, meta.label || slug, conteo[slug] || 0);
+  });
+  cont.innerHTML = html;
+}
+
+function msjSetFiltro(slug) {
+  _msjFiltro = slug;
+  _msjRenderChips();
+  _msjFiltrar();
+}
+
+function msjFiltrar() {
+  _msjQuery = (document.getElementById('msj-buscar')?.value || '').toLowerCase().trim();
+  _msjFiltrar();
+}
+
+function _msjFiltrar() {
+  var cont = document.getElementById('msj-lista');
+  if (!cont) return;
+  var q = _msjQuery;
+  var items = _msjData.mensajes.filter(function(m) {
+    if (_msjFiltro !== 'all' && m.categoria !== _msjFiltro) return false;
+    if (q) {
+      var hay = (m.titulo + ' ' + m.descripcion + ' ' + (m.cuando || '')).toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+  if (!items.length) {
+    cont.innerHTML = '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">No hay mensajes que coincidan con tu filtro.</div>';
+    return;
+  }
+  // Agrupar por categoría (cuando filtro = all, mostrar cabecera por grupo)
+  if (_msjFiltro === 'all') {
+    var porCat = {};
+    items.forEach(function(m) {
+      (porCat[m.categoria] = porCat[m.categoria] || []).push(m);
+    });
+    var slugs = Object.keys(_msjData.categorias).sort(function(a, b) {
+      return (_msjData.categorias[a].orden || 999) - (_msjData.categorias[b].orden || 999);
+    });
+    var html = '';
+    slugs.forEach(function(slug) {
+      var its = porCat[slug] || [];
+      if (!its.length) return;
+      var meta = _msjData.categorias[slug] || {};
+      html += '<div style="margin-bottom:24px">'
+        + '<div style="display:flex;align-items:baseline;gap:10px;margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid var(--voco-border)">'
+        +   '<h3 style="margin:0;color:var(--voco-text);font-size:.92rem;font-weight:700">' + _msjEscapeHtml(meta.label || slug) + '</h3>'
+        +   '<span style="color:var(--voco-text-muted);font-size:.76rem">' + _msjEscapeHtml(meta.descripcion || '') + '</span>'
+        + '</div>';
+      its.forEach(function(m) { html += _msjRenderItem(m); });
+      html += '</div>';
+    });
+    cont.innerHTML = html;
+  } else {
+    cont.innerHTML = items.map(_msjRenderItem).join('');
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+/* Renderiza UNA tarjeta de mensaje. Layout 2 columnas:
+   - Izquierda: editor (textarea + placeholders + botones)
+   - Derecha: preview burbuja WhatsApp con sustitución en vivo
+*/
 function _msjRenderItem(m) {
-  var id = 'msj-' + m.key.replace(/[^a-z0-9]/gi, '_');
-  var pillPers = m.personalizado
-    ? '<span style="background:#dbeafe;color:#1e40af;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:8px">Personalizado</span>'
-    : '<span style="background:var(--voco-content-bg-alt);color:var(--voco-text-muted);font-size:.68rem;font-weight:500;padding:2px 8px;border-radius:10px;margin-left:8px">Default</span>';
+  var id      = 'msj-' + m.key.replace(/[^a-z0-9]/gi, '_');
+  var maxLen  = m.max_length || 4000;
+  var esCorto = maxLen <= 50;
+  var rows    = esCorto ? 1 : 3;
+
+  // Pill de estado: Activo + Personalizado, o variantes
+  var pills = '';
+  if (!m.activo) {
+    pills += '<span style="background:#fee2e2;color:#991b1b;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:8px">Desactivado</span>';
+  } else if (m.personalizado) {
+    pills += '<span style="background:#dbeafe;color:#1e40af;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:8px">Personalizado</span>';
+  } else {
+    pills += '<span style="background:var(--voco-content-bg-alt);color:var(--voco-text-muted);font-size:.68rem;font-weight:500;padding:2px 8px;border-radius:10px;margin-left:8px">Predeterminado</span>';
+  }
+  if (!m.puede_desactivarse) {
+    pills += '<span title="Mensaje esencial — sin él, el flujo se rompe" style="background:#fef3c7;color:#92400e;font-size:.68rem;font-weight:600;padding:2px 8px;border-radius:10px;margin-left:6px">Esencial</span>';
+  }
+
+  // Toggle ON/OFF (solo si puede_desactivarse)
+  var toggleHtml = '';
+  if (m.puede_desactivarse) {
+    toggleHtml = '<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.76rem;color:var(--voco-text-muted)">'
+      + '<input type="checkbox" ' + (m.activo ? 'checked' : '')
+      + ' onchange="toggleMensaje(\'' + _msjEscapeHtml(m.key) + '\', this.checked)"'
+      + ' style="cursor:pointer"> Activo</label>';
+  } else {
+    toggleHtml = '<span style="font-size:.72rem;color:var(--voco-text-muted)"><i data-lucide="lock" style="width:11px;height:11px;vertical-align:-1px"></i> Siempre activo</span>';
+  }
+
+  // Placeholders disponibles
   var phHtml = '';
   if (m.placeholders && m.placeholders.length) {
-    phHtml = '<div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:6px">'
-      + 'Placeholders: '
+    phHtml = '<div style="font-size:.7rem;color:var(--voco-text-muted);margin-top:6px;line-height:1.6">'
+      + 'Disponibles: '
       + m.placeholders.map(function(p) {
-          return '<code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px;margin-right:3px">{' + _msjEscapeHtml(p) + '}</code>';
+          return '<code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px;margin-right:3px;cursor:pointer" title="Click para copiar" onclick="navigator.clipboard.writeText(\'{' + p + '}\')">{' + _msjEscapeHtml(p) + '}</code>';
         }).join('')
       + '</div>';
   }
-  var maxLen = m.max_length || 4000;
-  var rows   = maxLen <= 50 ? 1 : 3;  // inputs cortos (botones) en 1 línea
+
+  // Preview burbuja WhatsApp (oculta para mensajes muy cortos como botones)
+  var previewHtml = '';
+  if (esCorto) {
+    // Botón estilo CTA WhatsApp
+    previewHtml = '<div style="background:#f5f6f7;border-radius:8px;padding:8px;border:1px solid #e8e8e8">'
+      + '<div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600">Vista previa del botón</div>'
+      + '<div id="' + id + '-preview" style="background:#fff;color:#0084ff;text-align:center;padding:9px;border-radius:6px;font-weight:600;font-size:.88rem;border:1px solid #dfe1e6">'
+      +   _msjEscapeHtml(m.content || m.default)
+      + '</div></div>';
+  } else {
+    previewHtml = '<div style="background:#efeae2;border-radius:8px;padding:10px;border:1px solid #d9d4cc">'
+      + '<div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600">Vista previa</div>'
+      + '<div id="' + id + '-preview" style="background:#fff;color:#111b21;padding:8px 10px;border-radius:6px 6px 6px 0;font-size:.84rem;line-height:1.45;box-shadow:0 1px 0.5px rgba(11,20,26,.13);max-width:100%;white-space:pre-wrap;word-wrap:break-word">'
+      +   _msjMarkdownWA(_msjFormatPreview(m.content || m.default))
+      + '</div></div>';
+  }
+
+  // Card completa con layout 2 cols (editor + preview)
   return ''
-    + '<div style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px;margin-bottom:12px">'
-    +   '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px">'
-    +     '<div style="flex:1">'
+    + '<div style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px;margin-bottom:12px"' + (!m.activo ? ' class="msj-card-off"' : '') + '>'
+    +   '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px">'
+    +     '<div style="flex:1;min-width:0">'
     +       '<div style="display:flex;align-items:center;flex-wrap:wrap">'
     +         '<span style="font-weight:600;color:var(--voco-text);font-size:.9rem">' + _msjEscapeHtml(m.titulo) + '</span>'
-    +         pillPers
+    +         pills
     +       '</div>'
     +       '<div style="color:var(--voco-text-muted);font-size:.78rem;margin-top:2px;line-height:1.45">' + _msjEscapeHtml(m.descripcion) + '</div>'
-    +       (m.cuando ? '<div style="color:var(--voco-text-muted);font-size:.72rem;margin-top:2px"><i data-lucide="clock" style="width:11px;height:11px;vertical-align:-1px;margin-right:3px"></i>' + _msjEscapeHtml(m.cuando) + '</div>' : '')
+    +       (m.cuando ? '<div style="color:var(--voco-text-muted);font-size:.72rem;margin-top:3px"><i data-lucide="clock" style="width:11px;height:11px;vertical-align:-1px;margin-right:3px"></i>' + _msjEscapeHtml(m.cuando) + '</div>' : '')
+    +     '</div>'
+    +     '<div style="flex-shrink:0">' + toggleHtml + '</div>'
+    +   '</div>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">'
+    +     '<div>'  /* col izquierda — editor */
+    +       '<textarea id="' + id + '" rows="' + rows + '" maxlength="' + maxLen + '" data-key="' + _msjEscapeHtml(m.key) + '"'
+    +         ' oninput="msjLivePreview(\'' + id + '\', ' + esCorto + ')"'
+    +         ' style="width:100%;padding:9px 11px;border:1px solid var(--voco-border);border-radius:7px;background:var(--voco-content-bg-alt);color:var(--voco-text);font-size:.86rem;outline:none;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:' + (esCorto ? '38px' : '90px') + ';line-height:1.4' + (esCorto ? ';font-family:monospace' : '') + '">'
+    +         _msjEscapeHtml(m.content)
+    +       '</textarea>'
+    +       phHtml
+    +       '<div style="display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap">'
+    +         '<button class="btn-primary" style="padding:6px 14px;font-size:.78rem" onclick="guardarMensaje(\'' + _msjEscapeHtml(m.key) + '\')">'
+    +           '<i data-lucide="check" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Guardar'
+    +         '</button>'
+    +         '<button class="btn-secondary" style="padding:6px 14px;font-size:.78rem" onclick="restaurarMensaje(\'' + _msjEscapeHtml(m.key) + '\')">'
+    +           '<i data-lucide="rotate-ccw" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Restaurar'
+    +         '</button>'
+    +         '<span class="msj-status" id="' + id + '-status" style="font-size:.74rem;color:var(--voco-text-muted)"></span>'
+    +       '</div>'
+    +     '</div>'
+    +     '<div>'  /* col derecha — preview */
+    +       previewHtml
     +     '</div>'
     +   '</div>'
-    +   '<textarea id="' + id + '" rows="' + rows + '" maxlength="' + maxLen + '" data-key="' + _msjEscapeHtml(m.key) + '"'
-    +     ' style="width:100%;margin-top:10px;padding:9px 11px;border:1px solid var(--voco-border);border-radius:7px;background:var(--voco-content-bg-alt);color:var(--voco-text);font-size:.86rem;outline:none;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:68px;line-height:1.4">'
-    +     _msjEscapeHtml(m.content)
-    +   '</textarea>'
-    +   phHtml
-    +   '<div style="display:flex;gap:8px;align-items:center;margin-top:10px">'
-    +     '<button class="btn-primary" style="padding:6px 14px;font-size:.78rem" onclick="guardarMensaje(\'' + _msjEscapeHtml(m.key) + '\')">'
-    +       '<i data-lucide="check" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Guardar'
-    +     '</button>'
-    +     '<button class="btn-secondary" style="padding:6px 14px;font-size:.78rem" onclick="restaurarMensaje(\'' + _msjEscapeHtml(m.key) + '\')">'
-    +       '<i data-lucide="rotate-ccw" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Restaurar default'
-    +     '</button>'
-    +     '<span class="msj-status" id="' + id + '-status" style="font-size:.76rem;color:var(--voco-text-muted)"></span>'
-    +   '</div>'
     + '</div>';
+}
+
+/* Actualiza el preview en vivo a medida que el usuario edita el textarea. */
+function msjLivePreview(id, esCorto) {
+  var ta = document.getElementById(id);
+  var pv = document.getElementById(id + '-preview');
+  if (!ta || !pv) return;
+  var val = ta.value;
+  if (esCorto) {
+    pv.textContent = val || '(vacío)';
+    pv.style.opacity = val ? '1' : '.5';
+  } else {
+    pv.innerHTML = _msjMarkdownWA(_msjFormatPreview(val || '(vacío)'));
+    pv.style.opacity = val ? '1' : '.5';
+  }
 }
 
 async function guardarMensaje(key) {
@@ -8807,7 +9002,7 @@ async function guardarMensaje(key) {
     }
     st.textContent = '✓ Guardado';
     st.style.color = '#16a34a';
-    setTimeout(function() { cargarMensajes(); }, 600);  // refrescar para que el pill cambie a Personalizado
+    setTimeout(function() { cargarMensajes(); }, 600);
   } catch (e) {
     st.textContent = 'Error: ' + e.message;
     st.style.color = '#dc2626';
@@ -8816,18 +9011,43 @@ async function guardarMensaje(key) {
 
 async function restaurarMensaje(key) {
   if (!confirm('¿Restaurar este mensaje al texto por defecto? Tu personalización se perderá.')) return;
-  var id = 'msj-' + key.replace(/[^a-z0-9]/gi, '_');
-  var st = document.getElementById(id + '-status');
-  if (st) { st.textContent = 'Restaurando…'; st.style.color = 'var(--voco-text-muted)'; }
   var ag = _escAgentId || 1;
   try {
     var r = await fetch('/inbox/api/agents/' + ag + '/mensajes/' + encodeURIComponent(key), {
       method: 'DELETE', credentials: 'include',
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    await cargarMensajes();  // re-render con el default
+    await cargarMensajes();
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function toggleMensaje(key, activo) {
+  var id = 'msj-' + key.replace(/[^a-z0-9]/gi, '_');
+  var st = document.getElementById(id + '-status');
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/agents/' + ag + '/mensajes/' + encodeURIComponent(key) + '/activo', {
+      method: 'PATCH', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({activo: activo}),
+    });
+    var d = await r.json();
+    if (!r.ok || !d.ok) {
+      if (st) { st.textContent = d.error || 'Error'; st.style.color = '#dc2626'; }
+      // Revertir el checkbox al estado original
+      await cargarMensajes();
+      return;
+    }
+    if (st) {
+      st.textContent = activo ? '✓ Activado' : '✓ Desactivado';
+      st.style.color = '#16a34a';
+    }
+    setTimeout(function() { cargarMensajes(); }, 400);
   } catch (e) {
     if (st) { st.textContent = 'Error: ' + e.message; st.style.color = '#dc2626'; }
+    await cargarMensajes();
   }
 }
 
