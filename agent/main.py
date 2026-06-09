@@ -5336,6 +5336,10 @@ _CONFIG_KEYS_ALLOWED = {
     "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
     "ANTHROPIC_API_KEY", "AI_MODEL",
     "SHOPIFY_STORE", "SHOPIFY_STOREFRONT_TOKEN", "SHOPIFY_ADMIN_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
+    # #55 — OAuth Shopify (modelo Jelou/99Envíos): el cliente entrega
+    # Client ID + Client Secret, Voco hace el OAuth dance y obtiene el
+    # ADMIN_TOKEN automáticamente. Esos 2 son del Partners Dashboard del cliente.
+    "SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET",
     # Sprint 4 — reglas del negocio configurables por agente
     "PEDIDO_MINIMO", "PEDIDO_MIN_MSG",
 }
@@ -5351,6 +5355,8 @@ _CONFIG_META = {
     "SHOPIFY_STOREFRONT_TOKEN":{"label": "Storefront Token", "tipo": "secret"},
     "SHOPIFY_ADMIN_TOKEN":     {"label": "Admin API Token",  "tipo": "secret"},
     "SHOPIFY_WEBHOOK_SECRET":  {"label": "Webhook Secret",   "tipo": "secret"},
+    "SHOPIFY_CLIENT_ID":       {"label": "Client ID (OAuth)",     "tipo": "plain"},
+    "SHOPIFY_CLIENT_SECRET":   {"label": "Client Secret (OAuth)", "tipo": "secret"},
     "PEDIDO_MINIMO":           {"label": "Pedido mínimo (COP)", "tipo": "plain"},
     "PEDIDO_MIN_MSG":          {"label": "Mensaje pedido mínimo", "tipo": "plain"},
 }
@@ -5507,6 +5513,224 @@ async def inbox_test_config(
         return JSONResponse(content={"ok": False, "error": str(e)[:120]})
 
     return JSONResponse(content={"ok": False, "error": "Servicio no reconocido"})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# #55 — OAuth Shopify (modelo Jelou/99Envíos)
+# ══════════════════════════════════════════════════════════════════════════════
+# Flujo OAuth Authorization Code Grant de Shopify:
+#   1. Cliente da Client ID + Client Secret + dominio en Voco
+#   2. Click 'Conectar con Shopify' → /oauth/shopify/start genera state + URL
+#   3. Browser redirige al cliente a Shopify Admin para autorizar
+#   4. Shopify redirige a /oauth/shopify/callback con code+shop+hmac+state
+#   5. Voco verifica HMAC + state, intercambia code por access_token
+#   6. Guarda SHOPIFY_ADMIN_TOKEN en config + redirige al panel
+#
+# Docs oficiales:
+# https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/authorization-code-grant
+
+# Scopes que Voco necesita. Si se agregan features, agregarlos acá y los
+# clientes deben re-autorizar para recibir los nuevos permisos.
+SHOPIFY_OAUTH_SCOPES = ",".join([
+    "read_products",
+    "read_inventory",
+    "read_orders",
+    "read_shipping",
+    "write_draft_orders",
+    "write_discounts",
+    "read_customers",
+])
+
+# State tracking en memoria (anti-CSRF). TTL 10 min.
+# { state_token: {"agent_id": int, "shop": str, "user_id": int, "at": float} }
+_shopify_oauth_states: dict[str, dict] = {}
+_SHOPIFY_OAUTH_STATE_TTL = 600  # 10 min
+
+
+def _cleanup_shopify_states() -> None:
+    """Limpia states expirados (>10 min). Llamado en cada start/callback."""
+    ahora = time.time()
+    expirados = [s for s, info in _shopify_oauth_states.items()
+                 if ahora - info.get("at", 0) > _SHOPIFY_OAUTH_STATE_TTL]
+    for s in expirados:
+        _shopify_oauth_states.pop(s, None)
+
+
+def _shopify_oauth_verify_hmac(query_params: dict, client_secret: str) -> bool:
+    """Verifica HMAC del callback de Shopify para asegurar que viene de Shopify
+    y no fue tampered. Algoritmo según docs:
+      1. Quitar 'hmac' y 'signature' del query
+      2. Ordenar parámetros alfabéticamente
+      3. Concatenar key=value separados por &
+      4. Calcular HMAC-SHA256 con client_secret como key
+      5. Comparar con el hmac que llegó
+    """
+    recibido = query_params.get("hmac", "")
+    if not recibido or not client_secret:
+        return False
+    filtrado = {k: v for k, v in query_params.items() if k not in ("hmac", "signature")}
+    mensaje = "&".join(f"{k}={v}" for k, v in sorted(filtrado.items()))
+    esperado = hmac.new(
+        client_secret.encode("utf-8"),
+        mensaje.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(esperado, recibido)
+
+
+def _shopify_callback_url(request: Request) -> str:
+    """Construye la URL de callback OAuth a partir del host actual.
+    Multi-tenant: funciona en Railway, dev local y futuro dominio propio."""
+    base = str(request.base_url).rstrip("/")
+    if base.startswith("http://") and "localhost" not in base:
+        base = base.replace("http://", "https://", 1)
+    return f"{base}/oauth/shopify/callback"
+
+
+@app.post("/inbox/api/oauth/shopify/start")
+async def api_shopify_oauth_start(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Inicia el flujo OAuth. Cliente debe haber guardado SHOPIFY_STORE +
+    SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET en Configuración antes.
+
+    Response: {ok, auth_url} — el frontend hace window.location = auth_url
+    """
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    # Permitir override desde el body (para 'probar antes de guardar') o leer del config
+    from agent.memory import get_config_value
+    # Para v1 usamos agent_id=1; con #45 (selector) el frontend podría pasarlo
+    agent_id = int(body.get("agent_id") or 1)
+
+    store = (body.get("store") or "").strip() or (
+        await get_config_value("SHOPIFY_STORE", agent_id)
+        or os.getenv("SHOPIFY_STORE", "")
+    )
+    client_id = (body.get("client_id") or "").strip() or (
+        await get_config_value("SHOPIFY_CLIENT_ID", agent_id) or ""
+    )
+    client_secret = (body.get("client_secret") or "").strip() or (
+        await get_config_value("SHOPIFY_CLIENT_SECRET", agent_id) or ""
+    )
+    store = store.replace("https://", "").replace("http://", "").rstrip("/")
+
+    if not store or not client_id or not client_secret:
+        return JSONResponse(status_code=400, content={
+            "ok": False,
+            "error": "Configura primero: Dominio + Client ID + Client Secret (guardar) antes de conectar.",
+        })
+    if not store.endswith(".myshopify.com"):
+        return JSONResponse(status_code=400, content={
+            "ok": False,
+            "error": f"El dominio debe terminar en .myshopify.com (recibido: {store}). Usa el dominio interno, no el personalizado.",
+        })
+
+    # Generar state token aleatorio + guardar contexto
+    _cleanup_shopify_states()
+    state = secrets.token_urlsafe(32)
+    _shopify_oauth_states[state] = {
+        "agent_id":      agent_id,
+        "shop":          store,
+        "client_id":     client_id,
+        "client_secret": client_secret,
+        "user_id":       user.get("id"),
+        "at":            time.time(),
+    }
+
+    callback = _shopify_callback_url(request)
+    auth_url = (
+        f"https://{store}/admin/oauth/authorize"
+        f"?client_id={client_id}"
+        f"&scope={SHOPIFY_OAUTH_SCOPES}"
+        f"&redirect_uri={callback}"
+        f"&state={state}"
+    )
+    logger.info(f"[shopify-oauth] start agent={agent_id} shop={store} (callback={callback})")
+    return JSONResponse(content={"ok": True, "auth_url": auth_url, "callback_url": callback})
+
+
+@app.get("/oauth/shopify/callback")
+async def shopify_oauth_callback(request: Request):
+    """Callback OAuth de Shopify. NO requiere auth de Voco — viene del browser
+    del cliente redirigido desde Shopify. Validamos HMAC + state para anti-CSRF.
+
+    Recibe: ?code=X&shop=Y&hmac=Z&state=W&timestamp=N
+    Devuelve: redirect al panel con ?shopify_oauth=ok|error&msg=...
+    """
+    qp = dict(request.query_params)
+    code  = qp.get("code", "")
+    shop  = qp.get("shop", "")
+    state = qp.get("state", "")
+    hmac_recibido = qp.get("hmac", "")
+
+    def _redirect_panel(estado: str, mensaje: str = "") -> RedirectResponse:
+        import urllib.parse as _up
+        msg = _up.quote(mensaje[:200])
+        return RedirectResponse(
+            f"/inbox#configuracion?shopify_oauth={estado}&msg={msg}",
+            status_code=302,
+        )
+
+    if not code or not shop or not state or not hmac_recibido:
+        return _redirect_panel("error", "Parámetros incompletos del callback")
+
+    # Recuperar contexto del state (anti-CSRF)
+    _cleanup_shopify_states()
+    info = _shopify_oauth_states.pop(state, None)
+    if not info:
+        return _redirect_panel("error", "State inválido o expirado. Reintenta el OAuth desde el panel.")
+    if info["shop"] != shop:
+        return _redirect_panel("error", f"Shop mismatch: esperado {info['shop']}, recibido {shop}")
+
+    # Verificar HMAC (firma del client_secret)
+    if not _shopify_oauth_verify_hmac(qp, info["client_secret"]):
+        logger.warning(f"[shopify-oauth] HMAC inválido para shop={shop}")
+        return _redirect_panel("error", "Firma HMAC inválida. Verifica el Client Secret en Configuración.")
+
+    # Intercambiar code por access_token
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as cli:
+            r = await cli.post(
+                f"https://{shop}/admin/oauth/access_token",
+                json={
+                    "client_id":     info["client_id"],
+                    "client_secret": info["client_secret"],
+                    "code":          code,
+                },
+            )
+        if r.status_code != 200:
+            logger.error(f"[shopify-oauth] intercambio code→token HTTP {r.status_code}: {r.text[:300]}")
+            return _redirect_panel("error", f"Shopify rechazó el code (HTTP {r.status_code}). Reintenta.")
+        access_token = (r.json() or {}).get("access_token", "")
+        if not access_token:
+            return _redirect_panel("error", "Shopify no devolvió access_token. Reintenta.")
+    except Exception as e:
+        logger.error(f"[shopify-oauth] error intercambiando code: {e}")
+        return _redirect_panel("error", f"Error de red: {e!s}")
+
+    # Guardar el token + dominio en config del agente
+    try:
+        from agent.memory import set_config_value
+        agent_id = info["agent_id"]
+        await set_config_value("SHOPIFY_STORE",       shop,         agent_id)
+        await set_config_value("SHOPIFY_ADMIN_TOKEN", access_token, agent_id)
+        logger.info(f"[shopify-oauth] ✅ token guardado para shop={shop} agent={agent_id}")
+    except Exception as e:
+        logger.error(f"[shopify-oauth] error guardando token: {e}")
+        return _redirect_panel("error", f"OAuth OK pero falló al guardar: {e!s}")
+
+    return _redirect_panel("ok", f"Conectado con {shop} — webhooks y cupones automáticos disponibles.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
