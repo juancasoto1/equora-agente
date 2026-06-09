@@ -1663,6 +1663,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
            onclick="showSec('clientes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('clientes')">
         <span class="ni" aria-hidden="true"><i data-lucide="users" style="width:16px;height:16px;vertical-align:-3px"></i></span> Clientes
       </div>
+      <div class="nav-item" role="button" tabindex="0" data-sec="equipo"
+           onclick="showSec('equipo')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('equipo')">
+        <span class="ni" aria-hidden="true"><i data-lucide="user-cog" style="width:16px;height:16px;vertical-align:-3px"></i></span> Equipo
+      </div>
       <div class="nav-item" role="button" tabindex="0" data-sec="plantillas"
            onclick="showSec('plantillas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('plantillas')">
         <span class="ni" aria-hidden="true"><i data-lucide="file-text" style="width:16px;height:16px;vertical-align:-3px"></i></span> Plantillas
@@ -2980,6 +2984,76 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       </div><!-- /sec-escalaciones -->
 
       <!-- ═══════════════════════════════════════
+           SECCIÓN: EQUIPO (administración de usuarios internos)
+           Movido desde Configuración → Equipo para que sea un módulo
+           de primer nivel en el sidebar — gestión de personas debe
+           ser tan accesible como Clientes.
+           ═══════════════════════════════════════ -->
+      <div class="sec sec-light" id="sec-equipo">
+        <div class="sec-hdr">
+          <div>
+            <h1 style="display:flex;align-items:center;gap:10px">
+              <i data-lucide="user-cog" style="width:22px;height:22px"></i> Equipo
+            </h1>
+            <p style="margin:6px 0 0;color:var(--voco-text-muted);font-size:.86rem">
+              Agentes humanos que atienden escalaciones dentro del panel. Cada uno puede configurar su número de WhatsApp para recibir avisos de escalación.
+            </p>
+          </div>
+          <button class="btn-primary" style="font-size:.82rem;padding:7px 14px" onclick="mostrarFormNuevoAgente()">
+            + Nuevo agente
+          </button>
+        </div>
+
+        <div style="padding:24px;overflow-y:auto">
+          <!-- Formulario nuevo agente (oculto por defecto) -->
+          <div id="equipo-form-wrap" style="display:none;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;
+               border-radius:10px;padding:18px;margin-bottom:20px">
+            <h3 style="margin:0 0 14px;font-size:.9rem;color:var(--voco-text)">Nuevo agente</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Nombre completo</label>
+                <input id="eq-nombre" type="text" placeholder="Felipe García"
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Email</label>
+                <input id="eq-email" type="email" placeholder="felipe@empresa.com"
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Contraseña temporal</label>
+                <input id="eq-password" type="password" placeholder="Min. 6 caracteres"
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Rol</label>
+                <select id="eq-rol" style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none;background:var(--voco-card-bg)">
+                  <option value="agente">Agente</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:14px">
+              <button class="btn-primary" style="font-size:.82rem;padding:7px 16px" onclick="crearAgenteEquipo()">Crear agente</button>
+              <button class="btn-secondary" style="font-size:.82rem;padding:7px 14px" onclick="document.getElementById('equipo-form-wrap').style.display='none'">Cancelar</button>
+            </div>
+            <div id="equipo-form-msg" style="margin-top:10px;font-size:.82rem"></div>
+          </div>
+
+          <!-- Tabla de agentes -->
+          <div id="equipo-tabla-wrap">
+            <div id="equipo-tabla" style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;overflow:hidden">
+              <div style="padding:14px 16px;color:var(--voco-text-muted);font-size:.85rem;text-align:center">Cargando equipo…</div>
+            </div>
+          </div>
+
+          <!-- Info de plan -->
+          <div id="equipo-plan-info" style="margin-top:14px;font-size:.78rem;color:var(--voco-text-muted);text-align:center"></div>
+        </div>
+      </div><!-- /sec-equipo -->
+
+      <!-- ═══════════════════════════════════════
            SECCIÓN: PIPELINE (#30 — módulo opcional)
            Solo se muestra cuando Agent.modules_json.pipeline=true.
            El nav-item correspondiente está oculto por default; el JS
@@ -3027,7 +3101,6 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div class="cfg-tab active" onclick="cfgTab('integraciones',this)"><i data-lucide="plug" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Integraciones</div>
             <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()"><i data-lucide="brain" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Prompt</div>
             <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()"><i data-lucide="flask-conical" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar</div>
-            <div class="cfg-tab" onclick="cfgTab('equipo',this);cargarEquipo()"><i data-lucide="users" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Equipo</div>
             <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Templates</div>
             <div class="cfg-tab" onclick="cfgTab('mensajes',this);cargarMensajes()"><i data-lucide="message-square-text" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Mensajes</div>
             <div class="cfg-tab" onclick="cfgTab('promociones',this);cargarPromocion()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Promociones</div>
@@ -3669,64 +3742,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           </div><!-- /pane probar -->
 
           <!-- ── Pane: Equipo (Sprint 1) ── -->
-          <div class="cfg-pane" id="cfg-pane-equipo" style="padding:24px;overflow-y:auto">
-
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-              <div>
-                <h2 style="margin:0;font-size:1.1rem;color:var(--voco-text)">👥 Equipo de Soporte</h2>
-                <p style="margin:4px 0 0;font-size:.83rem;color:var(--voco-text-muted)">Agentes humanos que atienden escalaciones dentro del panel</p>
-              </div>
-              <button class="btn-primary" style="font-size:.82rem;padding:7px 14px" onclick="mostrarFormNuevoAgente()">
-                + Nuevo agente
-              </button>
-            </div>
-
-            <!-- Formulario nuevo agente (oculto por defecto) -->
-            <div id="equipo-form-wrap" style="display:none;background:var(--voco-nav-bg-active);border:1px solid #c7d2fe;
-                 border-radius:10px;padding:18px;margin-bottom:20px">
-              <h3 style="margin:0 0 14px;font-size:.9rem;color:var(--voco-text)">Nuevo agente</h3>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <div>
-                  <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Nombre completo</label>
-                  <input id="eq-nombre" type="text" placeholder="Felipe García"
-                    style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
-                </div>
-                <div>
-                  <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Email</label>
-                  <input id="eq-email" type="email" placeholder="felipe@empresa.com"
-                    style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
-                </div>
-                <div>
-                  <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Contraseña temporal</label>
-                  <input id="eq-password" type="password" placeholder="Min. 6 caracteres"
-                    style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none">
-                </div>
-                <div>
-                  <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Rol</label>
-                  <select id="eq-rol" style="width:100%;border:1px solid var(--voco-border);border-radius:7px;padding:8px 10px;font-size:.84rem;box-sizing:border-box;outline:none;background:var(--voco-card-bg)">
-                    <option value="agente">Agente</option>
-                    <option value="supervisor">Supervisor</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-              </div>
-              <div style="display:flex;gap:8px;margin-top:14px">
-                <button class="btn-primary" style="font-size:.82rem;padding:7px 16px" onclick="crearAgenteEquipo()">Crear agente</button>
-                <button class="btn-secondary" style="font-size:.82rem;padding:7px 14px" onclick="document.getElementById('equipo-form-wrap').style.display='none'">Cancelar</button>
-              </div>
-              <div id="equipo-form-msg" style="margin-top:10px;font-size:.82rem"></div>
-            </div>
-
-            <!-- Tabla de agentes -->
-            <div id="equipo-tabla-wrap">
-              <div id="equipo-tabla" style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;overflow:hidden">
-                <div style="padding:14px 16px;color:var(--voco-text-muted);font-size:.85rem;text-align:center">Cargando equipo…</div>
-              </div>
-            </div>
-
-            <!-- Info de plan -->
-            <div id="equipo-plan-info" style="margin-top:14px;font-size:.78rem;color:var(--voco-text-muted);text-align:center"></div>
-          </div><!-- /pane equipo -->
+          <!-- Pane Equipo MOVIDO a sección propia del sidebar (id="sec-equipo").
+               Mantenemos este pane vacío como compatibilidad temporal del routing
+               viejo de cfgTab — si algún link interno apunta acá, redirigimos. -->
+          <div class="cfg-pane" id="cfg-pane-equipo" style="padding:24px;overflow-y:auto;display:none"></div>
 
           <!-- ── Pane: Templates Rápidos (Sprint 2) ── -->
           <div class="cfg-pane" id="cfg-pane-templates" style="padding:24px;overflow-y:auto">
@@ -4203,6 +4222,7 @@ function showSec(id) {
     if (id === 'plantillas')    { cargarTablaPlantillas(); actualizarSubcat(); setTimeout(_hookPreview, 200); }
     if (id === 'metricas')      { cargarMetricas(); }
     if (id === 'clientes')      { cargarClientes(); }
+    if (id === 'equipo')        { cargarEquipo(); }
     if (id === 'configuracion') { cargarConfiguracion(); cargarEstadoSistema(); }
     if (id === 'escalaciones')  { escCargarLista(); }
   }
@@ -4342,6 +4362,7 @@ async function cambiarAgenteActivo(nuevoId) {
     plantillas:    function(){ if(typeof cargarTablaPlantillas==='function')cargarTablaPlantillas(); if(typeof actualizarSubcat==='function')actualizarSubcat(); },
     metricas:      function(){ if(typeof cargarMetricas==='function')cargarMetricas(); },
     clientes:      function(){ if(typeof cargarClientes==='function')cargarClientes(); },
+    equipo:        function(){ if(typeof cargarEquipo==='function')cargarEquipo(); },
     configuracion: function(){ if(typeof cargarConfiguracion==='function')cargarConfiguracion(); if(typeof cargarEstadoSistema==='function')cargarEstadoSistema(); },
     escalaciones:  function(){ if(typeof escCargarLista==='function')escCargarLista(); },
   };
