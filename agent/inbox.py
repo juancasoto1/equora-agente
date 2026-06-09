@@ -9722,11 +9722,24 @@ async function guardarPromocion() {
       st.style.color = '#dc2626';
       return;
     }
-    st.textContent = '✓ Guardado correctamente';
-    st.style.color = '#16a34a';
-    // Limpiar el mensaje a los 3s
-    if (_promoSaveTimer) clearTimeout(_promoSaveTimer);
-    _promoSaveTimer = setTimeout(function() { st.textContent = ''; }, 3000);
+    // #54 fase 3 — feedback enriquecido si Voco intentó crear el cupón
+    // automáticamente en Shopify (requiere Admin token).
+    var ssetup = d.shopify_setup;
+    if (ssetup) {
+      var prefix = ssetup.ok ? '✓ Guardado · ' : '⚠ Guardado · ';
+      var color  = ssetup.ok ? '#16a34a' : '#d97706';
+      var icono  = ssetup.estado === 'creado'   ? '🛍️ '
+                 : ssetup.estado === 'ya_existe' ? '✓ ' : '⚠ ';
+      st.innerHTML = prefix + '<span style="color:' + color + '">' + icono + (ssetup.mensaje || '') + '</span>';
+      st.style.color = color;
+      if (_promoSaveTimer) clearTimeout(_promoSaveTimer);
+      _promoSaveTimer = setTimeout(function() { st.innerHTML = ''; }, 8000);  // 8s para que alcance a leerse
+    } else {
+      st.textContent = '✓ Guardado correctamente';
+      st.style.color = '#16a34a';
+      if (_promoSaveTimer) clearTimeout(_promoSaveTimer);
+      _promoSaveTimer = setTimeout(function() { st.textContent = ''; }, 3000);
+    }
   } catch (e) {
     st.textContent = 'Error: ' + e.message;
     st.style.color = '#dc2626';

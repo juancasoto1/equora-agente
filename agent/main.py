@@ -3236,7 +3236,62 @@ async def api_guardar_descuento(
         f"[descuento] agent_id={agent_id_param} actualizado por user={user.get('id')} "
         f"(activo={activo}, codigo={codigo}, umbral={umbral}, pct={pct})"
     )
-    return JSONResponse(content={"ok": True})
+
+    # ── #54 fase 3 — Auto-crear cupón en Shopify si hay Admin API ─────────────
+    # Si el agente activó la promo Y tiene SHOPIFY_ADMIN_TOKEN configurado,
+    # intentamos crear el discount code automáticamente en Shopify. Esto evita
+    # que el merchant tenga que duplicar el código en 2 lugares (Voco + Shopify).
+    # Es best-effort: si Shopify falla (ya existe, scope faltante, etc.) la
+    # respuesta al panel sigue ok=True pero incluye `shopify_setup` con detalle.
+    respuesta_extra: dict = {}
+    if activo and codigo:
+        from agent.memory import get_config_value
+        store_raw = (await get_config_value("SHOPIFY_STORE", agent_id_param)
+                     or os.getenv("SHOPIFY_STORE", "")).strip()
+        admin_tok = (await get_config_value("SHOPIFY_ADMIN_TOKEN", agent_id_param)
+                     or os.getenv("SHOPIFY_ADMIN_TOKEN", "")).strip()
+        if store_raw and admin_tok:
+            from agent.shopify_admin import buscar_discount_code, crear_discount_code
+            store = store_raw.replace("https://", "").replace("http://", "").rstrip("/")
+            try:
+                existente = await buscar_discount_code(store, admin_tok, codigo)
+                if existente:
+                    respuesta_extra["shopify_setup"] = {
+                        "ok": True,
+                        "estado": "ya_existe",
+                        "mensaje": f"El código '{codigo}' ya existe en Shopify — Voco lo anunciará tal como esté configurado allá.",
+                    }
+                    logger.info(f"[descuento] '{codigo}' ya existe en Shopify para agent {agent_id_param} — no recreo")
+                else:
+                    res = await crear_discount_code(store, admin_tok, codigo, pct, umbral)
+                    if res.get("ok"):
+                        respuesta_extra["shopify_setup"] = {
+                            "ok": True,
+                            "estado": "creado",
+                            "mensaje": f"Cupón '{codigo}' creado automáticamente en Shopify ({pct}% desde ${umbral:,}).",
+                            "price_rule_id":    res.get("price_rule_id"),
+                            "discount_code_id": res.get("discount_code_id"),
+                        }
+                        logger.info(f"[descuento] cupón '{codigo}' creado en Shopify para agent {agent_id_param}")
+                    else:
+                        respuesta_extra["shopify_setup"] = {
+                            "ok": False,
+                            "estado": "error",
+                            "mensaje": f"No pude crear el cupón en Shopify: {res.get('error', 'error desconocido')}. Créalo manualmente en Shopify Admin → Discounts.",
+                        }
+                        logger.warning(f"[descuento] crear cupón '{codigo}' falló: {res.get('error')}")
+            except Exception as e:
+                logger.error(f"[descuento] error con Shopify Admin: {e}")
+                respuesta_extra["shopify_setup"] = {
+                    "ok": False,
+                    "estado": "error",
+                    "mensaje": f"Error contactando Shopify: {e!s}. Créalo manualmente.",
+                }
+        # Si no hay Admin token configurado, simplemente no intentamos —
+        # la respuesta normal (ok=True) sigue. El cliente puede crear el
+        # cupón a mano en Shopify Admin como hasta ahora.
+
+    return JSONResponse(content={"ok": True, **respuesta_extra})
 
 
 # ──────────────────────────────────────────────────────────────────────────────
