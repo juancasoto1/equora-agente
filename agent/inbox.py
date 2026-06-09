@@ -949,7 +949,7 @@ html.dark .msys{box-shadow:none}
 /* ══════════════════════════════════════════════
    SECCIÓN LIGHT: base compartida
    ══════════════════════════════════════════════ */
-.sec-light{background:#f0f2f5;flex-direction:column;overflow:auto}
+.sec-light{background:var(--voco-content-bg-alt);flex-direction:column;overflow:auto}
 .sec-hdr{
   background:var(--voco-content-bg);padding:18px 28px;display:flex;align-items:center;gap:12px;
   border-bottom:1px solid var(--voco-border);flex-shrink:0;
@@ -1265,7 +1265,7 @@ html.dark .wa-phone-bar .wa-sub{color:#8696a0}
   animation:dot-pulse 1.4s infinite}
 .sistema-dot.loading{background:#94a3b8;animation:dot-pulse 1s infinite}
 @keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.sistema-name{font-weight:700;font-size:.86rem;color:#1a2332}
+.sistema-name{font-weight:700;font-size:.86rem;color:var(--voco-text)}
 .sistema-msg{font-size:.8rem;color:var(--voco-text-muted);margin-bottom:4px}
 .sistema-detalle{font-size:.72rem;color:var(--voco-text-muted);line-height:1.4}
 .sistema-sugerencia{font-size:.74rem;color:#dc2626;margin-top:6px;padding:6px 8px;
@@ -1300,10 +1300,10 @@ html.dark .cfg-pill-error{background:rgba(239,68,68,.18);color:#f87171}
 .cfg-inp{flex:1}
 .cfg-eye-btn{position:absolute;right:10px;background:none;border:none;cursor:pointer;
   font-size:.85rem;padding:0;color:var(--voco-text-muted);line-height:1}
-.cfg-eye-btn:hover{color:#1a2332}
+.cfg-eye-btn:hover{color:var(--voco-text)}
 .cfg-field-status{font-size:.95rem;flex-shrink:0;width:20px;text-align:center}
 .cfg-actions{display:flex;gap:10px;align-items:center;margin-top:22px;
-  padding-top:18px;border-top:1px solid #f0f2f5;flex-wrap:wrap}
+  padding-top:18px;border-top:1px solid var(--voco-border);flex-wrap:wrap}
 .cfg-test-result{font-size:.82rem;padding:8px 14px;border-radius:8px;line-height:1.5;flex:1;min-width:180px}
 .cfg-test-ok{background:#e8f5e9;color:#1b5e20;border:1px solid #a5d6a7}
 .cfg-test-err{background:#fce4e4;color:#b71c1c;border:1px solid #ef9a9a}
