@@ -274,6 +274,11 @@ class UsuarioInterno(Base):
     rol:            Mapped[str]           = mapped_column(String(20), default="agente")  # agente|supervisor|admin
     activo:         Mapped[bool]          = mapped_column(Boolean, default=True)
     ultimo_ping_at: Mapped[datetime|None] = mapped_column(DateTime, nullable=True)      # para "online"
+    # Notificaciones de escalación por WhatsApp (#52) — cada usuario decide
+    # si quiere recibir los avisos en su número personal. Default OFF para
+    # que no se le mande a nadie hasta opt-in explícito.
+    telefono_wa:           Mapped[str]    = mapped_column(String(50), default="")
+    notif_escalaciones_wa: Mapped[bool]   = mapped_column(Boolean, default=False)
     created_at:     Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
 
 
@@ -363,6 +368,10 @@ async def inicializar_db():
             # Flag activo (#28 fase 2.7): permite desactivar un mensaje sin
             # borrarlo. Default TRUE para preservar comportamiento existente.
             "ALTER TABLE agent_messages ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE",
+            # #52 — Notificaciones de escalación configurables por usuario interno.
+            # Default OFF: cada agente humano debe opt-in explícitamente.
+            "ALTER TABLE usuarios_internos ADD COLUMN IF NOT EXISTS telefono_wa VARCHAR(50) DEFAULT ''",
+            "ALTER TABLE usuarios_internos ADD COLUMN IF NOT EXISTS notif_escalaciones_wa BOOLEAN DEFAULT FALSE",
             # Índices para las nuevas tablas (create_all ya las creó si no existían)
             "CREATE INDEX IF NOT EXISTS ix_pipelines_agent       ON pipelines           (agent_id)",
             "CREATE INDEX IF NOT EXISTS ix_deals_agent           ON deals               (agent_id)",
@@ -2652,7 +2661,42 @@ def _ui_to_dict(u: UsuarioInterno) -> dict:
         "activo":         u.activo,
         "ultimo_ping_at": u.ultimo_ping_at.isoformat() if u.ultimo_ping_at else None,
         "created_at":     u.created_at.isoformat(),
+        # #52 — preferencias de notificación por WhatsApp
+        "telefono_wa":            getattr(u, "telefono_wa", "") or "",
+        "notif_escalaciones_wa":  bool(getattr(u, "notif_escalaciones_wa", False)),
     }
+
+
+async def obtener_receptores_escalacion_wa(agent_id: int) -> list[str]:
+    """Devuelve los teléfonos WA de usuarios internos que opt-in para recibir
+    notificaciones de escalación, filtrados por agente.
+
+    Solo incluye:
+      - Usuarios activos (UsuarioInterno.activo=True)
+      - Que pertenecen al agent_id dado
+      - Con notif_escalaciones_wa=True
+      - Con telefono_wa no vacío
+
+    Retorna lista de strings con solo dígitos (sin '+' ni espacios).
+    Si nadie está opt-in, retorna lista vacía — el caller decide si usar
+    fallback (env var ADMIN_WHATSAPP_NUMBERS) o solo notificar al panel.
+    """
+    import re as _re
+    async with async_session() as session:
+        result = await session.execute(
+            select(UsuarioInterno).where(
+                UsuarioInterno.agent_id == agent_id,
+                UsuarioInterno.activo == True,
+                UsuarioInterno.notif_escalaciones_wa == True,
+                UsuarioInterno.telefono_wa != "",
+            )
+        )
+        telefonos = []
+        for u in result.scalars().all():
+            digitos = _re.sub(r"\D", "", u.telefono_wa or "")
+            if digitos:
+                telefonos.append(digitos)
+        return telefonos
 
 
 async def crear_usuario_interno(

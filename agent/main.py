@@ -6255,24 +6255,59 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
     except Exception as e:
         logger.error(f"Error pausando bot: {e}")
 
-    # ── 3. Notificar por WhatsApp si hay números de admin configurados ─────────
-    if not ADMIN_WHATSAPP_NUMBERS:
-        logger.info("ADMIN_WHATSAPP_NUMBERS no configurado — escalación solo en panel")
+    # ── 3. Notificar por WhatsApp a los asesores que hayan opt-in ──────────────
+    # Estrategia de resolución de receptores (#52):
+    #   1. Usuarios internos del agente con notif_escalaciones_wa=True (BD).
+    #   2. Si no hay nadie opt-in en BD → fallback a ADMIN_WHATSAPP_NUMBERS
+    #      (env var legacy). Mantiene compatibilidad con setup actual de Railway.
+    #   3. Si ambos están vacíos → solo se queda en el panel (sin notif WA).
+    from agent.memory import obtener_receptores_escalacion_wa, obtener_agente
+    receptores: list[str] = []
+    try:
+        receptores = await obtener_receptores_escalacion_wa(agent_id)
+    except Exception as e:
+        logger.error(f"[escalacion] error leyendo receptores de BD: {e}")
+    origen_receptores = "BD"
+    if not receptores:
+        receptores = ADMIN_WHATSAPP_NUMBERS
+        origen_receptores = "env(legacy)"
+
+    if not receptores:
+        logger.info(
+            f"[escalacion] sin receptores configurados (BD vacía + ADMIN_WHATSAPP_NUMBERS "
+            f"vacía) para agent={agent_id} — solo notificación en panel"
+        )
         return
+
+    # Nombre del negocio (para el mensaje, en lugar del hardcode "Equora")
+    nombre_negocio = ""
+    try:
+        agente_info = await obtener_agente(agent_id)
+        if agente_info:
+            nombre_negocio = agente_info.get("name") or ""
+    except Exception:
+        pass
+    referencia_panel = f"panel de {nombre_negocio}" if nombre_negocio else "panel de Voco"
 
     cliente_digits = "".join(filter(str.isdigit, telefono_cliente))
     mensaje = (
-        f"🚨 *Escalación Andrea Bot*\n\n"
+        f"🚨 *Escalación de conversación*\n\n"
         f"*Motivo:* {motivo}\n"
         f"*Urgencia:* {urgencia}\n"
         f"*Cliente:* {cliente_nombre or 'desconocido'}\n"
         f"*WhatsApp cliente:* +{telefono_cliente}\n\n"
         f"*Contexto:*\n{contexto}\n\n"
-        f"Entra al panel de Equora para tomar la conversación."
+        f"Entra al {referencia_panel} para tomar la conversación."
     )
 
-    for admin in ADMIN_WHATSAPP_NUMBERS:
+    logger.info(
+        f"[escalacion] notificando a {len(receptores)} receptor(es) "
+        f"(origen={origen_receptores}) para agent={agent_id}"
+    )
+    for admin in receptores:
         admin_digits = "".join(filter(str.isdigit, admin))
+        # Filtro de seguridad: no notificarse a uno mismo si el cliente es el
+        # mismo número del receptor (caso típico al hacer pruebas con propio WA).
         if admin_digits == cliente_digits or admin_digits.endswith(cliente_digits[-10:]):
             logger.warning(f"Escalación omitida para {admin}: es el mismo número del cliente")
             continue
