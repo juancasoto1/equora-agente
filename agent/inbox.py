@@ -3363,14 +3363,57 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 <div class="cfg-step-num">3</div>
                 <div class="cfg-step-body">
                   <div class="cfg-field-lbl">
+                    Admin API access token
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-admin')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge" style="background:#dbeafe;color:#1e40af">Recomendado</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-sh-admin">
+                    <b>Con este token Voco puede:</b><br>
+                    · <b>Registrar webhooks automáticamente</b> (no necesitas configurarlos a mano)<br>
+                    · Leer pedidos completos para confirmaciones precisas<br>
+                    · Crear cupones automáticamente cuando configures la promoción del bono<br><br>
+                    <b>Cómo obtenerlo</b> (modelo similar a Jelou, 99Envíos):<br>
+                    1. Shopify Admin → <b>Settings</b> → <b>Apps and sales channels</b><br>
+                    2. Arriba a la derecha → <b>"Develop apps"</b> → <b>"Create an app"</b><br>
+                    3. Nombre: <code>Voco</code> → <b>"Create app"</b><br>
+                    4. Pestaña <b>"Configuration"</b> → <b>"Configure"</b> en Admin API access scopes<br>
+                    5. Activa estos scopes mínimos:<br>
+                    &nbsp;&nbsp;<code>read_products</code>, <code>read_inventory</code>, <code>read_orders</code>,<br>
+                    &nbsp;&nbsp;<code>read_shipping</code>, <code>write_draft_orders</code>,<br>
+                    &nbsp;&nbsp;<code>write_discounts</code> (para que Voco cree cupones)<br>
+                    6. <b>"Save"</b> → pestaña <b>"API credentials"</b> → <b>"Install app"</b><br>
+                    7. Copia el <b>"Admin API access token"</b> (empieza con <code>shpat_...</code>) y pégalo aquí<br>
+                    <small style="color:var(--voco-text-muted)">⚠️ El token solo se muestra UNA vez. Guárdalo bien.</small>
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-sh-admin" class="f-inp" placeholder="shpat_..." autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-admin',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-SHOPIFY_ADMIN_TOKEN"></span>
+                  </div>
+                  <!-- Auto-registro de webhooks: solo aparece si hay Admin token + dominio -->
+                  <div style="margin-top:10px;padding:10px 12px;background:var(--voco-content-bg-alt);border-radius:8px;font-size:.78rem;color:var(--voco-text-muted);line-height:1.5">
+                    <b>Después de guardar el token</b>, usa el botón
+                    <b>"Sincronizar webhooks"</b> abajo para que Voco registre
+                    automáticamente los 5 webhooks que necesita en tu tienda.
+                    No tendrás que pegar la URL del webhook ni el secret a mano.
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">4</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
                     Webhook Secret
                     <button class="cfg-help-btn" onclick="toggleHelp('help-sh-whsec')" type="button" aria-label="Ayuda">?</button>
                     <span class="opt-badge">Opcional</span>
                   </div>
                   <div class="cfg-help-box" id="help-sh-whsec">
                     Permite verificar que las notificaciones de nuevas órdenes llegan <b>realmente de Shopify</b> y no de terceros.<br>
-                    <b>Dónde está:</b> Shopify Admin → <b>Configuración → Notificaciones → Webhooks</b> → sección <b>"Clave secreta del webhook"</b>.<br>
-                    Si no lo configuras, el sistema acepta todas las notificaciones de órdenes sin verificar su origen.
+                    <b>Si configuraste el Admin API token arriba</b>, no necesitas esto — los webhooks que Voco registra programáticamente firman con el secret automático.<br>
+                    <b>Solo si configuras webhooks a mano:</b> Shopify Admin → <b>Configuración → Notificaciones → Webhooks</b> → sección <b>"Clave secreta del webhook"</b>.
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
@@ -3384,6 +3427,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
               <div class="cfg-actions">
                 <div id="cfg-shopify-result" class="cfg-test-result" style="display:none"></div>
+                <button class="btn-secondary" onclick="sincronizarWebhooksShopify()" type="button"
+                  title="Registra los webhooks automáticamente vía Admin API. Requiere Admin token configurado.">
+                  <i data-lucide="refresh-cw" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Sincronizar webhooks
+                </button>
                 <button class="btn-secondary" onclick="testConexion('shopify')" type="button">🔌 Probar conexión</button>
                 <button class="btn-primary" onclick="guardarConfig('shopify')" type="button">💾 Guardar</button>
               </div>
@@ -7185,6 +7232,7 @@ async function cargarConfiguracion() {
     AI_MODEL:                'cfg-ant-model',
     SHOPIFY_STORE:           'cfg-sh-domain',
     SHOPIFY_STOREFRONT_TOKEN:'cfg-sh-sftoken',
+    SHOPIFY_ADMIN_TOKEN:     'cfg-sh-admin',
     SHOPIFY_WEBHOOK_SECRET:  'cfg-sh-whsec',
     PEDIDO_MINIMO:           'cfg-pedido-min',
     PEDIDO_MIN_MSG:          'cfg-pedido-msg',
@@ -7259,9 +7307,11 @@ async function guardarConfig(service) {
   } else if (service === 'shopify') {
     var sd = (document.getElementById('cfg-sh-domain').value  || '').trim();
     var sf = (document.getElementById('cfg-sh-sftoken').value || '').trim();
+    var sa = (document.getElementById('cfg-sh-admin').value   || '').trim();
     var sw = (document.getElementById('cfg-sh-whsec').value   || '').trim();
     if (sd) payload.SHOPIFY_STORE            = sd;
     if (sf) payload.SHOPIFY_STOREFRONT_TOKEN = sf;
+    if (sa) payload.SHOPIFY_ADMIN_TOKEN      = sa;
     if (sw) payload.SHOPIFY_WEBHOOK_SECRET   = sw;
   } else if (service === 'reglas') {
     var pm  = (document.getElementById('cfg-pedido-min').value || '').trim();
@@ -7303,6 +7353,48 @@ async function guardarConfig(service) {
 }
 
 /* ── testConexion: POST /inbox/api/config/test/{service} ── */
+/* #54 — Sincronización programática de webhooks Shopify vía Admin API.
+   Reemplaza el copy-paste manual de URL+secret en Shopify Admin. */
+async function sincronizarWebhooksShopify() {
+  var resultId = 'cfg-shopify-result';
+  var domain   = (document.getElementById('cfg-sh-domain').value || '').trim();
+  var admin    = (document.getElementById('cfg-sh-admin').value  || '').trim();
+  if (!domain && !admin) {
+    _showCfgResult(resultId, false, '⚠️ Configura primero el dominio y el Admin API token, luego guarda.');
+    return;
+  }
+  _showCfgResult(resultId, null, '🔄 Registrando webhooks vía Admin API…');
+  try {
+    var r = await fetch('/inbox/api/integraciones/shopify/sincronizar-webhooks', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({store: domain, admin_token: admin})
+    });
+    var d = await r.json();
+    if (!d.ok) {
+      _showCfgResult(resultId, false, '⚠️ ' + (d.error || 'No se pudieron registrar los webhooks'));
+      return;
+    }
+    var partes = [];
+    if (d.creados      && d.creados.length)      partes.push('✅ ' + d.creados.length + ' creados');
+    if (d.conservados  && d.conservados.length)  partes.push('• ' + d.conservados.length + ' ya existían');
+    if (d.recreados    && d.recreados.length)    partes.push('🔄 ' + d.recreados.length + ' reemplazados');
+    if (d.fallidos     && d.fallidos.length)     partes.push('❌ ' + d.fallidos.length + ' fallaron');
+    var resumen = partes.length ? partes.join(' · ') : 'Sin cambios';
+    var detalle = '<b>Webhooks sincronizados</b> apuntando a:<br>'
+      + '<code style="font-size:.78rem;word-break:break-all">' + (d.callback_url || '') + '</code><br>'
+      + '<span style="font-size:.82rem">' + resumen + '</span>';
+    if (d.fallidos && d.fallidos.length) {
+      detalle += '<br><span style="font-size:.78rem;color:#dc2626">Detalles errores: '
+        + d.fallidos.map(function(f) { return _msjEscapeHtml(f); }).join('; ')
+        + '</span>';
+    }
+    _showCfgResult(resultId, d.fallidos && d.fallidos.length === 0, detalle);
+  } catch (e) {
+    _showCfgResult(resultId, false, 'Error de red: ' + String(e));
+  }
+}
+
 async function testConexion(service) {
   var payload  = {};
   var resultId = 'cfg-' + service + '-result';
@@ -7324,8 +7416,10 @@ async function testConexion(service) {
   } else if (service === 'shopify') {
     var sd = (document.getElementById('cfg-sh-domain').value  || '').trim();
     var sf = (document.getElementById('cfg-sh-sftoken').value || '').trim();
+    var sa = (document.getElementById('cfg-sh-admin').value   || '').trim();
     if (sd) payload.SHOPIFY_STORE            = sd;
     if (sf) payload.SHOPIFY_STOREFRONT_TOKEN = sf;
+    if (sa) payload.SHOPIFY_ADMIN_TOKEN      = sa;
   }
 
   _showCfgResult(resultId, null, '🔄 Probando conexión…');

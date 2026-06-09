@@ -5280,7 +5280,7 @@ async def inbox_revertir_opt_out(
 _CONFIG_KEYS_ALLOWED = {
     "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
     "ANTHROPIC_API_KEY", "AI_MODEL",
-    "SHOPIFY_STORE", "SHOPIFY_STOREFRONT_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
+    "SHOPIFY_STORE", "SHOPIFY_STOREFRONT_TOKEN", "SHOPIFY_ADMIN_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
     # Sprint 4 — reglas del negocio configurables por agente
     "PEDIDO_MINIMO", "PEDIDO_MIN_MSG",
 }
@@ -5294,6 +5294,7 @@ _CONFIG_META = {
     "AI_MODEL":                {"label": "Modelo IA",          "tipo": "plain"},
     "SHOPIFY_STORE":           {"label": "Dominio tienda",   "tipo": "plain"},
     "SHOPIFY_STOREFRONT_TOKEN":{"label": "Storefront Token", "tipo": "secret"},
+    "SHOPIFY_ADMIN_TOKEN":     {"label": "Admin API Token",  "tipo": "secret"},
     "SHOPIFY_WEBHOOK_SECRET":  {"label": "Webhook Secret",   "tipo": "secret"},
     "PEDIDO_MINIMO":           {"label": "Pedido mínimo (COP)", "tipo": "plain"},
     "PEDIDO_MIN_MSG":          {"label": "Mensaje pedido mínimo", "tipo": "plain"},
@@ -5384,12 +5385,31 @@ async def inbox_test_config(
             return JSONResponse(content={"ok": False, "error": err})
 
         elif service == "shopify":
-            # Andrea usa la Storefront API (no Admin API) para catálogo y checkouts
-            sf_token = _val("SHOPIFY_STOREFRONT_TOKEN")
-            domain   = _val("SHOPIFY_STORE").replace("https://","").replace("http://","").rstrip("/")
-            if not sf_token or not domain:
-                return JSONResponse(content={"ok": False, "error": "Storefront Token o dominio no configurado"})
-            # Consulta mínima a la Storefront GraphQL API para verificar credenciales
+            # Voco tiene 2 APIs de Shopify:
+            #   - Storefront API (público): catálogo + cartCreate. Modelo actual.
+            #   - Admin API (privado): webhooks, pedidos, cupones. Nuevo (#54).
+            # El test prueba CUALQUIERA que esté configurada — prioriza Admin
+            # si está presente porque da más info útil (nombre tienda, plan).
+            domain = _val("SHOPIFY_STORE").replace("https://", "").replace("http://", "").rstrip("/")
+            if not domain:
+                return JSONResponse(content={"ok": False, "error": "Dominio Shopify no configurado"})
+            admin_token = _val("SHOPIFY_ADMIN_TOKEN")
+            sf_token    = _val("SHOPIFY_STOREFRONT_TOKEN")
+
+            # Si hay Admin token: probar Admin API (más completo)
+            if admin_token:
+                from agent.shopify_admin import verificar_admin_token
+                resultado = await verificar_admin_token(domain, admin_token)
+                if resultado.get("ok"):
+                    msg = f"✅ Admin API conectada · {resultado.get('shop_name', domain)}"
+                    if resultado.get("plan"):
+                        msg += f" ({resultado['plan']})"
+                    return JSONResponse(content={"ok": True, "msg": msg, "tipo": "admin"})
+                return JSONResponse(content={"ok": False, "error": resultado.get("error", "Error con Admin API")})
+
+            # Fallback: probar Storefront (modelo viejo)
+            if not sf_token:
+                return JSONResponse(content={"ok": False, "error": "Configura Admin API token (recomendado) o Storefront Token"})
             gql = '{"query":"{ shop { name } }"}'
             async with httpx.AsyncClient(timeout=12) as cli:
                 r = await cli.post(
@@ -5407,7 +5427,7 @@ async def inbox_test_config(
                     msg = errors[0].get("message", "Token inválido") if errors else "Token inválido"
                     return JSONResponse(content={"ok": False, "error": msg})
                 shop_name = (data.get("data") or {}).get("shop", {}).get("name", domain)
-                return JSONResponse(content={"ok": True, "msg": f"✅ Tienda conectada · {shop_name}"})
+                return JSONResponse(content={"ok": True, "msg": f"✅ Storefront conectada · {shop_name}", "tipo": "storefront"})
             return JSONResponse(content={"ok": False, "error": f"Error HTTP {r.status_code} — verifica el dominio y el token"})
 
         elif service == "anthropic":
@@ -5432,6 +5452,64 @@ async def inbox_test_config(
         return JSONResponse(content={"ok": False, "error": str(e)[:120]})
 
     return JSONResponse(content={"ok": False, "error": "Servicio no reconocido"})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# #54 — Sincronización programática de webhooks Shopify
+# ══════════════════════════════════════════════════════════════════════════════
+@app.post("/inbox/api/integraciones/shopify/sincronizar-webhooks")
+async def api_shopify_sincronizar_webhooks(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Registra (o actualiza) los webhooks que Voco necesita en la tienda
+    Shopify del agente, vía Admin API. Reemplaza el copy-paste manual del
+    cliente en Shopify Admin → Notifications → Webhooks.
+
+    Body opcional:
+        {"store": "...", "admin_token": "..."}
+    Si no se pasan, los lee del config_value/env del agente activo.
+
+    Response:
+        {ok, creados, conservados, recreados, fallidos, callback_url, error?}
+    """
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    store       = (body.get("store") or "").strip() or os.getenv("SHOPIFY_STORE", "")
+    admin_token = (body.get("admin_token") or "").strip() or os.getenv("SHOPIFY_ADMIN_TOKEN", "")
+    store = store.replace("https://", "").replace("http://", "").rstrip("/")
+    if not store or not admin_token:
+        return JSONResponse(status_code=400, content={
+            "ok": False,
+            "error": "Falta dominio Shopify o Admin API token. Configura SHOPIFY_STORE y SHOPIFY_ADMIN_TOKEN en Integraciones."
+        })
+
+    # Construir el callback URL desde el host de la request (multi-tenant ready
+    # — funciona con cualquier dominio donde esté desplegado Voco)
+    base = str(request.base_url).rstrip("/")
+    if base.startswith("http://") and "localhost" not in base:
+        # Shopify exige HTTPS para webhooks — forzar si no estamos en local
+        base = base.replace("http://", "https://", 1)
+    callback_url = f"{base}/shopify-webhook"
+
+    from agent.shopify_admin import sincronizar_webhooks_voco
+    res = await sincronizar_webhooks_voco(store, admin_token, callback_url)
+    res["callback_url"] = callback_url
+    if res.get("ok"):
+        logger.info(
+            f"[shopify-admin] webhooks sync para {store}: "
+            f"+{len(res.get('creados', []))} ={len(res.get('conservados', []))} "
+            f"~{len(res.get('recreados', []))} !{len(res.get('fallidos', []))}"
+        )
+    return JSONResponse(content=res)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
