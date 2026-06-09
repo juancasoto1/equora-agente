@@ -8136,7 +8136,23 @@ function _renderTablaEquipo(equipo) {
     var rc = rolColor[u.rol] || '#f1f5f9;color:#475569';
     var onlineColor = u.ultimo_ping_at && (Date.now() - new Date(u.ultimo_ping_at).getTime() < 60000)
       ? '#22c55e' : '#d1d5db';
-    return '<tr style="border-bottom:1px solid #f1f5f9">' +
+    // Pill de notificaciones de escalación por WhatsApp (#52).
+    // Click → modal pequeño con toggle + input del número.
+    var notifHtml;
+    if (u.notif_escalaciones_wa && u.telefono_wa) {
+      // Mostrar últimos 4 dígitos del número para confirmación visual
+      var tail = (u.telefono_wa.length > 4) ? u.telefono_wa.slice(-4) : u.telefono_wa;
+      notifHtml = '<button onclick="abrirEditarNotifEsc(' + u.id + ')" '
+        + 'style="background:#dcfce7;color:#15803d;border:1px solid #86efac;'
+        + 'padding:2px 9px;border-radius:10px;font-size:.72rem;font-weight:700;cursor:pointer">'
+        + '✓ Activo ···' + _escEsc(tail) + '</button>';
+    } else {
+      notifHtml = '<button onclick="abrirEditarNotifEsc(' + u.id + ')" '
+        + 'style="background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;'
+        + 'padding:2px 9px;border-radius:10px;font-size:.72rem;font-weight:600;cursor:pointer">'
+        + 'Configurar</button>';
+    }
+    return '<tr style="border-bottom:1px solid #f1f5f9" data-uid="' + u.id + '">' +
       '<td style="padding:10px 14px;font-weight:600;font-size:.86rem;color:var(--voco-text)">' +
         '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + onlineColor + ';margin-right:6px"></span>' +
         _escEsc(u.nombre) + '</td>' +
@@ -8144,6 +8160,7 @@ function _renderTablaEquipo(equipo) {
       '<td style="padding:10px 14px"><span style="background:' + rc + ';padding:2px 8px;border-radius:10px;font-size:.73rem;font-weight:700">' + u.rol + '</span></td>' +
       '<td style="padding:10px 14px"><span style="background:' + (u.activo ? '#dcfce7;color:#15803d' : '#fee2e2;color:#b91c1c') +
         ';padding:2px 8px;border-radius:10px;font-size:.73rem;font-weight:700">' + (u.activo ? 'Activo' : 'Inactivo') + '</span></td>' +
+      '<td style="padding:10px 14px">' + notifHtml + '</td>' +
       '<td style="padding:10px 14px;font-size:.82rem">' +
         (u.activo ? '<button onclick="desactivarAgenteEquipo(' + u.id + ')" style="color:#ef4444;background:none;border:none;cursor:pointer;font-size:.78rem">Desactivar</button>' : '') +
       '</td></tr>';
@@ -8154,8 +8171,105 @@ function _renderTablaEquipo(equipo) {
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Email</th>' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Rol</th>' +
     '<th style="padding:8px 14px;text-align:left;font-weight:600">Estado</th>' +
+    '<th style="padding:8px 14px;text-align:left;font-weight:600">Notif escalación WA</th>' +
     '<th style="padding:8px 14px"></th>' +
     '</thead><tbody>' + filas.join('') + '</tbody></table>';
+  // Guardar referencia al equipo para que el modal pueda leer datos
+  _equipoCache = equipo;
+}
+
+/* Cache del último listado de equipo, usado por el modal de edición. */
+var _equipoCache = [];
+
+/* Modal de edición de preferencias de notificación de escalación.
+   Diseño minimal: toggle + input + guardar. */
+function abrirEditarNotifEsc(uid) {
+  var u = _equipoCache.find(function(x) { return x.id === uid; });
+  if (!u) return;
+  // Construir modal una sola vez y reutilizar
+  var modal = document.getElementById('notif-esc-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'notif-esc-modal';
+    modal.style.cssText = 'display:none;position:fixed;top:0;left:0;right:0;bottom:0;'
+      + 'background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center';
+    modal.innerHTML = ''
+      + '<div style="background:var(--voco-card-bg);border-radius:12px;padding:22px 24px;max-width:440px;width:92%;border:1px solid var(--voco-border)">'
+      +   '<h3 style="margin:0 0 4px;color:var(--voco-text);font-size:1.02rem">Notificaciones de escalación</h3>'
+      +   '<p style="margin:0 0 16px;color:var(--voco-text-muted);font-size:.82rem;line-height:1.5">Cuando un cliente sea escalado, recibirás un WhatsApp en tu número personal con el motivo y contexto.</p>'
+      +   '<div id="notif-esc-user" style="background:var(--voco-content-bg-alt);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:.83rem"></div>'
+      +   '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:.88rem;color:var(--voco-text);margin-bottom:14px">'
+      +     '<input type="checkbox" id="notif-esc-toggle" style="cursor:pointer;width:18px;height:18px">'
+      +     '<span style="font-weight:600">Recibir escalaciones en mi WhatsApp</span>'
+      +   '</label>'
+      +   '<label style="display:block;font-size:.78rem;font-weight:600;color:var(--voco-text);margin-bottom:5px">'
+      +     'Tu número de WhatsApp'
+      +   '</label>'
+      +   '<input type="tel" id="notif-esc-tel" placeholder="+57 300 123 4567"'
+      +     ' style="width:100%;padding:9px 11px;border:1px solid var(--voco-border);border-radius:7px;background:var(--voco-content-bg-alt);color:var(--voco-text);font-size:.88rem;outline:none;box-sizing:border-box;font-family:inherit">'
+      +   '<div style="font-size:.7rem;color:var(--voco-text-muted);margin-top:4px;margin-bottom:18px">Incluye el código de país. Solo se aceptan dígitos.</div>'
+      +   '<div id="notif-esc-status" style="font-size:.78rem;margin-bottom:10px;min-height:14px"></div>'
+      +   '<div style="display:flex;gap:8px;justify-content:flex-end">'
+      +     '<button type="button" onclick="cerrarNotifEscModal()" class="btn-secondary" style="padding:7px 14px;font-size:.82rem">Cancelar</button>'
+      +     '<button type="button" onclick="guardarNotifEsc()" class="btn-primary" style="padding:7px 16px;font-size:.82rem" id="notif-esc-save">Guardar</button>'
+      +   '</div>'
+      + '</div>';
+    document.body.appendChild(modal);
+    // Click en backdrop cierra
+    modal.addEventListener('click', function(ev) {
+      if (ev.target === modal) cerrarNotifEscModal();
+    });
+  }
+  // Rellenar con datos del usuario
+  document.getElementById('notif-esc-user').innerHTML =
+    '<b>' + _escEsc(u.nombre) + '</b><br>'
+    + '<span style="color:var(--voco-text-muted);font-size:.78rem">' + _escEsc(u.email) + ' · ' + _escEsc(u.rol) + '</span>';
+  document.getElementById('notif-esc-toggle').checked = !!u.notif_escalaciones_wa;
+  document.getElementById('notif-esc-tel').value = u.telefono_wa || '';
+  document.getElementById('notif-esc-status').textContent = '';
+  modal.dataset.uid = String(uid);
+  modal.style.display = 'flex';
+}
+
+function cerrarNotifEscModal() {
+  var modal = document.getElementById('notif-esc-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function guardarNotifEsc() {
+  var modal  = document.getElementById('notif-esc-modal');
+  var uid    = parseInt(modal.dataset.uid, 10);
+  var activo = document.getElementById('notif-esc-toggle').checked;
+  var tel    = (document.getElementById('notif-esc-tel').value || '').trim();
+  var st     = document.getElementById('notif-esc-status');
+  var btn    = document.getElementById('notif-esc-save');
+  // Validación: si activa pero sin tel, error
+  if (activo && !tel.replace(/\D/g, '')) {
+    st.innerHTML = '<span style="color:#dc2626">Si activas la notificación, debes ingresar tu número.</span>';
+    return;
+  }
+  btn.disabled = true; st.innerHTML = '<span style="color:var(--voco-text-muted)">Guardando…</span>';
+  try {
+    var r = await fetch('/inbox/api/equipo/' + uid, {
+      method: 'PUT', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({notif_escalaciones_wa: activo, telefono_wa: tel})
+    });
+    var d = await r.json();
+    if (!r.ok || !d.ok) {
+      st.innerHTML = '<span style="color:#dc2626">' + (d.error || 'Error al guardar') + '</span>';
+      return;
+    }
+    st.innerHTML = '<span style="color:#16a34a">✓ Guardado</span>';
+    setTimeout(function() {
+      cerrarNotifEscModal();
+      cargarEquipo();  // refresca la tabla con el nuevo pill
+    }, 500);
+  } catch (e) {
+    st.innerHTML = '<span style="color:#dc2626">Error de red</span>';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function mostrarFormNuevoAgente() {

@@ -4245,7 +4245,17 @@ async def api_actualizar_agente_equipo(
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     body = await request.json()
-    campos = {k: v for k, v in body.items() if k in ("nombre", "rol", "activo", "password")}
+    # Whitelist de campos editables. #52 agrega notif_escalaciones_wa y telefono_wa.
+    campos = {k: v for k, v in body.items() if k in (
+        "nombre", "rol", "activo", "password",
+        "notif_escalaciones_wa", "telefono_wa",
+    )}
+    # Normalizar el teléfono a solo dígitos (sin '+' ni espacios) si viene
+    if "telefono_wa" in campos:
+        digitos = re.sub(r"\D", "", str(campos["telefono_wa"] or ""))
+        campos["telefono_wa"] = digitos
+    if "notif_escalaciones_wa" in campos:
+        campos["notif_escalaciones_wa"] = bool(campos["notif_escalaciones_wa"])
     ok = await actualizar_usuario_interno(ui_id, **campos)
     return JSONResponse(content={"ok": ok})
 
