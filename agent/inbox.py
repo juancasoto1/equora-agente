@@ -3359,46 +3359,76 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </div>
               </div>
 
+              <!-- ──────────────────────────────────────────────────────────
+                   STEP 3 — OAuth (modelo Jelou/99Envíos)
+                   ────────────────────────────────────────────────────────── -->
               <div class="cfg-step">
                 <div class="cfg-step-num">3</div>
                 <div class="cfg-step-body">
                   <div class="cfg-field-lbl">
-                    Admin API access token
-                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-admin')" type="button" aria-label="Ayuda">?</button>
+                    Conexión OAuth con Shopify
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-oauth')" type="button" aria-label="Ayuda">?</button>
                     <span class="opt-badge" style="background:#dbeafe;color:#1e40af">Recomendado</span>
                   </div>
-                  <div class="cfg-help-box" id="help-sh-admin">
-                    <b>Con este token Voco puede:</b><br>
+                  <div class="cfg-help-box" id="help-sh-oauth">
+                    <b>Con OAuth Voco puede:</b><br>
                     · <b>Registrar webhooks automáticamente</b> (no necesitas configurarlos a mano)<br>
                     · Leer pedidos completos para confirmaciones precisas<br>
-                    · Crear cupones automáticamente cuando configures la promoción del bono<br><br>
-                    <b>Cómo obtenerlo</b> (modelo similar a Jelou, 99Envíos):<br>
-                    1. Shopify Admin → <b>Settings</b> → <b>Apps and sales channels</b><br>
-                    2. Arriba a la derecha → <b>"Develop apps"</b> → <b>"Create an app"</b><br>
-                    3. Nombre: <code>Voco</code> → <b>"Create app"</b><br>
-                    4. Pestaña <b>"Configuration"</b> → <b>"Configure"</b> en Admin API access scopes<br>
-                    5. Activa estos scopes mínimos:<br>
-                    &nbsp;&nbsp;<code>read_products</code>, <code>read_inventory</code>, <code>read_orders</code>,<br>
-                    &nbsp;&nbsp;<code>read_shipping</code>, <code>write_draft_orders</code>,<br>
-                    &nbsp;&nbsp;<code>write_discounts</code> (para que Voco cree cupones)<br>
-                    6. <b>"Save"</b> → pestaña <b>"API credentials"</b> → <b>"Install app"</b><br>
-                    7. Copia el <b>"Admin API access token"</b> (empieza con <code>shpat_...</code>) y pégalo aquí<br>
-                    <small style="color:var(--voco-text-muted)">⚠️ El token solo se muestra UNA vez. Guárdalo bien.</small>
+                    · <b>Crear cupones automáticamente</b> cuando configures la promoción del bono<br><br>
+                    <b>Cómo obtener Client ID + Client Secret</b> (modelo Jelou, 99Envíos):<br>
+                    1. Ve a <a href="https://partners.shopify.com" target="_blank"><b>partners.shopify.com</b></a> y crea cuenta (gratis)<br>
+                    2. Una vez dentro → <b>Apps</b> → <b>"Create app"</b> → tipo <b>"Custom distribution"</b><br>
+                    3. Nombre: <code>Voco</code> → siguiente<br>
+                    4. En <b>Configuration → URLs</b> agrega como <b>"Allowed redirection URL"</b>:<br>
+                    &nbsp;&nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px">https://[tu-dominio]/oauth/shopify/callback</code><br>
+                    5. En <b>App setup → Protected customer data access</b> activa lo necesario<br>
+                    6. Pestaña <b>"API credentials"</b> → copia el <b>Client ID</b> y el <b>Client secret</b><br>
+                    7. Pégalos abajo, guarda y haz click en <b>"Conectar con Shopify"</b><br>
+                    <small style="color:var(--voco-text-muted)">⚠️ El Client Secret solo se muestra UNA vez. Guárdalo bien.</small>
+                  </div>
+
+                  <!-- Client ID -->
+                  <div class="cfg-field-lbl" style="margin-top:10px">
+                    Client ID
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="text" id="cfg-sh-cid" class="f-inp" placeholder="Client ID de tu app en Partners" autocomplete="off" style="flex:1">
+                    <span class="cfg-field-status" id="st-SHOPIFY_CLIENT_ID"></span>
+                  </div>
+
+                  <!-- Client Secret -->
+                  <div class="cfg-field-lbl" style="margin-top:10px">
+                    Client Secret
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-admin" class="f-inp" placeholder="shpat_..." autocomplete="off">
-                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-admin',this)" type="button">👁</button>
+                      <input type="password" id="cfg-sh-csec" class="f-inp" placeholder="Client Secret de tu app" autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-csec',this)" type="button">👁</button>
                     </div>
-                    <span class="cfg-field-status" id="st-SHOPIFY_ADMIN_TOKEN"></span>
+                    <span class="cfg-field-status" id="st-SHOPIFY_CLIENT_SECRET"></span>
                   </div>
-                  <!-- Auto-registro de webhooks: solo aparece si hay Admin token + dominio -->
-                  <div style="margin-top:10px;padding:10px 12px;background:var(--voco-content-bg-alt);border-radius:8px;font-size:.78rem;color:var(--voco-text-muted);line-height:1.5">
-                    <b>Después de guardar el token</b>, usa el botón
-                    <b>"Sincronizar webhooks"</b> abajo para que Voco registre
-                    automáticamente los 5 webhooks que necesita en tu tienda.
-                    No tendrás que pegar la URL del webhook ni el secret a mano.
+
+                  <!-- Estado de conexión (admin token actual) -->
+                  <div id="cfg-oauth-status" style="margin-top:14px;padding:12px 14px;background:var(--voco-content-bg-alt);border-radius:8px;font-size:.82rem;line-height:1.5">
+                    <span style="color:var(--voco-text-muted)">Estado: <i>cargando…</i></span>
                   </div>
+
+                  <!-- Avanzado: pegar token manualmente (fallback Modelo A — #54) -->
+                  <details style="margin-top:10px;font-size:.78rem;color:var(--voco-text-muted)">
+                    <summary style="cursor:pointer">¿Ya tienes un Admin API token directo (modo avanzado)?</summary>
+                    <div style="margin-top:8px;padding:10px 12px;background:var(--voco-content-bg-alt);border-radius:8px">
+                      Si creaste una <b>Custom App</b> en Shopify Admin → Develop apps,
+                      puedes pegar acá el token <code>shpat_...</code> sin usar OAuth.
+                      Esto reemplaza el OAuth de arriba.
+                      <div class="cfg-field-row" style="margin-top:6px">
+                        <div class="cfg-input-wrap" style="flex:1">
+                          <input type="password" id="cfg-sh-admin" class="f-inp" placeholder="shpat_..." autocomplete="off">
+                          <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-admin',this)" type="button">👁</button>
+                        </div>
+                        <span class="cfg-field-status" id="st-SHOPIFY_ADMIN_TOKEN"></span>
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </div>
 
@@ -3427,12 +3457,17 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
               <div class="cfg-actions">
                 <div id="cfg-shopify-result" class="cfg-test-result" style="display:none"></div>
+                <button class="btn-primary" onclick="conectarOAuthShopify()" type="button"
+                  style="background:#008060;border-color:#008060"
+                  title="Inicia OAuth con tu tienda. Requiere haber guardado Client ID + Client Secret + dominio.">
+                  <i data-lucide="link" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Conectar con Shopify
+                </button>
                 <button class="btn-secondary" onclick="sincronizarWebhooksShopify()" type="button"
-                  title="Registra los webhooks automáticamente vía Admin API. Requiere Admin token configurado.">
+                  title="Registra los webhooks automáticamente vía Admin API. Requiere haber completado OAuth o tener Admin token.">
                   <i data-lucide="refresh-cw" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Sincronizar webhooks
                 </button>
                 <button class="btn-secondary" onclick="testConexion('shopify')" type="button">🔌 Probar conexión</button>
-                <button class="btn-primary" onclick="guardarConfig('shopify')" type="button">💾 Guardar</button>
+                <button class="btn-secondary" onclick="guardarConfig('shopify')" type="button">💾 Guardar</button>
               </div>
             </div><!-- /card-shopify -->
 
@@ -7233,6 +7268,8 @@ async function cargarConfiguracion() {
     SHOPIFY_STORE:           'cfg-sh-domain',
     SHOPIFY_STOREFRONT_TOKEN:'cfg-sh-sftoken',
     SHOPIFY_ADMIN_TOKEN:     'cfg-sh-admin',
+    SHOPIFY_CLIENT_ID:       'cfg-sh-cid',
+    SHOPIFY_CLIENT_SECRET:   'cfg-sh-csec',
     SHOPIFY_WEBHOOK_SECRET:  'cfg-sh-whsec',
     PEDIDO_MINIMO:           'cfg-pedido-min',
     PEDIDO_MIN_MSG:          'cfg-pedido-msg',
@@ -7280,6 +7317,11 @@ async function cargarConfiguracion() {
     _setCfgOvStatus('ov-ai-status',      aiOk   ? 'ok' : 'error');
     _setCfgOvStatus('ov-shopify-status', shopOk ? 'ok' : 'error');
 
+    // #55 — Estado de OAuth Shopify (conectado o no según ADMIN_TOKEN)
+    if (typeof _actualizarEstadoOAuthShopify === 'function') {
+      _actualizarEstadoOAuthShopify(d.SHOPIFY_ADMIN_TOKEN);
+    }
+
   } catch(e) {
     console.error('Error cargando configuración:', e);
   }
@@ -7305,14 +7347,18 @@ async function guardarConfig(service) {
     if (k) payload.ANTHROPIC_API_KEY = k;
     if (m) payload.AI_MODEL          = m;
   } else if (service === 'shopify') {
-    var sd = (document.getElementById('cfg-sh-domain').value  || '').trim();
-    var sf = (document.getElementById('cfg-sh-sftoken').value || '').trim();
-    var sa = (document.getElementById('cfg-sh-admin').value   || '').trim();
-    var sw = (document.getElementById('cfg-sh-whsec').value   || '').trim();
-    if (sd) payload.SHOPIFY_STORE            = sd;
-    if (sf) payload.SHOPIFY_STOREFRONT_TOKEN = sf;
-    if (sa) payload.SHOPIFY_ADMIN_TOKEN      = sa;
-    if (sw) payload.SHOPIFY_WEBHOOK_SECRET   = sw;
+    var sd  = (document.getElementById('cfg-sh-domain').value  || '').trim();
+    var sf  = (document.getElementById('cfg-sh-sftoken').value || '').trim();
+    var sa  = (document.getElementById('cfg-sh-admin').value   || '').trim();
+    var sw  = (document.getElementById('cfg-sh-whsec').value   || '').trim();
+    var sci = (document.getElementById('cfg-sh-cid').value     || '').trim();
+    var scs = (document.getElementById('cfg-sh-csec').value    || '').trim();
+    if (sd)  payload.SHOPIFY_STORE            = sd;
+    if (sf)  payload.SHOPIFY_STOREFRONT_TOKEN = sf;
+    if (sa)  payload.SHOPIFY_ADMIN_TOKEN      = sa;
+    if (sw)  payload.SHOPIFY_WEBHOOK_SECRET   = sw;
+    if (sci) payload.SHOPIFY_CLIENT_ID        = sci;
+    if (scs) payload.SHOPIFY_CLIENT_SECRET    = scs;
   } else if (service === 'reglas') {
     var pm  = (document.getElementById('cfg-pedido-min').value || '').trim();
     var pmm = (document.getElementById('cfg-pedido-msg').value || '').trim();
@@ -7353,6 +7399,106 @@ async function guardarConfig(service) {
 }
 
 /* ── testConexion: POST /inbox/api/config/test/{service} ── */
+/* #55 — OAuth Shopify (modelo Jelou/99Envíos).
+   Inicia el flujo: pide al backend la URL de autorización y redirige el
+   navegador a Shopify. El callback termina en /oauth/shopify/callback
+   que guarda el token y redirige de vuelta al panel con ?shopify_oauth=ok */
+async function conectarOAuthShopify() {
+  var resultId = 'cfg-shopify-result';
+  var domain = (document.getElementById('cfg-sh-domain').value || '').trim();
+  var cid    = (document.getElementById('cfg-sh-cid').value    || '').trim();
+  var csec   = (document.getElementById('cfg-sh-csec').value   || '').trim();
+  if (!domain || !cid || !csec) {
+    _showCfgResult(resultId, false,
+      '⚠️ Configura primero Dominio + Client ID + Client Secret y guarda. Después haz click acá.');
+    return;
+  }
+  if (!/\.myshopify\.com$/.test(domain)) {
+    _showCfgResult(resultId, false,
+      '⚠️ El dominio debe terminar en .myshopify.com (usa el dominio interno, no el personalizado).');
+    return;
+  }
+  _showCfgResult(resultId, null, '🔄 Generando URL de autorización…');
+  try {
+    var r = await fetch('/inbox/api/oauth/shopify/start', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({store: domain, client_id: cid, client_secret: csec})
+    });
+    var d = await r.json();
+    if (!d.ok || !d.auth_url) {
+      _showCfgResult(resultId, false, d.error || 'No se pudo iniciar OAuth');
+      return;
+    }
+    _showCfgResult(resultId, null, '🚀 Redirigiendo a Shopify para autorizar…');
+    setTimeout(function() { window.location.href = d.auth_url; }, 400);
+  } catch (e) {
+    _showCfgResult(resultId, false, 'Error de red: ' + String(e));
+  }
+}
+
+/* Helper: rellena la URL del callback en el help-box con el dominio actual,
+   para que el cliente pueda copiarla y pegarla en su app de Shopify Partners. */
+function _rellenarCallbackUrlShopify() {
+  var el = document.getElementById('oauth-callback-hint');
+  if (el) {
+    el.textContent = window.location.origin + '/oauth/shopify/callback';
+  }
+}
+
+/* Helper: actualiza el estado de OAuth en el panel (conectado/no conectado).
+   Lo llama cargarConfiguracion() después de leer el config — si hay
+   SHOPIFY_ADMIN_TOKEN guardado, muestra ✓ conectado. */
+function _actualizarEstadoOAuthShopify(adminTokenConfig) {
+  var box = document.getElementById('cfg-oauth-status');
+  if (!box) return;
+  if (adminTokenConfig && adminTokenConfig.configurado) {
+    box.innerHTML = '<span style="color:#16a34a"><i data-lucide="check-circle" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i><b>Conectado</b></span> '
+      + '· Voco tiene acceso a tu tienda. Puedes hacer click en <b>"Sincronizar webhooks"</b> para registrarlos automáticamente.';
+  } else {
+    box.innerHTML = '<span style="color:var(--voco-text-muted)"><i data-lucide="link-2-off" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i><b>No conectado</b></span> '
+      + '· Llena los campos arriba, guarda, y haz click en <b>"Conectar con Shopify"</b>.';
+  }
+  if (window.lucide) window.lucide.createIcons();
+}
+
+/* Manejo del retorno del callback OAuth. Cuando el usuario regresa desde
+   Shopify, el callback redirige a /inbox#configuracion?shopify_oauth=ok|error&msg=...
+   Detectamos esos params y mostramos feedback. */
+function _procesarRetornoOAuthShopify() {
+  // El hash incluye los params: #configuracion?shopify_oauth=ok&msg=...
+  var hash = window.location.hash || '';
+  var qmark = hash.indexOf('?');
+  if (qmark < 0) return;
+  var qs = hash.substring(qmark + 1);
+  var params = {};
+  qs.split('&').forEach(function(kv) {
+    var eq = kv.indexOf('=');
+    if (eq > 0) params[decodeURIComponent(kv.substring(0, eq))] = decodeURIComponent(kv.substring(eq + 1));
+  });
+  if (!params.shopify_oauth) return;
+  // Limpiar hash para que no se repita al refrescar
+  history.replaceState(null, '', window.location.pathname + '#configuracion');
+  // Asegurar que estamos en la sección
+  if (typeof showSec === 'function') showSec('configuracion');
+  setTimeout(function() {
+    var resultId = 'cfg-shopify-result';
+    if (params.shopify_oauth === 'ok') {
+      _showCfgResult(resultId, true, '🎉 ' + (params.msg || 'Conectado con Shopify'));
+      // Refrescar el config para que el campo Admin Token quede marcado como configurado
+      if (typeof cargarConfiguracion === 'function') cargarConfiguracion();
+    } else {
+      _showCfgResult(resultId, false, '⚠️ ' + (params.msg || 'Error en OAuth'));
+    }
+  }, 300);
+}
+
+/* Disparar el procesamiento al cargar + cada vez que se entra a config */
+window.addEventListener('DOMContentLoaded', function() {
+  _rellenarCallbackUrlShopify();
+  _procesarRetornoOAuthShopify();
+});
+
 /* #54 — Sincronización programática de webhooks Shopify vía Admin API.
    Reemplaza el copy-paste manual de URL+secret en Shopify Admin. */
 async function sincronizarWebhooksShopify() {
