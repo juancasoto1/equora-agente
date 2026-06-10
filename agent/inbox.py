@@ -3379,9 +3379,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     1. En tu Shopify Admin: <b>Configuración → Apps y canales de venta → Desarrollar apps</b><br>
                     2. Click en <b>"Desarrollar apps en Dev Dashboard"</b> (botón negro) — se abre el Dev Dashboard de tu tienda<br>
                     3. <b>Crear app</b> (arriba a la derecha) → Nombre: <code>Voco</code><br>
-                    4. En la app creada → <b>Configuración</b> → agrega como <b>URL de redirección permitida</b>:<br>
-                    &nbsp;&nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">https://[tu-dominio]/oauth/shopify/callback</code><br>
-                    &nbsp;&nbsp;<button type="button" onclick="_copiarCallbackOAuth(this)" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-top:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar URL</button><br>
+                    4. En la app creada → <b>Configuración → URLs</b> hay <b>2 campos distintos</b>:<br><br>
+                    &nbsp;&nbsp;<b>a) URL de la app</b> (adónde lleva el botón "Abrir" en tu Shopify):<br>
+                    &nbsp;&nbsp;<code id="oauth-app-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">https://[tu-dominio]/inbox</code>
+                    <button type="button" onclick="_copiarUrlOAuth(this, 'app')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br><br>
+                    &nbsp;&nbsp;<b>b) URLs de redirección permitidas</b> (adónde Shopify regresa tras autorizar OAuth):<br>
+                    &nbsp;&nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">https://[tu-dominio]/oauth/shopify/callback</code>
+                    <button type="button" onclick="_copiarUrlOAuth(this, 'callback')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br><br>
                     5. En <b>Alcances</b>: <code>read_products</code>, <code>read_inventory</code>, <code>read_orders</code>, <code>read_shipping</code>, <code>write_draft_orders</code>, <code>write_discounts</code>, <code>read_customers</code><br>
                     6. <b>Publica</b> una versión de la app<br>
                     7. Pestaña <b>Credenciales API</b> → copia <b>ID de cliente</b> y <b>Secreto del cliente</b><br>
@@ -7440,18 +7444,22 @@ async function conectarOAuthShopify() {
   }
 }
 
-/* Helper: rellena la URL del callback en el help-box con el dominio actual,
-   para que el cliente pueda copiarla y pegarla en su app del Dev Dashboard. */
+/* Helper: rellena las 2 URLs OAuth en el help-box con el dominio actual,
+   para que el cliente pueda copiarlas a su app del Dev Dashboard. */
 function _rellenarCallbackUrlShopify() {
-  var el = document.getElementById('oauth-callback-hint');
-  if (el) {
-    el.textContent = window.location.origin + '/oauth/shopify/callback';
-  }
+  var origen = window.location.origin;
+  var app = document.getElementById('oauth-app-hint');
+  if (app) app.textContent = origen + '/inbox';
+  var cb = document.getElementById('oauth-callback-hint');
+  if (cb)  cb.textContent  = origen + '/oauth/shopify/callback';
 }
 
-/* Helper: copia al portapapeles la URL del callback. */
-function _copiarCallbackOAuth(btn) {
-  var url = (window.location.origin + '/oauth/shopify/callback');
+/* Helper: copia al portapapeles la URL solicitada ('app' o 'callback'). */
+function _copiarUrlOAuth(btn, tipo) {
+  var origen = window.location.origin;
+  var url = (tipo === 'app')
+    ? origen + '/inbox'
+    : origen + '/oauth/shopify/callback';
   if (!navigator.clipboard) {
     var ta = document.createElement('textarea');
     ta.value = url; document.body.appendChild(ta);
@@ -7469,6 +7477,9 @@ function _copiarCallbackOAuth(btn) {
     if (window.lucide) window.lucide.createIcons();
   }, 1500);
 }
+
+/* Compat: el nombre viejo se conserva por si quedó algún call site. */
+function _copiarCallbackOAuth(btn) { _copiarUrlOAuth(btn, 'callback'); }
 
 /* Helper: actualiza el estado de OAuth en el panel (conectado/no conectado).
    Lo llama cargarConfiguracion() después de leer el config — si hay
