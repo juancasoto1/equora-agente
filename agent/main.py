@@ -362,8 +362,21 @@ async def _procesar_carrito_unificado():
     """
     ahora = time.time()
     umbral_gratis = obtener_umbral_envio_gratis()
-    minimo_fmt = f"{PEDIDO_MINIMO:,}".replace(",", ".")
     gratis_fmt = f"{umbral_gratis:,}".replace(",", ".")
+
+    async def _resolver_pedido_minimo(tel: str) -> int:
+        """Lee PEDIDO_MINIMO del config_value del agente principal del cliente.
+        Fallback a la env var global. Esto evita usar el 50000 hardcoded
+        cuando el merchant configuró otro valor en el panel."""
+        try:
+            from agent.memory import get_config_value
+            aid = await _resolver_agent_id_principal(tel)
+            raw = await get_config_value("PEDIDO_MINIMO", aid)
+            if raw:
+                return int(str(raw).strip() or 0) or PEDIDO_MINIMO
+        except Exception:
+            pass
+        return PEDIDO_MINIMO
 
     # Dos queries con tiempos distintos: estado 3 vs estados 4-5
     clientes_min   = await clientes_con_carrito_abandonado(min_inactivo=CARRITO_MIN_MIN,   max_inactivo=CARRITO_MAX_MIN)
@@ -407,18 +420,24 @@ async def _procesar_carrito_unificado():
         if total <= 0:
             continue
 
+        # Resolver PEDIDO_MINIMO del agente (por config_value, no el global).
+        # Esto fixa el bug donde el seguimiento decía "$50.000" aún cuando el
+        # merchant configuró otro valor (ej. 25000) en el panel.
+        pedido_minimo_local = await _resolver_pedido_minimo(telefono)
+        minimo_fmt = f"{pedido_minimo_local:,}".replace(",", ".")
+
         # Verificar que el estado corresponde a la ventana de tiempo correcta
         # Estado 3 (< mínimo): solo si pasó CARRITO_MIN_MIN
         # Estados 4-5 (≥ mínimo): solo si pasó CROSSSELL_MIN_MIN
-        if total < PEDIDO_MINIMO and not en_min:
-            logger.info(f"Carrito {telefono}: ${total:,} < mínimo, aún no han pasado {CARRITO_MIN_MIN} min — esperando")
+        if total < pedido_minimo_local and not en_min:
+            logger.info(f"Carrito {telefono}: ${total:,} < mínimo ${pedido_minimo_local}, aún no han pasado {CARRITO_MIN_MIN} min — esperando")
             continue  # Aún no es tiempo para el aviso de pedido mínimo
-        if total >= PEDIDO_MINIMO and not en_cross:
-            logger.info(f"Carrito {telefono}: ${total:,} ≥ mínimo, aún no han pasado {CROSSSELL_MIN_MIN} min — esperando")
+        if total >= pedido_minimo_local and not en_cross:
+            logger.info(f"Carrito {telefono}: ${total:,} ≥ mínimo ${pedido_minimo_local}, aún no han pasado {CROSSSELL_MIN_MIN} min — esperando")
             continue  # Aún no es tiempo para el cross-sell
 
         # Calcular estado actual para detectar cambios
-        estado_actual = 3 if total < PEDIDO_MINIMO else (4 if total < umbral_gratis else 5)
+        estado_actual = 3 if total < pedido_minimo_local else (4 if total < umbral_gratis else 5)
 
         # Si el estado cambió (ej. cliente agregó productos: 3→4), resetear cooldown
         # para notificar de inmediato el nuevo estado
@@ -457,7 +476,7 @@ async def _procesar_carrito_unificado():
         if total <= 0:
             continue
         # Re-calcular estado actual con el total vivo (puede haber cambiado)
-        estado_actual = 3 if total < PEDIDO_MINIMO else (4 if total < umbral_gratis else 5)
+        estado_actual = 3 if total < pedido_minimo_local else (4 if total < umbral_gratis else 5)
 
         nombres_en_carrito = {p.get("producto", "").lower() for p in items}
         total_fmt = f"{total:,}".replace(",", ".")
@@ -503,12 +522,12 @@ async def _procesar_carrito_unificado():
                 return None
 
         try:
-            if total < PEDIDO_MINIMO:
+            if total < pedido_minimo_local:
                 # ── Estado 3: bajo el mínimo ──────────────────────────────
                 # Texto configurable por agente (puede apagarse si el negocio
                 # no maneja pedido mínimo). Si está desactivado, no enviamos
                 # nada — el cliente no es interrumpido.
-                falta = PEDIDO_MINIMO - total
+                falta = pedido_minimo_local - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
                 sugeridos = _sugerir_productos(nombres_en_carrito)
                 lineas = "\n".join(f"✅ {s}" for s in sugeridos)
