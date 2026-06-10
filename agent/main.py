@@ -892,6 +892,20 @@ def _botones_carrito_estandar(ofrece_confirmar: bool = False) -> list[dict]:
     return botones
 
 
+def _botones_post_pedido() -> list[dict]:
+    """Botones estilo Jelou que se envían cuando el cliente confirma pedido
+    y el checkout está listo. 3 opciones:
+      💳 Ir al pago    → enviará el invoice_url del Draft Order
+      🔍 Agregar más   → reabre el catálogo para sumar productos
+      🛒 Ver mi carrito → reenvía resumen del carrito actual
+    """
+    return [
+        {"id": "act_ir_pago",      "title": "💳 Ir al pago"},
+        {"id": "act_agregar_mas",  "title": "🔍 Agregar más"},
+        {"id": "act_ver_carrito",  "title": "🛒 Ver mi carrito"},
+    ]
+
+
 async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
     """Lee el carrito_activo de BD y envía un resumen determinístico al cliente.
     Se llama desde el handler act_ver_carrito. NUNCA delega al LLM — el backend
@@ -958,15 +972,16 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
 def _es_url_checkout_valida(url: str) -> bool:
     """True si la URL es un checkout real de Shopify (no la home).
 
-    Acepta los formatos actuales del Storefront API y de los webhooks:
+    Acepta los formatos actuales del Storefront API, Admin API y webhooks:
       - '/checkouts/cn/...' y '/checkouts/...'  (webhook checkouts/create, formato clásico)
       - '/checkout/...'                          (alias usado por algunos endpoints)
-      - '/cart/c/{id}?key=...&_s=...&_y=...'    (Storefront API cartCreate — CON tokens
-        de sesión; este es el formato que Shopify devuelve ahora).
+      - '/cart/c/{id}?key=...&_s=...&_y=...'    (Storefront cartCreate — legacy)
+      - '/invoices/...'                          (Admin Draft Order invoice_url — actual)
     """
     if not url:
         return False
-    return ("/checkouts/" in url) or ("/checkout/" in url) or ("/cart/c/" in url)
+    return (("/checkouts/" in url) or ("/checkout/" in url)
+            or ("/cart/c/" in url) or ("/invoices/" in url))
 
 
 async def _obtener_o_recrear_checkout_url(
@@ -1588,14 +1603,15 @@ async def webhook_handler(request: Request):
                             await obtener_mensaje(_agent_id, "cart.checkout_listo_texto"),
                             _ctx_ph,
                         )
-                        boton_label = (await obtener_mensaje(_agent_id, "cart.checkout_listo_boton")).strip() or "Confirmar pedido"
-                        ok_cta = False
-                        if hasattr(_proveedor_agente, "enviar_cta_url"):
-                            ok_cta = await _proveedor_agente.enviar_cta_url(
-                                msg.telefono, msg_checkout,
-                                boton_label, checkout_url,
+                        # Estilo Jelou (#61): 3 reply buttons en vez de cta_url directo.
+                        # El cliente decide si paga ya, agrega más productos, o revisa
+                        # primero el carrito. El handler act_ir_pago envía el cta_url.
+                        ok_btns = False
+                        if hasattr(_proveedor_agente, "enviar_botones_reply"):
+                            ok_btns = await _proveedor_agente.enviar_botones_reply(
+                                msg.telefono, msg_checkout, _botones_post_pedido(),
                             )
-                        if not ok_cta:
+                        if not ok_btns:
                             await _proveedor_agente.enviar_mensaje(
                                 msg.telefono, f"{msg_checkout}\n\n👉 {checkout_url}"
                             )
@@ -1624,6 +1640,49 @@ async def webhook_handler(request: Request):
                         msg.telefono, "assistant", msg_confirmacion,
                         agent_id=_agent_id,
                     )
+                    continue
+
+                if accion == "act_ir_pago":
+                    # Botón Jelou (#61): el cliente decidió pagar — enviamos
+                    # cta_url al invoice_url/checkout_url guardado en BD.
+                    checkout_url = await _obtener_o_recrear_checkout_url(
+                        msg.telefono, agent_id=_agent_id, forzar_recrear=False,
+                    )
+                    if not checkout_url:
+                        _txt_no_enc = await obtener_mensaje(_agent_id, "error.checkout_no_encontrado")
+                        if _txt_no_enc:
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_no_enc)
+                            await guardar_mensaje(msg.telefono, "assistant", _txt_no_enc, agent_id=_agent_id)
+                        continue
+                    boton_label = (await obtener_mensaje(_agent_id, "cart.checkout_listo_boton")).strip() or "Pagar ahora"
+                    txt = "Toca el botón para completar tu pago de forma segura 🔒"
+                    ok_cta = False
+                    if hasattr(_proveedor_agente, "enviar_cta_url"):
+                        ok_cta = await _proveedor_agente.enviar_cta_url(
+                            msg.telefono, txt, boton_label, checkout_url,
+                        )
+                    if not ok_cta:
+                        await _proveedor_agente.enviar_mensaje(
+                            msg.telefono, f"{txt}\n\n👉 {checkout_url}"
+                        )
+                    continue
+
+                if accion == "act_agregar_mas":
+                    # Botón Jelou (#61): cliente quiere agregar más productos —
+                    # reabrimos el catálogo nativo de WhatsApp.
+                    secciones = obtener_secciones_catalogo(None)
+                    if secciones:
+                        header_cat = await _catalogo_header_for_agent(_agent_id)
+                        await _proveedor_agente.enviar_catalogo_productos(
+                            msg.telefono, header_cat,
+                            "Elige los productos que quieras agregar a tu pedido.",
+                            secciones,
+                        )
+                    else:
+                        await _proveedor_agente.enviar_mensaje(
+                            msg.telefono,
+                            "Cuéntame qué producto te gustaría agregar y te lo busco 🛒",
+                        )
                     continue
 
                 if accion == "act_ver_carrito":

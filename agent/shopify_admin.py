@@ -340,3 +340,164 @@ async def buscar_discount_code(store: str, admin_token: str, codigo: str) -> dic
     except Exception as e:
         logger.warning(f"[shopify-admin] buscar_discount_code {codigo}: {e}")
     return None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Catálogo — Admin GraphQL products query
+# ──────────────────────────────────────────────────────────────────────────────
+# Reemplaza Storefront API. Devuelve la misma SHAPE que el query Storefront
+# para drop-in en tools.py:
+#   { "data": { "products": { "edges": [ {"node": { title, handle, productType,
+#     tags, collections{edges{node{title}}}, images{edges{node{url}}},
+#     variants{edges{node{id, title, sku, price{amount}, availableForSale,
+#     quantityAvailable, image{url}}}} } } ] } } }
+
+_ADMIN_PRODUCTS_QUERY = """
+{
+  products(first: 100, query: "status:active") {
+    edges {
+      node {
+        id
+        title
+        handle
+        productType
+        tags
+        status
+        collections(first: 5) { edges { node { title } } }
+        images(first: 1) { edges { node { url } } }
+        variants(first: 10) {
+          edges {
+            node {
+              id
+              title
+              sku
+              price
+              inventoryQuantity
+              inventoryPolicy
+              image { url }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+_ADMIN_SHOP_LOGO_QUERY = """
+{
+  shop {
+    brand {
+      logo { image { url } }
+    }
+  }
+}
+"""
+
+
+async def obtener_productos_admin(store: str, admin_token: str) -> dict[str, Any]:
+    """GraphQL Admin → products. Retorna shape COMPATIBLE con Storefront query
+    para drop-in en tools.py.
+
+    Returns:
+        {"data": {"products": {"edges": [...] }}}  con price={amount: str} y
+        availableForSale derivado de inventoryPolicy + inventoryQuantity.
+    """
+    url = _admin_url(store, "graphql.json")
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(url, headers=_admin_headers(admin_token),
+                                  json={"query": _ADMIN_PRODUCTS_QUERY})
+        if r.status_code != 200:
+            logger.error(f"[shopify-admin] productos HTTP {r.status_code}: {r.text[:200]}")
+            return {"data": {"products": {"edges": []}}}
+        data = r.json() or {}
+        if data.get("errors"):
+            logger.error(f"[shopify-admin] productos GraphQL errors: {data['errors']}")
+            return {"data": {"products": {"edges": []}}}
+        # Normalizar para que la shape sea idéntica a Storefront
+        edges = (data.get("data") or {}).get("products", {}).get("edges", []) or []
+        for e in edges:
+            node = e.get("node") or {}
+            for ve in (node.get("variants") or {}).get("edges", []):
+                v = ve.get("node") or {}
+                # price: string decimal → {amount: str}
+                if isinstance(v.get("price"), str):
+                    v["price"] = {"amount": v["price"]}
+                # availableForSale: derivar de policy + inventory
+                policy = (v.get("inventoryPolicy") or "").upper()
+                qty = v.get("inventoryQuantity")
+                if policy == "CONTINUE":  # vender sin existencias
+                    v["availableForSale"] = True
+                else:
+                    v["availableForSale"] = isinstance(qty, int) and qty > 0
+                # alias para que tools.py siga leyendo quantityAvailable
+                v["quantityAvailable"] = qty if isinstance(qty, int) else None
+        return {"data": {"products": {"edges": edges}}}
+    except Exception as e:
+        logger.error(f"[shopify-admin] obtener_productos_admin error: {e}")
+        return {"data": {"products": {"edges": []}}}
+
+
+async def obtener_logo_shopify_admin(store: str, admin_token: str) -> str:
+    """GraphQL Admin → shop.brand.logo.image.url. Devuelve '' si no hay logo."""
+    url = _admin_url(store, "graphql.json")
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.post(url, headers=_admin_headers(admin_token),
+                                  json={"query": _ADMIN_SHOP_LOGO_QUERY})
+        if r.status_code != 200:
+            return ""
+        data = r.json() or {}
+        return (((data.get("data") or {}).get("shop") or {})
+                .get("brand", {}) or {}).get("logo", {}).get("image", {}).get("url", "") or ""
+    except Exception:
+        return ""
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Carrito — Draft Order con invoice_url (reemplaza Storefront cartCreate)
+# ──────────────────────────────────────────────────────────────────────────────
+async def crear_draft_order(
+    store: str, admin_token: str,
+    line_items: list[dict], note: str, note_attributes: list[dict],
+) -> dict[str, Any]:
+    """POST /admin/draft_orders.json → crea draft order y devuelve invoice_url
+    (el link que el cliente abre para pagar).
+
+    Args:
+        line_items: [{"variant_id": int, "quantity": int}, ...]  (variant_id NUMÉRICO)
+        note: nota visible en Shopify Admin para el merchant
+        note_attributes: [{"name": "Telefono", "value": "+57..."}, ...]
+
+    Returns:
+        {ok: bool, invoice_url?: str, draft_order_id?: int, error?: str}
+    """
+    if not line_items:
+        return {"ok": False, "error": "Sin items"}
+    url = _admin_url(store, "draft_orders.json")
+    payload = {
+        "draft_order": {
+            "line_items":      line_items,
+            "note":            note,
+            "note_attributes": note_attributes,
+            "use_customer_default_address": True,
+        }
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(url, headers=_admin_headers(admin_token), json=payload)
+        if r.status_code not in (200, 201):
+            logger.error(f"[shopify-admin] draft_order HTTP {r.status_code}: {r.text[:300]}")
+            return {"ok": False, "error": f"HTTP {r.status_code}: {r.text[:200]}"}
+        d = r.json() or {}
+        draft = d.get("draft_order") or {}
+        invoice_url = draft.get("invoice_url") or ""
+        if not invoice_url:
+            logger.error(f"[shopify-admin] draft_order sin invoice_url: {d}")
+            return {"ok": False, "error": "Shopify no devolvió invoice_url"}
+        return {"ok": True, "invoice_url": invoice_url, "draft_order_id": draft.get("id")}
+    except Exception as e:
+        logger.error(f"[shopify-admin] crear_draft_order error: {e}")
+        return {"ok": False, "error": str(e)}
