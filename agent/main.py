@@ -6836,15 +6836,62 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
             logger.error(f"Error notificando escalación a {admin}: {e}")
 
 
-def _verificar_hmac_shopify(body: bytes, hmac_header: str) -> bool:
-    if not SHOPIFY_WEBHOOK_SECRET:
-        # Sin secret configurado, dejamos pasar (útil para pruebas iniciales)
-        logger.warning("SHOPIFY_WEBHOOK_SECRET no configurado — saltando verificación HMAC")
+async def _verificar_hmac_shopify(body: bytes, hmac_header: str, shop: str = "") -> bool:
+    """Verifica el HMAC del webhook de Shopify.
+
+    Webhooks registrados vía Admin API (OAuth) se firman con el Client Secret
+    de la app — el mismo que el merchant pegó en Configuración. Voco intenta
+    validar contra el client_secret de cada agente conocido hasta encontrar
+    coincidencia. Fallback al SHOPIFY_WEBHOOK_SECRET legacy (env var) para
+    setups antiguos manuales.
+    """
+    if not hmac_header:
+        return False
+
+    secrets_a_probar: list[str] = []
+
+    # 1) Client Secret del agente conectado a este shop (post-OAuth).
+    #    Multi-tenant: si hay varios agentes, recolectamos todos los
+    #    client_secrets de quienes tengan ese shop configurado.
+    try:
+        from agent.memory import async_session, ConfigValue
+        from sqlalchemy import select
+        async with async_session() as s:
+            # Buscar todos los agentes con SHOPIFY_CLIENT_SECRET configurado.
+            # Si conocemos el shop, filtramos por SHOPIFY_STORE coincidente.
+            stmt = select(ConfigValue).where(ConfigValue.clave == "SHOPIFY_CLIENT_SECRET")
+            res = await s.execute(stmt)
+            for cv in res.scalars().all():
+                if cv.valor:
+                    if shop:
+                        # Verificar que el agente tenga este shop configurado
+                        stmt2 = select(ConfigValue).where(
+                            ConfigValue.agent_id == cv.agent_id,
+                            ConfigValue.clave == "SHOPIFY_STORE",
+                        )
+                        store_cv = (await s.execute(stmt2)).scalar_one_or_none()
+                        if store_cv and store_cv.valor and store_cv.valor.lower() == shop.lower():
+                            secrets_a_probar.append(cv.valor)
+                    else:
+                        secrets_a_probar.append(cv.valor)
+    except Exception as e:
+        logger.warning(f"[hmac] no pude leer client_secrets de BD: {e}")
+
+    # 2) Fallback legacy: env var SHOPIFY_WEBHOOK_SECRET (setups manuales viejos)
+    if SHOPIFY_WEBHOOK_SECRET:
+        secrets_a_probar.append(SHOPIFY_WEBHOOK_SECRET)
+
+    if not secrets_a_probar:
+        logger.warning("[hmac] sin secrets configurados — saltando verificación")
         return True
-    digest = base64.b64encode(
-        hmac.new(SHOPIFY_WEBHOOK_SECRET.encode("utf-8"), body, hashlib.sha256).digest()
-    ).decode()
-    return hmac.compare_digest(digest, hmac_header or "")
+
+    for secret in secrets_a_probar:
+        digest = base64.b64encode(
+            hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()
+        ).decode()
+        if hmac.compare_digest(digest, hmac_header):
+            return True
+    return False
 
 
 def _normalizar_telefono(valor: str | None) -> str | None:
@@ -6893,9 +6940,10 @@ async def shopify_webhook(request: Request):
     body = await request.body()
     hmac_header = request.headers.get("X-Shopify-Hmac-Sha256", "")
     topic = request.headers.get("X-Shopify-Topic", "")
+    shop_header = request.headers.get("X-Shopify-Shop-Domain", "")
 
-    if not _verificar_hmac_shopify(body, hmac_header):
-        logger.error(f"HMAC inválido en shopify-webhook (topic={topic})")
+    if not await _verificar_hmac_shopify(body, hmac_header, shop=shop_header):
+        logger.error(f"HMAC inválido en shopify-webhook (topic={topic}, shop={shop_header})")
         raise HTTPException(status_code=401, detail="Invalid HMAC")
 
     try:
