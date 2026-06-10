@@ -1596,17 +1596,17 @@ async def webhook_handler(request: Request):
                     continue
 
                 if accion == "act_confirmar_pedido":
-                    # Usar el URL guardado en BD (que ya está actualizado).
-                    # Cada vez que el cliente envía una orden del catálogo nativo,
-                    # el flujo __ORDEN_CATALOGO__ RECREA el checkout con el merge
-                    # completo y lo guarda en BD. Por eso pedido_checkout_url
-                    # siempre refleja el carrito actual — no hace falta forzar
-                    # recreación aquí (lo que causaba fallos cuando alguna
-                    # variante no matcheaba en _variant_map).
-                    #
-                    # Solo recrea si el URL guardado está corrupto (sin /checkouts/).
+                    # SIEMPRE recrear desde el carrito_activo actual. Equora
+                    # reportó (10-jun-2026): tras "Ver carrito" + "Confirmar
+                    # pedido" se reutilizaba un checkout_url viejo guardado de
+                    # un pedido previo — productos del checkout no coincidían
+                    # con el carrito actual (cobraba lo que NO pidió el cliente).
+                    # El supuesto anterior ("__ORDEN_CATALOGO__ siempre actualiza
+                    # el URL") no se cumple cuando el cliente solo navega con
+                    # botones de carrito. forzar_recrear=True garantiza que el
+                    # link de pago refleje EXACTAMENTE lo que está en BD ahora.
                     checkout_url = await _obtener_o_recrear_checkout_url(
-                        msg.telefono, agent_id=_agent_id, forzar_recrear=False
+                        msg.telefono, agent_id=_agent_id, forzar_recrear=True
                     )
                     if checkout_url:
                         # Mensaje y label del botón configurables por agente
