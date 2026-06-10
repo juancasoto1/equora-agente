@@ -7358,12 +7358,16 @@ async function instalarShopify() {
       _showCfgResult(resultId, false, '⚠️ No se pudieron guardar las credenciales.');
       return;
     }
-    // 2) Iniciar OAuth
+    // 2) Iniciar OAuth — pasamos panel_path para que el callback regrese
+    //    al panel del agente correcto (no al selector raíz /inbox).
     _showCfgResult(resultId, null, '🔄 Iniciando instalación en Shopify…');
     var r = await fetch('/inbox/api/oauth/shopify/start', {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({store: domain, client_id: cid, client_secret: csec})
+      body: JSON.stringify({
+        store: domain, client_id: cid, client_secret: csec,
+        panel_path: window.location.pathname,
+      })
     });
     var d = await r.json();
     if (!d.ok || !d.auth_url) {

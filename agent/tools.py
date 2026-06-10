@@ -292,7 +292,11 @@ async def cargar_tarifas_envio() -> tuple[int, int]:
     """
     global _costo_envio, _envio_gratis
 
-    if not SHOPIFY_ADMIN_TOKEN:
+    # Preferir token + store del agente conectado (post-OAuth). Fallback env vars.
+    admin_token = await _resolver_admin_token()
+    store_dom = await _resolver_store()
+
+    if not admin_token:
         logger.info(
             f"SHOPIFY_ADMIN_TOKEN no configurado — tarifas de envío desde env vars: "
             f"costo=${_costo_envio}, gratis desde=${_envio_gratis}"
@@ -300,8 +304,8 @@ async def cargar_tarifas_envio() -> tuple[int, int]:
         return _costo_envio, _envio_gratis
 
     try:
-        url = f"https://{SHOPIFY_STORE}/admin/api/2024-10/shipping_zones.json"
-        headers = {"X-Shopify-Access-Token": SHOPIFY_ADMIN_TOKEN}
+        url = f"https://{store_dom}/admin/api/2024-10/shipping_zones.json"
+        headers = {"X-Shopify-Access-Token": admin_token}
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url, headers=headers)
             r.raise_for_status()

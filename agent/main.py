@@ -5721,12 +5721,20 @@ async def api_shopify_oauth_start(
     # Generar state token aleatorio + guardar contexto
     _cleanup_shopify_states()
     state = secrets.token_urlsafe(32)
+    # panel_path = la URL del panel del agente desde donde se inició el OAuth.
+    # El callback la usa para redirigir de vuelta al panel correcto (no al
+    # selector raíz /inbox). Validamos que empiece con / para evitar open
+    # redirect a dominios externos.
+    panel_path = (body.get("panel_path") or "").strip()
+    if not panel_path.startswith("/"):
+        panel_path = "/inbox"
     _shopify_oauth_states[state] = {
         "agent_id":      agent_id,
         "shop":          store,
         "client_id":     client_id,
         "client_secret": client_secret,
         "user_id":       user.get("id"),
+        "panel_path":    panel_path,
         "at":            time.time(),
     }
 
@@ -5756,11 +5764,16 @@ async def shopify_oauth_callback(request: Request):
     state = qp.get("state", "")
     hmac_recibido = qp.get("hmac", "")
 
-    def _redirect_panel(estado: str, mensaje: str = "") -> RedirectResponse:
+    # panel_path se resuelve desde el state cuando esté disponible (más abajo).
+    # Si no, fallback a /inbox (selector raíz).
+    panel_path_default = "/inbox"
+
+    def _redirect_panel(estado: str, mensaje: str = "", path: str | None = None) -> RedirectResponse:
         import urllib.parse as _up
         msg = _up.quote(mensaje[:200])
+        target = path or panel_path_default
         return RedirectResponse(
-            f"/inbox#configuracion?shopify_oauth={estado}&msg={msg}",
+            f"{target}#configuracion?shopify_oauth={estado}&msg={msg}",
             status_code=302,
         )
 
@@ -5774,6 +5787,9 @@ async def shopify_oauth_callback(request: Request):
         return _redirect_panel("error", "State inválido o expirado. Reintenta el OAuth desde el panel.")
     if info["shop"] != shop:
         return _redirect_panel("error", f"Shop mismatch: esperado {info['shop']}, recibido {shop}")
+    # Usar el panel_path del state para que el toast aterrice en el panel
+    # del agente correcto (no en el selector raíz).
+    panel_path_default = info.get("panel_path") or "/inbox"
 
     # Verificar HMAC (firma del client_secret)
     if not _shopify_oauth_verify_hmac(qp, info["client_secret"]):
