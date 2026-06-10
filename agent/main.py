@@ -701,6 +701,61 @@ async def _procesar_carrito_unificado():
             logger.error(f"Error en seguimiento carrito {telefono}: {e}")
 
 
+# Keywords que indican que la conversación se cerró naturalmente. Se
+# matchean SOLO contra los últimos 1-2 mensajes (no historial completo)
+# para evitar falsos positivos de saludos viejos. Lowercase + sin tildes.
+_CIERRE_USER_KW = (
+    "gracias", "muchas gracias", "ok gracias", "perfecto", "listo",
+    "vale", "ya recibí", "ya recibi", "todo bien", "nos vemos",
+    "chao", "chau", "adiós", "adios", "hasta luego", "hasta pronto",
+    "que tengas", "buen dia", "buena tarde", "buena noche",
+)
+_CIERRE_ASSISTANT_KW = (
+    "que disfrutes", "estamos para servirte", "para servirte",
+    "cualquier cosa", "vuelve cuando", "hasta pronto", "hasta luego",
+    "que tengas", "feliz dia", "feliz día", "feliz tarde", "feliz noche",
+    "un gusto", "un placer", "fue un gusto", "que tengas un",
+)
+
+
+def _texto_normalizado(s: str) -> str:
+    """Lowercase + quita tildes para matching case/accent-insensitive."""
+    import unicodedata as _u
+    s = _u.normalize("NFKD", s or "")
+    return "".join(c for c in s if not _u.combining(c)).lower()
+
+
+async def _conversacion_cerrada_naturalmente(telefono: str, aid: int) -> bool:
+    """True si los últimos mensajes indican una despedida natural — para
+    NO disparar el follow-up genérico. Heurística defensiva: el backend no
+    confía en que el LLM emita un marcador de cierre.
+
+    Reglas:
+      · El último mensaje es de assistant Y contiene keyword de despedida
+      · El penúltimo es user con gracias/cierre Y el último es assistant
+        con respuesta corta (acuse) — patrón "gracias / de nada"
+    """
+    try:
+        hist = await obtener_historial(telefono, limite=4, agent_id=aid)
+    except Exception:
+        return False
+    if not hist:
+        return False
+    ultimo = hist[-1]
+    ultimo_rol = ultimo.get("role", "")
+    ultimo_txt = _texto_normalizado(ultimo.get("content", ""))
+    if ultimo_rol == "assistant" and any(kw in ultimo_txt for kw in _CIERRE_ASSISTANT_KW):
+        return True
+    # Patrón "user dice gracias → assistant responde" (sin keyword fuerte de despedida)
+    if ultimo_rol == "assistant" and len(hist) >= 2:
+        penultimo = hist[-2]
+        if penultimo.get("role") == "user":
+            pen_txt = _texto_normalizado(penultimo.get("content", ""))
+            if any(kw in pen_txt for kw in _CIERRE_USER_KW):
+                return True
+    return False
+
+
 async def _procesar_followups():
     """Estado 6: sin carrito, sin checkout. Follow-up genérico una sola vez."""
     telefonos = await conversaciones_para_followup(FOLLOWUP_MIN, FOLLOWUP_MAX_HORAS)
@@ -711,6 +766,13 @@ async def _procesar_followups():
             continue
         try:
             aid = await _resolver_agent_id_principal(telefono)
+            # Heurística defensiva: si la conversación cerró natural
+            # (gracias / despedida) NO insistir con follow-up. Marcamos
+            # como cerrado para que el timer no vuelva a evaluarlo.
+            if await _conversacion_cerrada_naturalmente(telefono, aid):
+                logger.info(f"[followup] {telefono} cerrada naturalmente — marcando y saltando")
+                await marcar_cierre_enviado(telefono)
+                continue
             texto = await obtener_mensaje(aid, "system.followup")
             if not texto:
                 # El agente desactivó este mensaje desde el panel — no insistir
