@@ -5532,13 +5532,17 @@ async def inbox_test_config(
 # Scopes que Voco necesita. Si se agregan features, agregarlos acá y los
 # clientes deben re-autorizar para recibir los nuevos permisos.
 SHOPIFY_OAUTH_SCOPES = ",".join([
+    # Catálogo (reemplaza Storefront API)
     "read_products",
+    "write_products",
     "read_inventory",
+    "write_inventory",
+    # Pedidos (webhooks + confirmaciones)
     "read_orders",
-    "read_shipping",
+    # Carrito (reemplaza permalinks /cart/c/)
     "write_draft_orders",
+    # Cupones post-venta (feature #43)
     "write_discounts",
-    "read_customers",
 ])
 
 # State tracking en memoria (anti-CSRF). TTL 10 min.
@@ -5730,7 +5734,23 @@ async def shopify_oauth_callback(request: Request):
         logger.error(f"[shopify-oauth] error guardando token: {e}")
         return _redirect_panel("error", f"OAuth OK pero falló al guardar: {e!s}")
 
-    return _redirect_panel("ok", f"Conectado con {shop} — webhooks y cupones automáticos disponibles.")
+    # Auto-registrar webhooks de Voco (orders/create, orders/paid, etc.).
+    # Best-effort: si falla, el cliente igual queda conectado y puede reintentar
+    # desde el panel — no abortamos el OAuth por esto.
+    try:
+        from agent.shopify_admin import sincronizar_webhooks_voco
+        callback_webhook = f"{str(request.base_url).rstrip('/').replace('http://', 'https://', 1)}/shopify-webhook"
+        res = await sincronizar_webhooks_voco(shop, access_token, callback_webhook)
+        creados = len(res.get("creados", []))
+        existentes = len(res.get("conservados", []))
+        fallidos = len(res.get("fallidos", []))
+        logger.info(f"[shopify-oauth] webhooks auto-registrados: {creados} nuevos, {existentes} existentes, {fallidos} fallidos")
+        if fallidos:
+            logger.warning(f"[shopify-oauth] webhooks fallidos: {res.get('fallidos')}")
+    except Exception as e:
+        logger.error(f"[shopify-oauth] no se pudieron auto-registrar webhooks (no es bloqueante): {e}")
+
+    return _redirect_panel("ok", f"Conectado con {shop}. Tu agente ya tiene acceso a tu catálogo y pedidos.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

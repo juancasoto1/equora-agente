@@ -3308,20 +3308,40 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 <span class="cfg-status-pill cfg-pill-pending" id="pill-shopify">Verificando…</span>
               </div>
 
+              <!-- Instrucciones cómo obtener las credenciales -->
               <div class="cfg-step">
                 <div class="cfg-step-num">1</div>
                 <div class="cfg-step-body">
                   <div class="cfg-field-lbl">
-                    Dominio de la tienda
-                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-domain')" type="button" aria-label="Ayuda">?</button>
-                    <span class="req">*</span>
+                    Cómo conectar tu tienda
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-howto')" type="button" aria-label="Ayuda">?</button>
                   </div>
-                  <div class="cfg-help-box" id="help-sh-domain">
-                    El subdominio interno de tu tienda Shopify, siempre termina en <code>.myshopify.com</code><br>
-                    <b>Dónde encontrarlo:</b> Shopify Admin → <b>Configuración → Dominios</b> → busca el dominio que dice <em>"mitienda.myshopify.com"</em><br>
-                    ⚠️ <b>No uses</b> el dominio personalizado (ej: <code>equoradistribuciones.com</code>) — usa el <code>.myshopify.com</code><br>
-                    <b>No incluyas</b> <code>https://</code> al inicio ni <code>/</code> al final.<br>
-                    Ejemplo: <code>equora-6.myshopify.com</code>
+                  <div class="cfg-help-box" id="help-sh-howto" style="display:block">
+                    <b>1.</b> En tu Shopify Admin: <b>Configuración → Apps y canales de venta → Desarrollar apps</b><br>
+                    <b>2.</b> Click en <b>"Desarrollar apps en Dev Dashboard"</b> (botón negro)<br>
+                    <b>3.</b> <b>Crear app</b> → Nombre: <code>Voco</code><br>
+                    <b>4.</b> En la app creada → <b>Configuración → URLs</b>:<br>
+                    &nbsp;&nbsp;<b>URL de la app:</b>
+                    &nbsp;<code id="oauth-app-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">cargando…</code>
+                    <button type="button" onclick="_copiarUrlOAuth(this, 'app')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br>
+                    &nbsp;&nbsp;<b>URL de redirección:</b>
+                    &nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">cargando…</code>
+                    <button type="button" onclick="_copiarUrlOAuth(this, 'callback')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br>
+                    <b>5. Alcances:</b> <code>write_inventory, read_inventory, read_orders, read_products, write_products, write_draft_orders</code><br>
+                    <b>6.</b> <b>Publica</b> la app<br>
+                    <b>7.</b> Pestaña <b>Credenciales API</b> → copia <b>Client ID</b>, <b>Client Secret</b> y pégalos abajo<br>
+                    <small style="color:var(--voco-text-muted)">⚠️ El Client Secret solo se muestra UNA vez. Guárdalo bien.</small>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Dominio -->
+              <div class="cfg-step">
+                <div class="cfg-step-num">2</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Dominio de tu tienda
+                    <span class="req">*</span>
                   </div>
                   <div class="cfg-field-row">
                     <input type="text" id="cfg-sh-domain" class="f-inp" placeholder="mitienda.myshopify.com" autocomplete="off" style="flex:1">
@@ -3330,163 +3350,50 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </div>
               </div>
 
-              <div class="cfg-step">
-                <div class="cfg-step-num">2</div>
-                <div class="cfg-step-body">
-                  <div class="cfg-field-lbl">
-                    Token de Storefront API
-                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-sftoken')" type="button" aria-label="Ayuda">?</button>
-                    <span class="req">*</span>
-                  </div>
-                  <div class="cfg-help-box" id="help-sh-sftoken">
-                    Andrea usa la <b>Storefront API</b> para leer el catálogo y crear checkouts.<br>
-                    Para obtener el token debes tener instalada la app <b>Headless</b> en tu tienda:<br><br>
-                    1. Shopify Admin → <b>Apps</b> → busca <b>"Headless"</b> e instálala<br>
-                    2. Abre la app Headless → <b>"Add Storefront"</b> (o selecciona el existente)<br>
-                    3. Verás dos tokens en la sección <b>"Storefront API"</b>:<br>
-                    &nbsp;&nbsp;• <b>Token de acceso público</b> — cadena de <b>32 caracteres hex</b> sin prefijo → <em>usa este</em><br>
-                    &nbsp;&nbsp;• Token de acceso privado — empieza con <code>shpat_…</code> (también funciona)<br>
-                    4. Copia el <b>Token de acceso público</b> y pégalo aquí<br>
-                    <small style="color:var(--voco-text-muted)">Ejemplo: <code>d6fe89xxxxxxxxxxxxxxxxxxxxxx</code> (32 chars) &nbsp;·&nbsp; <a href="https://shopify.dev/docs/api/usage/authentication#access-tokens-for-the-storefront-api" target="_blank">Documentación oficial →</a></small>
-                  </div>
-                  <div class="cfg-field-row">
-                    <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-sftoken" class="f-inp" placeholder="Token público hex de 32 chars (o shpat_...)" autocomplete="off">
-                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-sftoken',this)" type="button">👁</button>
-                    </div>
-                    <span class="cfg-field-status" id="st-SHOPIFY_STOREFRONT_TOKEN"></span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- ──────────────────────────────────────────────────────────
-                   STEP 3 — OAuth (modelo Jelou/99Envíos)
-                   ────────────────────────────────────────────────────────── -->
+              <!-- Client ID -->
               <div class="cfg-step">
                 <div class="cfg-step-num">3</div>
                 <div class="cfg-step-body">
                   <div class="cfg-field-lbl">
-                    Conexión OAuth con Shopify
-                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-oauth')" type="button" aria-label="Ayuda">?</button>
-                    <span class="opt-badge" style="background:#dbeafe;color:#1e40af">Recomendado</span>
-                  </div>
-                  <div class="cfg-help-box" id="help-sh-oauth">
-                    <b>Con OAuth Voco puede:</b><br>
-                    · <b>Registrar webhooks automáticamente</b> (no necesitas configurarlos a mano)<br>
-                    · Leer pedidos completos para confirmaciones precisas<br>
-                    · <b>Crear cupones automáticamente</b> cuando configures la promoción del bono<br><br>
-                    <b>Cómo obtener Client ID + Client Secret</b> (modelo Jelou, 99Envíos):<br>
-                    1. En tu Shopify Admin: <b>Configuración → Apps y canales de venta → Desarrollar apps</b><br>
-                    2. Click en <b>"Desarrollar apps en Dev Dashboard"</b> (botón negro) — se abre el Dev Dashboard de tu tienda<br>
-                    3. <b>Crear app</b> (arriba a la derecha) → Nombre: <code>Voco</code><br>
-                    4. En la app creada → <b>Configuración → URLs</b> hay <b>2 campos distintos</b>:<br><br>
-                    &nbsp;&nbsp;<b>a) URL de la app</b> (adónde lleva el botón "Abrir" en tu Shopify):<br>
-                    &nbsp;&nbsp;<code id="oauth-app-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">https://[tu-dominio]/inbox</code>
-                    <button type="button" onclick="_copiarUrlOAuth(this, 'app')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br><br>
-                    &nbsp;&nbsp;<b>b) URLs de redirección permitidas</b> (adónde Shopify regresa tras autorizar OAuth):<br>
-                    &nbsp;&nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">https://[tu-dominio]/oauth/shopify/callback</code>
-                    <button type="button" onclick="_copiarUrlOAuth(this, 'callback')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br><br>
-                    5. En <b>Alcances</b>: <code>read_products</code>, <code>read_inventory</code>, <code>read_orders</code>, <code>read_shipping</code>, <code>write_draft_orders</code>, <code>write_discounts</code>, <code>read_customers</code><br>
-                    6. <b>Publica</b> una versión de la app<br>
-                    7. Pestaña <b>Credenciales API</b> → copia <b>ID de cliente</b> y <b>Secreto del cliente</b><br>
-                    8. Pégalos abajo, guarda y haz click en <b>"Conectar con Shopify"</b><br>
-                    <small style="color:var(--voco-text-muted)">⚠️ El Client Secret solo se muestra UNA vez. Guárdalo bien.</small><br>
-                    <small style="color:var(--voco-text-muted)">No necesitas cuenta de Shopify Partners — el Dev Dashboard vive dentro de tu propia tienda.</small>
-                  </div>
-
-                  <!-- Client ID -->
-                  <div class="cfg-field-lbl" style="margin-top:10px">
                     Client ID
+                    <span class="req">*</span>
                   </div>
                   <div class="cfg-field-row">
-                    <input type="text" id="cfg-sh-cid" class="f-inp" placeholder="Client ID de tu app en Partners" autocomplete="off" style="flex:1">
+                    <input type="text" id="cfg-sh-cid" class="f-inp" placeholder="Client ID de Shopify" autocomplete="off" style="flex:1">
                     <span class="cfg-field-status" id="st-SHOPIFY_CLIENT_ID"></span>
                   </div>
+                </div>
+              </div>
 
-                  <!-- Client Secret -->
-                  <div class="cfg-field-lbl" style="margin-top:10px">
+              <!-- Client Secret -->
+              <div class="cfg-step">
+                <div class="cfg-step-num">4</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
                     Client Secret
+                    <span class="req">*</span>
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-csec" class="f-inp" placeholder="Client Secret de tu app" autocomplete="off">
+                      <input type="password" id="cfg-sh-csec" class="f-inp" placeholder="Client Secret de Shopify" autocomplete="off">
                       <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-csec',this)" type="button">👁</button>
                     </div>
                     <span class="cfg-field-status" id="st-SHOPIFY_CLIENT_SECRET"></span>
                   </div>
 
-                  <!-- Estado de conexión (admin token actual) -->
+                  <!-- Estado de conexión -->
                   <div id="cfg-oauth-status" style="margin-top:14px;padding:12px 14px;background:var(--voco-content-bg-alt);border-radius:8px;font-size:.82rem;line-height:1.5">
                     <span style="color:var(--voco-text-muted)">Estado: <i>cargando…</i></span>
                   </div>
-
-                  <!-- Avanzado: pegar token manualmente (fallback Modelo A — #54) -->
-                  <details style="margin-top:10px;font-size:.78rem;color:var(--voco-text-muted)">
-                    <summary style="cursor:pointer">¿Ya tienes un Admin API token directo (modo avanzado)?</summary>
-                    <div style="margin-top:8px;padding:10px 12px;background:var(--voco-content-bg-alt);border-radius:8px">
-                      Si creaste una <b>Custom App</b> en Shopify Admin → Develop apps,
-                      puedes pegar acá el token <code>shpat_...</code> sin usar OAuth.
-                      Esto reemplaza el OAuth de arriba.
-                      <div class="cfg-field-row" style="margin-top:6px">
-                        <div class="cfg-input-wrap" style="flex:1">
-                          <input type="password" id="cfg-sh-admin" class="f-inp" placeholder="shpat_..." autocomplete="off">
-                          <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-admin',this)" type="button">👁</button>
-                        </div>
-                        <span class="cfg-field-status" id="st-SHOPIFY_ADMIN_TOKEN"></span>
-                      </div>
-                    </div>
-                  </details>
                 </div>
               </div>
 
-              <div class="cfg-step">
-                <div class="cfg-step-num">4</div>
-                <div class="cfg-step-body">
-                  <div class="cfg-field-lbl">
-                    Webhook Secret
-                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-whsec')" type="button" aria-label="Ayuda">?</button>
-                    <span class="opt-badge">Opcional</span>
-                  </div>
-                  <div class="cfg-help-box" id="help-sh-whsec">
-                    Permite verificar que las notificaciones de nuevas órdenes llegan <b>realmente de Shopify</b> y no de terceros.<br>
-                    <b>Si configuraste el Admin API token arriba</b>, no necesitas esto — los webhooks que Voco registra programáticamente firman con el secret automático.<br>
-                    <b>Solo si configuras webhooks a mano:</b> Shopify Admin → <b>Configuración → Notificaciones → Webhooks</b> → sección <b>"Clave secreta del webhook"</b>.
-                  </div>
-                  <div class="cfg-field-row">
-                    <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-whsec" class="f-inp" placeholder="shpss_..." autocomplete="off">
-                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-whsec',this)" type="button">👁</button>
-                    </div>
-                    <span class="cfg-field-status" id="st-SHOPIFY_WEBHOOK_SECRET"></span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="cfg-actions" style="flex-wrap:wrap">
+              <div class="cfg-actions">
                 <div id="cfg-shopify-result" class="cfg-test-result" style="display:none;flex-basis:100%"></div>
-
-                <!-- Grupo 1: Guardar credenciales (Client ID/Secret/dominio o token avanzado) -->
-                <button class="btn-secondary" onclick="guardarConfig('shopify')" type="button"
-                  title="Guarda Client ID, Client Secret y dominio (o el Admin token en modo avanzado). Hazlo ANTES de conectar.">
-                  💾 Guardar credenciales
-                </button>
-
-                <!-- Grupo 2: Conectar vía OAuth (acción principal una vez guardadas las credenciales) -->
-                <button class="btn-primary" onclick="conectarOAuthShopify()" type="button"
+                <button class="btn-primary" onclick="instalarShopify()" type="button"
                   style="background:#008060;border-color:#008060"
-                  title="Inicia OAuth con tu tienda. Requiere haber guardado Client ID + Client Secret + dominio.">
-                  <i data-lucide="link" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Conectar con Shopify
-                </button>
-
-                <!-- Grupo 3: Acciones post-conexión -->
-                <span style="width:1px;height:24px;background:var(--voco-border);margin:0 4px"></span>
-                <button class="btn-secondary" onclick="testConexion('shopify')" type="button"
-                  title="Verifica que el token Admin actual responde correctamente.">
-                  🔌 Probar conexión
-                </button>
-                <button class="btn-secondary" onclick="sincronizarWebhooksShopify()" type="button"
-                  title="Registra los 5 webhooks de Voco (orders/create, orders/paid, etc.) en tu tienda vía Admin API.">
-                  <i data-lucide="refresh-cw" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Registrar webhooks
+                  title="Guarda credenciales e inicia la instalación en tu tienda Shopify.">
+                  <i data-lucide="link" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Instalar
                 </button>
               </div>
             </div><!-- /card-shopify -->
@@ -7286,11 +7193,8 @@ async function cargarConfiguracion() {
     ANTHROPIC_API_KEY:       'cfg-ant-key',
     AI_MODEL:                'cfg-ant-model',
     SHOPIFY_STORE:           'cfg-sh-domain',
-    SHOPIFY_STOREFRONT_TOKEN:'cfg-sh-sftoken',
-    SHOPIFY_ADMIN_TOKEN:     'cfg-sh-admin',
     SHOPIFY_CLIENT_ID:       'cfg-sh-cid',
     SHOPIFY_CLIENT_SECRET:   'cfg-sh-csec',
-    SHOPIFY_WEBHOOK_SECRET:  'cfg-sh-whsec',
     PEDIDO_MINIMO:           'cfg-pedido-min',
     PEDIDO_MIN_MSG:          'cfg-pedido-msg',
   };
@@ -7328,7 +7232,8 @@ async function cargarConfiguracion() {
     var ok = function(k) { return d[k] && d[k].configurado; };
     var metaOk  = ok('META_ACCESS_TOKEN') && ok('META_PHONE_NUMBER_ID');
     var aiOk    = ok('ANTHROPIC_API_KEY');
-    var shopOk  = ok('SHOPIFY_STOREFRONT_TOKEN') && ok('SHOPIFY_STORE');
+    // shopify ok = OAuth completado (admin token presente) + dominio
+    var shopOk  = ok('SHOPIFY_ADMIN_TOKEN') && ok('SHOPIFY_STORE');
 
     _setCfgPill('pill-meta',       metaOk ? 'ok' : 'error');
     _setCfgPill('pill-anthropic',  aiOk   ? 'ok' : 'error');
@@ -7367,18 +7272,12 @@ async function guardarConfig(service) {
     if (k) payload.ANTHROPIC_API_KEY = k;
     if (m) payload.AI_MODEL          = m;
   } else if (service === 'shopify') {
-    var sd  = (document.getElementById('cfg-sh-domain').value  || '').trim();
-    var sf  = (document.getElementById('cfg-sh-sftoken').value || '').trim();
-    var sa  = (document.getElementById('cfg-sh-admin').value   || '').trim();
-    var sw  = (document.getElementById('cfg-sh-whsec').value   || '').trim();
-    var sci = (document.getElementById('cfg-sh-cid').value     || '').trim();
-    var scs = (document.getElementById('cfg-sh-csec').value    || '').trim();
-    if (sd)  payload.SHOPIFY_STORE            = sd;
-    if (sf)  payload.SHOPIFY_STOREFRONT_TOKEN = sf;
-    if (sa)  payload.SHOPIFY_ADMIN_TOKEN      = sa;
-    if (sw)  payload.SHOPIFY_WEBHOOK_SECRET   = sw;
-    if (sci) payload.SHOPIFY_CLIENT_ID        = sci;
-    if (scs) payload.SHOPIFY_CLIENT_SECRET    = scs;
+    var sd  = (document.getElementById('cfg-sh-domain').value || '').trim();
+    var sci = (document.getElementById('cfg-sh-cid').value    || '').trim();
+    var scs = (document.getElementById('cfg-sh-csec').value   || '').trim();
+    if (sd)  payload.SHOPIFY_STORE         = sd;
+    if (sci) payload.SHOPIFY_CLIENT_ID     = sci;
+    if (scs) payload.SHOPIFY_CLIENT_SECRET = scs;
   } else if (service === 'reglas') {
     var pm  = (document.getElementById('cfg-pedido-min').value || '').trim();
     var pmm = (document.getElementById('cfg-pedido-msg').value || '').trim();
@@ -7419,27 +7318,48 @@ async function guardarConfig(service) {
 }
 
 /* ── testConexion: POST /inbox/api/config/test/{service} ── */
-/* #55 — OAuth Shopify (modelo Jelou/99Envíos).
-   Inicia el flujo: pide al backend la URL de autorización y redirige el
-   navegador a Shopify. El callback termina en /oauth/shopify/callback
-   que guarda el token y redirige de vuelta al panel con ?shopify_oauth=ok */
-async function conectarOAuthShopify() {
+/* Instalar Shopify: un solo paso que guarda credenciales (dominio +
+   Client ID + Client Secret) y arranca el flujo OAuth. El callback
+   termina en /oauth/shopify/callback y registra los webhooks automático. */
+async function instalarShopify() {
   var resultId = 'cfg-shopify-result';
   var domain = (document.getElementById('cfg-sh-domain').value || '').trim();
   var cid    = (document.getElementById('cfg-sh-cid').value    || '').trim();
   var csec   = (document.getElementById('cfg-sh-csec').value   || '').trim();
   if (!domain || !cid || !csec) {
     _showCfgResult(resultId, false,
-      '⚠️ Configura primero Dominio + Client ID + Client Secret y guarda. Después haz click acá.');
+      '⚠️ Completa Dominio + Client ID + Client Secret antes de instalar.');
     return;
   }
+  // Normalizar dominio: sin https://, sin /
+  domain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
   if (!/\.myshopify\.com$/.test(domain)) {
     _showCfgResult(resultId, false,
       '⚠️ El dominio debe terminar en .myshopify.com (usa el dominio interno, no el personalizado).');
     return;
   }
-  _showCfgResult(resultId, null, '🔄 Generando URL de autorización…');
+  // Reflejar dominio normalizado en el input
+  document.getElementById('cfg-sh-domain').value = domain;
+
+  _showCfgResult(resultId, null, '🔄 Guardando credenciales…');
   try {
+    // 1) Guardar credenciales
+    var rg = await fetch('/inbox/api/config/save', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        SHOPIFY_STORE:         domain,
+        SHOPIFY_CLIENT_ID:     cid,
+        SHOPIFY_CLIENT_SECRET: csec,
+      })
+    });
+    var dg = await rg.json();
+    if (!dg.ok) {
+      _showCfgResult(resultId, false, '⚠️ No se pudieron guardar las credenciales.');
+      return;
+    }
+    // 2) Iniciar OAuth
+    _showCfgResult(resultId, null, '🔄 Iniciando instalación en Shopify…');
     var r = await fetch('/inbox/api/oauth/shopify/start', {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type': 'application/json'},
@@ -7447,10 +7367,11 @@ async function conectarOAuthShopify() {
     });
     var d = await r.json();
     if (!d.ok || !d.auth_url) {
-      _showCfgResult(resultId, false, d.error || 'No se pudo iniciar OAuth');
+      _showCfgResult(resultId, false, d.error || 'No se pudo iniciar la instalación');
       return;
     }
-    _showCfgResult(resultId, null, '🚀 Redirigiendo a Shopify para autorizar…');
+    // 3) Redirigir a Shopify para autorizar
+    _showCfgResult(resultId, null, '🚀 Redirigiendo a Shopify…');
     setTimeout(function() { window.location.href = d.auth_url; }, 400);
   } catch (e) {
     _showCfgResult(resultId, false, 'Error de red: ' + String(e));
@@ -7502,10 +7423,10 @@ function _actualizarEstadoOAuthShopify(adminTokenConfig) {
   if (!box) return;
   if (adminTokenConfig && adminTokenConfig.configurado) {
     box.innerHTML = '<span style="color:#16a34a"><i data-lucide="check-circle" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i><b>Conectado</b></span> '
-      + '· Voco tiene acceso a tu tienda. Puedes hacer click en <b>"Sincronizar webhooks"</b> para registrarlos automáticamente.';
+      + '· Voco está sincronizado con tu tienda.';
   } else {
     box.innerHTML = '<span style="color:var(--voco-text-muted)"><i data-lucide="link-2-off" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i><b>No conectado</b></span> '
-      + '· Llena los campos arriba, guarda, y haz click en <b>"Conectar con Shopify"</b>.';
+      + '· Completa los 3 campos y haz click en <b>"Instalar"</b>.';
   }
   if (window.lucide) window.lucide.createIcons();
 }
@@ -7547,48 +7468,6 @@ window.addEventListener('DOMContentLoaded', function() {
   _procesarRetornoOAuthShopify();
 });
 
-/* #54 — Sincronización programática de webhooks Shopify vía Admin API.
-   Reemplaza el copy-paste manual de URL+secret en Shopify Admin. */
-async function sincronizarWebhooksShopify() {
-  var resultId = 'cfg-shopify-result';
-  var domain   = (document.getElementById('cfg-sh-domain').value || '').trim();
-  var admin    = (document.getElementById('cfg-sh-admin').value  || '').trim();
-  if (!domain && !admin) {
-    _showCfgResult(resultId, false, '⚠️ Configura primero el dominio y el Admin API token, luego guarda.');
-    return;
-  }
-  _showCfgResult(resultId, null, '🔄 Registrando webhooks vía Admin API…');
-  try {
-    var r = await fetch('/inbox/api/integraciones/shopify/sincronizar-webhooks', {
-      method: 'POST', credentials: 'include',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({store: domain, admin_token: admin})
-    });
-    var d = await r.json();
-    if (!d.ok) {
-      _showCfgResult(resultId, false, '⚠️ ' + (d.error || 'No se pudieron registrar los webhooks'));
-      return;
-    }
-    var partes = [];
-    if (d.creados      && d.creados.length)      partes.push('✅ ' + d.creados.length + ' creados');
-    if (d.conservados  && d.conservados.length)  partes.push('• ' + d.conservados.length + ' ya existían');
-    if (d.recreados    && d.recreados.length)    partes.push('🔄 ' + d.recreados.length + ' reemplazados');
-    if (d.fallidos     && d.fallidos.length)     partes.push('❌ ' + d.fallidos.length + ' fallaron');
-    var resumen = partes.length ? partes.join(' · ') : 'Sin cambios';
-    var detalle = '<b>Webhooks sincronizados</b> apuntando a:<br>'
-      + '<code style="font-size:.78rem;word-break:break-all">' + (d.callback_url || '') + '</code><br>'
-      + '<span style="font-size:.82rem">' + resumen + '</span>';
-    if (d.fallidos && d.fallidos.length) {
-      detalle += '<br><span style="font-size:.78rem;color:#dc2626">Detalles errores: '
-        + d.fallidos.map(function(f) { return _msjEscapeHtml(f); }).join('; ')
-        + '</span>';
-    }
-    _showCfgResult(resultId, d.fallidos && d.fallidos.length === 0, detalle);
-  } catch (e) {
-    _showCfgResult(resultId, false, 'Error de red: ' + String(e));
-  }
-}
-
 async function testConexion(service) {
   var payload  = {};
   var resultId = 'cfg-' + service + '-result';
@@ -7608,12 +7487,9 @@ async function testConexion(service) {
     if (k) payload.ANTHROPIC_API_KEY = k;
     if (m) payload.AI_MODEL          = m;
   } else if (service === 'shopify') {
-    var sd = (document.getElementById('cfg-sh-domain').value  || '').trim();
-    var sf = (document.getElementById('cfg-sh-sftoken').value || '').trim();
-    var sa = (document.getElementById('cfg-sh-admin').value   || '').trim();
-    if (sd) payload.SHOPIFY_STORE            = sd;
-    if (sf) payload.SHOPIFY_STOREFRONT_TOKEN = sf;
-    if (sa) payload.SHOPIFY_ADMIN_TOKEN      = sa;
+    // Test usa el Admin token obtenido vía OAuth (ya en BD). Solo pasamos dominio.
+    var sd = (document.getElementById('cfg-sh-domain').value || '').trim();
+    if (sd) payload.SHOPIFY_STORE = sd;
   }
 
   _showCfgResult(resultId, null, '🔄 Probando conexión…');
