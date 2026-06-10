@@ -14,8 +14,7 @@ _catalog_cache: str = ""
 _catalog_cache_at: datetime | None = None
 CATALOG_TTL_SEG: int = int(os.getenv("CATALOG_TTL_SEG", 300))  # 5 min por defecto
 
-SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "equora-6.myshopify.com")
-SHOPIFY_STOREFRONT_TOKEN = os.getenv("SHOPIFY_STOREFRONT_TOKEN", "d6fe89f265fed1b5f9572f19fc0ba3a7")
+SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "")
 SHOPIFY_ADMIN_TOKEN = os.getenv("SHOPIFY_ADMIN_TOKEN", "")
 
 
@@ -48,64 +47,9 @@ META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
 META_CATALOG_ID = os.getenv("META_CATALOG_ID", "")
 META_API_VERSION = "v21.0"
 
-SHOPIFY_GQL_QUERY = """
-{
-  products(first: 100) {
-    edges {
-      node {
-        title
-        handle
-        productType
-        tags
-        collections(first: 5) {
-          edges {
-            node {
-              title
-            }
-          }
-        }
-        images(first: 1) {
-          edges {
-            node {
-              url
-            }
-          }
-        }
-        variants(first: 10) {
-          edges {
-            node {
-              id
-              title
-              sku
-              price { amount }
-              availableForSale
-              quantityAvailable
-              image {
-                url
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}
-"""
-
-# Query separada para el logo de la tienda (no bloquea la carga del catálogo)
-SHOPIFY_LOGO_QUERY = """
-{
-  shop {
-    brand {
-      logo {
-        image {
-          url
-        }
-      }
-    }
-  }
-}
-"""
+# Queries Storefront GraphQL (SHOPIFY_GQL_QUERY, SHOPIFY_LOGO_QUERY) y la
+# global SHOPIFY_STOREFRONT_TOKEN fueron eliminadas en #62. Ahora todo el
+# catálogo y carrito usa Admin API via agent/shopify_admin.py.
 
 # Colecciones que ignoramos como categoría visible (las crea Shopify por defecto)
 COLECCIONES_IGNORADAS = {"home page", "frontpage", "all", "todos"}
@@ -386,24 +330,17 @@ async def obtener_catalogo_shopify() -> str:
         return _catalog_cache  # Respuesta instantánea desde cache
 
     try:
-        # Preferir Admin GraphQL si hay token (post-OAuth). Fallback Storefront.
+        # Catálogo se obtiene EXCLUSIVAMENTE desde Admin GraphQL (post-OAuth).
+        # El fallback Storefront fue retirado en #62 — todo cliente Voco debe
+        # completar OAuth antes de operar (UX Jelou).
         admin_tok = await _resolver_admin_token()
         store_dom = await _resolver_store()
-        if admin_tok and store_dom:
-            from agent.shopify_admin import obtener_productos_admin
-            data = await obtener_productos_admin(store_dom, admin_tok)
-            logger.info(f"[catalogo] fuente=Admin GraphQL (store={store_dom})")
-        else:
-            url = f"https://{SHOPIFY_STORE}/api/2024-10/graphql.json"
-            headers = {
-                "Content-Type": "application/json",
-                "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
-            }
-            async with httpx.AsyncClient(timeout=10) as client:
-                r = await client.post(url, json={"query": SHOPIFY_GQL_QUERY}, headers=headers)
-                r.raise_for_status()
-                data = r.json()
-            logger.info("[catalogo] fuente=Storefront API (fallback, sin Admin token)")
+        if not (admin_tok and store_dom):
+            logger.warning("[catalogo] sin SHOPIFY_ADMIN_TOKEN — completa OAuth en Configuración")
+            return "## Catálogo de productos\n\nNo hay tienda Shopify conectada. Conecta tu tienda en Configuración → Shopify."
+        from agent.shopify_admin import obtener_productos_admin
+        data = await obtener_productos_admin(store_dom, admin_tok)
+        logger.info(f"[catalogo] fuente=Admin GraphQL (store={store_dom})")
 
         products = data.get("data", {}).get("products", {}).get("edges", [])
         if not products:
@@ -552,29 +489,17 @@ async def obtener_catalogo_shopify() -> str:
 
 
 async def _cargar_logo_shopify():
-    """Obtiene el logo de la tienda desde Shopify brand API (background task)."""
+    """Obtiene el logo de la tienda desde Shopify Admin API (background task)."""
     global _shop_logo_url
     if _shop_logo_url or os.getenv("LOGO_URL"):
         return  # Ya tenemos logo
     try:
         admin_tok = await _resolver_admin_token()
         store_dom = await _resolver_store()
-        if admin_tok and store_dom:
-            from agent.shopify_admin import obtener_logo_shopify_admin
-            logo_url = await obtener_logo_shopify_admin(store_dom, admin_tok)
-        else:
-            url = f"https://{SHOPIFY_STORE}/api/2024-10/graphql.json"
-            headers = {
-                "Content-Type": "application/json",
-                "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
-            }
-            async with httpx.AsyncClient(timeout=8) as client:
-                r = await client.post(url, json={"query": SHOPIFY_LOGO_QUERY}, headers=headers)
-                if r.status_code != 200:
-                    return
-                data = r.json()
-                logo_data = (data.get("data") or {}).get("shop", {}).get("brand", {}) or {}
-                logo_url = logo_data.get("logo", {}).get("image", {}).get("url", "")
+        if not (admin_tok and store_dom):
+            return
+        from agent.shopify_admin import obtener_logo_shopify_admin
+        logo_url = await obtener_logo_shopify_admin(store_dom, admin_tok)
         if logo_url:
             _shop_logo_url = logo_url
             logger.info(f"Logo Shopify obtenido: {_shop_logo_url}")
@@ -1002,22 +927,7 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
     es_tel_real = bool(telefono and telefono not in ("web-tienda",) and any(c.isdigit() for c in telefono))
     telefono_e164 = ("+" + telefono.lstrip("+")) if es_tel_real else ""
 
-    mutation = """
-    mutation cartCreate($input: CartInput!) {
-      cartCreate(input: $input) {
-        cart {
-          id
-          checkoutUrl
-        }
-        userErrors {
-          field
-          message
-        }
-      }
-    }
-    """
-
-    origen = "WhatsApp - Andrea Bot" if es_tel_real else "Tienda Web Equora"
+    origen = "WhatsApp - Andrea Bot" if es_tel_real else "Tienda Web"
     attributes = [{"key": "Origen", "value": origen}]
     if es_tel_real:
         attributes.append({"key": "Telefono WhatsApp", "value": telefono_e164})
@@ -1031,79 +941,40 @@ async def crear_checkout_shopify(telefono: str, datos: dict) -> str | None:
         if valor:
             attributes.append({"key": k_label, "value": valor})
 
-    # buyerIdentity: solo incluir phone si el teléfono es válido
-    buyer_identity: dict = {"countryCode": "CO"}
-    if es_tel_real:
-        buyer_identity["phone"] = telefono_e164
-
     nota = (
         f"Pedido WhatsApp de {datos.get('nombres', '')} {datos.get('apellidos', '')} ({telefono_e164})"
-        if es_tel_real else "Pedido desde Tienda Web Equora"
+        if es_tel_real else "Pedido desde Tienda Web"
     )
 
-    # Preferir Draft Order vía Admin API si hay token (post-OAuth).
-    # Fallback Storefront cartCreate para clientes legacy sin OAuth.
+    # Checkout vía Admin API Draft Order (post-OAuth). Storefront cartCreate
+    # fue retirado en #62 — todo cliente Voco usa Admin desde aquí.
     admin_tok = await _resolver_admin_token()
     store_dom = await _resolver_store()
-    if admin_tok and store_dom:
-        from agent.shopify_admin import crear_draft_order
-        # Convertir merchandiseId (gid://shopify/ProductVariant/123) → variant_id numérico
-        line_items_admin = []
-        for ln in lines:
-            gid = ln["merchandiseId"]
-            variant_id = int(gid.split("/")[-1]) if "/" in gid else int(gid)
-            line_items_admin.append({
-                "variant_id": variant_id,
-                "quantity":   ln["quantity"],
-            })
-        # attributes → note_attributes (Draft Order format)
-        note_attrs = [{"name": a["key"], "value": a["value"]} for a in attributes]
-        res = await crear_draft_order(
-            store_dom, admin_tok,
-            line_items=line_items_admin, note=nota, note_attributes=note_attrs,
-        )
-        if res.get("ok"):
-            invoice_url = res["invoice_url"]
-            logger.info(f"[checkout] Draft Order creado para {telefono}: {invoice_url}")
-            return invoice_url
-        logger.warning(f"[checkout] Draft Order falló ({res.get('error')}) — fallback a Storefront cartCreate")
-        # cae al cartCreate de abajo
-
-    # Fallback Storefront API cartCreate (legacy sin OAuth)
-    variables = {
-        "input": {
-            "lines": lines,
-            "buyerIdentity": buyer_identity,
-            "attributes": attributes,
-            "note": nota,
-        }
-    }
-    url = f"https://{SHOPIFY_STORE}/api/2024-10/graphql.json"
-    headers = {
-        "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": SHOPIFY_STOREFRONT_TOKEN,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.post(url, json={"query": mutation, "variables": variables}, headers=headers)
-            if r.status_code != 200:
-                logger.error(f"Error Storefront cartCreate: {r.status_code} — {r.text}")
-                return None
-            result = r.json()
-            errores = result.get("data", {}).get("cartCreate", {}).get("userErrors", [])
-            if errores:
-                logger.error(f"userErrors cartCreate: {errores}")
-                return None
-            cart = result.get("data", {}).get("cartCreate", {}).get("cart")
-            if not cart:
-                logger.error(f"cartCreate sin cart: {result}")
-                return None
-            checkout_url = cart.get("checkoutUrl")
-            logger.info(f"Checkout creado para {telefono}: {checkout_url}")
-            return checkout_url
-    except Exception as e:
-        logger.error(f"Error creando checkout en Shopify: {e}")
+    if not (admin_tok and store_dom):
+        logger.error("[checkout] sin SHOPIFY_ADMIN_TOKEN — completa OAuth en Configuración")
         return None
+    from agent.shopify_admin import crear_draft_order
+    # Convertir merchandiseId (gid://shopify/ProductVariant/123) → variant_id numérico
+    line_items_admin = []
+    for ln in lines:
+        gid = ln["merchandiseId"]
+        variant_id = int(gid.split("/")[-1]) if "/" in gid else int(gid)
+        line_items_admin.append({
+            "variant_id": variant_id,
+            "quantity":   ln["quantity"],
+        })
+    # attributes → note_attributes (Draft Order format)
+    note_attrs = [{"name": a["key"], "value": a["value"]} for a in attributes]
+    res = await crear_draft_order(
+        store_dom, admin_tok,
+        line_items=line_items_admin, note=nota, note_attributes=note_attrs,
+    )
+    if not res.get("ok"):
+        logger.error(f"[checkout] Draft Order falló: {res.get('error')}")
+        return None
+    invoice_url = res["invoice_url"]
+    logger.info(f"[checkout] Draft Order creado para {telefono}: {invoice_url}")
+    return invoice_url
 
 
 async def obtener_precios_sheet() -> list[dict]:

@@ -240,15 +240,10 @@ async def lifespan(app: FastAPI):
 
     # Pre-cargar defaults de tools.py en os.environ para que el panel de configuración
     # muestre el estado real aunque los valores vengan del código y no de Railway env vars
-    from agent.tools import SHOPIFY_STORE, SHOPIFY_STOREFRONT_TOKEN
-    _defaults = {
-        "SHOPIFY_STORE":            SHOPIFY_STORE,
-        "SHOPIFY_STOREFRONT_TOKEN": SHOPIFY_STOREFRONT_TOKEN,
-    }
-    for _k, _v in _defaults.items():
-        if _v and not os.environ.get(_k):
-            os.environ[_k] = _v
-            logger.debug(f"[config] {_k} pre-cargado desde defaults de tools.py")
+    from agent.tools import SHOPIFY_STORE
+    if SHOPIFY_STORE and not os.environ.get("SHOPIFY_STORE"):
+        os.environ["SHOPIFY_STORE"] = SHOPIFY_STORE
+        logger.debug("[config] SHOPIFY_STORE pre-cargado desde defaults de tools.py")
 
     # Verificar que agente Equora (agent_id=1) existe
     from agent.memory import obtener_agente
@@ -5427,10 +5422,10 @@ async def inbox_revertir_opt_out(
 _CONFIG_KEYS_ALLOWED = {
     "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
     "ANTHROPIC_API_KEY", "AI_MODEL",
-    "SHOPIFY_STORE", "SHOPIFY_STOREFRONT_TOKEN", "SHOPIFY_ADMIN_TOKEN", "SHOPIFY_WEBHOOK_SECRET",
-    # #55 — OAuth Shopify (modelo Jelou/99Envíos): el cliente entrega
-    # Client ID + Client Secret, Voco hace el OAuth dance y obtiene el
-    # ADMIN_TOKEN automáticamente. Esos 2 son del Partners Dashboard del cliente.
+    # Shopify post-#62: solo OAuth (modelo Jelou). El cliente entrega Client
+    # ID + Client Secret; Voco hace el OAuth dance y obtiene ADMIN_TOKEN
+    # automáticamente. STOREFRONT_TOKEN y WEBHOOK_SECRET fueron retirados.
+    "SHOPIFY_STORE", "SHOPIFY_ADMIN_TOKEN",
     "SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET",
     # Sprint 4 — reglas del negocio configurables por agente
     "PEDIDO_MINIMO", "PEDIDO_MIN_MSG",
@@ -5444,9 +5439,7 @@ _CONFIG_META = {
     "ANTHROPIC_API_KEY":       {"label": "API Key",            "tipo": "secret"},
     "AI_MODEL":                {"label": "Modelo IA",          "tipo": "plain"},
     "SHOPIFY_STORE":           {"label": "Dominio tienda",   "tipo": "plain"},
-    "SHOPIFY_STOREFRONT_TOKEN":{"label": "Storefront Token", "tipo": "secret"},
     "SHOPIFY_ADMIN_TOKEN":     {"label": "Admin API Token",  "tipo": "secret"},
-    "SHOPIFY_WEBHOOK_SECRET":  {"label": "Webhook Secret",   "tipo": "secret"},
     "SHOPIFY_CLIENT_ID":       {"label": "Client ID (OAuth)",     "tipo": "plain"},
     "SHOPIFY_CLIENT_SECRET":   {"label": "Client Secret (OAuth)", "tipo": "secret"},
     "PEDIDO_MINIMO":           {"label": "Pedido mínimo (COP)", "tipo": "plain"},
@@ -5538,50 +5531,21 @@ async def inbox_test_config(
             return JSONResponse(content={"ok": False, "error": err})
 
         elif service == "shopify":
-            # Voco tiene 2 APIs de Shopify:
-            #   - Storefront API (público): catálogo + cartCreate. Modelo actual.
-            #   - Admin API (privado): webhooks, pedidos, cupones. Nuevo (#54).
-            # El test prueba CUALQUIERA que esté configurada — prioriza Admin
-            # si está presente porque da más info útil (nombre tienda, plan).
+            # Test Admin API únicamente (#62 retiró Storefront).
             domain = _val("SHOPIFY_STORE").replace("https://", "").replace("http://", "").rstrip("/")
             if not domain:
                 return JSONResponse(content={"ok": False, "error": "Dominio Shopify no configurado"})
             admin_token = _val("SHOPIFY_ADMIN_TOKEN")
-            sf_token    = _val("SHOPIFY_STOREFRONT_TOKEN")
-
-            # Si hay Admin token: probar Admin API (más completo)
-            if admin_token:
-                from agent.shopify_admin import verificar_admin_token
-                resultado = await verificar_admin_token(domain, admin_token)
-                if resultado.get("ok"):
-                    msg = f"✅ Admin API conectada · {resultado.get('shop_name', domain)}"
-                    if resultado.get("plan"):
-                        msg += f" ({resultado['plan']})"
-                    return JSONResponse(content={"ok": True, "msg": msg, "tipo": "admin"})
-                return JSONResponse(content={"ok": False, "error": resultado.get("error", "Error con Admin API")})
-
-            # Fallback: probar Storefront (modelo viejo)
-            if not sf_token:
-                return JSONResponse(content={"ok": False, "error": "Configura Admin API token (recomendado) o Storefront Token"})
-            gql = '{"query":"{ shop { name } }"}'
-            async with httpx.AsyncClient(timeout=12) as cli:
-                r = await cli.post(
-                    f"https://{domain}/api/2024-10/graphql.json",
-                    content=gql,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Shopify-Storefront-Access-Token": sf_token,
-                    },
-                )
-            if r.status_code == 200:
-                data = r.json()
-                errors = data.get("errors")
-                if errors:
-                    msg = errors[0].get("message", "Token inválido") if errors else "Token inválido"
-                    return JSONResponse(content={"ok": False, "error": msg})
-                shop_name = (data.get("data") or {}).get("shop", {}).get("name", domain)
-                return JSONResponse(content={"ok": True, "msg": f"✅ Storefront conectada · {shop_name}", "tipo": "storefront"})
-            return JSONResponse(content={"ok": False, "error": f"Error HTTP {r.status_code} — verifica el dominio y el token"})
+            if not admin_token:
+                return JSONResponse(content={"ok": False, "error": "Sin Admin token — completa OAuth con 'Instalar'"})
+            from agent.shopify_admin import verificar_admin_token
+            resultado = await verificar_admin_token(domain, admin_token)
+            if resultado.get("ok"):
+                msg = f"✅ Conectado · {resultado.get('shop_name', domain)}"
+                if resultado.get("plan"):
+                    msg += f" ({resultado['plan']})"
+                return JSONResponse(content={"ok": True, "msg": msg, "tipo": "admin"})
+            return JSONResponse(content={"ok": False, "error": resultado.get("error", "Error con Admin API")})
 
         elif service == "anthropic":
             api_key = _val("ANTHROPIC_API_KEY")
