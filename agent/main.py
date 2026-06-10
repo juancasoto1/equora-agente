@@ -5799,8 +5799,20 @@ async def shopify_oauth_callback(request: Request):
     info = _shopify_oauth_states.pop(state, None)
     if not info:
         return _redirect_panel("error", "State inválido o expirado. Reintenta el OAuth desde el panel.")
+
+    # Shop mismatch tolerante: cuando una tienda tiene múltiples dominios
+    # .myshopify.com (ej. equora-6 público + kbetje-6y interno canónico),
+    # Shopify SIEMPRE devuelve el canónico interno en el callback aunque
+    # el user haya iniciado con el alias público. Aceptamos el shop que
+    # Shopify devuelve si es .myshopify.com válido — la seguridad la da
+    # el HMAC (firmado con el client_secret de ESA app), no el dominio.
     if info["shop"] != shop:
-        return _redirect_panel("error", f"Shop mismatch: esperado {info['shop']}, recibido {shop}")
+        if not shop.endswith(".myshopify.com"):
+            return _redirect_panel("error", f"Dominio inválido recibido de Shopify: {shop}")
+        logger.info(
+            f"[shopify-oauth] dominio canónico distinto al iniciado: "
+            f"iniciado={info['shop']} canónico={shop} — adoptando canónico"
+        )
     # Usar el panel_path del state para que el toast aterrice en el panel
     # del agente correcto (no en el selector raíz).
     panel_path_default = info.get("panel_path") or "/inbox"
