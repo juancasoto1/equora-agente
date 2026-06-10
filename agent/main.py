@@ -5762,13 +5762,24 @@ async def api_shopify_sincronizar_webhooks(
     except Exception:
         body = {}
 
-    store       = (body.get("store") or "").strip() or os.getenv("SHOPIFY_STORE", "")
-    admin_token = (body.get("admin_token") or "").strip() or os.getenv("SHOPIFY_ADMIN_TOKEN", "")
+    # Resolver desde 3 fuentes (en orden): body explícito > config_value del
+    # agente (BD, donde OAuth lo guarda) > env var (legacy). Esto soporta:
+    # · Cliente probando sin guardar primero (body)
+    # · Cliente ya conectado vía OAuth (config_value)
+    # · Setup viejo con env vars de Railway (legacy)
+    from agent.memory import get_config_value
+    agent_id_int = int(body.get("agent_id") or 1)
+    store = (body.get("store") or "").strip()
+    if not store:
+        store = (await get_config_value("SHOPIFY_STORE", agent_id_int)) or os.getenv("SHOPIFY_STORE", "")
+    admin_token = (body.get("admin_token") or "").strip()
+    if not admin_token:
+        admin_token = (await get_config_value("SHOPIFY_ADMIN_TOKEN", agent_id_int)) or os.getenv("SHOPIFY_ADMIN_TOKEN", "")
     store = store.replace("https://", "").replace("http://", "").rstrip("/")
     if not store or not admin_token:
         return JSONResponse(status_code=400, content={
             "ok": False,
-            "error": "Falta dominio Shopify o Admin API token. Configura SHOPIFY_STORE y SHOPIFY_ADMIN_TOKEN en Integraciones."
+            "error": "Falta dominio Shopify o Admin API token. Conéctate primero con 'Conectar con Shopify' o configura el token en modo avanzado."
         })
 
     # Construir el callback URL desde el host de la request (multi-tenant ready

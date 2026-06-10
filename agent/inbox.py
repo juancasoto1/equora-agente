@@ -3462,19 +3462,32 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </div>
               </div>
 
-              <div class="cfg-actions">
-                <div id="cfg-shopify-result" class="cfg-test-result" style="display:none"></div>
+              <div class="cfg-actions" style="flex-wrap:wrap">
+                <div id="cfg-shopify-result" class="cfg-test-result" style="display:none;flex-basis:100%"></div>
+
+                <!-- Grupo 1: Guardar credenciales (Client ID/Secret/dominio o token avanzado) -->
+                <button class="btn-secondary" onclick="guardarConfig('shopify')" type="button"
+                  title="Guarda Client ID, Client Secret y dominio (o el Admin token en modo avanzado). Hazlo ANTES de conectar.">
+                  💾 Guardar credenciales
+                </button>
+
+                <!-- Grupo 2: Conectar vía OAuth (acción principal una vez guardadas las credenciales) -->
                 <button class="btn-primary" onclick="conectarOAuthShopify()" type="button"
                   style="background:#008060;border-color:#008060"
                   title="Inicia OAuth con tu tienda. Requiere haber guardado Client ID + Client Secret + dominio.">
                   <i data-lucide="link" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Conectar con Shopify
                 </button>
-                <button class="btn-secondary" onclick="sincronizarWebhooksShopify()" type="button"
-                  title="Registra los webhooks automáticamente vía Admin API. Requiere haber completado OAuth o tener Admin token.">
-                  <i data-lucide="refresh-cw" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Sincronizar webhooks
+
+                <!-- Grupo 3: Acciones post-conexión -->
+                <span style="width:1px;height:24px;background:var(--voco-border);margin:0 4px"></span>
+                <button class="btn-secondary" onclick="testConexion('shopify')" type="button"
+                  title="Verifica que el token Admin actual responde correctamente.">
+                  🔌 Probar conexión
                 </button>
-                <button class="btn-secondary" onclick="testConexion('shopify')" type="button">🔌 Probar conexión</button>
-                <button class="btn-secondary" onclick="guardarConfig('shopify')" type="button">💾 Guardar</button>
+                <button class="btn-secondary" onclick="sincronizarWebhooksShopify()" type="button"
+                  title="Registra los 5 webhooks de Voco (orders/create, orders/paid, etc.) en tu tienda vía Admin API.">
+                  <i data-lucide="refresh-cw" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Registrar webhooks
+                </button>
               </div>
             </div><!-- /card-shopify -->
 
