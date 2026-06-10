@@ -3376,15 +3376,18 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     · Leer pedidos completos para confirmaciones precisas<br>
                     · <b>Crear cupones automáticamente</b> cuando configures la promoción del bono<br><br>
                     <b>Cómo obtener Client ID + Client Secret</b> (modelo Jelou, 99Envíos):<br>
-                    1. Ve a <a href="https://partners.shopify.com" target="_blank"><b>partners.shopify.com</b></a> y crea cuenta (gratis)<br>
-                    2. Una vez dentro → <b>Apps</b> → <b>"Create app"</b> → tipo <b>"Custom distribution"</b><br>
-                    3. Nombre: <code>Voco</code> → siguiente<br>
-                    4. En <b>Configuration → URLs</b> agrega como <b>"Allowed redirection URL"</b>:<br>
-                    &nbsp;&nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px">https://[tu-dominio]/oauth/shopify/callback</code><br>
-                    5. En <b>App setup → Protected customer data access</b> activa lo necesario<br>
-                    6. Pestaña <b>"API credentials"</b> → copia el <b>Client ID</b> y el <b>Client secret</b><br>
-                    7. Pégalos abajo, guarda y haz click en <b>"Conectar con Shopify"</b><br>
-                    <small style="color:var(--voco-text-muted)">⚠️ El Client Secret solo se muestra UNA vez. Guárdalo bien.</small>
+                    1. En tu Shopify Admin: <b>Configuración → Apps y canales de venta → Desarrollar apps</b><br>
+                    2. Click en <b>"Desarrollar apps en Dev Dashboard"</b> (botón negro) — se abre el Dev Dashboard de tu tienda<br>
+                    3. <b>Crear app</b> (arriba a la derecha) → Nombre: <code>Voco</code><br>
+                    4. En la app creada → <b>Configuración</b> → agrega como <b>URL de redirección permitida</b>:<br>
+                    &nbsp;&nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">https://[tu-dominio]/oauth/shopify/callback</code><br>
+                    &nbsp;&nbsp;<button type="button" onclick="_copiarCallbackOAuth(this)" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-top:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar URL</button><br>
+                    5. En <b>Alcances</b>: <code>read_products</code>, <code>read_inventory</code>, <code>read_orders</code>, <code>read_shipping</code>, <code>write_draft_orders</code>, <code>write_discounts</code>, <code>read_customers</code><br>
+                    6. <b>Publica</b> una versión de la app<br>
+                    7. Pestaña <b>Credenciales API</b> → copia <b>ID de cliente</b> y <b>Secreto del cliente</b><br>
+                    8. Pégalos abajo, guarda y haz click en <b>"Conectar con Shopify"</b><br>
+                    <small style="color:var(--voco-text-muted)">⚠️ El Client Secret solo se muestra UNA vez. Guárdalo bien.</small><br>
+                    <small style="color:var(--voco-text-muted)">No necesitas cuenta de Shopify Partners — el Dev Dashboard vive dentro de tu propia tienda.</small>
                   </div>
 
                   <!-- Client ID -->
@@ -7438,12 +7441,33 @@ async function conectarOAuthShopify() {
 }
 
 /* Helper: rellena la URL del callback en el help-box con el dominio actual,
-   para que el cliente pueda copiarla y pegarla en su app de Shopify Partners. */
+   para que el cliente pueda copiarla y pegarla en su app del Dev Dashboard. */
 function _rellenarCallbackUrlShopify() {
   var el = document.getElementById('oauth-callback-hint');
   if (el) {
     el.textContent = window.location.origin + '/oauth/shopify/callback';
   }
+}
+
+/* Helper: copia al portapapeles la URL del callback. */
+function _copiarCallbackOAuth(btn) {
+  var url = (window.location.origin + '/oauth/shopify/callback');
+  if (!navigator.clipboard) {
+    var ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+  } else {
+    navigator.clipboard.writeText(url);
+  }
+  var orig = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="check" style="width:11px;height:11px;vertical-align:-1px"></i> Copiado';
+  btn.style.color = '#16a34a';
+  if (window.lucide) window.lucide.createIcons();
+  setTimeout(function() {
+    btn.innerHTML = orig;
+    btn.style.color = 'var(--voco-text-muted)';
+    if (window.lucide) window.lucide.createIcons();
+  }, 1500);
 }
 
 /* Helper: actualiza el estado de OAuth en el panel (conectado/no conectado).
