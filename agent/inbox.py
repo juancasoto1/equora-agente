@@ -7161,7 +7161,7 @@ async function _verificarShopify() {
     if (d.ok) {
       _setSistemaEstado('shopify', 'ok',
         '✅ Conexión Shopify activa',
-        he(d.detalle || d.message || 'Storefront API respondiendo'));
+        he(d.detalle || d.msg || d.message || 'Admin API respondiendo'));
     } else {
       _setSistemaEstado('shopify', 'warn',
         '⚠️ ' + (d.error || 'No configurado'),
