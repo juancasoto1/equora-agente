@@ -1614,26 +1614,40 @@ async def webhook_handler(request: Request):
                         # Configuración → Mensajes → "Flujo de compra".
                         from agent.mensajes import format_seguro
                         _ctx_ph = await construir_contexto_placeholders(_agent_id)
-                        # Inyectar {total} desde el carrito_activo actual
-                        # (sin esto, el placeholder queda vacío y se muestra
-                        # "Tu pedido está listo por valor de $").
                         _ctx_ph["total"] = await _total_carrito_fmt(msg.telefono, _agent_id)
                         msg_checkout = format_seguro(
                             await obtener_mensaje(_agent_id, "cart.checkout_listo_texto"),
                             _ctx_ph,
                         )
-                        # Estilo Jelou (#61): 3 reply buttons en vez de cta_url directo.
-                        # El cliente decide si paga ya, agrega más productos, o revisa
-                        # primero el carrito. El handler act_ir_pago envía el cta_url.
-                        ok_btns = False
-                        if hasattr(_proveedor_agente, "enviar_botones_reply"):
-                            ok_btns = await _proveedor_agente.enviar_botones_reply(
-                                msg.telefono, msg_checkout, _botones_post_pedido(),
+                        boton_label = (await obtener_mensaje(_agent_id, "cart.checkout_listo_boton")).strip() or "Pagar ahora"
+                        # Mensaje 1: CTA URL directo al checkout (1 click → pagar).
+                        # WhatsApp no permite mezclar URL button + reply buttons,
+                        # entonces los otros 2 (Agregar más / Ver carrito) van
+                        # como mensaje complementario aparte (no obliga al cliente
+                        # a 2 clicks para pagar, que es la fricción que Jelou
+                        # evita).
+                        ok_cta = False
+                        if hasattr(_proveedor_agente, "enviar_cta_url"):
+                            ok_cta = await _proveedor_agente.enviar_cta_url(
+                                msg.telefono, msg_checkout, boton_label, checkout_url,
                             )
-                        if not ok_btns:
+                        if not ok_cta:
                             await _proveedor_agente.enviar_mensaje(
                                 msg.telefono, f"{msg_checkout}\n\n👉 {checkout_url}"
                             )
+                        # Mensaje 2 (complementario): opciones de modificar antes
+                        # de pagar — siempre disponibles.
+                        if hasattr(_proveedor_agente, "enviar_botones_reply"):
+                            try:
+                                await _proveedor_agente.enviar_botones_reply(
+                                    msg.telefono, "¿Quieres modificar algo antes de pagar?",
+                                    [
+                                        {"id": "act_agregar_mas", "title": "🔍 Agregar más"},
+                                        {"id": "act_ver_carrito", "title": "🛒 Ver mi carrito"},
+                                    ],
+                                )
+                            except Exception as _e_b:
+                                logger.warning(f"[confirmar-pedido] botones complementarios fallaron: {_e_b}")
                     else:
                         _txt_no_enc = await obtener_mensaje(_agent_id, "error.checkout_no_encontrado")
                         if _txt_no_enc:
