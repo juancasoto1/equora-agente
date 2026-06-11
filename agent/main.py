@@ -34,7 +34,7 @@ from agent.memory import (
     marcar_followup_enviado, marcar_cierre_enviado,
     conversaciones_para_followup, conversaciones_para_cierre,
     clientes_con_carrito_abandonado,
-    guardar_checkout_url, clientes_con_checkout_abandonado,
+    guardar_checkout_url, limpiar_checkout_url, clientes_con_checkout_abandonado,
     verificar_cierre_enviado,
     get_modo_humano, set_modo_humano,
     obtener_todas_conversaciones, obtener_historial_con_timestamps,
@@ -854,6 +854,17 @@ async def _procesar_abandono_checkout():
         max_min=CHECKOUT_ABANDONO_MAX,
     )
     for telefono, checkout_url_raw in clientes:
+        # Defensa: si el cliente ya no tiene carrito activo (vació explícito
+        # o el TTL del carrito expiró), NO mandar recuperación de checkout
+        # — es incoherente con su intención. Marcamos como enviado para que
+        # el timer no reintente.
+        carrito_vivo = await obtener_carrito_activo(telefono)
+        if not carrito_vivo:
+            logger.info(f"[checkout-abandono] {telefono} sin carrito activo — saltando y marcando")
+            await limpiar_checkout_url(telefono)
+            await marcar_checkout_abandono_enviado(telefono)
+            continue
+
         # AUTOREPARAR si el URL guardado es corrupto (ej. solo la home).
         # Antes: saltábamos silencioso, lo que dejaba al cliente sin botón.
         # Ahora: recreamos checkout desde carrito_activo si está disponible.
@@ -1717,7 +1728,13 @@ async def webhook_handler(request: Request):
                     # Vaciar directo en BD (sin depender del LLM) + confirmar.
                     try:
                         await limpiar_carrito_activo(msg.telefono, agent_id=_agent_id)
-                        logger.info(f"[act_vaciar_carrito] carrito vaciado para {msg.telefono}")
+                        # Limpiar también el pedido_checkout_url para que el
+                        # loop de checkout-abandonado no envíe "Vimos que
+                        # iniciaste tu pedido pero no terminaste el proceso"
+                        # cuando el cliente acaba de decir explícitamente
+                        # que no quiere el pedido. Bug reportado por Equora.
+                        await limpiar_checkout_url(msg.telefono, agent_id=_agent_id)
+                        logger.info(f"[act_vaciar_carrito] carrito + checkout_url vaciados para {msg.telefono}")
                     except Exception as e:
                         logger.error(f"[act_vaciar_carrito] error vaciando: {e}")
                     msg_confirmacion = (

@@ -711,6 +711,21 @@ async def guardar_checkout_url(telefono: str, checkout_url: str, agent_id: int =
         await session.commit()
 
 
+async def limpiar_checkout_url(telefono: str, agent_id: int = 1) -> None:
+    """Borra el pedido_checkout_url del cliente. Se llama cuando el cliente
+    vacía explícitamente el carrito, para que el loop de checkout-abandonado
+    no envíe un seguimiento de 'no terminaste tu pedido' minutos después."""
+    if not telefono:
+        return
+    async with async_session() as session:
+        cliente = await _get_cliente(session, telefono, agent_id)
+        if not cliente:
+            return
+        cliente.pedido_checkout_url = ""
+        cliente.actualizado = datetime.utcnow()
+        await session.commit()
+
+
 async def clientes_con_checkout_abandonado(
     min_min: int = 20,
     max_min: int = 120,
