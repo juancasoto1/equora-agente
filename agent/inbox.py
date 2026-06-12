@@ -3249,6 +3249,69 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </div>
               </div>
 
+              <div class="cfg-step">
+                <div class="cfg-step-num">6</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Pixel ID (Conversions API)
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-meta-pixel')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge">Opcional</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-meta-pixel">
+                    <b>¿Qué es?</b> El ID del Pixel de Meta que recibe eventos server-side (ViewContent, AddToCart, Purchase) desde Voco para optimizar campañas publicitarias.<br>
+                    <b>Dónde encontrarlo:</b> business.facebook.com → <b>Administrador de eventos</b> → tu Pixel → <b>Configuración</b> → ID del píxel.<br>
+                    Si no usas anuncios de Meta, puedes dejar este campo vacío.
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="text" id="cfg-meta-pixel" class="f-inp" placeholder="1639593250424954" autocomplete="off" style="flex:1">
+                    <span class="cfg-field-status" id="st-META_PIXEL_ID"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">7</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Token CAPI (Conversions API)
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-meta-capi')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge">Opcional</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-meta-capi">
+                    <b>¿Qué es?</b> Token de acceso server-side para enviar eventos al Pixel desde Voco (Conversions API).<br>
+                    <b>Dónde generarlo:</b> Administrador de eventos → tu Pixel → <b>Configuración</b> → <b>Conversions API</b> → "Generar token de acceso".<br>
+                    Necesario para que Meta atribuya conversiones a tus anuncios desde WhatsApp.
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-meta-capi" class="f-inp" placeholder="EAAB..." autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-meta-capi',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-META_CAPI_TOKEN"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">8</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Test Event Code (CAPI debug)
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-meta-tec')" type="button" aria-label="Ayuda">?</button>
+                    <span class="opt-badge">Solo para pruebas</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-meta-tec">
+                    <b>¿Qué es?</b> Código de prueba que hace aparecer los eventos en la pestaña "Probar eventos" del Administrador de eventos sin contaminar datos reales.<br>
+                    <b>Cómo obtenerlo:</b> Administrador de eventos → tu Pixel → <b>Probar eventos</b> → copia el código (formato: <code>TEST12345</code>).<br>
+                    <b>⚠️ Vaciar en producción</b> — si dejas un código aquí, los eventos NO contarán para optimización real.
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="text" id="cfg-meta-tec" class="f-inp" placeholder="TEST12345 (dejar vacío en producción)" autocomplete="off" style="flex:1">
+                    <span class="cfg-field-status" id="st-META_CAPI_TEST_CODE"></span>
+                  </div>
+                </div>
+              </div>
+
               <div class="cfg-actions">
                 <div id="cfg-meta-result" class="cfg-test-result" style="display:none"></div>
                 <button class="btn-secondary" onclick="testConexion('meta')" type="button" id="btn-test-meta">
@@ -7210,6 +7273,9 @@ async function cargarConfiguracion() {
     META_WABA_ID:         'cfg-meta-waba',
     META_VERIFY_TOKEN:    'cfg-meta-verify',
     META_CATALOG_ID:      'cfg-meta-catalog',
+    META_PIXEL_ID:        'cfg-meta-pixel',
+    META_CAPI_TOKEN:      'cfg-meta-capi',
+    META_CAPI_TEST_CODE:  'cfg-meta-tec',
     ANTHROPIC_API_KEY:       'cfg-ant-key',
     AI_MODEL:                'cfg-ant-model',
     SHOPIFY_STORE:           'cfg-sh-domain',
@@ -7283,11 +7349,18 @@ async function guardarConfig(service) {
     var w = (document.getElementById('cfg-meta-waba').value   || '').trim();
     var v = (document.getElementById('cfg-meta-verify').value  || '').trim();
     var c = (document.getElementById('cfg-meta-catalog').value || '').trim();
-    if (t) payload.META_ACCESS_TOKEN    = t;
-    if (p) payload.META_PHONE_NUMBER_ID = p;
-    if (w) payload.META_WABA_ID         = w;
-    if (v) payload.META_VERIFY_TOKEN    = v;
-    if (c) payload.META_CATALOG_ID      = c;
+    var px = (document.getElementById('cfg-meta-pixel').value  || '').trim();
+    var ct = (document.getElementById('cfg-meta-capi').value   || '').trim();
+    var tc = (document.getElementById('cfg-meta-tec').value    || '').trim();
+    if (t)  payload.META_ACCESS_TOKEN    = t;
+    if (p)  payload.META_PHONE_NUMBER_ID = p;
+    if (w)  payload.META_WABA_ID         = w;
+    if (v)  payload.META_VERIFY_TOKEN    = v;
+    if (c)  payload.META_CATALOG_ID      = c;
+    if (px) payload.META_PIXEL_ID        = px;
+    if (ct) payload.META_CAPI_TOKEN      = ct;
+    // Test event code permite vaciar (para apagar modo prueba)
+    payload.META_CAPI_TEST_CODE = tc;
   } else if (service === 'anthropic') {
     var k = (document.getElementById('cfg-ant-key').value   || '').trim();
     var m = (document.getElementById('cfg-ant-model').value || '').trim();

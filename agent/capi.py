@@ -21,7 +21,19 @@ PIXEL_ID        = os.getenv("META_PIXEL_ID", "")
 CAPI_TOKEN      = os.getenv("META_CAPI_TOKEN", "")
 CAPI_TEST_CODE  = os.getenv("META_CAPI_TEST_CODE", "")  # solo para pruebas — vaciar en producción
 API_VER         = "v21.0"
-CAPI_URL        = f"https://graph.facebook.com/{API_VER}/{PIXEL_ID}/events"
+
+
+async def _resolver(clave: str, fallback: str) -> str:
+    """Lee de config_value (panel) y fallback a env var. Permite que el
+    merchant rote credenciales desde el panel sin reiniciar el server."""
+    try:
+        from agent.memory import get_config_value
+        val = await get_config_value(clave, 1)
+        if val:
+            return val.strip()
+    except Exception:
+        pass
+    return fallback
 
 # Source estándar para todos los eventos de Andrea
 EVENT_SOURCE_URL = "https://wa.me/message/andrea-equora"
@@ -57,7 +69,12 @@ async def enviar_evento(
         custom_data     : dict con campos opcionales (value, currency, content_name, etc.)
         event_source_url: URL de referencia del evento
     """
-    if not PIXEL_ID or not CAPI_TOKEN:
+    # Resolver dinámicamente desde config_value (panel) → permite rotar
+    # token sin reiniciar. Fallback a env vars al startup.
+    pixel_id   = await _resolver("META_PIXEL_ID", PIXEL_ID)
+    capi_token = await _resolver("META_CAPI_TOKEN", CAPI_TOKEN)
+    test_code  = await _resolver("META_CAPI_TEST_CODE", CAPI_TEST_CODE)
+    if not pixel_id or not capi_token:
         logger.debug("[capi] META_PIXEL_ID o META_CAPI_TOKEN no configurados — evento omitido")
         return
 
@@ -75,17 +92,15 @@ async def enviar_evento(
                 "custom_data": custom_data or {},
             }
         ],
-        "access_token": CAPI_TOKEN,
+        "access_token": capi_token,
     }
-    # test_event_code: solo cuando META_CAPI_TEST_CODE está configurado
-    # Hace que los eventos aparezcan en "Probar eventos" de Meta Events Manager
-    # Vaciar esta variable en producción para no contaminar datos reales
-    if CAPI_TEST_CODE:
-        payload["test_event_code"] = CAPI_TEST_CODE
+    if test_code:
+        payload["test_event_code"] = test_code
 
+    capi_url = f"https://graph.facebook.com/{API_VER}/{pixel_id}/events"
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            r = await client.post(CAPI_URL, json=payload)
+            r = await client.post(capi_url, json=payload)
             if r.status_code == 200:
                 logger.info(f"[capi] {event_name} → {telefono[-4:]}**** OK")
             else:

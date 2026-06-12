@@ -5509,6 +5509,8 @@ async def inbox_revertir_opt_out(
 _CONFIG_KEYS_ALLOWED = {
     "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
     "META_CATALOG_ID",
+    # Conversions API (Pixel server-side) — antes solo en Railway env vars
+    "META_PIXEL_ID", "META_CAPI_TOKEN", "META_CAPI_TEST_CODE",
     "ANTHROPIC_API_KEY", "AI_MODEL",
     # Shopify post-#62: solo OAuth (modelo Jelou). El cliente entrega Client
     # ID + Client Secret; Voco hace el OAuth dance y obtiene ADMIN_TOKEN
@@ -5525,6 +5527,9 @@ _CONFIG_META = {
     "META_WABA_ID":            {"label": "WABA ID",            "tipo": "plain"},
     "META_VERIFY_TOKEN":       {"label": "Verify Token",       "tipo": "plain"},
     "META_CATALOG_ID":         {"label": "Catalog ID",         "tipo": "plain"},
+    "META_PIXEL_ID":           {"label": "Pixel ID (CAPI)",    "tipo": "plain"},
+    "META_CAPI_TOKEN":         {"label": "Token CAPI",         "tipo": "secret"},
+    "META_CAPI_TEST_CODE":     {"label": "Test Event Code",    "tipo": "plain"},
     "ANTHROPIC_API_KEY":       {"label": "API Key",            "tipo": "secret"},
     "AI_MODEL":                {"label": "Modelo IA",          "tipo": "plain"},
     "SHOPIFY_STORE":           {"label": "Dominio tienda",   "tipo": "plain"},
@@ -5574,7 +5579,7 @@ async def inbox_save_config(
 
     body = await request.json()
     # Claves que permiten valor vacío (para resetear) — el resto solo guarda si no está vacío
-    _PERMITE_VACIO = {"PEDIDO_MIN_MSG"}
+    _PERMITE_VACIO = {"PEDIDO_MIN_MSG", "META_CAPI_TEST_CODE"}
     saved = []
     for clave, valor in body.items():
         if clave in _CONFIG_KEYS_ALLOWED and isinstance(valor, str):
