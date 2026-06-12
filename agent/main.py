@@ -445,8 +445,9 @@ async def _procesar_carrito_unificado():
                 f"(${total:,}) — cooldown reseteado"
             )
             # CAPI: InitiateCheckout — cliente alcanzó el mínimo de pedido (3→4 ó 3→5)
+            # Pasamos items con retailer_id para que Meta haga match con catálogo
             if estado_anterior == 3 and estado_actual in (4, 5):
-                asyncio.create_task(capi_initiate_checkout(telefono, total))
+                asyncio.create_task(capi_initiate_checkout(telefono, total, productos=items))
 
         # Cooldown: no re-notificar el mismo estado en CARRITO_COOLDOWN_MIN minutos
         elapsed_min = (ahora - _carrito_unif_cooldown.get(telefono, 0)) / 60
@@ -2750,6 +2751,13 @@ async def shopify_cart_update(request: Request):
                     "cantidad":      qty,
                     "precio_unitario": precio,
                     "subtotal":      subtotal,
+                    # retailer_id es CRÍTICO para que el evento CAPI
+                    # AddToCart matchee con el catálogo Meta (sin esto
+                    # la proporción de coincidencias cae <90% y los
+                    # eventos no optimizan campañas)
+                    "retailer_id":   (p.get("retailer_id")
+                                      or p.get("product_retailer_id")
+                                      or p.get("sku") or ""),
                 })
             await guardar_carrito_activo(telefono, items_para_bd)
             logger.info(
@@ -7182,6 +7190,34 @@ async def shopify_webhook(request: Request):
         except (NameError, IndexError):
             _aids_tmp = await obtener_agent_ids_por_telefono(telefono)
             _aid_shopify = _aids_tmp[0] if _aids_tmp else 1
+
+        # CAPI: Purchase — pago confirmado. Construir productos con
+        # retailer_id desde los line_items del payload de Shopify para que
+        # Meta haga match con el catálogo (crítico para optimizar campañas).
+        try:
+            line_items = payload.get("line_items") or []
+            productos_capi = []
+            for it in line_items:
+                # Shopify expone sku en line_items; ese suele coincidir con
+                # el retailer_id del catálogo Meta (Shopify Catalog Connector
+                # sincroniza SKU → retailer_id por defecto).
+                sku = (it.get("sku") or "").strip()
+                if sku:
+                    productos_capi.append({
+                        "producto":        it.get("title", ""),
+                        "presentacion":    it.get("variant_title", ""),
+                        "cantidad":        int(it.get("quantity", 1)),
+                        "precio_unitario": int(float(it.get("price", 0))),
+                        "retailer_id":     sku,
+                    })
+            from agent.capi import capi_purchase
+            asyncio.create_task(capi_purchase(
+                telefono, total_int, productos_capi,
+                order_id=str(payload.get("order_number") or payload.get("id") or ""),
+            ))
+        except Exception as _e_capi:
+            logger.warning(f"[capi] Purchase falló (no bloqueante): {_e_capi}")
+
         from agent.mensajes import format_seguro as _fmt_shopify
         _ctx_shopify = await construir_contexto_placeholders(_aid_shopify)
         _ctx_shopify["numero_pedido"] = nombre_orden
