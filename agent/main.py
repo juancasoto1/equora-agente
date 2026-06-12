@@ -5584,19 +5584,22 @@ async def inbox_save_config(
                 os.environ[clave] = valor   # actualizar en tiempo real
                 saved.append(clave)
 
-    # Si se actualizó META_CATALOG_ID, invalidar el cache del catálogo
-    # para que la próxima request recargue desde Meta con el nuevo ID.
-    # Evita que el cliente tenga que esperar el TTL (5 min) o reiniciar.
-    if "META_CATALOG_ID" in saved:
+    # Si se actualizó META_CATALOG_ID o META_ACCESS_TOKEN, invalidar el
+    # cache del catálogo y forzar recarga inmediata desde Meta. Evita que
+    # el cliente tenga que esperar el TTL (5 min) o reiniciar el server.
+    if "META_CATALOG_ID" in saved or "META_ACCESS_TOKEN" in saved:
         try:
             from agent import tools as _tools
             _tools._catalog_cache = ""
             _tools._catalog_cache_at = None
             _tools._fb_items.clear()
+            _tools._sku_map.clear()
             asyncio.create_task(_tools._cargar_fb_catalog())
-            logger.info("[config] META_CATALOG_ID actualizado — cache invalidado y catálogo Meta recargando")
+            # También recargar catálogo Shopify para reconstruir _sku_map
+            asyncio.create_task(_tools.obtener_catalogo_shopify())
+            logger.info(f"[config] {saved} actualizado(s) — cache invalidado, catálogo recargando")
         except Exception as e:
-            logger.error(f"[config] error invalidando cache tras META_CATALOG_ID: {e}")
+            logger.error(f"[config] error invalidando cache: {e}")
 
     return JSONResponse(content={"ok": True, "saved": saved})
 
