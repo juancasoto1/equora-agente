@@ -3230,6 +3230,25 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </div>
               </div>
 
+              <div class="cfg-step">
+                <div class="cfg-step-num">5</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Catalog ID (catálogo Meta Commerce)
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-meta-catalog')" type="button" aria-label="Ayuda">?</button>
+                  </div>
+                  <div class="cfg-help-box" id="help-meta-catalog">
+                    <b>¿Qué es?</b> El ID del catálogo que sincroniza Shopify con WhatsApp. Es lo que permite que el bot envíe la burbuja de productos nativa en el chat.<br>
+                    <b>Dónde encontrarlo:</b> business.facebook.com → <b>Commerce Manager</b> → tu catálogo → <b>Configuración → Catálogo y feeds</b>. El ID es un número largo (ej: <code>1030213069529092</code>).<br>
+                    Si reconectas el catálogo Shopify↔Meta, este ID cambia — debes actualizarlo aquí.
+                  </div>
+                  <div class="cfg-field-row">
+                    <input type="text" id="cfg-meta-catalog" class="f-inp" placeholder="1030213069529092" autocomplete="off" style="flex:1">
+                    <span class="cfg-field-status" id="st-META_CATALOG_ID"></span>
+                  </div>
+                </div>
+              </div>
+
               <div class="cfg-actions">
                 <div id="cfg-meta-result" class="cfg-test-result" style="display:none"></div>
                 <button class="btn-secondary" onclick="testConexion('meta')" type="button" id="btn-test-meta">
@@ -7190,6 +7209,7 @@ async function cargarConfiguracion() {
     META_PHONE_NUMBER_ID: 'cfg-meta-pid',
     META_WABA_ID:         'cfg-meta-waba',
     META_VERIFY_TOKEN:    'cfg-meta-verify',
+    META_CATALOG_ID:      'cfg-meta-catalog',
     ANTHROPIC_API_KEY:       'cfg-ant-key',
     AI_MODEL:                'cfg-ant-model',
     SHOPIFY_STORE:           'cfg-sh-domain',
@@ -7261,11 +7281,13 @@ async function guardarConfig(service) {
     var t = (document.getElementById('cfg-meta-token').value  || '').trim();
     var p = (document.getElementById('cfg-meta-pid').value    || '').trim();
     var w = (document.getElementById('cfg-meta-waba').value   || '').trim();
-    var v = (document.getElementById('cfg-meta-verify').value || '').trim();
+    var v = (document.getElementById('cfg-meta-verify').value  || '').trim();
+    var c = (document.getElementById('cfg-meta-catalog').value || '').trim();
     if (t) payload.META_ACCESS_TOKEN    = t;
     if (p) payload.META_PHONE_NUMBER_ID = p;
     if (w) payload.META_WABA_ID         = w;
     if (v) payload.META_VERIFY_TOKEN    = v;
+    if (c) payload.META_CATALOG_ID      = c;
   } else if (service === 'anthropic') {
     var k = (document.getElementById('cfg-ant-key').value   || '').trim();
     var m = (document.getElementById('cfg-ant-model').value || '').trim();

@@ -5500,6 +5500,7 @@ async def inbox_revertir_opt_out(
 
 _CONFIG_KEYS_ALLOWED = {
     "META_ACCESS_TOKEN", "META_PHONE_NUMBER_ID", "META_WABA_ID", "META_VERIFY_TOKEN",
+    "META_CATALOG_ID",
     "ANTHROPIC_API_KEY", "AI_MODEL",
     # Shopify post-#62: solo OAuth (modelo Jelou). El cliente entrega Client
     # ID + Client Secret; Voco hace el OAuth dance y obtiene ADMIN_TOKEN
@@ -5515,6 +5516,7 @@ _CONFIG_META = {
     "META_PHONE_NUMBER_ID":    {"label": "Phone Number ID",    "tipo": "plain"},
     "META_WABA_ID":            {"label": "WABA ID",            "tipo": "plain"},
     "META_VERIFY_TOKEN":       {"label": "Verify Token",       "tipo": "plain"},
+    "META_CATALOG_ID":         {"label": "Catalog ID",         "tipo": "plain"},
     "ANTHROPIC_API_KEY":       {"label": "API Key",            "tipo": "secret"},
     "AI_MODEL":                {"label": "Modelo IA",          "tipo": "plain"},
     "SHOPIFY_STORE":           {"label": "Dominio tienda",   "tipo": "plain"},
@@ -5573,6 +5575,21 @@ async def inbox_save_config(
                 await set_config_value(clave, valor)
                 os.environ[clave] = valor   # actualizar en tiempo real
                 saved.append(clave)
+
+    # Si se actualizó META_CATALOG_ID, invalidar el cache del catálogo
+    # para que la próxima request recargue desde Meta con el nuevo ID.
+    # Evita que el cliente tenga que esperar el TTL (5 min) o reiniciar.
+    if "META_CATALOG_ID" in saved:
+        try:
+            from agent import tools as _tools
+            _tools._catalog_cache = ""
+            _tools._catalog_cache_at = None
+            _tools._fb_items.clear()
+            asyncio.create_task(_tools._cargar_fb_catalog())
+            logger.info("[config] META_CATALOG_ID actualizado — cache invalidado y catálogo Meta recargando")
+        except Exception as e:
+            logger.error(f"[config] error invalidando cache tras META_CATALOG_ID: {e}")
+
     return JSONResponse(content={"ok": True, "saved": saved})
 
 

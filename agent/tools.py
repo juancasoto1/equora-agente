@@ -43,6 +43,33 @@ async def _resolver_store() -> str:
         pass
     return SHOPIFY_STORE
 
+
+async def _resolver_meta_catalog_id() -> str:
+    """Lee META_CATALOG_ID preferentemente de config_value (agent_id=1) y
+    fallback a env var. Permite que cambios en el panel surtan efecto sin
+    reiniciar el server (importante cuando el merchant reconecta el
+    catálogo Shopify↔Meta y cambia el ID)."""
+    try:
+        from agent.memory import get_config_value
+        val = await get_config_value("META_CATALOG_ID", 1)
+        if val:
+            return val.strip()
+    except Exception:
+        pass
+    return META_CATALOG_ID
+
+
+async def _resolver_meta_access_token() -> str:
+    """Idem para META_ACCESS_TOKEN."""
+    try:
+        from agent.memory import get_config_value
+        val = await get_config_value("META_ACCESS_TOKEN", 1)
+        if val:
+            return val.strip()
+    except Exception:
+        pass
+    return META_ACCESS_TOKEN
+
 META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
 META_CATALOG_ID = os.getenv("META_CATALOG_ID", "")
 META_API_VERSION = "v21.0"
@@ -511,16 +538,21 @@ async def _cargar_fb_catalog():
     """Consulta la Graph API de Meta para obtener los retailer_ids reales del catálogo.
     Estos IDs son los únicos válidos para mensajes product_list de WhatsApp."""
     global _fb_items, _sku_map
-    if not META_ACCESS_TOKEN or not META_CATALOG_ID:
+    # Leer dinámicamente desde config_value (panel) para que cambios surtan
+    # efecto sin reiniciar — útil cuando el merchant reconecta el catálogo
+    # Shopify↔Meta y obtiene un META_CATALOG_ID nuevo.
+    meta_token   = await _resolver_meta_access_token()
+    meta_cat_id  = await _resolver_meta_catalog_id()
+    if not meta_token or not meta_cat_id:
         logger.warning("META_ACCESS_TOKEN o META_CATALOG_ID no configurados — catálogo nativo deshabilitado")
         return
 
     todos = []
-    url = f"https://graph.facebook.com/{META_API_VERSION}/{META_CATALOG_ID}/products"
+    url = f"https://graph.facebook.com/{META_API_VERSION}/{meta_cat_id}/products"
     params = {
         "fields": "retailer_id,name,price,availability",
         "limit": 200,
-        "access_token": META_ACCESS_TOKEN,
+        "access_token": meta_token,
     }
     try:
         async with httpx.AsyncClient(timeout=15) as client:
