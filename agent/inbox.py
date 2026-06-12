@@ -810,6 +810,24 @@ html.dark{
   /* Body: espacio para la barra inferior */
   #body{padding-bottom:58px}
 
+  /* Conversaciones móvil — barra de escritura visible (#41)
+     Bug reportado: en móvil la barra de escritura no aparece.
+     Causa raíz: el nav inferior fixed (58px) tapaba #ib cuando #chat-area
+     ocupaba 100% sin reservar espacio para él. Además, al enfocar el
+     textarea el teclado del SO empujaba el viewport y #ib salía de pantalla.
+     Fix: #chat-area usa 100dvh respetando el padding-bottom:58px del body,
+     y #ib queda sticky en el fondo de su contenedor con z-index alto. */
+  #chat-area{
+    height:calc(100dvh - 58px);
+    max-height:calc(100dvh - 58px);
+  }
+  #ib{
+    position:sticky;bottom:0;z-index:50;
+    padding-bottom:max(10px, env(safe-area-inset-bottom));
+  }
+  /* Asegurar que el listado de mensajes haga scroll y no empuje #ib */
+  #msgs{flex:1;min-height:0;overflow-y:auto}
+
   /* Secciones: full width */
   .sec-light .sec-hdr{padding:12px 14px}
   .sec-hdr h1{font-size:1rem}
@@ -818,7 +836,15 @@ html.dark{
   #esc-sidebar{width:100%!important;min-width:unset!important}
   #esc-sidebar.mob-oculto{display:none!important}
   #esc-detalle.mob-oculto{display:none!important}
-  #esc-detalle{position:fixed;top:0;left:0;right:0;bottom:58px;z-index:200;background:#fff}
+  /* #esc-detalle queda fixed para cubrir pantalla; sec-body ya tiene
+     padding-bottom:58px gracias a #body, pero esc-detalle se posiciona
+     absoluto desde top:0 → necesita reservar espacio para el nav inferior
+     (bottom:58px ya lo hacía) Y permitir scroll interno. */
+  #esc-detalle{position:fixed;top:0;left:0;right:0;bottom:58px;z-index:200;
+    background:var(--voco-content-bg);overflow-y:auto}
+  /* Lista de tickets: padding-bottom para que el último ticket no quede
+     detrás del nav inferior. (#41) */
+  #esc-lista{padding-bottom:62px}
 
   /* Clientes: tabla → scroll horizontal */
   #cli-tabla-wrap{overflow-x:auto}

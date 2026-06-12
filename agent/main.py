@@ -1232,14 +1232,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS para que Lovable (equoradistribuciones.com) pueda llamar a /shopify/cart-update
+# CORS — orígenes permitidos para llamadas externas (mini-tienda Lovable,
+# checkout custom, etc.). Multi-tenant: cada merchant configura sus dominios
+# en CORS_ALLOWED_ORIGINS (env var, separados por coma). Fallback a Equora
+# legacy mientras hay un solo tenant en producción.
+_cors_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] or [
+    "https://equoradistribuciones.com",
+    "https://www.equoradistribuciones.com",
+    "https://equora-6.myshopify.com",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://equoradistribuciones.com",
-        "https://www.equoradistribuciones.com",
-        "https://equora-6.myshopify.com",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
@@ -1248,7 +1253,7 @@ app.add_middleware(
 
 @app.get("/")
 async def health_check():
-    return {"status": "ok", "agente": "Andrea", "negocio": "Equora Distribuciones"}
+    return {"status": "ok", "service": "voco"}
 
 
 @app.get("/webhook")
@@ -1352,7 +1357,10 @@ def extraer_marcador_lista(respuesta: str) -> tuple[str, dict | None]:
     return texto_limpio, datos
 
 
-EQUORA_BASE = "https://equoradistribuciones.com"
+# URL base del sitio web del merchant — se usa para construir links a colecciones
+# desde [[TIENDA:término]]. Multi-tenant: configurable por env var con fallback
+# a Equora mientras hay un solo tenant en producción.
+EQUORA_BASE = os.getenv("MERCHANT_SITE_URL", "https://equoradistribuciones.com")
 
 # Mapeo de términos que Andrea escribe en [[TIENDA:término]] → URL de la colección
 _COLECCION_MAP: dict[str, str] = {
@@ -7084,9 +7092,11 @@ async def shopify_webhook(request: Request):
             # Usar SHOPIFY_STORE configurado (multi-tenant) en lugar de hardcoded.
             token = payload.get("token") or ""
             if token:
-                from agent.tools import SHOPIFY_STORE
-                tienda = SHOPIFY_STORE or "equora-6.myshopify.com"
-                checkout_url = f"https://{tienda}/checkouts/cn/{token}/es"
+                # Resolver tienda multi-tenant: config_value primero, env legacy
+                from agent.tools import _resolver_store as _rs
+                tienda = await _rs()
+                if tienda:
+                    checkout_url = f"https://{tienda}/checkouts/cn/{token}/es"
         # Normalizar dominio: si el cliente configuró SHOPIFY_CUSTOM_DOMAIN
         # (con la ruta /checkouts correctamente apuntada), usarlo. Si no,
         # dejar el dominio myshopify.com original — funciona SIEMPRE y evita

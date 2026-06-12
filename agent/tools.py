@@ -232,9 +232,13 @@ _catalog_json: list[dict] = []
 # Clave: título normalizado → Valor: handle (ej. "lavaloza-antibacterial-biotu")
 _handle_map: dict[str, str] = {}
 
-# URL base de los productos en equoradistribuciones.com
+# URL base de los productos del merchant (para construir links tipo
+# /product/<handle>). Multi-tenant: leer de env MERCHANT_PRODUCT_BASE (nuevo
+# nombre genérico). El nombre viejo EQUORA_PRODUCT_BASE queda como fallback
+# para no romper deploys actuales.
 EQUORA_PRODUCT_BASE = os.getenv(
-    "EQUORA_PRODUCT_BASE", "https://equoradistribuciones.com/product"
+    "MERCHANT_PRODUCT_BASE",
+    os.getenv("EQUORA_PRODUCT_BASE", "https://equoradistribuciones.com/product"),
 )
 
 # ── Tarifas de envío (cargadas desde Shopify Admin API o env vars) ────────────
