@@ -20,10 +20,25 @@ class ProveedorMeta(ProveedorWhatsApp):
         verify_token: str = "",
         catalog_id: str = "",
     ):
-        self.access_token = access_token or os.getenv("META_ACCESS_TOKEN", "")
-        self.phone_number_id = phone_number_id or os.getenv("META_PHONE_NUMBER_ID", "")
+        # Sanitización defensiva: tokens copiados de páginas web (Meta Business)
+        # vienen con caracteres unicode invisibles (zero-width space, NBSP, BOM)
+        # que rompen httpx con "ascii codec can't encode" al usar como HTTP
+        # header. Filtramos a solo ASCII printable acá para que no importe de
+        # qué fuente venga el token (env, BD, request body).
+        def _ascii_only(s: str) -> str:
+            if not s:
+                return ""
+            # Quitar caracteres invisibles conocidos y normalizar
+            for ch in ("​", "‌", "‍", " ", "﻿",
+                       "⁠", " "):
+                s = s.replace(ch, "")
+            # Forzar ASCII printable (32-126) — quita CRLF, tabs y unicode
+            return "".join(c for c in s if 32 <= ord(c) < 127)
+
+        self.access_token = _ascii_only(access_token or os.getenv("META_ACCESS_TOKEN", ""))
+        self.phone_number_id = _ascii_only(phone_number_id or os.getenv("META_PHONE_NUMBER_ID", ""))
         self.verify_token = verify_token or os.getenv("META_VERIFY_TOKEN", "equora-andrea-2024")
-        self.catalog_id = catalog_id or os.getenv("META_CATALOG_ID", "")
+        self.catalog_id = _ascii_only(catalog_id or os.getenv("META_CATALOG_ID", ""))
         self.api_version = "v21.0"
 
     async def validar_webhook(self, request: Request):

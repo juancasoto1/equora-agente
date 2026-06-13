@@ -5669,7 +5669,18 @@ async def inbox_test_config(
     body = await request.json()
 
     def _val(clave: str) -> str:
-        return (body.get(clave) or "").strip() or os.getenv(clave, "")
+        v = (body.get(clave) or "").strip() or os.getenv(clave, "")
+        # Sanitización para tokens (mismo motivo que en /config/save): caracteres
+        # invisibles que se copian de Meta Business rompen httpx en headers.
+        if clave in {"META_ACCESS_TOKEN", "META_CAPI_TOKEN", "SHOPIFY_ADMIN_TOKEN",
+                     "SHOPIFY_CLIENT_SECRET", "ANTHROPIC_API_KEY"}:
+            for ch in ("​", "‌", "‍", " ", "﻿", " ", " "):
+                v = v.replace(ch, "")
+            try:
+                v.encode("ascii")
+            except UnicodeEncodeError:
+                v = "".join(c for c in v if 32 <= ord(c) < 127)
+        return v
 
     try:
         if service == "meta":
