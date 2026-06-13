@@ -5613,6 +5613,22 @@ async def inbox_save_config(
     for clave, valor in body.items():
         if clave in _CONFIG_KEYS_ALLOWED and isinstance(valor, str):
             valor = valor.strip()
+            # Sanitizar caracteres invisibles que se copian de páginas web
+            # (zero-width space, non-breaking space, BOM, etc.). Estos rompen
+            # httpx con 'ascii codec can't encode' al usar el valor como header.
+            # Bug reportado por Equora 13-jun al pegar token de Meta Business.
+            for ch in ("​", "‌", "‍", " ", "﻿", " ", " "):
+                valor = valor.replace(ch, "")
+            # Para campos que van como HTTP header (tokens), forzar ASCII
+            if clave in {"META_ACCESS_TOKEN", "META_CAPI_TOKEN",
+                         "SHOPIFY_ADMIN_TOKEN", "SHOPIFY_CLIENT_SECRET",
+                         "ANTHROPIC_API_KEY"}:
+                try:
+                    valor.encode("ascii")
+                except UnicodeEncodeError:
+                    # Filtrar a solo ASCII printable
+                    valor = "".join(c for c in valor if 32 <= ord(c) < 127)
+                    logger.warning(f"[config] {clave} tenía caracteres no-ASCII — filtrados")
             if valor or clave in _PERMITE_VACIO:
                 await set_config_value(clave, valor)
                 os.environ[clave] = valor   # actualizar en tiempo real
