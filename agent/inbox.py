@@ -817,31 +817,36 @@ html.dark{
      textarea el teclado del SO empujaba el viewport y #ib salía de pantalla.
      Fix: #chat-area usa 100dvh respetando el padding-bottom:58px del body,
      y #ib queda sticky en el fondo de su contenedor con z-index alto. */
-  #chat-area{
-    height:calc(100dvh - 58px);
-    max-height:calc(100dvh - 58px);
-  }
+  /* #ib fixed encima del nav inferior — position:sticky no funciona
+     porque #cv tiene overflow:hidden y el flex consume todo el espacio
+     empujando #ib fuera del viewport. */
   #ib{
-    position:sticky;bottom:0;z-index:50;
+    position:fixed!important;
+    bottom:58px;left:0;right:0;
+    z-index:100;
     padding-bottom:max(10px, env(safe-area-inset-bottom));
+    background:var(--hd);
+    border-top:1px solid var(--bd);
   }
-  /* Asegurar que el listado de mensajes haga scroll y no empuje #ib */
-  #msgs{flex:1;min-height:0;overflow-y:auto}
+  /* #msgs gana padding-bottom para no quedar tapado por #ib (estimo
+     ~70px del input + holgura). */
+  #msgs{padding-bottom:80px!important}
 
   /* Secciones: full width */
   .sec-light .sec-hdr{padding:12px 14px}
   .sec-hdr h1{font-size:1rem}
 
-  /* Escalaciones: lista ocupa todo el ancho en móvil */
+  /* Escalaciones móvil — master/detail (#41)
+     Bug: al entrar a la sección, #esc-detalle (fixed + z-index:200)
+     tapaba la lista. Fix combinado: CSS conserva la convención
+     mob-oculto y JS añade esa clase al detalle al entrar a la sección. */
   #esc-sidebar{width:100%!important;min-width:unset!important}
   #esc-sidebar.mob-oculto{display:none!important}
   #esc-detalle.mob-oculto{display:none!important}
-  /* #esc-detalle queda fixed para cubrir pantalla; sec-body ya tiene
-     padding-bottom:58px gracias a #body, pero esc-detalle se posiciona
-     absoluto desde top:0 → necesita reservar espacio para el nav inferior
-     (bottom:58px ya lo hacía) Y permitir scroll interno. */
-  #esc-detalle{position:fixed;top:0;left:0;right:0;bottom:58px;z-index:200;
-    background:var(--voco-content-bg);overflow-y:auto}
+  #esc-detalle{
+    position:fixed;top:0;left:0;right:0;bottom:58px;z-index:200;
+    background:var(--voco-content-bg);overflow-y:auto;
+  }
   /* Lista de tickets: padding-bottom para que el último ticket no quede
      detrás del nav inferior. (#41) */
   #esc-lista{padding-bottom:62px}
@@ -4342,6 +4347,15 @@ function showSec(id) {
     if (id === 'equipo')        { cargarEquipo(); }
     if (id === 'configuracion') { cargarConfiguracion(); cargarEstadoSistema(); }
     if (id === 'escalaciones')  { escCargarLista(); }
+  }
+  // En móvil al entrar a Escalaciones, forzar vista de LISTA (no detalle).
+  // Sin esto el #esc-detalle (position:fixed z-index:200) tapaba la lista
+  // con "Ningún ticket seleccionado" y el user no podía elegir uno. (#41)
+  if (id === 'escalaciones' && window.innerWidth <= 768) {
+    var _esb = document.getElementById('esc-sidebar');
+    var _edt = document.getElementById('esc-detalle');
+    if (_esb) _esb.classList.remove('mob-oculto');
+    if (_edt) _edt.classList.add('mob-oculto');
   }
   // Reflejar sección en el hash de la URL para deep-linking
   try { history.replaceState(null, '', '#' + id); } catch(e) {}
