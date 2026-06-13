@@ -5657,19 +5657,57 @@ async def inbox_test_config(
 
     try:
         if service == "meta":
+            # El test viejo solo hacía GET /me (basic auth). Eso da OK aunque
+            # falten scopes whatsapp_business_*. Equora reportó bug 13-jun:
+            # "Probar conexión" decía Conectado pero envíos a /messages
+            # fallaban con 400. Ahora validamos los 3 endpoints reales que
+            # Voco usa: /me (auth), /{phone_id}? (lectura phone),
+            # /{waba_id}/message_templates (scope mgmt).
             access_token = _val("META_ACCESS_TOKEN")
+            phone_id     = _val("META_PHONE_NUMBER_ID")
+            waba_id      = _val("META_WABA_ID")
             if not access_token:
                 return JSONResponse(content={"ok": False, "error": "Token de acceso no configurado"})
+            warnings: list[str] = []
+            ok_total = True
+            nombre = ""
             async with httpx.AsyncClient(timeout=12) as cli:
-                r = await cli.get(
+                # 1) auth básica
+                r1 = await cli.get(
                     "https://graph.facebook.com/v21.0/me",
                     headers={"Authorization": f"Bearer {access_token}"},
                 )
-            if r.status_code == 200:
-                nombre = r.json().get("name") or r.json().get("id") or "OK"
-                return JSONResponse(content={"ok": True, "msg": f"✅ Conectado · {nombre}"})
-            err = r.json().get("error", {}).get("message", f"HTTP {r.status_code}")
-            return JSONResponse(content={"ok": False, "error": err})
+                if r1.status_code != 200:
+                    err = r1.json().get("error", {}).get("message", f"HTTP {r1.status_code}")
+                    return JSONResponse(content={"ok": False, "error": f"Token inválido: {err}"})
+                nombre = r1.json().get("name") or r1.json().get("id") or "OK"
+                # 2) scope whatsapp_business_messaging (para enviar mensajes)
+                if phone_id:
+                    r2 = await cli.get(
+                        f"https://graph.facebook.com/v21.0/{phone_id}",
+                        headers={"Authorization": f"Bearer {access_token}"},
+                    )
+                    if r2.status_code != 200:
+                        ok_total = False
+                        err = r2.json().get("error", {}).get("message", f"HTTP {r2.status_code}")
+                        warnings.append(f"❌ Phone Number ID {phone_id} inaccesible: {err}. Falta scope 'whatsapp_business_messaging' o ID incorrecto.")
+                # 3) scope whatsapp_business_management (para plantillas/webhooks)
+                if waba_id:
+                    r3 = await cli.get(
+                        f"https://graph.facebook.com/v21.0/{waba_id}/message_templates?limit=1",
+                        headers={"Authorization": f"Bearer {access_token}"},
+                    )
+                    if r3.status_code != 200:
+                        ok_total = False
+                        err = r3.json().get("error", {}).get("message", f"HTTP {r3.status_code}")
+                        warnings.append(f"❌ WABA {waba_id} inaccesible: {err}. Falta scope 'whatsapp_business_management' o WABA ID incorrecto.")
+            if ok_total:
+                return JSONResponse(content={"ok": True, "msg": f"✅ Conectado · {nombre} · Phone + WABA + Templates OK"})
+            return JSONResponse(content={
+                "ok": False,
+                "error": "Token responde a /me pero faltan scopes WhatsApp:\n\n" + "\n".join(warnings) +
+                         "\n\nRegenera el token en developers.facebook.com → tu app → WhatsApp → API Setup con scopes whatsapp_business_messaging + whatsapp_business_management."
+            })
 
         elif service == "shopify":
             # Test Admin API únicamente (#62 retiró Storefront).
