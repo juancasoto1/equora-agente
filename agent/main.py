@@ -3720,18 +3720,27 @@ async def inbox_responder(
         from agent.memory import obtener_agente
         _agente = await obtener_agente(agent_id) or {"id": 1}
         _prov = await _get_meta_para_agente(_agente)
-        # CRÍTICO: chequear el return — enviar_mensaje puede devolver False
-        # silenciosamente (token expirado, ventana 24h cerrada, número
-        # inválido, etc.). Sin esto el frontend mostraba "enviado" pero el
-        # cliente nunca recibía nada. (#41 reportado 12-jun-2026 móvil)
+        # DIAGNÓSTICO: loguear qué credenciales se están usando (sin exponer
+        # token completo). Útil para detectar config_value en BD que difiere
+        # de env vars de Railway tras cambios recientes.
+        _pn = (_prov.phone_number_id or "")
+        _tk = (_prov.access_token or "")
+        logger.info(
+            f"[responder] agent_id={agent_id} → phone_number_id={_pn} "
+            f"(len={len(_pn)}) · access_token={_tk[:12]}…{_tk[-4:] if len(_tk)>4 else ''} "
+            f"(len={len(_tk)})"
+        )
         ok = await _prov.enviar_mensaje(telefono, mensaje)
         if not ok:
             logger.error(f"[responder] enviar_mensaje devolvió False para {telefono} (agent_id={agent_id})")
             return JSONResponse(status_code=502, content={
                 "ok": False,
-                "error": "WhatsApp rechazó el envío. Causas típicas: token Meta expirado, "
-                         "ventana de 24 horas cerrada (el cliente no ha escrito en >24h), "
-                         "o número WhatsApp inválido. Revisa logs de Railway para el detalle."
+                "error": f"WhatsApp rechazó el envío.\n\n"
+                         f"Phone Number ID usado: {_pn}\n"
+                         f"Token (primeros chars): {_tk[:8]}…\n\n"
+                         f"Causas típicas: token expirado, Phone Number ID incorrecto, "
+                         f"ventana de 24h cerrada, o scope insuficiente. Logs de Railway "
+                         f"tienen la respuesta exacta de Meta."
             })
         await guardar_mensaje(telefono, "assistant", mensaje, agent_id=agent_id)
         await registrar_mensaje_asistente(telefono)
