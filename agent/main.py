@@ -3720,14 +3720,26 @@ async def inbox_responder(
         from agent.memory import obtener_agente
         _agente = await obtener_agente(agent_id) or {"id": 1}
         _prov = await _get_meta_para_agente(_agente)
-        await _prov.enviar_mensaje(telefono, mensaje)
+        # CRÍTICO: chequear el return — enviar_mensaje puede devolver False
+        # silenciosamente (token expirado, ventana 24h cerrada, número
+        # inválido, etc.). Sin esto el frontend mostraba "enviado" pero el
+        # cliente nunca recibía nada. (#41 reportado 12-jun-2026 móvil)
+        ok = await _prov.enviar_mensaje(telefono, mensaje)
+        if not ok:
+            logger.error(f"[responder] enviar_mensaje devolvió False para {telefono} (agent_id={agent_id})")
+            return JSONResponse(status_code=502, content={
+                "ok": False,
+                "error": "WhatsApp rechazó el envío. Causas típicas: token Meta expirado, "
+                         "ventana de 24 horas cerrada (el cliente no ha escrito en >24h), "
+                         "o número WhatsApp inválido. Revisa logs de Railway para el detalle."
+            })
         await guardar_mensaje(telefono, "assistant", mensaje, agent_id=agent_id)
         await registrar_mensaje_asistente(telefono)
         logger.info(f"Mensaje manual enviado a {telefono} desde inbox (agent_id={agent_id})")
         return JSONResponse(content={"ok": True})
     except Exception as e:
         logger.error(f"Error enviando desde inbox a {telefono}: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
 
 
 # ══════════════════════════════════════════════════════════════════════════════

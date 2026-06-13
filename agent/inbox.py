@@ -787,28 +787,38 @@ html.dark{
    SPRINT 3 — RESPONSIVE MÓVIL
    ══════════════════════════════════════════════ */
 @media(max-width:768px){
-  /* Nav lateral → barra inferior fija */
+  /* Nav lateral → barra inferior fija con scroll horizontal cuando hay
+     8+ items. Ya no usamos flex:1 (apretaba mucho) — cada item tiene
+     ancho fijo razonable y el contenedor scrollea si no caben. */
   #nav{
     position:fixed;bottom:0;left:0;right:0;
     width:100%!important;min-width:unset!important;
-    height:58px;flex-direction:row;align-items:center;
-    padding:0;border-right:none;border-top:1px solid #1e2e3d;
+    height:60px;flex-direction:row;align-items:stretch;
+    padding:0;border-right:none;border-top:1px solid var(--voco-border);
     z-index:500;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    /* Indicador visual de scroll: scrollbar fina */
+    scrollbar-width:thin;
   }
+  #nav::-webkit-scrollbar{height:2px}
+  #nav::-webkit-scrollbar-thumb{background:var(--voco-border);border-radius:1px}
   .nav-section,.nav-footer{display:none}
   .nav-item{
-    flex:1;flex-direction:column;align-items:center;justify-content:center;
-    gap:2px;padding:6px 2px;border-left:none!important;
-    border-top:3px solid transparent;min-width:52px;
-    font-size:.58rem;letter-spacing:0;
+    flex:0 0 auto;
+    flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;padding:8px 4px;border-left:none!important;
+    border-top:3px solid transparent;
+    min-width:72px;max-width:72px;
+    font-size:.64rem;letter-spacing:0;line-height:1.1;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
   .nav-item.active{border-top-color:var(--az);border-left-color:transparent!important}
-  .nav-item .ni{font-size:1.3rem;width:auto}
+  .nav-item .ni{font-size:1.25rem;width:auto;line-height:1}
   /* El badge en nav móvil */
-  #esc-badge{position:absolute;top:4px;right:4px;font-size:.6rem;padding:0 5px}
+  #esc-badge{position:absolute;top:6px;right:10px;font-size:.6rem;padding:0 5px}
 
   /* Body: espacio para la barra inferior */
-  #body{padding-bottom:58px}
+  #body{padding-bottom:60px}
 
   /* Conversaciones móvil — barra de escritura visible (#41)
      Bug reportado: en móvil la barra de escritura no aparece.
@@ -822,15 +832,16 @@ html.dark{
      empujando #ib fuera del viewport. */
   #ib{
     position:fixed!important;
-    bottom:58px;left:0;right:0;
+    bottom:60px;left:0;right:0;
     z-index:100;
     padding-bottom:max(10px, env(safe-area-inset-bottom));
     background:var(--hd);
     border-top:1px solid var(--bd);
   }
-  /* #msgs gana padding-bottom para no quedar tapado por #ib (estimo
-     ~70px del input + holgura). */
-  #msgs{padding-bottom:80px!important}
+  /* #msgs gana padding-bottom para no quedar tapado por #ib.
+     Cálculo: #ib mide ~60px (textarea + padding) + safe-area-inset
+     + holgura de un mensaje completo (~50px) ≈ 130px. */
+  #msgs{padding-bottom:140px!important}
 
   /* Secciones: full width */
   .sec-light .sec-hdr{padding:12px 14px}
@@ -844,7 +855,7 @@ html.dark{
   #esc-sidebar.mob-oculto{display:none!important}
   #esc-detalle.mob-oculto{display:none!important}
   #esc-detalle{
-    position:fixed;top:0;left:0;right:0;bottom:58px;z-index:200;
+    position:fixed;top:0;left:0;right:0;bottom:60px;z-index:200;
     background:var(--voco-content-bg);overflow-y:auto;
   }
   /* Lista de tickets: padding-bottom para que el último ticket no quede
