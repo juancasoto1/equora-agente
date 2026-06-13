@@ -4589,7 +4589,12 @@ function api(path, opts) {
   return fetch(path, Object.assign({credentials: 'same-origin'}, opts || {}))
     .then(function(r) {
       if (r.status === 401) { location.href = '/inbox/login'; throw new Error('No autorizado'); }
-      return r.json();
+      // Intentar parsear JSON aunque sea error 4xx/5xx (el backend devuelve
+      // {ok:false, error:"..."} en esos casos). Si no hay body parsable,
+      // sintetizar uno con el status para que el caller pueda mostrar algo.
+      return r.json().catch(function() {
+        return {ok: false, error: 'HTTP ' + r.status + ' (sin respuesta JSON)'};
+      });
     });
 }
 
@@ -4769,16 +4774,22 @@ function sendMsg() {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({telefono: TEL, mensaje: msg})
   }).then(function(d) {
-    if (d.ok) {
+    if (d && d.ok) {
       ti.value = '';
       ti.style.height = 'auto';
       loadMsgs(true);
       loadConvs();
     } else {
-      alert('Error al enviar: ' + (d.error || 'intenta de nuevo'));
+      // Mostrar SIEMPRE el error real (antes el catch silenciaba todo).
+      alert('No se pudo enviar el mensaje:\n\n' + ((d && d.error) || 'Error desconocido. Revisa logs de Railway.'));
     }
     btn.disabled = false;
-  }).catch(function() { btn.disabled = false; });
+  }).catch(function(e) {
+    // Error de red o JSON inválido — mostrar al user en vez de fallar
+    // silenciosamente (bug reportado 12-jun móvil: "ni siquiera sale el mensaje")
+    alert('Error de red al enviar el mensaje:\n\n' + (e && e.message ? e.message : String(e)));
+    btn.disabled = false;
+  });
 }
 
 function onKey(e) {
