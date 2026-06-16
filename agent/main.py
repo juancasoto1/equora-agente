@@ -45,7 +45,7 @@ from agent.memory import (
     marcar_opt_out, verificar_opt_out, revertir_opt_out, obtener_opt_outs,
     obtener_clientes_con_estado,
     get_config_value, set_config_value, get_all_config_values, cargar_config_en_env,
-    guardar_cliente_import,
+    guardar_cliente_import, editar_cliente,
     # Sprint 1 — SaaS multi-tenant
     crear_usuario, obtener_usuario_por_email, obtener_usuario_por_id,
     crear_sesion, verificar_sesion, cerrar_sesion,
@@ -5297,6 +5297,52 @@ async def inbox_clientes(
     for c in clientes:
         resumen[c["estado"]] = resumen.get(c["estado"], 0) + 1
     return JSONResponse(content={"clientes": clientes, "resumen": resumen})
+
+
+@app.post("/inbox/api/clientes/edit")
+async def inbox_editar_cliente(
+    request: Request,
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Edita nombre/teléfono/ciudad de un cliente desde el panel.
+    Si cambia el teléfono, migra todas las referencias (mensajes, escalaciones, etc).
+    """
+    if not await _obtener_sesion_usuario(voco_session or inbox_session):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Payload inválido")
+
+    telefono_original = (body.get("telefono_original") or "").strip()
+    if not telefono_original:
+        return JSONResponse({"ok": False, "error": "Falta telefono_original"}, status_code=400)
+
+    datos = {
+        "nombres":  (body.get("nombres") or "").strip(),
+        "apellidos": (body.get("apellidos") or "").strip(),
+        "ciudad":   (body.get("ciudad") or "").strip(),
+    }
+
+    telefono_nuevo_raw = (body.get("telefono") or "").strip()
+    telefono_nuevo: str | None = None
+    if telefono_nuevo_raw:
+        telefono_nuevo = _normalizar_telefono(telefono_nuevo_raw)
+        if not telefono_nuevo:
+            return JSONResponse(
+                {"ok": False, "error": "Teléfono inválido"},
+                status_code=400,
+            )
+
+    resultado = await editar_cliente(
+        telefono_original=telefono_original,
+        datos=datos,
+        agent_id=1,
+        telefono_nuevo=telefono_nuevo,
+    )
+    status = 200 if resultado["ok"] else 409
+    return JSONResponse(resultado, status_code=status)
 
 
 def _normalizar_telefono(raw: str) -> str | None:

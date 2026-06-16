@@ -2886,6 +2886,56 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         </div>
       </div>
 
+      <!-- Modal: Editar cliente -->
+      <div id="modal-editar-cliente" class="modal-overlay" style="display:none" onclick="cerrarEditarCliente(event)">
+        <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+          <div class="modal-hdr">
+            <div>
+              <div class="modal-title">✎ Editar cliente</div>
+              <div class="modal-sub" id="editar-cli-sub">—</div>
+            </div>
+            <button class="modal-close" onclick="cerrarEditarCliente()" aria-label="Cerrar modal">✕</button>
+          </div>
+
+          <input type="hidden" id="edit-cli-tel-original" value="">
+
+          <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">Nombres</label>
+          <input id="edit-cli-nombres" type="text"
+                 style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 10px;font-size:.88rem;margin-bottom:12px;box-sizing:border-box">
+
+          <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">Apellidos</label>
+          <input id="edit-cli-apellidos" type="text"
+                 style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 10px;font-size:.88rem;margin-bottom:12px;box-sizing:border-box">
+
+          <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">
+            Teléfono <span style="color:var(--voco-text-muted);font-weight:400">(con indicativo: 57XXXXXXXXXX)</span>
+          </label>
+          <input id="edit-cli-telefono" type="tel" inputmode="numeric"
+                 style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 10px;font-size:.88rem;margin-bottom:4px;box-sizing:border-box;font-family:ui-monospace,monospace"
+                 placeholder="573001234567">
+          <div style="font-size:.72rem;color:var(--voco-text-muted);margin-bottom:12px">
+            Si pones un número que empieza por 3 sin indicativo, se completa con 57 automáticamente.
+          </div>
+
+          <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">Ciudad</label>
+          <input id="edit-cli-ciudad" type="text"
+                 style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 10px;font-size:.88rem;margin-bottom:16px;box-sizing:border-box">
+
+          <div id="edit-cli-msg" style="font-size:.83rem;margin-bottom:10px;display:none"></div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button onclick="cerrarEditarCliente()"
+                    style="padding:9px 16px;background:none;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.85rem;font-weight:600;color:var(--voco-text);cursor:pointer">
+              Cancelar
+            </button>
+            <button id="edit-cli-save" onclick="guardarEditarCliente()"
+                    style="padding:9px 18px;background:var(--voco-brand);color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer">
+              Guardar cambios
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══════════════════════════════════════
            SECCIÓN: ESCALACIONES (Sprint 1)
            ═══════════════════════════════════════ -->
@@ -5005,10 +5055,90 @@ function renderClientes() {
        +    ' aria-label="Ver chat de ' + he(disp) + '">Ver chat</button>'
        + '<button class="cli-act-btn cli-write-btn" onclick="abrirEscribir(\'' + he(c.telefono) + '\',\'' + he(nm).replace(/'/g,"&#39;") + '\')"'
        +    ' aria-label="Escribir a ' + he(disp) + '" data-tel="' + he(c.telefono) + '" data-nombre="' + he(nm) + '">✍ Escribir</button>'
+       + '<button class="cli-act-btn" onclick="abrirEditarCliente(\'' + he(c.telefono) + '\')"'
+       +    ' aria-label="Editar ' + he(disp) + '" title="Editar nombre, teléfono o ciudad">✎ Editar</button>'
        + '</td>'
        + '</tr>';
   }
   document.getElementById('cli-tbody').innerHTML = h;
+}
+
+function abrirEditarCliente(telefono) {
+  // Buscar el cliente en la data en memoria — evita una llamada extra al server
+  var cli = null;
+  for (var i = 0; i < _CLI_DATA.length; i++) {
+    if (_CLI_DATA[i].telefono === telefono) { cli = _CLI_DATA[i]; break; }
+  }
+  if (!cli) { alert('Cliente no encontrado en la lista'); return; }
+
+  // El campo nombre del listado viene como "Nombres Apellidos" concatenado.
+  // Para edición separamos en dos campos — al guardar, el backend los junta.
+  var partes = (cli.nombre || '').trim().split(/\s+/);
+  var nombres   = partes.slice(0, Math.max(1, partes.length - 1)).join(' ');
+  var apellidos = partes.length > 1 ? partes[partes.length - 1] : '';
+
+  document.getElementById('edit-cli-tel-original').value = cli.telefono;
+  document.getElementById('edit-cli-nombres').value   = nombres;
+  document.getElementById('edit-cli-apellidos').value = apellidos;
+  document.getElementById('edit-cli-telefono').value  = cli.telefono;
+  document.getElementById('edit-cli-ciudad').value    = cli.ciudad || '';
+  document.getElementById('editar-cli-sub').textContent = '+' + cli.telefono;
+
+  var msg = document.getElementById('edit-cli-msg');
+  msg.style.display = 'none'; msg.textContent = '';
+
+  document.getElementById('modal-editar-cliente').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('edit-cli-nombres').focus(); }, 50);
+}
+
+function cerrarEditarCliente(ev) {
+  if (ev && ev.target && ev.target.id !== 'modal-editar-cliente') return;
+  document.getElementById('modal-editar-cliente').style.display = 'none';
+}
+
+async function guardarEditarCliente() {
+  var btn = document.getElementById('edit-cli-save');
+  var msg = document.getElementById('edit-cli-msg');
+  var tel_original = document.getElementById('edit-cli-tel-original').value;
+  var tel_nuevo    = document.getElementById('edit-cli-telefono').value.trim();
+  var payload = {
+    telefono_original: tel_original,
+    nombres:   document.getElementById('edit-cli-nombres').value.trim(),
+    apellidos: document.getElementById('edit-cli-apellidos').value.trim(),
+    ciudad:    document.getElementById('edit-cli-ciudad').value.trim(),
+    telefono:  tel_nuevo,
+  };
+
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  msg.style.display = 'none';
+
+  try {
+    var r = await fetch('/inbox/api/clientes/edit', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+      credentials: 'include',
+    });
+    var data = {};
+    try { data = await r.json(); } catch(e) { data = {ok:false, error:'Respuesta no válida del servidor'}; }
+
+    if (!r.ok || !data.ok) {
+      msg.style.display = 'block';
+      msg.style.color   = '#dc2626';
+      msg.textContent   = '✕ ' + (data.error || 'Error al guardar (HTTP ' + r.status + ')');
+      btn.disabled = false; btn.textContent = 'Guardar cambios';
+      return;
+    }
+
+    // Éxito — cerrar y refrescar
+    cerrarEditarCliente();
+    cargarClientes();
+  } catch (err) {
+    msg.style.display = 'block';
+    msg.style.color   = '#dc2626';
+    msg.textContent   = '✕ Error de red — ' + err.message;
+    btn.disabled = false; btn.textContent = 'Guardar cambios';
+  }
 }
 
 function fmtRelativo(ts) {

@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, Integer, Boolean, func, text, PrimaryKeyConstraint
+from sqlalchemy import String, Text, DateTime, select, update, Integer, Boolean, func, text, PrimaryKeyConstraint
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -559,6 +559,75 @@ async def guardar_cliente_import(telefono: str, datos: dict, agent_id: int = 1) 
             session.add(cliente)
             await session.commit()
             return "inserted"
+
+
+# Tablas con columna que referencia el teléfono del cliente. Si el merchant
+# corrige el número (ej: agregar +57 cuando el cliente se guardó sin indicativo),
+# hay que migrar TODAS las referencias en una sola transacción — si no, los
+# mensajes/escalaciones/deals quedan huérfanos apuntando al número viejo.
+_TABLAS_REF_TELEFONO = (
+    ("mensajes",            "telefono"),
+    ("difusion_mensajes",   "telefono"),
+    ("estado_conversacion", "telefono"),
+    ("opt_outs",            "telefono"),
+    ("tickets",             "telefono_cliente"),
+    ("deals",               "cliente_telefono"),
+)
+
+
+async def editar_cliente(
+    telefono_original: str,
+    datos: dict,
+    agent_id: int = 1,
+    telefono_nuevo: str | None = None,
+) -> dict:
+    """Edita un cliente del panel. Si telefono_nuevo es distinto al original,
+    migra todas las referencias (mensajes, escalaciones, deals, etc) atómicamente.
+
+    Retorna: {"ok": bool, "error": str | None, "telefono": str}
+    """
+    async with async_session() as session:
+        cliente = await _get_cliente(session, telefono_original, agent_id)
+        if not cliente:
+            return {"ok": False, "error": "Cliente no encontrado", "telefono": telefono_original}
+
+        # Actualizar campos editables (nombres, apellidos, ciudad, etc)
+        for campo in CAMPOS_CLIENTE:
+            if campo in datos:
+                setattr(cliente, campo, str(datos.get(campo) or ""))
+        cliente.actualizado = datetime.utcnow()
+
+        # Si no hay cambio de teléfono, solo persistir y salir
+        if not telefono_nuevo or telefono_nuevo == telefono_original:
+            await session.commit()
+            return {"ok": True, "error": None, "telefono": telefono_original}
+
+        # Cambio de teléfono — verificar que el nuevo no choque con otro cliente
+        existente = await _get_cliente(session, telefono_nuevo, agent_id)
+        if existente:
+            return {
+                "ok": False,
+                "error": f"Ya existe un cliente con el teléfono {telefono_nuevo}",
+                "telefono": telefono_original,
+            }
+
+        # Migrar referencias en tablas relacionadas + el propio cliente.
+        # Usamos raw SQL porque telefono es parte de la PK en Cliente y SQLAlchemy
+        # ORM no permite actualizar PKs directamente.
+        for tabla, columna in _TABLAS_REF_TELEFONO:
+            await session.execute(
+                text(f"UPDATE {tabla} SET {columna} = :nuevo "
+                     f"WHERE {columna} = :viejo AND agent_id = :aid"),
+                {"nuevo": telefono_nuevo, "viejo": telefono_original, "aid": agent_id},
+            )
+        # Actualizar la fila Cliente al final (cambia PK)
+        await session.execute(
+            text("UPDATE clientes SET telefono = :nuevo "
+                 "WHERE telefono = :viejo AND agent_id = :aid"),
+            {"nuevo": telefono_nuevo, "viejo": telefono_original, "aid": agent_id},
+        )
+        await session.commit()
+        return {"ok": True, "error": None, "telefono": telefono_nuevo}
 
 
 async def obtener_cliente(telefono: str, agent_id: int = 1) -> dict | None:
