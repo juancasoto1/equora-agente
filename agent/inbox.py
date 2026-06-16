@@ -5100,6 +5100,12 @@ function abrirEditarCliente(telefono) {
 function cerrarEditarCliente(ev) {
   if (ev && ev.target && ev.target.id !== 'modal-editar-cliente') return;
   document.getElementById('modal-editar-cliente').style.display = 'none';
+  // Reset defensivo del botón. La función guardarEditarCliente() invoca
+  // cerrarEditarCliente() tras un guardado exitoso pero no resetea el estado
+  // del botón antes — así si el navegador conserva el DOM, al abrir otro
+  // cliente el botón seguiría en "Guardando…" disabled.
+  var btn = document.getElementById('edit-cli-save');
+  if (btn) { btn.disabled = false; btn.textContent = 'Guardar cambios'; }
 }
 
 async function guardarEditarCliente() {
