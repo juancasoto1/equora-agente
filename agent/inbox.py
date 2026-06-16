@@ -1650,6 +1650,12 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 .cli-write-btn{background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe}
 .cli-write-btn:hover{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}
 .cli-empty{padding:64px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
+/* Aviso de configuración pendiente en una tarjeta de mensaje. Color rojo
+   semántico de alerta, atenuado en dark mode para no saturar la vista. */
+.msj-aviso-detalle{background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;color:#7f1d1d}
+[data-theme="dark"] .msj-aviso-detalle{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);border-left:4px solid #dc2626;color:#fca5a5}
+[data-theme="dark"] .msj-aviso-detalle code{background:rgba(0,0,0,.3) !important;color:#fecaca !important;border-color:rgba(220,38,38,.3) !important}
+[data-theme="dark"] .msj-aviso-detalle b{color:#fecaca}
 .cli-empty-ic{font-size:3rem;margin-bottom:12px;opacity:.5}
 .cli-empty-txt{font-size:.9rem;font-weight:500;color:var(--voco-text-muted)}
 /* Empty state reusable — usar en cualquier vista vacía */
@@ -9783,30 +9789,53 @@ function _msjRenderItem(m) {
     toggleHtml = '<span style="font-size:.72rem;color:var(--voco-text-muted)"><i data-lucide="lock" style="width:11px;height:11px;vertical-align:-1px"></i> Siempre activo</span>';
   }
 
-  // Placeholders disponibles
+  // Placeholders disponibles — chips con contraste explícito para dark mode.
+  // Antes solo usaba var(--voco-content-bg-alt) y el color del code heredaba
+  // — en dark mode quedaban casi invisibles. Ahora forzamos color de marca
+  // para que destaquen como acción clickable (copy).
   var phHtml = '';
   if (m.placeholders && m.placeholders.length) {
-    phHtml = '<div style="font-size:.7rem;color:var(--voco-text-muted);margin-top:6px;line-height:1.6">'
+    phHtml = '<div style="font-size:.7rem;color:var(--voco-text-muted);margin-top:6px;line-height:1.85">'
       + 'Disponibles: '
       + m.placeholders.map(function(p) {
-          return '<code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px;margin-right:3px;cursor:pointer" title="Click para copiar" onclick="navigator.clipboard.writeText(\'{' + p + '}\')">{' + _msjEscapeHtml(p) + '}</code>';
+          return '<code style="background:var(--voco-content-bg-alt);color:var(--voco-brand);'
+            + 'border:1px solid var(--voco-border);padding:2px 7px;border-radius:4px;'
+            + 'margin-right:4px;cursor:pointer;font-size:.72rem;font-weight:600" '
+            + 'title="Click para copiar" '
+            + 'onclick="navigator.clipboard.writeText(\'{' + p + '}\')">'
+            + '{' + _msjEscapeHtml(p) + '}</code>';
         }).join('')
       + '</div>';
   }
 
-  // Preview burbuja WhatsApp (oculta para mensajes muy cortos como botones)
+  // Preview burbuja WhatsApp (oculta para mensajes muy cortos como botones).
+  // INTENCIÓN: el preview se mantiene en colores claros incluso en dark mode
+  // porque está imitando la UI real de WhatsApp que el cliente final verá.
+  // No es un bug de contraste — es preview fidedigno. Marcamos con caption
+  // y borde de marca para que se lea "esto es lo que verá tu cliente" en vez
+  // de "aquí se rompió el dark mode".
+  var captionPreview = '<div style="display:flex;align-items:center;gap:5px;'
+    + 'font-size:.68rem;color:var(--voco-text-muted);text-transform:uppercase;'
+    + 'letter-spacing:.5px;margin-bottom:6px;font-weight:600">'
+    + '<i data-lucide="smartphone" style="width:11px;height:11px"></i>'
+    + 'Cómo lo verá tu cliente'
+    + '</div>';
   var previewHtml = '';
   if (esCorto) {
-    // Botón estilo CTA WhatsApp
-    previewHtml = '<div style="background:#f5f6f7;border-radius:8px;padding:8px;border:1px solid #e8e8e8">'
-      + '<div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600">Vista previa del botón</div>'
-      + '<div id="' + id + '-preview" style="background:#fff;color:#0084ff;text-align:center;padding:9px;border-radius:6px;font-weight:600;font-size:.88rem;border:1px solid #dfe1e6">'
+    previewHtml = '<div style="background:#f5f6f7;border-radius:8px;padding:10px;'
+      + 'border:1px solid var(--voco-border);box-shadow:0 0 0 2px rgba(99,102,241,.06) inset">'
+      + captionPreview
+      + '<div id="' + id + '-preview" style="background:#fff;color:#0084ff;text-align:center;'
+      + 'padding:9px;border-radius:6px;font-weight:600;font-size:.88rem;border:1px solid #dfe1e6">'
       +   _msjEscapeHtml(m.content || m.default)
       + '</div></div>';
   } else {
-    previewHtml = '<div style="background:#efeae2;border-radius:8px;padding:10px;border:1px solid #d9d4cc">'
-      + '<div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:600">Vista previa</div>'
-      + '<div id="' + id + '-preview" style="background:#fff;color:#111b21;padding:8px 10px;border-radius:6px 6px 6px 0;font-size:.84rem;line-height:1.45;box-shadow:0 1px 0.5px rgba(11,20,26,.13);max-width:100%;white-space:pre-wrap;word-wrap:break-word">'
+    previewHtml = '<div style="background:#efeae2;border-radius:8px;padding:10px;'
+      + 'border:1px solid var(--voco-border);box-shadow:0 0 0 2px rgba(99,102,241,.06) inset">'
+      + captionPreview
+      + '<div id="' + id + '-preview" style="background:#fff;color:#111b21;padding:8px 10px;'
+      + 'border-radius:6px 6px 6px 0;font-size:.84rem;line-height:1.45;'
+      + 'box-shadow:0 1px 0.5px rgba(11,20,26,.13);max-width:100%;white-space:pre-wrap;word-wrap:break-word">'
       +   _msjMarkdownWA(_msjFormatPreview(m.content || m.default))
       + '</div></div>';
   }
@@ -9859,8 +9888,12 @@ function _msjRenderItem(m) {
       + 'Requiere configuración'
       + '<i data-lucide="chevron-down" style="width:11px;height:11px" class="msj-chevron"></i>'
       + '</button>';
-    avisoDetalle = '<div id="' + detalleId + '" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #dc2626;'
-      + 'border-radius:6px;padding:12px 14px;margin-bottom:10px;font-size:.8rem;color:#7f1d1d;line-height:1.55">'
+    // Color rojo del aviso se mantiene en ambos modos (semántica de alerta).
+    // El fondo se aclara con opacidad sobre var(--voco-card-bg) para no
+    // saturar el dark mode con un bloque rojo brillante. En light queda igual.
+    avisoDetalle = '<div id="' + detalleId + '" class="msj-aviso-detalle" '
+      + 'style="display:none;border-radius:6px;padding:12px 14px;margin-bottom:10px;'
+      + 'font-size:.8rem;line-height:1.55">'
       + '<div>' + avisoBody + '</div>'
       + webhookBox
       + (linkBtn ? '<div>' + linkBtn + '</div>' : '')
