@@ -4353,7 +4353,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
     <div id="cap-progress" style="display:none;margin-top:8px;font-size:.82rem;color:#4f46e5">⏳ Enviando…</div>
     <div style="display:flex;gap:8px;margin-top:12px">
-      <button onclick="cerrarModalCaption()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
+      <button onclick="cerrarModalCaption()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);color:var(--voco-text);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
       <button id="cap-enviar-btn" onclick="confirmarEnvioMedia()" style="flex:1;padding:9px;background:#25d366;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Enviar</button>
     </div>
   </div>
