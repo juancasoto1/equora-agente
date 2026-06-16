@@ -4338,6 +4338,28 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 </div><!-- /shell -->
 
 <!-- ══════════════════════════════════════════════════════
+     Modal Adjuntar archivo (#68 followup) — A NIVEL GLOBAL del template
+     del inbox. Antes vivía dentro de sec-conversaciones y al estar el
+     padre en display:none cuando el user estaba en otra sección, el modal
+     quedaba invisible aunque fuera position:fixed. Compartido por
+     Conversaciones y Escalaciones — el flujo de envío detecta el origen.
+     ══════════════════════════════════════════════════════ -->
+<div id="modal-caption" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:var(--voco-card-bg);border-radius:12px;padding:22px;max-width:420px;width:90%">
+    <h3 id="cap-titulo" style="margin:0 0 14px;color:var(--voco-text);font-size:1rem">Enviar archivo</h3>
+    <div id="cap-preview" style="margin-bottom:14px;text-align:center"></div>
+    <textarea id="cap-texto" placeholder="Descripción (opcional)…" rows="2"
+      style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
+    <div id="cap-progress" style="display:none;margin-top:8px;font-size:.82rem;color:#4f46e5">⏳ Enviando…</div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="cerrarModalCaption()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
+      <button id="cap-enviar-btn" onclick="confirmarEnvioMedia()" style="flex:1;padding:9px;background:#25d366;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
      Modal de detalle de campaña de difusión
      ══════════════════════════════════════════════════════ -->
 <div id="dif-detail-modal" class="modal-overlay" style="display:none" onclick="cerrarDetalleCampana(event)">
@@ -10898,22 +10920,6 @@ html.dark .agent-pill{{background:var(--pill-bg-dark)!important;color:var(--pill
 
   <div class="agents-grid">
     {cards_html}
-  </div>
-</div>
-
-<!-- MODAL ADJUNTAR ARCHIVO (global — usado por Conversaciones Y Escalaciones) -->
-<div id="modal-caption" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
-  background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
-  <div style="background:var(--voco-card-bg);border-radius:12px;padding:22px;max-width:420px;width:90%">
-    <h3 id="cap-titulo" style="margin:0 0 14px;color:var(--voco-text);font-size:1rem">Enviar archivo</h3>
-    <div id="cap-preview" style="margin-bottom:14px;text-align:center"></div>
-    <textarea id="cap-texto" placeholder="Descripción (opcional)…" rows="2"
-      style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;resize:vertical;box-sizing:border-box;font-family:inherit"></textarea>
-    <div id="cap-progress" style="display:none;margin-top:8px;font-size:.82rem;color:#4f46e5">⏳ Enviando…</div>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button onclick="cerrarModalCaption()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
-      <button id="cap-enviar-btn" onclick="confirmarEnvioMedia()" style="flex:1;padding:9px;background:#25d366;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Enviar</button>
-    </div>
   </div>
 </div>
 
