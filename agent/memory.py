@@ -565,13 +565,19 @@ async def guardar_cliente_import(telefono: str, datos: dict, agent_id: int = 1) 
 # corrige el número (ej: agregar +57 cuando el cliente se guardó sin indicativo),
 # hay que migrar TODAS las referencias en una sola transacción — si no, los
 # mensajes/escalaciones/deals quedan huérfanos apuntando al número viejo.
+#
+# El tercer campo (pk_compuesta) indica si la tabla tiene PK sobre (agent_id, telefono).
+# En esos casos, si YA existe una fila en el teléfono nuevo, el UPDATE viola la
+# constraint UNIQUE — toca borrar la fila vieja antes (preferimos conservar la
+# fila del teléfono nuevo, que es la "correcta"). Pasó con Lorena Camayo: estaba
+# el mismo cliente registrado con y sin indicativo en estado_conversacion.
 _TABLAS_REF_TELEFONO = (
-    ("mensajes",            "telefono"),
-    ("difusion_mensajes",   "telefono"),
-    ("estado_conversacion", "telefono"),
-    ("opt_outs",            "telefono"),
-    ("tickets",             "telefono_cliente"),
-    ("deals",               "cliente_telefono"),
+    ("mensajes",            "telefono",         False),
+    ("difusion_mensajes",   "telefono",         False),
+    ("estado_conversacion", "telefono",         True),
+    ("opt_outs",            "telefono",         True),
+    ("tickets",             "telefono_cliente", False),
+    ("deals",               "cliente_telefono", False),
 )
 
 
@@ -614,11 +620,22 @@ async def editar_cliente(
         # Migrar referencias en tablas relacionadas + el propio cliente.
         # Usamos raw SQL porque telefono es parte de la PK en Cliente y SQLAlchemy
         # ORM no permite actualizar PKs directamente.
-        for tabla, columna in _TABLAS_REF_TELEFONO:
+        params = {"nuevo": telefono_nuevo, "viejo": telefono_original, "aid": agent_id}
+        for tabla, columna, pk_compuesta in _TABLAS_REF_TELEFONO:
+            if pk_compuesta:
+                # Borrar la fila vieja si ya existe una para el teléfono nuevo,
+                # para evitar violar la PK compuesta al hacer el UPDATE.
+                await session.execute(
+                    text(f"DELETE FROM {tabla} "
+                         f"WHERE {columna} = :viejo AND agent_id = :aid "
+                         f"AND EXISTS (SELECT 1 FROM {tabla} "
+                         f"            WHERE {columna} = :nuevo AND agent_id = :aid)"),
+                    params,
+                )
             await session.execute(
                 text(f"UPDATE {tabla} SET {columna} = :nuevo "
                      f"WHERE {columna} = :viejo AND agent_id = :aid"),
-                {"nuevo": telefono_nuevo, "viejo": telefono_original, "aid": agent_id},
+                params,
             )
         # Actualizar la fila Cliente al final (cambia PK)
         await session.execute(
