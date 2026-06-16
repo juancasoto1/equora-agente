@@ -3757,6 +3757,29 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             </div><!-- /card-sistema -->
 
             <!-- Próximas integraciones -->
+            <!-- #66 — Diagnóstico catálogo Shopify ↔ Meta Commerce -->
+            <div class="cfg-card" style="margin-bottom:18px">
+              <div class="cfg-card-title" style="margin-bottom:6px">
+                <i data-lucide="search-check" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px;color:var(--voco-brand)"></i>
+                Diagnóstico de catálogo
+              </div>
+              <div style="font-size:.83rem;color:var(--voco-text-muted);margin-bottom:12px;line-height:1.5">
+                Compara tu catálogo Shopify con Meta Commerce. Detecta productos
+                que existen en Shopify pero NO aparecen en el catálogo de WhatsApp,
+                variantes sin SKU, y elementos huérfanos en Meta. Útil cuando los
+                clientes reportan "no veo X producto" en el catálogo del chat.
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+                <button class="btn-primary" onclick="ejecutarDiagnosticoCatalogo()" type="button"
+                  id="btn-diag-catalogo" style="padding:8px 16px;font-size:.85rem">
+                  <i data-lucide="play" style="width:13px;height:13px;vertical-align:-2px;margin-right:5px"></i>
+                  Ejecutar diagnóstico
+                </button>
+                <span id="diag-cat-status" style="font-size:.78rem;color:var(--voco-text-muted)"></span>
+              </div>
+              <div id="diag-cat-result" style="display:none"></div>
+            </div>
+
             <div class="cfg-card" style="border-style:dashed;background:var(--voco-content-bg-alt)">
               <div class="cfg-card-title" style="color:var(--voco-text-muted);margin-bottom:12px">🚀 Próximas integraciones</div>
               <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;font-size:.83rem;color:var(--voco-text-muted)">
@@ -7531,6 +7554,105 @@ async function cargarEstadoSistema() {
 }
 
 /* ── cargarConfiguracion: pide GET /inbox/api/config y rellena indicadores ── */
+/* ── #66 — Diagnóstico catálogo Shopify ↔ Meta ──────────────────────────
+   Dispara el endpoint que cruza ambos catálogos y muestra el resultado
+   estructurado: contadores + listas de issues colapsables. */
+async function ejecutarDiagnosticoCatalogo() {
+  var btn    = document.getElementById('btn-diag-catalogo');
+  var status = document.getElementById('diag-cat-status');
+  var resBox = document.getElementById('diag-cat-result');
+
+  btn.disabled = true;
+  status.textContent = 'Consultando Shopify y Meta…';
+  status.style.color = 'var(--voco-text-muted)';
+  resBox.style.display = 'none';
+
+  try {
+    var r = await fetch('/inbox/api/diagnostico/catalogo', {credentials:'include'});
+    var d = await r.json();
+    if (!d.ok) {
+      status.textContent = '✕ ' + (d.error || 'Error');
+      status.style.color = '#dc2626';
+      btn.disabled = false;
+      return;
+    }
+    _renderDiagnosticoCatalogo(d);
+    status.textContent = '✓ Diagnóstico completado';
+    status.style.color = '#059669';
+  } catch (e) {
+    status.textContent = '✕ Error de red — ' + e.message;
+    status.style.color = '#dc2626';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function _renderDiagnosticoCatalogo(d) {
+  var box = document.getElementById('diag-cat-result');
+  var r = d.resumen || {};
+  var iss = d.issues || {};
+
+  // Tarjetas resumen — colores semánticos según gravedad
+  function card(titulo, valor, tono) {
+    var c = tono === 'ok' ? '#059669'
+          : tono === 'warn' ? '#d97706'
+          : tono === 'bad' ? '#dc2626'
+          : 'var(--voco-text)';
+    return '<div style="background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);'
+      + 'border-radius:8px;padding:10px 14px;flex:1;min-width:130px">'
+      + '<div style="font-size:.72rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">' + titulo + '</div>'
+      + '<div style="font-size:1.3rem;font-weight:700;color:' + c + '">' + valor + '</div>'
+      + '</div>';
+  }
+
+  var resumenHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'
+    + card('Shopify variantes', r.shopify_total_variantes || 0, 'ok')
+    + card('Meta items',        r.meta_total_items || 0, 'ok')
+    + card('Coinciden',         r.matcheados || 0, 'ok')
+    + card('Sin SKU (Shopify)', r.shopify_sin_sku || 0, (r.shopify_sin_sku || 0) > 0 ? 'warn' : 'ok')
+    + card('Faltan en Meta',    r.faltantes_en_meta || 0, (r.faltantes_en_meta || 0) > 0 ? 'bad' : 'ok')
+    + card('Huérfanos en Meta', r.huerfanos_en_meta || 0, (r.huerfanos_en_meta || 0) > 0 ? 'warn' : 'ok')
+    + '</div>';
+
+  var errMeta = d.error_meta ? '<div style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:.8rem;color:#dc2626">Meta API: ' + _msjEscapeHtml(d.error_meta) + ' — los datos de Meta pueden estar incompletos.</div>' : '';
+
+  // Detalle de cada lista
+  function listaIssues(titulo, items, fila) {
+    if (!items || !items.length) return '';
+    var rows = items.slice(0, 25).map(fila).join('');
+    var mas = items.length > 25 ? '<div style="font-size:.74rem;color:var(--voco-text-muted);padding:6px 10px">… y ' + (items.length - 25) + ' más (oculto para no saturar)</div>' : '';
+    return '<details style="margin-bottom:10px;border:1px solid var(--voco-border);border-radius:8px">'
+      + '<summary style="cursor:pointer;padding:10px 14px;font-weight:600;font-size:.84rem;color:var(--voco-text)">' + titulo + ' (' + items.length + ')</summary>'
+      + '<div style="border-top:1px solid var(--voco-border);max-height:280px;overflow-y:auto">' + rows + mas + '</div>'
+      + '</details>';
+  }
+
+  var issuesHtml = ''
+    + listaIssues('🛒 Variantes Shopify SIN SKU (no aparecerán en catálogo WhatsApp)',
+        iss.shopify_sin_sku,
+        function(v) { return '<div style="padding:8px 14px;border-bottom:1px solid var(--voco-border);font-size:.82rem;color:var(--voco-text)"><b>' + _msjEscapeHtml(v.titulo) + '</b>'
+          + (v.presentacion ? ' · <span style="color:var(--voco-text-muted)">' + _msjEscapeHtml(v.presentacion) + '</span>' : '')
+          + '</div>'; })
+    + listaIssues('❌ Productos en Shopify FALTANTES en Meta (no aparecen en catálogo WhatsApp)',
+        iss.faltantes_en_meta,
+        function(v) { return '<div style="padding:8px 14px;border-bottom:1px solid var(--voco-border);font-size:.82rem;color:var(--voco-text)"><b>' + _msjEscapeHtml(v.titulo) + '</b>'
+          + (v.presentacion ? ' · <span style="color:var(--voco-text-muted)">' + _msjEscapeHtml(v.presentacion) + '</span>' : '')
+          + ' · <code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px;font-size:.74rem">SKU: ' + _msjEscapeHtml(v.sku) + '</code></div>'; })
+    + listaIssues('👻 Huérfanos en Meta (existen en Meta pero no en Shopify)',
+        iss.huerfanos_en_meta,
+        function(v) { return '<div style="padding:8px 14px;border-bottom:1px solid var(--voco-border);font-size:.82rem;color:var(--voco-text)"><b>' + _msjEscapeHtml(v.name) + '</b>'
+          + ' · <code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px;font-size:.74rem">retailer_id: ' + _msjEscapeHtml(v.retailer_id) + '</code></div>'; });
+
+  var allGood = !iss.shopify_sin_sku?.length && !iss.faltantes_en_meta?.length && !iss.huerfanos_en_meta?.length;
+  var statusBanner = allGood
+    ? '<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#059669;font-size:.85rem;font-weight:600">✓ Catálogos perfectamente sincronizados — todos los productos coinciden.</div>'
+    : '';
+
+  box.innerHTML = resumenHtml + errMeta + statusBanner + issuesHtml;
+  box.style.display = 'block';
+  if (window.lucide) window.lucide.createIcons();
+}
+
 async function cargarConfiguracion() {
   // Mapeo campo_db → id del <input> / <select>
   var fieldMap = {

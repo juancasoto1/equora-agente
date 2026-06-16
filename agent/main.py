@@ -6159,6 +6159,139 @@ async def api_shopify_sincronizar_webhooks(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# #66 — Diagnóstico de catálogo Shopify ↔ Meta Commerce
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/inbox/api/diagnostico/catalogo")
+async def api_diagnostico_catalogo(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Compara los productos de Shopify con los del catálogo Meta Commerce.
+
+    Para el flujo de carrito nativo WhatsApp, cada producto en Shopify debe
+    tener su variante registrada en Meta Commerce con el SKU como retailer_id.
+    Si no coincide, ese producto NO aparece en el catálogo de WhatsApp aunque
+    exista en Shopify — el cliente no lo ve.
+
+    Causas comunes detectadas:
+      - SKU vacío en una variante de Shopify
+      - Producto en Shopify pero todavía no sincronizado a Meta
+      - retailer_id en Meta no corresponde a ningún SKU (huérfano)
+    """
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    from agent.tools import (
+        _resolver_admin_token, _resolver_store,
+        _resolver_meta_catalog_id, _resolver_meta_access_token,
+        META_API_VERSION,
+    )
+    from agent.shopify_admin import obtener_productos_admin
+
+    admin_tok   = await _resolver_admin_token()
+    store       = await _resolver_store()
+    meta_cat_id = await _resolver_meta_catalog_id()
+    meta_token  = await _resolver_meta_access_token()
+
+    if not admin_tok or not store:
+        return JSONResponse(
+            {"ok": False, "error": "Shopify no configurado (falta admin_token o store)"},
+            status_code=400,
+        )
+    if not meta_cat_id or not meta_token:
+        return JSONResponse(
+            {"ok": False, "error": "Meta Commerce no configurado (falta catalog_id o token)"},
+            status_code=400,
+        )
+
+    # 1) Cargar productos de Shopify
+    sh_resp = await obtener_productos_admin(store, admin_tok)
+    sh_edges = ((sh_resp.get("data") or {}).get("products") or {}).get("edges") or []
+    shopify_variantes: list[dict] = []
+    skus_shopify: set[str] = set()
+    sin_sku: list[dict] = []
+    for e in sh_edges:
+        prod = e.get("node") or {}
+        titulo_prod = prod.get("title", "")
+        for ve in (prod.get("variants") or {}).get("edges", []):
+            v = ve.get("node") or {}
+            sku = (v.get("sku") or "").strip()
+            entry = {
+                "shopify_product_id": prod.get("id", ""),
+                "shopify_variant_id": v.get("id", ""),
+                "titulo":             titulo_prod,
+                "presentacion":       v.get("title", ""),
+                "sku":                sku,
+            }
+            shopify_variantes.append(entry)
+            if sku:
+                skus_shopify.add(sku)
+            else:
+                sin_sku.append(entry)
+
+    # 2) Cargar catálogo Meta — paginado
+    meta_items: list[dict] = []
+    url = f"https://graph.facebook.com/{META_API_VERSION}/{meta_cat_id}/products"
+    params = {
+        "fields": "retailer_id,name,price,availability",
+        "limit":  200,
+        "access_token": meta_token,
+    }
+    error_meta = ""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            while url:
+                r = await client.get(url, params=params)
+                if r.status_code != 200:
+                    error_meta = f"Meta API {r.status_code}: {r.text[:200]}"
+                    break
+                data = r.json() or {}
+                meta_items.extend(data.get("data", []))
+                url = (data.get("paging") or {}).get("next")
+                params = {}
+    except Exception as e:
+        error_meta = str(e)
+
+    retailer_ids_meta = {(i.get("retailer_id") or "").strip() for i in meta_items}
+
+    # 3) Cruzar: qué Shopify-variants NO están en Meta (= no aparecen en el catálogo WA)
+    faltantes_en_meta = [
+        v for v in shopify_variantes
+        if v["sku"] and v["sku"] not in retailer_ids_meta
+    ]
+    # 4) Huérfanos en Meta: retailer_ids que no corresponden a ningún SKU Shopify
+    huerfanos_en_meta = [
+        {"retailer_id": (i.get("retailer_id") or "").strip(),
+         "name":        i.get("name", ""),
+         "availability": i.get("availability", "")}
+        for i in meta_items
+        if (i.get("retailer_id") or "").strip() and (i.get("retailer_id") or "").strip() not in skus_shopify
+    ]
+
+    return JSONResponse({
+        "ok": True,
+        "error_meta": error_meta,  # vacío si fue OK; si falló, los listados Meta serán parciales
+        "resumen": {
+            "shopify_total_variantes": len(shopify_variantes),
+            "shopify_con_sku":         len(skus_shopify),
+            "shopify_sin_sku":         len(sin_sku),
+            "meta_total_items":        len(meta_items),
+            "matcheados":              sum(1 for v in shopify_variantes if v["sku"] and v["sku"] in retailer_ids_meta),
+            "faltantes_en_meta":       len(faltantes_en_meta),
+            "huerfanos_en_meta":       len(huerfanos_en_meta),
+        },
+        "issues": {
+            # Limitar listados a 50 cada uno para no inflar el JSON; el resumen ya tiene los totales
+            "shopify_sin_sku":   sin_sku[:50],
+            "faltantes_en_meta": faltantes_en_meta[:50],
+            "huerfanos_en_meta": huerfanos_en_meta[:50],
+        },
+    })
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PROMPT EDITOR — leer, guardar y mejorar el system prompt con IA
 # ══════════════════════════════════════════════════════════════════════════════
 
