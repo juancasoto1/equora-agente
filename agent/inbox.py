@@ -3085,7 +3085,27 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                       <button class="btn-secondary" style="font-size:.78rem;padding:5px 10px" onclick="document.getElementById('transferir-wrap').style.display='none'">✕</button>
                     </div>
                   </div>
-                  <div style="display:flex;gap:8px">
+                  <div style="display:flex;gap:8px;position:relative">
+                    <!-- Botón Adjuntar (#68) — paridad con Conversaciones -->
+                    <div id="esc-attach-wrap" style="position:relative;align-self:flex-end">
+                      <button type="button" id="esc-attach-btn" onclick="escToggleAttachMenu()"
+                        aria-label="Adjuntar archivo" title="Adjuntar archivo"
+                        style="background:none;border:1px solid var(--voco-border);border-radius:8px;
+                        font-size:1.1rem;padding:0 10px;cursor:pointer;height:36px">📎</button>
+                      <div id="esc-attach-menu" style="display:none;position:absolute;bottom:42px;left:0;
+                        background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;
+                        box-shadow:0 4px 16px rgba(0,0,0,.18);padding:6px;min-width:200px;z-index:50">
+                        <div class="attach-opt" onclick="escAdjuntar('image')">
+                          <span style="background:#7c3aed">🖼</span> Imagen
+                        </div>
+                        <div class="attach-opt" onclick="escAdjuntar('video')">
+                          <span style="background:#dc2626">🎥</span> Video
+                        </div>
+                        <div class="attach-opt" onclick="escAdjuntar('document')">
+                          <span style="background:#2563eb">📄</span> Documento
+                        </div>
+                      </div>
+                    </div>
                     <textarea id="esc-reply-input" placeholder="Escribe tu respuesta al cliente…"
                       style="flex:1;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.85rem;
                       resize:none;height:60px;outline:none;font-family:inherit"
@@ -8620,6 +8640,40 @@ async function escEnviarRespuesta() {
   } catch(e) { alert('Error de red'); input.value = texto; }
 }
 
+/* ── #68 — Adjuntar archivos desde Escalaciones ─────────────────
+   Paridad con Conversaciones. Reutilizamos el modal-caption y el
+   endpoint /inbox/api/responder/media, pero con dos diferencias:
+   1) El teléfono destino es _escTicketActual.telefono_cliente (no TEL global)
+   2) Tras enviar, refrescamos la vista del ticket activo (no Conversaciones)
+
+   Implementación: el botón abre nuestro propio menú. Cada opción guarda
+   el teléfono en una variable global escAttachTel y lanza el flujo
+   existente — confirmarEnvioMedia revisa esa variable antes que TEL. */
+var _escAttachTel = null;
+
+function escToggleAttachMenu() {
+  if (!_escTicketActual) return;
+  var m = document.getElementById('esc-attach-menu');
+  if (m) m.style.display = m.style.display === 'none' ? '' : 'none';
+}
+
+// Cerrar al click fuera (mismo patrón que toggleAttachMenu del composer principal)
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('esc-attach-menu');
+  var btn  = document.getElementById('esc-attach-btn');
+  if (menu && menu.style.display !== 'none' && e.target !== btn && !menu.contains(e.target)) {
+    menu.style.display = 'none';
+  }
+});
+
+function escAdjuntar(tipo) {
+  if (!_escTicketActual) return;
+  document.getElementById('esc-attach-menu').style.display = 'none';
+  // Marcamos el teléfono del ticket para que confirmarEnvioMedia lo use
+  _escAttachTel = _escTicketActual.telefono_cliente;
+  abrirSelectorMedia(tipo);  // reusa el flujo existente — abre file picker + modal-caption
+}
+
 /* ══════════════════════════════════════════════════════════════
    SPRINT 1 — GESTIÓN DE EQUIPO (Usuarios Internos)
    ══════════════════════════════════════════════════════════════ */
@@ -9175,7 +9229,10 @@ function cerrarModalCaption() {
 }
 
 async function confirmarEnvioMedia() {
-  if (!_mediaFile || !TEL) return;
+  // _escAttachTel se setea cuando el adjunto se inició desde Escalaciones (#68);
+  // tiene prioridad sobre TEL para rutar el media al ticket correcto.
+  var targetTel = _escAttachTel || TEL;
+  if (!_mediaFile || !targetTel) return;
   var btn = document.getElementById('cap-enviar-btn');
   var prog = document.getElementById('cap-progress');
   btn.disabled = true;
@@ -9184,7 +9241,7 @@ async function confirmarEnvioMedia() {
 
   var fd = new FormData();
   fd.append('file',     _mediaFile);
-  fd.append('telefono', TEL);
+  fd.append('telefono', targetTel);
   fd.append('caption',  document.getElementById('cap-texto').value || '');
 
   try {
@@ -9194,7 +9251,18 @@ async function confirmarEnvioMedia() {
     var d = await r.json();
     if (d.ok) {
       cerrarModalCaption();
-      loadMsgs(true);  // recargar para ver la burbuja
+      // Refrescar la vista correcta — la de Conversaciones si vino de ahí,
+      // o el detalle del ticket en Escalaciones (#68).
+      if (_escAttachTel && _escTicketActual) {
+        try {
+          var rh = await fetch('/inbox/api/tickets/' + _escTicketActual.id + '/historial', {credentials:'include'});
+          var dh = await rh.json();
+          _escRenderMensajes(dh.mensajes || []);
+        } catch(e) { /* la burbuja llegará en el próximo polling */ }
+        _escAttachTel = null;
+      } else {
+        loadMsgs(true);  // recargar para ver la burbuja
+      }
     } else {
       prog.textContent = '❌ ' + (d.error || 'Error');
       btn.disabled = false;
