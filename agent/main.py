@@ -6256,34 +6256,44 @@ async def api_diagnostico_catalogo(
 
     retailer_ids_meta = {(i.get("retailer_id") or "").strip() for i in meta_items}
 
-    # 3) Cruzar: qué Shopify-variants NO están en Meta (= no aparecen en el catálogo WA)
-    faltantes_en_meta = [
-        v for v in shopify_variantes
-        if v["sku"] and v["sku"] not in retailer_ids_meta
-    ]
-    # 4) Huérfanos en Meta: retailer_ids que no corresponden a ningún SKU Shopify
-    huerfanos_en_meta = [
-        {"retailer_id": (i.get("retailer_id") or "").strip(),
-         "name":        i.get("name", ""),
-         "availability": i.get("availability", "")}
-        for i in meta_items
-        if (i.get("retailer_id") or "").strip() and (i.get("retailer_id") or "").strip() not in skus_shopify
-    ]
+    # Si la llamada a Meta falló, NO podemos sacar conclusiones sobre faltantes
+    # ni huérfanos — la lista de Meta está vacía o incompleta. Reportar "faltan
+    # 56 productos" cuando en realidad no pudimos leer Meta es peor que no
+    # reportar nada. Marcamos meta_disponible=False y omitimos esos contadores.
+    meta_disponible = not bool(error_meta) and len(meta_items) > 0
+
+    if meta_disponible:
+        faltantes_en_meta = [
+            v for v in shopify_variantes
+            if v["sku"] and v["sku"] not in retailer_ids_meta
+        ]
+        huerfanos_en_meta = [
+            {"retailer_id":  (i.get("retailer_id") or "").strip(),
+             "name":         i.get("name", ""),
+             "availability": i.get("availability", "")}
+            for i in meta_items
+            if (i.get("retailer_id") or "").strip() and (i.get("retailer_id") or "").strip() not in skus_shopify
+        ]
+        matcheados = sum(1 for v in shopify_variantes if v["sku"] and v["sku"] in retailer_ids_meta)
+    else:
+        faltantes_en_meta = []
+        huerfanos_en_meta = []
+        matcheados = None  # señal al frontend de "desconocido"
 
     return JSONResponse({
         "ok": True,
-        "error_meta": error_meta,  # vacío si fue OK; si falló, los listados Meta serán parciales
+        "error_meta":      error_meta,
+        "meta_disponible": meta_disponible,
         "resumen": {
             "shopify_total_variantes": len(shopify_variantes),
             "shopify_con_sku":         len(skus_shopify),
             "shopify_sin_sku":         len(sin_sku),
-            "meta_total_items":        len(meta_items),
-            "matcheados":              sum(1 for v in shopify_variantes if v["sku"] and v["sku"] in retailer_ids_meta),
-            "faltantes_en_meta":       len(faltantes_en_meta),
-            "huerfanos_en_meta":       len(huerfanos_en_meta),
+            "meta_total_items":        len(meta_items) if meta_disponible else None,
+            "matcheados":              matcheados,
+            "faltantes_en_meta":       len(faltantes_en_meta) if meta_disponible else None,
+            "huerfanos_en_meta":       len(huerfanos_en_meta) if meta_disponible else None,
         },
         "issues": {
-            # Limitar listados a 50 cada uno para no inflar el JSON; el resumen ya tiene los totales
             "shopify_sin_sku":   sin_sku[:50],
             "faltantes_en_meta": faltantes_en_meta[:50],
             "huerfanos_en_meta": huerfanos_en_meta[:50],

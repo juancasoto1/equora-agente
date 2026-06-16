@@ -7591,13 +7591,16 @@ function _renderDiagnosticoCatalogo(d) {
   var box = document.getElementById('diag-cat-result');
   var r = d.resumen || {};
   var iss = d.issues || {};
+  var metaOK = !!d.meta_disponible;
 
-  // Tarjetas resumen — colores semánticos según gravedad
+  // Tarjetas resumen — colores semánticos según gravedad. Si Meta no respondió,
+  // muestra "—" en lugar de 0 (sería engañoso decir "faltan 56" cuando
+  // realmente no pudimos leer Meta).
   function card(titulo, valor, tono) {
     var c = tono === 'ok' ? '#059669'
           : tono === 'warn' ? '#d97706'
           : tono === 'bad' ? '#dc2626'
-          : 'var(--voco-text)';
+          : 'var(--voco-text-muted)';
     return '<div style="background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);'
       + 'border-radius:8px;padding:10px 14px;flex:1;min-width:130px">'
       + '<div style="font-size:.72rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">' + titulo + '</div>'
@@ -7605,16 +7608,37 @@ function _renderDiagnosticoCatalogo(d) {
       + '</div>';
   }
 
+  function metaCard(titulo, valor, tono) {
+    return metaOK ? card(titulo, valor, tono) : card(titulo, '—', 'muted');
+  }
+
   var resumenHtml = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'
     + card('Shopify variantes', r.shopify_total_variantes || 0, 'ok')
-    + card('Meta items',        r.meta_total_items || 0, 'ok')
-    + card('Coinciden',         r.matcheados || 0, 'ok')
+    + metaCard('Meta items', r.meta_total_items || 0, 'ok')
+    + metaCard('Coinciden', r.matcheados || 0, 'ok')
     + card('Sin SKU (Shopify)', r.shopify_sin_sku || 0, (r.shopify_sin_sku || 0) > 0 ? 'warn' : 'ok')
-    + card('Faltan en Meta',    r.faltantes_en_meta || 0, (r.faltantes_en_meta || 0) > 0 ? 'bad' : 'ok')
-    + card('Huérfanos en Meta', r.huerfanos_en_meta || 0, (r.huerfanos_en_meta || 0) > 0 ? 'warn' : 'ok')
+    + metaCard('Faltan en Meta', r.faltantes_en_meta || 0, (r.faltantes_en_meta || 0) > 0 ? 'bad' : 'ok')
+    + metaCard('Huérfanos en Meta', r.huerfanos_en_meta || 0, (r.huerfanos_en_meta || 0) > 0 ? 'warn' : 'ok')
     + '</div>';
 
-  var errMeta = d.error_meta ? '<div style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:.8rem;color:#dc2626">Meta API: ' + _msjEscapeHtml(d.error_meta) + ' — los datos de Meta pueden estar incompletos.</div>' : '';
+  // Mensaje específico cuando Meta falló: explica que el catálogo del cliente
+  // PUEDE seguir funcionando (Meta lo sirve directo a WhatsApp sin pasar por
+  // este token), pero Voco no puede auditarlo desde el backend.
+  var errMeta = '';
+  if (!metaOK) {
+    var esPermiso = (d.error_meta || '').indexOf('#100') >= 0 || (d.error_meta || '').indexOf('approved') >= 0;
+    errMeta = '<div style="background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.3);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:.84rem;color:var(--voco-text);line-height:1.55">'
+      + '<div style="font-weight:600;color:#d97706;margin-bottom:4px">⚠ No se pudo leer el catálogo Meta</div>'
+      + '<div style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:8px">'
+      + (esPermiso
+          ? 'Tu token de Meta no tiene el permiso <b>catalog_management</b>. Esto NO afecta lo que ven los clientes en WhatsApp — Meta sirve el catálogo directo al cliente. Pero impide a Voco auditarlo desde acá.'
+          : 'Error de Meta API: los conteos de "Faltan en Meta" y "Huérfanos" no se calcularon.')
+      + '</div>'
+      + (esPermiso
+          ? '<div style="font-size:.74rem;color:var(--voco-text-muted)">Cómo arreglarlo: regenera el token de Meta en Business Settings agregando el permiso <code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px">catalog_management</code> y actualízalo en Configuración → Integraciones → Meta.</div>'
+          : '<div style="font-size:.72rem;color:var(--voco-text-muted);font-family:monospace;word-break:break-word">' + _msjEscapeHtml(d.error_meta) + '</div>')
+      + '</div>';
+  }
 
   // Detalle de cada lista
   function listaIssues(titulo, items, fila) {
