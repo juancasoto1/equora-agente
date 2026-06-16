@@ -7626,16 +7626,23 @@ function _renderDiagnosticoCatalogo(d) {
   // este token), pero Voco no puede auditarlo desde el backend.
   var errMeta = '';
   if (!metaOK) {
-    var esPermiso = (d.error_meta || '').indexOf('#100') >= 0 || (d.error_meta || '').indexOf('approved') >= 0;
+    var esAccess = (d.error_meta || '').indexOf('#100') >= 0 || (d.error_meta || '').indexOf('approved') >= 0;
     errMeta = '<div style="background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.3);border-radius:8px;padding:12px 14px;margin-bottom:12px;font-size:.84rem;color:var(--voco-text);line-height:1.55">'
-      + '<div style="font-weight:600;color:#d97706;margin-bottom:4px">⚠ No se pudo leer el catálogo Meta</div>'
-      + '<div style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:8px">'
-      + (esPermiso
-          ? 'Tu token de Meta no tiene el permiso <b>catalog_management</b>. Esto NO afecta lo que ven los clientes en WhatsApp — Meta sirve el catálogo directo al cliente. Pero impide a Voco auditarlo desde acá.'
-          : 'Error de Meta API: los conteos de "Faltan en Meta" y "Huérfanos" no se calcularon.')
+      + '<div style="font-weight:600;color:#d97706;margin-bottom:6px">⚠ No se pudo leer el catálogo de Meta</div>'
+      + '<div style="font-size:.8rem;color:var(--voco-text);margin-bottom:8px">'
+      + (esAccess
+          ? 'El token de Voco no tiene acceso a ese catálogo. <b>Tus clientes siguen viendo el catálogo en WhatsApp normalmente</b> — Meta lo sirve directo, no pasa por nuestro backend. Esto solo impide auditarlo desde aquí.'
+          : 'Los conteos de "Faltan en Meta" y "Huérfanos" no se calcularon por un error de la API de Meta.')
       + '</div>'
-      + (esPermiso
-          ? '<div style="font-size:.74rem;color:var(--voco-text-muted)">Cómo arreglarlo: regenera el token de Meta en Business Settings agregando el permiso <code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px">catalog_management</code> y actualízalo en Configuración → Integraciones → Meta.</div>'
+      + (esAccess
+          ? '<div style="font-size:.78rem;color:var(--voco-text);margin-bottom:6px"><b>Cómo arreglarlo</b> (en Meta Business Settings):</div>'
+            + '<ol style="font-size:.76rem;color:var(--voco-text-muted);margin:0;padding-left:20px;line-height:1.7">'
+            + '<li>Ve a <b>Configuración del negocio → Cuentas → Catálogos</b> y abre tu catálogo</li>'
+            + '<li>Click en <b>Usuarios asignados</b> (o "Personas y socios") → agregar tu System User con <b>Control total</b></li>'
+            + '<li>En <b>Apps conectadas</b>, verifica que esté tu app de WhatsApp Business</li>'
+            + '<li>Si todo está bien, verifica que el <code style="background:var(--voco-content-bg-alt);padding:1px 5px;border-radius:3px">META_CATALOG_ID</code> en Configuración → Integraciones → Meta coincida con el ID del catálogo en Business Settings</li>'
+            + '</ol>'
+            + '<div style="font-size:.72rem;color:var(--voco-text-muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--voco-border)">Error literal: <code style="font-family:monospace;word-break:break-word">' + _msjEscapeHtml(d.error_meta) + '</code></div>'
           : '<div style="font-size:.72rem;color:var(--voco-text-muted);font-family:monospace;word-break:break-word">' + _msjEscapeHtml(d.error_meta) + '</div>')
       + '</div>';
   }
