@@ -647,6 +647,92 @@ async def editar_cliente(
         return {"ok": True, "error": None, "telefono": telefono_nuevo}
 
 
+async def obtener_perfil_enriquecido(telefono: str, agent_id: int = 1) -> dict:
+    """Perfil compacto del cliente para alimentar el contexto del LLM (#65).
+
+    Inferimos en una sola query las señales que más cambian el tono y la
+    estrategia de respuesta del agente:
+
+      segmento       : activo (<30d) / tibio (30-90d) / frio (>90d) / nuevo (sin mensajes)
+                       Mismo umbral que el listado de Clientes — fuente de verdad única.
+      tier           : nuevo (0 pedidos) / recurrente (1-4) / vip (5+)
+      total_mensajes : proxy de engagement histórico (todo el chat acumulado)
+      dias_inactivo  : cuántos días desde el último mensaje del cliente
+      ticket_abierto : True si hay una escalación activa (no resuelta)
+      es_opt_out     : si pidió baja de difusiones
+
+    Diseñado para correr en ~3-5ms en hot path (cada respuesta del LLM).
+    """
+    ahora = datetime.utcnow()
+    perfil = {
+        "segmento":       "nuevo",
+        "tier":           "nuevo",
+        "total_mensajes": 0,
+        "dias_inactivo":  None,
+        "ticket_abierto": False,
+        "es_opt_out":     False,
+    }
+    async with async_session() as session:
+        # Último mensaje + total — una sola query agregada
+        r = await session.execute(
+            select(
+                func.max(Mensaje.timestamp).label("last_msg"),
+                func.count(Mensaje.id).label("total_msgs"),
+            ).where(Mensaje.agent_id == agent_id, Mensaje.telefono == telefono)
+        )
+        fila = r.one()
+        last_msg = fila.last_msg
+        total = fila.total_msgs or 0
+        perfil["total_mensajes"] = total
+
+        # Segmento por días desde el último mensaje
+        if last_msg:
+            if isinstance(last_msg, str):
+                try:
+                    last_msg = datetime.fromisoformat(last_msg.replace("Z", ""))
+                except Exception:
+                    last_msg = None
+            if last_msg:
+                dias = (ahora - last_msg).days
+                perfil["dias_inactivo"] = dias
+                if dias < 30:
+                    perfil["segmento"] = "activo"
+                elif dias < 90:
+                    perfil["segmento"] = "tibio"
+                else:
+                    perfil["segmento"] = "frio"
+
+        # Tier por pedidos realizados
+        cliente = await _get_cliente(session, telefono, agent_id)
+        if cliente:
+            pedidos = cliente.pedidos_realizados or 0
+            if pedidos >= 5:
+                perfil["tier"] = "vip"
+            elif pedidos >= 1:
+                perfil["tier"] = "recurrente"
+
+        # Ticket abierto — cualquier estado no resuelto
+        rt = await session.execute(
+            select(func.count(Ticket.id)).where(
+                Ticket.agent_id == agent_id,
+                Ticket.telefono_cliente == telefono,
+                Ticket.estado != "resuelto",
+            )
+        )
+        perfil["ticket_abierto"] = (rt.scalar() or 0) > 0
+
+        # Opt-out activo
+        ro = await session.execute(
+            select(func.count(OptOut.telefono)).where(
+                OptOut.agent_id == agent_id,
+                OptOut.telefono == telefono,
+            )
+        )
+        perfil["es_opt_out"] = (ro.scalar() or 0) > 0
+
+    return perfil
+
+
 async def obtener_cliente(telefono: str, agent_id: int = 1) -> dict | None:
     """Devuelve los datos guardados del cliente o None si no existe."""
     async with async_session() as session:

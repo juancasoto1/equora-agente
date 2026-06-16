@@ -5,7 +5,7 @@ import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from agent.tools import obtener_catalogo_shopify, obtener_costo_envio, obtener_umbral_envio_gratis
-from agent.memory import obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo, get_config_value
+from agent.memory import obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo, get_config_value, obtener_perfil_enriquecido
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -156,6 +156,41 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
             system_prompt = system_prompt + "\n\n" + catalogo
 
     if telefono:
+        # ── Perfil enriquecido del cliente (#65) ──────────────────────────────
+        # Señales compactas que más cambian la estrategia de respuesta:
+        # segmento (engagement), tier (lifetime value), ticket abierto.
+        # Sin esto, el LLM trata a un VIP con 12 pedidos igual que a alguien
+        # que escribe por primera vez — pierde la oportunidad de adaptar tono.
+        if _mod(modules, "client_memory"):
+            perfil = await obtener_perfil_enriquecido(telefono, agent_id)
+            partes = []
+            seg = perfil["segmento"]
+            tier = perfil["tier"]
+            dias = perfil["dias_inactivo"]
+
+            if seg == "nuevo":
+                partes.append("Cliente NUEVO: primera vez escribiendo. Explica el flujo con claridad y bájale fricción al primer pedido.")
+            elif seg == "activo":
+                partes.append(f"Cliente ACTIVO (último contacto hace {dias}d). Trato cercano, ya conoce el flujo.")
+            elif seg == "tibio":
+                partes.append(f"Cliente TIBIO (sin escribir hace {dias}d). Reactivación amable, recuérdale por qué le gustaron tus productos.")
+            elif seg == "frio":
+                partes.append(f"Cliente FRÍO (sin escribir hace {dias}d). Bienvenida calurosa, evita asumir que recuerda detalles de antes.")
+
+            if tier == "vip":
+                partes.append("Es VIP (5+ pedidos). Reconoce su recurrencia, trato premium, ofrécele lo mejor.")
+            elif tier == "recurrente":
+                partes.append("Es comprador RECURRENTE. Salta intro larga, ve directo a lo que necesita.")
+
+            if perfil["ticket_abierto"]:
+                partes.append("⚠️ TIENE UN TICKET DE SOPORTE ABIERTO con un humano. NO intentes cerrar venta nueva — pregunta si necesita algo nuevo o sigue con su caso pendiente.")
+
+            if perfil["es_opt_out"]:
+                partes.append("Está en opt-out de difusiones — no le ofrezcas suscribirse a campañas.")
+
+            if partes:
+                system_prompt += "\n\n## Perfil del cliente (resumen para adaptar tono)\n- " + "\n- ".join(partes)
+
         # ── Perfil del cliente (toggle: client_memory) ────────────────────────
         if _mod(modules, "client_memory"):
             cliente = await obtener_cliente(telefono, agent_id)
