@@ -1713,6 +1713,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
            onclick="showSec('plantillas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('plantillas')">
         <span class="ni" aria-hidden="true"><i data-lucide="file-text" style="width:16px;height:16px;vertical-align:-3px"></i></span> Plantillas
       </div>
+      <div class="nav-item" role="button" tabindex="0" data-sec="mensajes"
+           onclick="showSec('mensajes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('mensajes')">
+        <span class="ni" aria-hidden="true"><i data-lucide="message-square-text" style="width:16px;height:16px;vertical-align:-3px"></i></span> Mensajes
+      </div>
       <div class="nav-item" role="button" tabindex="0" data-sec="metricas"
            onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')">
         <span class="ni" aria-hidden="true"><i data-lucide="bar-chart-3" style="width:16px;height:16px;vertical-align:-3px"></i></span> Métricas
@@ -2696,6 +2700,48 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       </div><!-- /sec-metricas -->
 
       <!-- ═══════════════════════════════════════
+           SECCIÓN: MENSAJES DEL SISTEMA (#29)
+           Antes vivía como tab dentro de Configuración — los merchants
+           no lo encontraban. Promovido a sección top-level del sidebar.
+           ═══════════════════════════════════════ -->
+      <div class="sec sec-light" id="sec-mensajes">
+        <div class="sec-hdr">
+          <div>
+            <h1><i data-lucide="message-square-text" style="width:20px;height:20px;vertical-align:-4px;margin-right:4px;color:var(--voco-brand)"></i> Mensajes</h1>
+            <p style="color:var(--voco-text-muted);font-size:.85rem;margin:0">Personaliza los mensajes que tu agente envía automáticamente a tus clientes.</p>
+          </div>
+        </div>
+        <div class="sec-body" style="padding:24px;overflow-y:auto">
+          <div style="max-width:900px">
+            <p style="margin:0 0 18px;color:var(--voco-text-muted);font-size:.86rem;line-height:1.55">
+              Cada mensaje se puede editar libremente o desactivar — si tu negocio
+              no necesita alguno (por ejemplo, no manejas pedido mínimo o no
+              quieres enviar recordatorios), apágalo con el interruptor y el
+              agente dejará de enviarlo.
+            </p>
+
+            <!-- Barra de filtros: chips por categoría + búsqueda -->
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+              <div id="msj-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+              <div style="flex:1;min-width:180px;position:relative">
+                <i data-lucide="search" style="width:14px;height:14px;position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--voco-text-muted)"></i>
+                <input id="msj-buscar" type="text" placeholder="Buscar mensaje…"
+                  oninput="msjFiltrar()"
+                  style="width:100%;padding:8px 12px 8px 30px;border:1px solid var(--voco-border);border-radius:8px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.82rem;outline:none;box-sizing:border-box">
+              </div>
+            </div>
+
+            <!-- Estado de carga / lista de mensajes (se rellena via JS) -->
+            <div id="msj-lista">
+              <div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">
+                Cargando mensajes…
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /sec-mensajes -->
+
+      <!-- ═══════════════════════════════════════
            SECCIÓN: CLIENTES
            ═══════════════════════════════════════ -->
       <div class="sec sec-light" id="sec-clientes">
@@ -3194,7 +3240,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()"><i data-lucide="brain" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Prompt</div>
             <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()"><i data-lucide="flask-conical" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar</div>
             <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Templates</div>
-            <div class="cfg-tab" onclick="cfgTab('mensajes',this);cargarMensajes()"><i data-lucide="message-square-text" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Mensajes</div>
+            <!-- Mensajes promovido a sección top-level (#29). Antes vivía aquí como tab. -->
             <div class="cfg-tab" onclick="cfgTab('promociones',this);cargarPromocion()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Promociones</div>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)"><i data-lucide="book-open" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Documentación</div>
           </div>
@@ -3967,40 +4013,9 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             </div>
           </div><!-- /pane templates -->
 
-          <!-- ── Pane: Mensajes (sistema, configurables por agente — #28) ── -->
-          <div class="cfg-pane" id="cfg-pane-mensajes" style="padding:24px;overflow-y:auto">
-            <div style="max-width:900px">
-              <h2 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem">
-                <i data-lucide="message-square-text" style="width:18px;height:18px;vertical-align:-3px;margin-right:6px;color:var(--voco-brand)"></i>
-                Mensajes del sistema
-              </h2>
-              <p style="margin:0 0 18px;color:var(--voco-text-muted);font-size:.86rem;line-height:1.55">
-                Personaliza los mensajes que tu agente envía automáticamente
-                a tus clientes. Si tu negocio no necesita alguno (por ejemplo,
-                no manejas pedido mínimo o no quieres enviar recordatorios),
-                puedes <b>desactivarlo</b> con el interruptor — el agente no
-                lo enviará.
-              </p>
-
-              <!-- Barra de filtros: chips por categoría + búsqueda -->
-              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
-                <div id="msj-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-                <div style="flex:1;min-width:180px;position:relative">
-                  <i data-lucide="search" style="width:14px;height:14px;position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--voco-text-muted)"></i>
-                  <input id="msj-buscar" type="text" placeholder="Buscar mensaje…"
-                    oninput="msjFiltrar()"
-                    style="width:100%;padding:8px 12px 8px 30px;border:1px solid var(--voco-border);border-radius:8px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.82rem;outline:none;box-sizing:border-box">
-                </div>
-              </div>
-
-              <!-- Estado de carga / lista de mensajes (se rellena via JS) -->
-              <div id="msj-lista">
-                <div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">
-                  Cargando mensajes…
-                </div>
-              </div>
-            </div>
-          </div><!-- /pane mensajes -->
+          <!-- Pane Mensajes removido (#29) — ahora vive en sec-mensajes top-level.
+               Si llega un user con un link viejo a #cfg-pane-mensajes, el JS
+               showSec('mensajes') lo lleva a la sección correcta. -->
 
           <!-- ── Pane: Promociones (código descuento post-venta) ── -->
           <div class="cfg-pane" id="cfg-pane-promociones" style="padding:24px;overflow-y:auto">
@@ -4406,6 +4421,7 @@ function showSec(id) {
     if (id === 'metricas')      { cargarMetricas(); }
     if (id === 'clientes')      { cargarClientes(); }
     if (id === 'equipo')        { cargarEquipo(); }
+    if (id === 'mensajes')      { cargarMensajes(); }
     if (id === 'configuracion') { cargarConfiguracion(); cargarEstadoSistema(); }
     if (id === 'escalaciones')  { escCargarLista(); }
   }
@@ -4555,6 +4571,7 @@ async function cambiarAgenteActivo(nuevoId) {
     metricas:      function(){ if(typeof cargarMetricas==='function')cargarMetricas(); },
     clientes:      function(){ if(typeof cargarClientes==='function')cargarClientes(); },
     equipo:        function(){ if(typeof cargarEquipo==='function')cargarEquipo(); },
+    mensajes:      function(){ if(typeof cargarMensajes==='function')cargarMensajes(); },
     configuracion: function(){ if(typeof cargarConfiguracion==='function')cargarConfiguracion(); if(typeof cargarEstadoSistema==='function')cargarEstadoSistema(); },
     escalaciones:  function(){ if(typeof escCargarLista==='function')escCargarLista(); },
   };
@@ -4563,7 +4580,8 @@ async function cambiarAgenteActivo(nuevoId) {
     _secCargadas[sec] = true;
   }
   if (sec === 'configuracion') {
-    if (typeof cargarMensajes === 'function')  cargarMensajes();
+    // cargarMensajes() ya no se invoca aquí (#29 — la sección Mensajes vive
+    // como entrada propia del sidebar y se carga al hacer showSec('mensajes')).
     if (typeof cargarPromocion === 'function') cargarPromocion();
   }
   console.info('[agent-selector] cambiado a agent_id=' + nuevoId + ' (' + nuevo.name + ')');
