@@ -5087,6 +5087,12 @@ function abrirEditarCliente(telefono) {
   var msg = document.getElementById('edit-cli-msg');
   msg.style.display = 'none'; msg.textContent = '';
 
+  // Reset del botón — al cerrar tras éxito quedaba en "Guardando…" y deshabilitado,
+  // y la próxima apertura del modal no podía guardar sin recargar la página.
+  var btn = document.getElementById('edit-cli-save');
+  btn.disabled = false;
+  btn.textContent = 'Guardar cambios';
+
   document.getElementById('modal-editar-cliente').style.display = 'flex';
   setTimeout(function(){ document.getElementById('edit-cli-nombres').focus(); }, 50);
 }
