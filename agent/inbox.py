@@ -1364,9 +1364,12 @@ html.dark .cfg-pill-error{background:rgba(239,68,68,.18);color:#f87171}
   color:var(--voco-text);outline:none;box-sizing:border-box;margin-bottom:8px}
 .prompt-instruccion-ta:focus{border-color:var(--az)}
 /* ── SPRINT 4: Adjuntar media ── */
-.attach-opt{display:flex;align-items:center;gap:10px;padding:8px 12px;color:#e9edef;
+/* Opciones del menú Adjuntar — usa variables de tema para contraste en
+   light y dark. Antes tenía color:#e9edef hardcoded (gris claro), que
+   en light mode quedaba invisible sobre fondo blanco. */
+.attach-opt{display:flex;align-items:center;gap:10px;padding:8px 12px;color:var(--voco-text);
   cursor:pointer;border-radius:6px;font-size:.86rem;transition:background .12s}
-.attach-opt:hover{background:#2a3942}
+.attach-opt:hover{background:var(--voco-nav-bg-hover)}
 .attach-opt > span:first-child{width:30px;height:30px;border-radius:50%;color:#fff;
   display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0}
 /* Burbujas de media en el chat */
@@ -1856,9 +1859,11 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               <div id="attach-wrap" style="position:relative">
                 <button id="attach-btn" onclick="toggleAttachMenu()" aria-label="Adjuntar"
                   style="background:none;border:none;color:#8696a0;font-size:1.4rem;cursor:pointer;padding:4px 8px">📎</button>
-                <!-- Menú de opciones -->
+                <!-- Menú de opciones — usa variables de tema (antes era #202c33
+                     hardcoded, fuera de lugar en light mode). -->
                 <div id="attach-menu" style="display:none;position:absolute;bottom:42px;left:0;
-                  background:#202c33;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.4);
+                  background:var(--voco-card-bg);border:1px solid var(--voco-border);
+                  border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.18);
                   padding:6px;min-width:200px;z-index:50">
                   <div class="attach-opt" onclick="abrirSelectorMedia('image')">
                     <span style="background:#7c3aed">🖼</span> Imagen
