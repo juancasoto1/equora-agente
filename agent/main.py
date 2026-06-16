@@ -5649,7 +5649,8 @@ async def inbox_save_config(
     voco_session: str = Cookie(default=""),
 ):
     """Guarda credenciales en la BD y las inyecta en el entorno actual."""
-    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
         raise HTTPException(status_code=401, detail="No autorizado")
 
     body = await request.json()
@@ -5676,7 +5677,12 @@ async def inbox_save_config(
                     valor = "".join(c for c in valor if 32 <= ord(c) < 127)
                     logger.warning(f"[config] {clave} tenía caracteres no-ASCII — filtrados")
             if valor or clave in _PERMITE_VACIO:
-                await set_config_value(clave, valor)
+                # Pasamos contexto de usuario para que el historial (#48) sepa quién cambió qué.
+                await set_config_value(
+                    clave, valor,
+                    usuario_id=user.get("id"),
+                    usuario_email=user.get("email", ""),
+                )
                 os.environ[clave] = valor   # actualizar en tiempo real
                 saved.append(clave)
 
@@ -5698,6 +5704,100 @@ async def inbox_save_config(
             logger.error(f"[config] error invalidando cache: {e}")
 
     return JSONResponse(content={"ok": True, "saved": saved})
+
+
+# ── #48 — Historial + restore de configuración por agente ──────────────────────
+
+# Claves consideradas sensibles — al exponer historial, ofuscamos sus valores
+# para no leakear tokens completos en una UI accesible a múltiples usuarios.
+# El valor real se preserva en BD intacto, listo para el restore.
+_CLAVES_SENSIBLES = {
+    "META_ACCESS_TOKEN", "META_CAPI_TOKEN", "META_VERIFY_TOKEN",
+    "SHOPIFY_ADMIN_TOKEN", "SHOPIFY_CLIENT_SECRET", "SHOPIFY_WEBHOOK_SECRET",
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+}
+
+
+def _ofuscar_secreto(v: str) -> str:
+    """Muestra solo los últimos 4 caracteres. Vacío → '(vacío)'."""
+    if not v:
+        return "(vacío)"
+    if len(v) <= 8:
+        return "•" * len(v)
+    return "•" * 8 + v[-4:]
+
+
+@app.get("/inbox/api/config/historial")
+async def inbox_historial_config(
+    clave: str = "",
+    limite: int = 100,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Lista cambios de configuración del más reciente al más viejo, opcionalmente
+    filtrados por clave. Valores de claves sensibles vienen ofuscados (••••XXXX).
+    """
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_historial_config
+    entries = await obtener_historial_config(
+        agent_id=1,
+        clave=clave or None,
+        limite=max(1, min(limite, 500)),
+    )
+    # Ofuscar tokens en la respuesta
+    for e in entries:
+        if e["clave"] in _CLAVES_SENSIBLES:
+            e["valor_antes_display"]   = _ofuscar_secreto(e["valor_antes"])
+            e["valor_despues_display"] = _ofuscar_secreto(e["valor_despues"])
+        else:
+            e["valor_antes_display"]   = e["valor_antes"]
+            e["valor_despues_display"] = e["valor_despues"]
+        # Eliminar valores crudos para no leakearlos a la UI
+        e.pop("valor_antes", None)
+        e.pop("valor_despues", None)
+    return JSONResponse(content={"historial": entries})
+
+
+@app.post("/inbox/api/config/historial/{historial_id}/restore")
+async def inbox_restore_config(
+    historial_id: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Restaura el valor_antes de una entrada de historial. Crea un nuevo entry
+    de tipo 'restore' para mantener trazabilidad — no se borra el historial."""
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import restaurar_config_desde_historial
+    res = await restaurar_config_desde_historial(
+        historial_id=historial_id,
+        agent_id=1,
+        usuario_id=user.get("id"),
+        usuario_email=user.get("email", ""),
+    )
+    if not res["ok"]:
+        return JSONResponse(status_code=404, content={"ok": False, "error": res["error"]})
+    # Sincronizar os.environ + invalidar cache catálogo si aplica (mismo pattern
+    # que /config/save, sin duplicar logica)
+    clave = res["clave"]
+    valor_restaurado = await get_config_value(clave, 1) or ""
+    os.environ[clave] = valor_restaurado
+    if clave in ("META_CATALOG_ID", "META_ACCESS_TOKEN"):
+        try:
+            from agent import tools as _tools
+            _tools._catalog_cache = ""
+            _tools._catalog_cache_at = None
+            _tools._fb_items.clear()
+            _tools._sku_map.clear()
+            asyncio.create_task(_tools._cargar_fb_catalog())
+        except Exception as e:
+            logger.error(f"[config-restore] error invalidando cache: {e}")
+    logger.info(f"[config-restore] {clave} restaurado por {user.get('email')} (historial_id={historial_id})")
+    return JSONResponse(content={"ok": True, "clave": clave})
 
 
 @app.post("/inbox/api/config/test/{service}")

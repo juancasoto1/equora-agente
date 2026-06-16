@@ -3266,6 +3266,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Templates</div>
             <!-- Mensajes promovido a sección top-level (#29). Antes vivía aquí como tab. -->
             <div class="cfg-tab" onclick="cfgTab('promociones',this);cargarPromocion()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Promociones</div>
+            <div class="cfg-tab" onclick="cfgTab('historial',this);cargarHistorialConfig()"><i data-lucide="history" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Historial</div>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)"><i data-lucide="book-open" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Documentación</div>
           </div>
 
@@ -4136,6 +4137,37 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               </div>
             </div>
           </div><!-- /pane promociones -->
+
+          <!-- ── Pane: Historial de configuración (#48) ── -->
+          <div class="cfg-pane" id="cfg-pane-historial" style="padding:24px;overflow-y:auto">
+            <div style="max-width:1000px">
+              <h2 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem">
+                <i data-lucide="history" style="width:18px;height:18px;vertical-align:-3px;margin-right:6px;color:var(--voco-brand)"></i>
+                Historial de configuración
+              </h2>
+              <p style="margin:0 0 18px;color:var(--voco-text-muted);font-size:.86rem;line-height:1.55">
+                Cada cambio en Integraciones se registra acá. Si algo se rompe
+                tras un cambio (por ejemplo, pegaste un token equivocado),
+                puedes restaurar el valor anterior con un click. Los tokens y
+                claves se muestran ofuscados — el restore usa el valor real.
+              </p>
+
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+                <button class="btn-secondary" onclick="cargarHistorialConfig()" type="button" style="padding:6px 12px;font-size:.8rem">
+                  <i data-lucide="refresh-ccw" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Actualizar
+                </button>
+                <input id="hist-filtro-clave" type="text" placeholder="Filtrar por clave (ej: META_ACCESS_TOKEN)"
+                  oninput="_renderHistorialConfig()"
+                  style="flex:1;min-width:220px;padding:7px 11px;border:1px solid var(--voco-border);border-radius:7px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.82rem;outline:none">
+              </div>
+
+              <div id="hist-config-lista">
+                <div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">
+                  Click en Actualizar para cargar el historial.
+                </div>
+              </div>
+            </div>
+          </div><!-- /pane historial -->
 
           <!-- ── Pane: Documentación ── -->
           <div class="cfg-pane" id="cfg-pane-documentacion">
@@ -7541,6 +7573,93 @@ async function cargarEstadoSistema() {
     _verificarCatalogo(),
     _verificarShopify(),
   ]);
+}
+
+/* ── #48 — Historial + restore de configuración ───────────────────────── */
+var _histConfigData = [];
+
+async function cargarHistorialConfig() {
+  var cont = document.getElementById('hist-config-lista');
+  if (!cont) return;
+  cont.innerHTML = '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">Cargando historial…</div>';
+  try {
+    var r = await fetch('/inbox/api/config/historial?limite=200', {credentials:'include'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    _histConfigData = d.historial || [];
+    _renderHistorialConfig();
+  } catch (e) {
+    cont.innerHTML = '<div style="padding:18px;color:#dc2626;font-size:.85rem">Error: ' + (e.message || 'sin detalle') + '</div>';
+  }
+}
+
+function _renderHistorialConfig() {
+  var cont = document.getElementById('hist-config-lista');
+  if (!cont) return;
+  var q = (document.getElementById('hist-filtro-clave')?.value || '').trim().toUpperCase();
+  var items = _histConfigData.filter(function(e) {
+    if (!q) return true;
+    return (e.clave || '').toUpperCase().indexOf(q) >= 0;
+  });
+  if (!items.length) {
+    cont.innerHTML = '<div style="padding:24px;text-align:center;color:var(--voco-text-muted);font-size:.84rem">No hay cambios registrados' + (q ? ' que coincidan con el filtro.' : ' aún.') + '</div>';
+    return;
+  }
+  var accionLabel = {
+    edit:    {lbl: 'editado',    color: 'var(--voco-brand)'},
+    restore: {lbl: 'restaurado', color: '#059669'},
+    delete:  {lbl: 'borrado',    color: '#dc2626'},
+  };
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:.83rem">';
+  html += '<thead><tr style="text-align:left;color:var(--voco-text-muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--voco-border)">'
+    + '<th style="padding:8px 10px">Cuándo</th>'
+    + '<th style="padding:8px 10px">Clave</th>'
+    + '<th style="padding:8px 10px">Antes</th>'
+    + '<th style="padding:8px 10px">Después</th>'
+    + '<th style="padding:8px 10px">Usuario</th>'
+    + '<th style="padding:8px 10px;text-align:right">Acción</th>'
+    + '</tr></thead><tbody>';
+  items.forEach(function(e) {
+    var acc = accionLabel[e.accion] || accionLabel.edit;
+    var fecha = e.fecha ? fmtRelativo(e.fecha) : '—';
+    html += '<tr style="border-bottom:1px solid var(--voco-border)">'
+      + '<td style="padding:9px 10px;color:var(--voco-text-muted);white-space:nowrap" title="' + _msjEscapeHtml(e.fecha) + '">' + _msjEscapeHtml(fecha) + '</td>'
+      + '<td style="padding:9px 10px"><code style="background:var(--voco-content-bg-alt);padding:1px 6px;border-radius:3px;font-size:.76rem;color:var(--voco-text)">' + _msjEscapeHtml(e.clave) + '</code></td>'
+      + '<td style="padding:9px 10px;color:var(--voco-text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + _msjEscapeHtml(e.valor_antes_display) + '">' + _msjEscapeHtml(e.valor_antes_display) + '</td>'
+      + '<td style="padding:9px 10px;color:var(--voco-text);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + _msjEscapeHtml(e.valor_despues_display) + '">' + _msjEscapeHtml(e.valor_despues_display) + '</td>'
+      + '<td style="padding:9px 10px;color:var(--voco-text-muted);font-size:.78rem">'
+        + (e.usuario_email ? _msjEscapeHtml(e.usuario_email) : '—')
+        + ' <span style="color:' + acc.color + ';font-weight:600;font-size:.72rem;text-transform:uppercase;margin-left:4px">' + acc.lbl + '</span>'
+      + '</td>'
+      + '<td style="padding:9px 10px;text-align:right;white-space:nowrap">'
+        + (e.valor_antes_display !== '(vacío)' || e.valor_antes_display === e.valor_despues_display
+            ? '<button class="btn-secondary" style="padding:5px 11px;font-size:.74rem" onclick="restaurarValorConfig(' + e.id + ',\'' + _msjEscapeHtml(e.clave) + '\')" title="Volver al valor anterior"><i data-lucide="rotate-ccw" style="width:11px;height:11px;vertical-align:-1px;margin-right:3px"></i>Restaurar</button>'
+            : '<span style="color:var(--voco-text-muted);font-size:.72rem">—</span>')
+      + '</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+  if (window.lucide) window.lucide.createIcons();
+}
+
+async function restaurarValorConfig(historialId, clave) {
+  if (!confirm('¿Restaurar el valor anterior de "' + clave + '"?\n\nEsto reescribirá el valor actual con lo que estaba antes de ese cambio.')) return;
+  try {
+    var r = await fetch('/inbox/api/config/historial/' + historialId + '/restore', {
+      method: 'POST', credentials: 'include',
+    });
+    var d = await r.json();
+    if (!r.ok || !d.ok) {
+      alert('Error al restaurar: ' + (d.error || 'HTTP ' + r.status));
+      return;
+    }
+    // Refrescar historial (aparece nueva entry "restore") y los inputs de Integraciones
+    await cargarHistorialConfig();
+    if (typeof cargarConfiguracion === 'function') cargarConfiguracion();
+  } catch (e) {
+    alert('Error de red: ' + e.message);
+  }
 }
 
 /* ── cargarConfiguracion: pide GET /inbox/api/config y rellena indicadores ── */

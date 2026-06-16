@@ -258,6 +258,33 @@ class ConfigValue(Base):
     actualizado_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class ConfigHistorial(Base):
+    """Auditoría de cambios de configuración con capacidad de restore (#48).
+
+    Cada vez que set_config_value cambia el valor de una clave, se inserta
+    una fila aquí con el valor anterior + el nuevo + quien lo cambió. Sirve
+    para:
+      - Auditoría: quién cambió qué y cuándo
+      - Rollback: restaurar un valor anterior en un click si algo se rompió
+                  (ej: pegaste un token roto, regresas al que sí funcionaba)
+
+    Los valores se guardan tal cual — el masking de tokens (mostrar solo
+    los últimos 4 chars) se hace en la API/UI, no acá, para que el restore
+    funcione con el valor completo.
+    """
+    __tablename__ = "config_historial"
+
+    id:             Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:       Mapped[int]      = mapped_column(Integer, index=True)
+    clave:          Mapped[str]      = mapped_column(String(100), index=True)
+    valor_antes:    Mapped[str]      = mapped_column(Text, default="")
+    valor_despues:  Mapped[str]      = mapped_column(Text, default="")
+    usuario_id:     Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    usuario_email:  Mapped[str]      = mapped_column(String(200), default="")
+    accion:         Mapped[str]      = mapped_column(String(20), default="edit")  # edit | restore | delete
+    fecha:          Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SPRINT 1 — Sistema de escalación multi-agente
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2154,20 +2181,115 @@ async def get_config_value(clave: str, agent_id: int = 1) -> str | None:
         return row.valor if row and row.valor else None
 
 
-async def set_config_value(clave: str, valor: str, agent_id: int = 1) -> None:
-    """Guarda o actualiza un valor de configuración en la BD."""
+async def set_config_value(
+    clave: str,
+    valor: str,
+    agent_id: int = 1,
+    usuario_id: int | None = None,
+    usuario_email: str = "",
+    accion: str = "edit",
+) -> None:
+    """Guarda o actualiza un valor de configuración en la BD y registra el cambio
+    en config_historial para auditoría y restore (#48).
+
+    Args:
+        usuario_id / usuario_email: quién hizo el cambio. Opcional para no romper
+            llamadas existentes que no tienen contexto de usuario (jobs, restore
+            interno, etc) — el historial queda con usuario vacío en esos casos.
+        accion: 'edit' (cambio manual desde panel), 'restore' (rollback desde
+            historial), 'delete' (borrado/reset).
+    """
     async with async_session() as session:
         result = await session.execute(
             select(ConfigValue).where(ConfigValue.agent_id == agent_id, ConfigValue.clave == clave)
         )
         row = result.scalar_one_or_none()
         ahora = datetime.utcnow()
+        valor_antes = row.valor if row else ""
+
         if row:
             row.valor = valor
             row.actualizado_at = ahora
         else:
             session.add(ConfigValue(agent_id=agent_id, clave=clave, valor=valor, actualizado_at=ahora))
+
+        # Registrar el cambio en el historial — solo si hubo cambio real
+        # (evita ruido cuando el panel guarda sin tocar nada).
+        if valor_antes != valor:
+            session.add(ConfigHistorial(
+                agent_id=agent_id,
+                clave=clave,
+                valor_antes=valor_antes,
+                valor_despues=valor,
+                usuario_id=usuario_id,
+                usuario_email=usuario_email[:200],
+                accion=accion,
+                fecha=ahora,
+            ))
         await session.commit()
+
+
+async def obtener_historial_config(
+    agent_id: int = 1,
+    clave: str | None = None,
+    limite: int = 100,
+) -> list[dict]:
+    """Devuelve cambios de configuración ordenados del más reciente al más viejo.
+    Si se pasa clave, filtra solo cambios de esa clave."""
+    async with async_session() as session:
+        query = select(ConfigHistorial).where(ConfigHistorial.agent_id == agent_id)
+        if clave:
+            query = query.where(ConfigHistorial.clave == clave)
+        query = query.order_by(ConfigHistorial.fecha.desc()).limit(limite)
+        result = await session.execute(query)
+        rows = result.scalars().all()
+        return [
+            {
+                "id":             r.id,
+                "clave":          r.clave,
+                "valor_antes":    r.valor_antes or "",
+                "valor_despues":  r.valor_despues or "",
+                "usuario_email":  r.usuario_email or "",
+                "accion":         r.accion or "edit",
+                "fecha":          r.fecha.isoformat() if r.fecha else "",
+            }
+            for r in rows
+        ]
+
+
+async def restaurar_config_desde_historial(
+    historial_id: int,
+    agent_id: int,
+    usuario_id: int | None = None,
+    usuario_email: str = "",
+) -> dict:
+    """Restaura el valor_antes de una entrada de historial. Registra a su vez
+    un nuevo entry de tipo 'restore' para preservar la trazabilidad.
+
+    Retorna {"ok": bool, "error": str | None, "clave": str | None}.
+    """
+    async with async_session() as session:
+        r = await session.execute(
+            select(ConfigHistorial).where(
+                ConfigHistorial.id == historial_id,
+                ConfigHistorial.agent_id == agent_id,
+            )
+        )
+        entry = r.scalar_one_or_none()
+        if not entry:
+            return {"ok": False, "error": "Entrada de historial no encontrada", "clave": None}
+        clave_a_restaurar = entry.clave
+        valor_a_restaurar = entry.valor_antes or ""
+    # Fuera del session para reusar set_config_value (que abre la suya).
+    await set_config_value(
+        clave_a_restaurar,
+        valor_a_restaurar,
+        agent_id=agent_id,
+        usuario_id=usuario_id,
+        usuario_email=usuario_email,
+        accion="restore",
+    )
+    return {"ok": True, "error": None, "clave": clave_a_restaurar}
 
 
 async def get_all_config_values(agent_id: int = 1) -> dict[str, str]:
