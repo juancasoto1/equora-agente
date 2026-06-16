@@ -5114,6 +5114,27 @@ async def inbox_difusion_detalle(
     return JSONResponse(content=data)
 
 
+@app.get("/inbox/api/metricas/operacion")
+async def inbox_metricas_operacion(
+    dias: int = 7,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Dashboard de salud del flujo (#47): tráfico + conversión + escalación.
+    Devuelve métricas del período actual vs período anterior para detectar
+    tendencias. agent_name viene incluido para que la UI no hardcodee 'Andrea'."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_metricas_operacion, obtener_agente
+    dias = max(1, min(int(dias or 7), 90))
+    data = await obtener_metricas_operacion(agent_id=1, dias=dias)
+    ag = await obtener_agente(1) or {}
+    data["agent_name"]    = ag.get("agent_name") or "Bot"
+    data["agent_business"] = ag.get("name") or ""
+    return JSONResponse(content=data)
+
+
 @app.get("/inbox/metricas/resumen")
 async def inbox_metricas_resumen(
     token: str = "",

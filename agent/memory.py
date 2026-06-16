@@ -674,6 +674,145 @@ async def editar_cliente(
         return {"ok": True, "error": None, "telefono": telefono_nuevo}
 
 
+async def obtener_metricas_operacion(agent_id: int = 1, dias: int = 7) -> dict:
+    """Métricas operacionales del flujo del agente para Dashboard Salud (#47).
+
+    Compara el período actual (últimos N días) vs el período anterior (N días
+    antes de eso), devolviendo absolute + delta % por cada métrica.
+
+    Calcula en bloque para evitar N+1 queries en hot path del dashboard.
+    """
+    ahora = datetime.utcnow()
+    actual_desde = ahora - timedelta(days=dias)
+    prev_desde   = ahora - timedelta(days=dias * 2)
+    prev_hasta   = actual_desde
+
+    def _pct(actual: int, prev: int) -> float | None:
+        """Cambio porcentual. None si no hay base para comparar."""
+        if prev == 0:
+            return None if actual == 0 else 100.0  # 0 → algo = "+100%" conceptual
+        return round(((actual - prev) / prev) * 100, 1)
+
+    async with async_session() as session:
+        # ── Tráfico ─────────────────────────────────────────────────────────
+        # Mensajes IN / OUT por período
+        async def _count_mensajes(role: str, desde: datetime, hasta: datetime | None = None) -> int:
+            q = select(func.count(Mensaje.id)).where(
+                Mensaje.agent_id == agent_id,
+                Mensaje.role == role,
+                Mensaje.timestamp >= desde,
+            )
+            if hasta:
+                q = q.where(Mensaje.timestamp < hasta)
+            r = await session.execute(q)
+            return r.scalar() or 0
+
+        # Conversaciones únicas (teléfonos distintos que escribieron en período)
+        async def _conv_unicas(desde: datetime, hasta: datetime | None = None) -> int:
+            q = select(func.count(func.distinct(Mensaje.telefono))).where(
+                Mensaje.agent_id == agent_id,
+                Mensaje.role == "user",
+                Mensaje.timestamp >= desde,
+                ~Mensaje.telefono.like("test-%"),
+            )
+            if hasta:
+                q = q.where(Mensaje.timestamp < hasta)
+            r = await session.execute(q)
+            return r.scalar() or 0
+
+        # Clientes nuevos: teléfonos cuyo PRIMER mensaje es dentro del período
+        async def _clientes_nuevos(desde: datetime, hasta: datetime | None = None) -> int:
+            sub = (
+                select(
+                    Mensaje.telefono,
+                    func.min(Mensaje.timestamp).label("primer"),
+                )
+                .where(Mensaje.agent_id == agent_id, ~Mensaje.telefono.like("test-%"))
+                .group_by(Mensaje.telefono)
+                .subquery()
+            )
+            q = select(func.count()).select_from(sub).where(sub.c.primer >= desde)
+            if hasta:
+                q = q.where(sub.c.primer < hasta)
+            r = await session.execute(q)
+            return r.scalar() or 0
+
+        in_act   = await _count_mensajes("user",      actual_desde)
+        in_prev  = await _count_mensajes("user",      prev_desde, prev_hasta)
+        out_act  = await _count_mensajes("assistant", actual_desde)
+        out_prev = await _count_mensajes("assistant", prev_desde, prev_hasta)
+        conv_act  = await _conv_unicas(actual_desde)
+        conv_prev = await _conv_unicas(prev_desde, prev_hasta)
+        nuevos_act  = await _clientes_nuevos(actual_desde)
+        nuevos_prev = await _clientes_nuevos(prev_desde, prev_hasta)
+
+        # ── Conversión ───────────────────────────────────────────────────────
+        # Pedidos: clientes con pedido_pendiente_at en período (proxy de "armó carrito")
+        async def _pedidos_armados(desde: datetime, hasta: datetime | None = None) -> int:
+            q = select(func.count(Cliente.telefono)).where(
+                Cliente.agent_id == agent_id,
+                Cliente.pedido_pendiente_at.isnot(None),
+                Cliente.pedido_pendiente_at >= desde,
+            )
+            if hasta:
+                q = q.where(Cliente.pedido_pendiente_at < hasta)
+            r = await session.execute(q)
+            return r.scalar() or 0
+
+        # Checkouts iniciados pero NO completados (proxy de abandono)
+        # Si tiene pedido_checkout_url Y pedidos_realizados==0 → abandonó
+        r = await session.execute(
+            select(func.count(Cliente.telefono)).where(
+                Cliente.agent_id == agent_id,
+                Cliente.pedido_checkout_url != "",
+            )
+        )
+        checkouts_pendientes = r.scalar() or 0
+
+        pedidos_act  = await _pedidos_armados(actual_desde)
+        pedidos_prev = await _pedidos_armados(prev_desde, prev_hasta)
+
+        # ── Escalación ─────────────────────────────────────────────────────
+        async def _tickets_creados(desde: datetime, hasta: datetime | None = None) -> int:
+            q = select(func.count(Ticket.id)).where(
+                Ticket.agent_id == agent_id,
+                Ticket.creado_at >= desde,
+            )
+            if hasta:
+                q = q.where(Ticket.creado_at < hasta)
+            r = await session.execute(q)
+            return r.scalar() or 0
+
+        tickets_act  = await _tickets_creados(actual_desde)
+        tickets_prev = await _tickets_creados(prev_desde, prev_hasta)
+
+        # Tickets abiertos AHORA (snapshot, no por período)
+        r = await session.execute(
+            select(Ticket.estado, func.count(Ticket.id))
+            .where(Ticket.agent_id == agent_id, Ticket.estado != "resuelto")
+            .group_by(Ticket.estado)
+        )
+        tickets_abiertos_por_estado = {est: cnt for est, cnt in r.all()}
+
+    return {
+        "periodo_dias": dias,
+        "actual_desde": actual_desde.isoformat(),
+        "prev_desde":   prev_desde.isoformat(),
+        "trafico": {
+            "conversaciones_unicas": {"actual": conv_act,  "prev": conv_prev,  "delta_pct": _pct(conv_act, conv_prev)},
+            "mensajes_recibidos":    {"actual": in_act,    "prev": in_prev,    "delta_pct": _pct(in_act, in_prev)},
+            "mensajes_enviados":     {"actual": out_act,   "prev": out_prev,   "delta_pct": _pct(out_act, out_prev)},
+            "clientes_nuevos":       {"actual": nuevos_act,"prev": nuevos_prev,"delta_pct": _pct(nuevos_act, nuevos_prev)},
+        },
+        "conversion": {
+            "pedidos_armados":      {"actual": pedidos_act, "prev": pedidos_prev, "delta_pct": _pct(pedidos_act, pedidos_prev)},
+            "checkouts_pendientes": {"actual": checkouts_pendientes, "prev": None, "delta_pct": None},  # snapshot, no delta
+            "tickets_creados":      {"actual": tickets_act,  "prev": tickets_prev, "delta_pct": _pct(tickets_act, tickets_prev)},
+            "tickets_abiertos_por_estado": tickets_abiertos_por_estado,
+        },
+    }
+
+
 async def obtener_perfil_enriquecido(telefono: str, agent_id: int = 1) -> dict:
     """Perfil compacto del cliente para alimentar el contexto del LLM (#65).
 

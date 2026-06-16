@@ -2616,6 +2616,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <div style="display:flex;border-bottom:1px solid var(--voco-border);margin-top:4px">
             <button class="det-tab active" id="met-tab-camp" onclick="metTab('camp',this)" style="font-size:.8rem;padding:8px 14px">📊 Campañas</button>
             <button class="det-tab" id="met-tab-equipo" onclick="metTab('equipo',this);cargarStatsEquipo()" style="font-size:.8rem;padding:8px 14px">👥 Equipo</button>
+            <button class="det-tab" id="met-tab-salud" onclick="metTab('salud',this);cargarMetricasOperacion()" style="font-size:.8rem;padding:8px 14px">🩺 Salud del flujo</button>
           </div>
         </div>
         <div class="sec-body">
@@ -2674,6 +2675,56 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   <tr><td colspan="9" class="loading-txt">Cargando...</td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <!-- Panel Salud del flujo (#47) — métricas operacionales -->
+          <div id="met-panel-salud" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 14px;flex-wrap:wrap;gap:8px">
+              <div>
+                <h2 style="margin:0;font-size:1.05rem;color:var(--voco-text)">Salud del flujo</h2>
+                <div id="salud-subtitulo" style="font-size:.78rem;color:var(--voco-text-muted);margin-top:3px">Comparando los últimos 7 días con los 7 anteriores</div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <select id="salud-periodo" onchange="cargarMetricasOperacion()" style="padding:5px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.8rem;color:var(--voco-text);background:var(--voco-card-bg)">
+                  <option value="7" selected>Últimos 7 días</option>
+                  <option value="14">Últimos 14 días</option>
+                  <option value="30">Últimos 30 días</option>
+                </select>
+                <button class="btn-secondary" style="font-size:.78rem;padding:5px 12px" onclick="cargarMetricasOperacion()">
+                  <i data-lucide="refresh-ccw" style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"></i>Actualizar
+                </button>
+              </div>
+            </div>
+
+            <!-- Panel 1: Tráfico -->
+            <div style="margin-bottom:6px">
+              <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px;display:flex;align-items:center;gap:6px">
+                <i data-lucide="users" style="width:12px;height:12px"></i> Tráfico
+              </p>
+            </div>
+            <div id="salud-cards-trafico" class="cards">
+              <div class="loading-txt" style="grid-column:1/-1">Cargando…</div>
+            </div>
+
+            <!-- Panel 2: Conversión & escalación -->
+            <div style="margin:24px 0 6px">
+              <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px;display:flex;align-items:center;gap:6px">
+                <i data-lucide="shopping-cart" style="width:12px;height:12px"></i> Conversión &amp; escalación
+              </p>
+            </div>
+            <div id="salud-cards-conversion" class="cards">
+              <div class="loading-txt" style="grid-column:1/-1">Cargando…</div>
+            </div>
+
+            <!-- Tickets abiertos por estado -->
+            <div style="margin:24px 0 6px">
+              <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px;display:flex;align-items:center;gap:6px">
+                <i data-lucide="inbox" style="width:12px;height:12px"></i> Tickets abiertos ahora
+              </p>
+            </div>
+            <div id="salud-tickets-abiertos" style="display:flex;gap:10px;flex-wrap:wrap">
+              <div class="loading-txt">Cargando…</div>
             </div>
           </div>
 
@@ -9136,22 +9187,110 @@ escSeleccionarTicket = async function(ticket) {
    SPRINT 3 — DASHBOARD SUPERVISOR
    ══════════════════════════════════════════════════════════════ */
 function metTab(id, btn) {
-  document.querySelectorAll('#met-tab-camp, #met-tab-equipo').forEach(function(t){
+  document.querySelectorAll('#met-tab-camp, #met-tab-equipo, #met-tab-salud').forEach(function(t){
     t.classList.remove('active');
   });
   btn.classList.add('active');
-  var secBody = document.querySelector('#sec-metricas .sec-body');
-  if (secBody) {
-    // Mostrar/ocultar paneles dentro del sec-body
-    var campPanel = document.getElementById('met-panel-equipo') ?
-      secBody.querySelector(':not(#met-panel-equipo)') : secBody;
-  }
-  // Toggle simple: ocultar/mostrar contenido de campañas vs equipo
-  document.querySelectorAll('#sec-metricas .sec-body > *:not(#met-panel-equipo)').forEach(function(el){
+  // Paneles auxiliares (Equipo, Salud) — ocultarlos para mostrar el correcto.
+  // Default 'camp': muestra todos los hijos del sec-body EXCEPTO los paneles aux.
+  document.querySelectorAll('#sec-metricas .sec-body > *:not(#met-panel-equipo):not(#met-panel-salud)').forEach(function(el){
     el.style.display = id === 'camp' ? '' : 'none';
   });
-  var panelEq = document.getElementById('met-panel-equipo');
-  if (panelEq) panelEq.style.display = id === 'equipo' ? '' : 'none';
+  var panelEq    = document.getElementById('met-panel-equipo');
+  var panelSalud = document.getElementById('met-panel-salud');
+  if (panelEq)    panelEq.style.display    = id === 'equipo' ? '' : 'none';
+  if (panelSalud) panelSalud.style.display = id === 'salud'  ? '' : 'none';
+}
+
+/* ── #47 — Dashboard salud del flujo ───────────────────────────────────── */
+async function cargarMetricasOperacion() {
+  var trafico = document.getElementById('salud-cards-trafico');
+  var conv    = document.getElementById('salud-cards-conversion');
+  var tickets = document.getElementById('salud-tickets-abiertos');
+  if (!trafico || !conv || !tickets) return;
+  trafico.innerHTML = '<div class="loading-txt" style="grid-column:1/-1">Cargando…</div>';
+  conv.innerHTML    = '<div class="loading-txt" style="grid-column:1/-1">Cargando…</div>';
+  tickets.innerHTML = '<div class="loading-txt">Cargando…</div>';
+
+  var dias = parseInt(document.getElementById('salud-periodo')?.value || '7', 10) || 7;
+  try {
+    var r = await fetch('/inbox/api/metricas/operacion?dias=' + dias, {credentials:'include'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    _renderMetricasOperacion(d);
+  } catch (e) {
+    trafico.innerHTML = '<div style="grid-column:1/-1;color:#dc2626;font-size:.85rem;padding:18px">Error cargando métricas: ' + e.message + '</div>';
+  }
+}
+
+function _renderMetricasOperacion(d) {
+  // Nombre del agente dinámico — NO hardcodear "Andrea"
+  var nombreAg = d.agent_name || 'el agente';
+  var dias = d.periodo_dias || 7;
+  var subt = document.getElementById('salud-subtitulo');
+  if (subt) {
+    subt.textContent = 'Comparando los últimos ' + dias + ' días con los ' + dias + ' anteriores · Agente: ' + nombreAg;
+  }
+
+  function deltaPill(deltaPct) {
+    if (deltaPct === null || deltaPct === undefined) {
+      return '<span style="font-size:.7rem;color:var(--voco-text-muted);font-weight:600">—</span>';
+    }
+    var positivo = deltaPct > 0;
+    var negativo = deltaPct < 0;
+    var color = positivo ? '#059669' : (negativo ? '#dc2626' : 'var(--voco-text-muted)');
+    var ico   = positivo ? '↑' : (negativo ? '↓' : '·');
+    var abs   = Math.abs(deltaPct);
+    return '<span style="font-size:.72rem;color:' + color + ';font-weight:700">' + ico + ' ' + abs + '%</span>';
+  }
+
+  // Cards reusan estilos existentes de .card (definidos en sec-metricas)
+  function card(titulo, m, fmt) {
+    var v = (m && m.actual != null) ? m.actual : 0;
+    var prev = (m && m.prev != null) ? m.prev : null;
+    var display = fmt ? fmt(v) : v.toLocaleString('es-CO');
+    var prevDisplay = (prev != null) ? (fmt ? fmt(prev) : prev.toLocaleString('es-CO')) : '—';
+    return '<div class="card" style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px">'
+      + '<div style="font-size:.72rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">' + titulo + '</div>'
+      + '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px">'
+      +   '<div style="font-size:1.5rem;font-weight:700;color:var(--voco-text)">' + display + '</div>'
+      +   deltaPill(m ? m.delta_pct : null)
+      + '</div>'
+      + '<div style="font-size:.72rem;color:var(--voco-text-muted)">vs ' + prevDisplay + ' período anterior</div>'
+      + '</div>';
+  }
+
+  var t = d.trafico || {};
+  document.getElementById('salud-cards-trafico').innerHTML =
+      card('Conversaciones únicas', t.conversaciones_unicas)
+    + card('Clientes nuevos',       t.clientes_nuevos)
+    + card('Mensajes recibidos',    t.mensajes_recibidos)
+    + card('Mensajes enviados por ' + nombreAg, t.mensajes_enviados);
+
+  var c = d.conversion || {};
+  document.getElementById('salud-cards-conversion').innerHTML =
+      card('Pedidos armados',       c.pedidos_armados)
+    + card('Checkouts pendientes',  c.checkouts_pendientes)
+    + card('Tickets escalados',     c.tickets_creados);
+
+  // Tickets abiertos AHORA (snapshot, no comparable a período)
+  var ticketsAbiertos = c.tickets_abiertos_por_estado || {};
+  var estados = ['sin_asignar', 'activo', 'pendiente'];
+  var estadoLabel = {sin_asignar: 'Sin asignar', activo: 'Activos', pendiente: 'Pendientes'};
+  var estadoColor = {sin_asignar: '#dc2626', activo: '#d97706', pendiente: '#6366f1'};
+  var html = '';
+  estados.forEach(function(est) {
+    var n = ticketsAbiertos[est] || 0;
+    html += '<div style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-left:3px solid ' + estadoColor[est] + ';border-radius:8px;padding:10px 14px;min-width:140px">'
+      + '<div style="font-size:.72rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.4px">' + estadoLabel[est] + '</div>'
+      + '<div style="font-size:1.4rem;font-weight:700;color:' + estadoColor[est] + ';margin-top:2px">' + n + '</div>'
+      + '</div>';
+  });
+  var total = estados.reduce(function(s, e) { return s + (ticketsAbiertos[e] || 0); }, 0);
+  if (total === 0) {
+    html = '<div style="color:#059669;font-size:.85rem;font-weight:600;padding:10px 14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px">✓ Sin tickets abiertos — todo está bajo control.</div>';
+  }
+  document.getElementById('salud-tickets-abiertos').innerHTML = html;
 }
 
 async function cargarStatsEquipo() {
