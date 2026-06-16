@@ -1842,10 +1842,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             </div>
 
             <div id="mbar">
-              <span class="lbl">Andrea responde</span>
+              <span class="lbl"><span id="mbar-agent-name">Agente</span> responde</span>
               <label class="tog" aria-label="Activar modo humano">
                 <input type="checkbox" id="togInput" onchange="toggleModo()"
-                       aria-label="Modo humano — cuando está activo, Andrea no responde">
+                       aria-label="Modo humano — cuando está activo, el agente no responde">
                 <span class="sl"></span>
               </label>
               <span class="lbl">Modo humano</span>
@@ -2029,7 +2029,8 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 <div class="wa-phone-bar">
                   <div class="wa-av">🤖</div>
                   <div>
-                    <div class="wa-name">Equora Distribuciones</div>
+                    <!-- Nombre dinámico — se actualiza en _renderSelectorAgente() -->
+                    <div class="wa-name" id="dif-prev-contact-name">Tu negocio</div>
                     <div class="wa-sub">en línea</div>
                   </div>
                 </div>
@@ -2372,7 +2373,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   </div>
                   <div class="f-group" style="margin-top:8px">
                     <span class="f-label">Nombre del lugar (ejemplo)</span>
-                    <input id="tpl-loc-name" class="f-inp" placeholder="Equora Distribuciones — Cali">
+                    <input id="tpl-loc-name" class="f-inp" placeholder="Nombre del negocio — Ciudad">
                   </div>
                 </div>
                 </div><!-- /hdr-section -->
@@ -2381,7 +2382,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 <div class="sep-label">📝 Cuerpo del mensaje <span class="req">*</span></div>
                 <div class="f-group" style="margin-bottom:4px">
                   <textarea id="tpl-body" class="f-ta" maxlength="1024"
-                    placeholder="Hola {{nombre}}, tenemos una oferta especial para ti en Equora Distribuciones 🌿"
+                    placeholder="Hola {{nombre}}, tenemos una oferta especial para ti 🎁"
                     oninput="updateBodyCounter()"></textarea>
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
                     <span class="f-hint">Campo requerido</span>
@@ -2532,7 +2533,8 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 <div class="wa-phone-bar">
                   <div class="wa-av">🤖</div>
                   <div>
-                    <div class="wa-name" id="prev-contact-name">Equora Distribuciones</div>
+                    <!-- Nombre dinámico — se actualiza en _renderSelectorAgente() -->
+                    <div class="wa-name" id="prev-contact-name">Tu negocio</div>
                     <div class="wa-sub">en línea</div>
                   </div>
                 </div>
@@ -4546,6 +4548,17 @@ function _renderSelectorAgente() {
   if (a.color) emojiEl.style.background = a.color;
   nameEl.textContent = a.agent_name || a.name || 'Agente';
   if (subEl) subEl.textContent = a.name || '';
+
+  // Sincronizar nombre del agente en lugares user-visible que antes estaban
+  // hardcoded a "Andrea" / "Equora Distribuciones" (#44). Cuando el merchant
+  // crea otro agente, el toggle "X responde" y los previews de plantillas
+  // muestran su marca, no Andrea/Equora.
+  var mbarName = document.getElementById('mbar-agent-name');
+  if (mbarName) mbarName.textContent = a.agent_name || 'Agente';
+  ['prev-contact-name', 'dif-prev-contact-name'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = a.name || a.agent_name || 'Tu negocio';
+  });
   if (_agentesAccesibles.length > 1) {
     selEl.style.cursor = 'pointer';
     selEl.onclick = _toggleDropdownAgente;
@@ -8559,7 +8572,9 @@ function _escRenderMensajes(mensajes) {
     wrap.style.alignItems = m.role === 'user' ? 'flex-end' : 'flex-start';
 
     var cls = m.role === 'user' ? 'esc-bbl-user' : (m.human ? 'esc-bbl-human' : 'esc-bbl-bot');
-    var label = m.role !== 'user' ? (m.human ? '👤 Agente' : '🤖 Andrea') : '';
+    // Nombre del bot dinámico desde el agente activo — no más hardcode "Andrea"
+    var botName = (_agenteActivoInfo && _agenteActivoInfo.agent_name) || 'Bot';
+    var label = m.role !== 'user' ? (m.human ? '👤 Agente' : '🤖 ' + botName) : '';
 
     // Renderizar usando la misma función del módulo Conversaciones — soporta
     // marcadores __MEDIA__ (imagen, video, doc, ubicación, producto) y

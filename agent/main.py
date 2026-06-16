@@ -1227,7 +1227,7 @@ async def _escalar_meta_fallo(
 
 
 app = FastAPI(
-    title="AgentKit — Andrea (Equora Distribuciones)",
+    title="Voco — Plataforma multi-tenant de agentes WhatsApp",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -6961,8 +6961,14 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
             urgencia=urgencia,
             contexto=contexto,
         )
-        # Auditoría
-        await registrar_evento_ticket(ticket["id"], "creado", "Andrea Bot",
+        # Auditoría — autor = nombre del agente del tenant (no hardcode "Andrea Bot")
+        try:
+            from agent.memory import obtener_agente as _obtener_ag
+            _ag = await _obtener_ag(agent_id)
+            _bot_label = ((_ag or {}).get("agent_name") or "Bot") + " (IA)"
+        except Exception:
+            _bot_label = "Bot (IA)"
+        await registrar_evento_ticket(ticket["id"], "creado", _bot_label,
                                       f"Motivo: {motivo} | Urgencia: {urgencia}")
         # Auto-asignación round-robin (si está habilitada)
         try:
