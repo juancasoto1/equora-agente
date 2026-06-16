@@ -7110,12 +7110,13 @@ async def _verificar_hmac_shopify(body: bytes, hmac_header: str, shop: str = "")
     return False
 
 
-def _normalizar_telefono(valor: str | None) -> str | None:
-    """Quita +, espacios, guiones — deja solo dígitos."""
-    if not valor:
-        return None
-    digitos = re.sub(r"\D", "", str(valor))
-    return digitos or None
+# NOTA: antes había aquí una segunda definición de _normalizar_telefono que
+# sobrescribía la versión inteligente del panel (línea ~5302) porque Python
+# carga el módulo top-down. Resultado: webhooks de Shopify que traían el
+# teléfono sin indicativo (ej: '3022888274') NO recibían el prefijo +57, y
+# el mensaje "Tu pedido está listo" se enviaba al número sin código de país
+# → no llegaba al cliente. La función inteligente añade '57' si detecta
+# 10 dígitos empezando por '3' (caso real Lorena Camayo, 2026-06-16).
 
 
 def _extraer_telefono(payload: dict) -> str | None:
