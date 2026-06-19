@@ -4159,6 +4159,16 @@ async def api_tomar_ticket(
     ticket = await tomar_ticket(ticket_id, agente_humano_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
+    # Activar modo humano para esta conversación. Sin esto Andrea sigue
+    # respondiendo al cliente mientras el humano lo atiende — el cliente
+    # ve respuestas duplicadas/contradictorias. La creación via escalación
+    # ya lo activa, pero si el humano toma un ticket que no pasó por esa
+    # ruta (ej: reabierto manualmente, o quedó con modo humano apagado por
+    # algún cambio anterior), aquí lo forzamos.
+    try:
+        await set_modo_humano(ticket["telefono_cliente"], True, agent_id=ticket["agent_id"])
+    except Exception as e:
+        logger.warning(f"No pude activar modo humano al tomar ticket {ticket_id}: {e}")
     await registrar_evento_ticket(ticket_id, "tomado", ticket.get("agente_nombre","Agente"),
                                   "Tomó la conversación")
     _push_evento_ticket(ticket["agent_id"], "ticket_tomado", ticket)
