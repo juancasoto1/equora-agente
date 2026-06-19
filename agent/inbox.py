@@ -234,6 +234,7 @@ def obtener_login_html(error: bool = False) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Voco — Iniciar sesión</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none'><path d='M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z' stroke='%2310b981' stroke-width='10' stroke-linejoin='round' stroke-linecap='round'/></svg>">
 __VOCO_DS__
 </head>
 <body class="min-h-screen bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100 antialiased">
@@ -253,11 +254,14 @@ __VOCO_DS__
 
 <main class="min-h-screen flex items-center justify-center px-4 py-12">
   <div class="w-full max-w-sm">
-    <!-- Logo -->
+    <!-- Logo Voco: símbolo hexagonal con tail de bocadillo, en SVG
+         inline para escalar perfecto y respetar el theme actual. -->
     <div class="flex flex-col items-center mb-8">
-      <div class="w-14 h-14 rounded-voco-xl bg-gradient-to-br from-brand-500 to-brand-700
-        flex items-center justify-center shadow-voco-lg mb-4">
-        <i data-lucide="zap" class="w-7 h-7 text-white"></i>
+      <div class="mb-3" style="width:64px;height:64px">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" aria-label="Voco">
+          <path d="M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z"
+                stroke="#10b981" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
       </div>
       <h1 class="text-2xl font-bold tracking-tight">Voco</h1>
       <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
@@ -407,6 +411,7 @@ def obtener_register_html(error: str = "") -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Voco — Crear cuenta</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none'><path d='M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z' stroke='%2310b981' stroke-width='10' stroke-linejoin='round' stroke-linecap='round'/></svg>">
 __VOCO_DS__
 </head>
 <body class="min-h-screen bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100 antialiased">
@@ -426,9 +431,12 @@ __VOCO_DS__
 <main class="min-h-screen flex items-center justify-center px-4 py-12">
   <div class="w-full max-w-sm">
     <div class="flex flex-col items-center mb-8">
-      <div class="w-14 h-14 rounded-voco-xl bg-gradient-to-br from-brand-500 to-brand-700
-        flex items-center justify-center shadow-voco-lg mb-4">
-        <i data-lucide="zap" class="w-7 h-7 text-white"></i>
+      <!-- Logo Voco -->
+      <div class="mb-3" style="width:64px;height:64px">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" aria-label="Voco">
+          <path d="M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z"
+                stroke="#10b981" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
       </div>
       <h1 class="text-2xl font-bold tracking-tight">Crear cuenta</h1>
       <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
@@ -592,6 +600,7 @@ _HTML = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="color-scheme" content="dark light">
 <title>Voco · Panel del agente</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none'><path d='M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z' stroke='%2310b981' stroke-width='10' stroke-linejoin='round' stroke-linecap='round'/></svg>">
 __VOCO_DS__
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1751,10 +1760,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         <span class="ni" aria-hidden="true"><i data-lucide="settings" style="width:16px;height:16px;vertical-align:-3px"></i></span> Configuración
       </div>
       <div class="nav-footer" style="display:flex;align-items:center;gap:8px">
-        <div style="width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
-          display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0">
-          <i data-lucide="zap" style="width:12px;height:12px"></i>
-        </div>
+        <!-- Logo Voco real (símbolo de bocadillo hexagonal). Era un placeholder
+             púrpura con icono 'zap' — ahora coherente con la marca. -->
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none"
+             style="width:22px;height:22px;flex-shrink:0">
+          <path d="M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z"
+                stroke="#10b981" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
         <small style="color:var(--voco-text-muted);font-weight:600">Voco · v1</small>
       </div>
     </nav>
@@ -1992,6 +2004,9 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   <label id="dif-csv-label" for="dif-csv-input">📂 Cargar CSV</label>
                   <input type="file" id="dif-csv-input" accept=".csv,text/csv" onchange="cargarArchivoCSV(this)">
                   <button class="btn-dl-csv" onclick="descargarFormatoCSV()" type="button">⬇ Formato</button>
+                  <button class="btn-dl-csv" onclick="abrirSelectorClientes()" type="button" title="Elegir clientes ya guardados en tu base">
+                    👥 Elegir de mi base
+                  </button>
                 </div>
                 <!-- Estadísticas del CSV (visible tras cargar) -->
                 <div id="dif-csv-stats"></div>
@@ -3318,6 +3333,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <!-- Mensajes promovido a sección top-level (#29). Antes vivía aquí como tab. -->
             <div class="cfg-tab" onclick="cfgTab('promociones',this);cargarPromocion()"><i data-lucide="gift" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Promociones</div>
             <div class="cfg-tab" onclick="cfgTab('historial',this);cargarHistorialConfig()"><i data-lucide="history" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Historial</div>
+            <a href="/inbox/onboarding-meta" class="cfg-tab" style="text-decoration:none;color:inherit"><i data-lucide="rocket" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Conectar WhatsApp</a>
             <div class="cfg-tab" onclick="cfgTab('documentacion',this)"><i data-lucide="book-open" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Documentación</div>
           </div>
 
@@ -3806,6 +3822,18 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   </div>
                   <div class="sistema-msg" id="msg-shopify">Verificando…</div>
                   <div class="sistema-detalle" id="det-shopify"></div>
+                </div>
+
+                <!-- Webhook WhatsApp — verifica que Meta envíe mensajes entrantes
+                     a Voco. Tras re-activar números, Meta a veces desuscribe la
+                     app y los mensajes nunca llegan al panel. -->
+                <div class="sistema-item" id="sistema-webhook">
+                  <div class="sistema-hdr">
+                    <span class="sistema-dot" id="dot-webhook"></span>
+                    <span class="sistema-name">🔔 Webhook WhatsApp</span>
+                  </div>
+                  <div class="sistema-msg" id="msg-webhook">Verificando…</div>
+                  <div class="sistema-detalle" id="det-webhook"></div>
                 </div>
               </div>
             </div><!-- /card-sistema -->
@@ -4445,6 +4473,47 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
     <div style="display:flex;gap:8px;margin-top:12px">
       <button onclick="cerrarModalCaption()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);color:var(--voco-text);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cancelar</button>
       <button id="cap-enviar-btn" onclick="confirmarEnvioMedia()" style="flex:1;padding:9px;background:#25d366;color:#fff;border:none;border-radius:7px;font-weight:600;cursor:pointer">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     Modal "Elegir de mi base" — selector de clientes para difusiones (#72)
+     ══════════════════════════════════════════════════════ -->
+<div id="modal-selector-clientes" class="modal-overlay" style="display:none" onclick="cerrarSelectorClientes(event)">
+  <div class="modal-box" style="max-width:720px;max-height:80vh;display:flex;flex-direction:column" onclick="event.stopPropagation()">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">👥 Elegir clientes de tu base</div>
+        <div class="modal-sub" id="sel-cli-sub">—</div>
+      </div>
+      <button class="modal-close" onclick="cerrarSelectorClientes()" aria-label="Cerrar modal">✕</button>
+    </div>
+    <!-- Filtros: segmento + búsqueda -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <div id="sel-cli-chips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+      <input id="sel-cli-buscar" type="text" placeholder="Buscar por nombre o teléfono…"
+        oninput="_selCliFiltrar()"
+        style="flex:1;min-width:180px;padding:7px 11px;border:1px solid var(--voco-border);border-radius:7px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.82rem;outline:none">
+    </div>
+    <!-- Acciones bulk -->
+    <div style="display:flex;gap:10px;align-items:center;font-size:.78rem;color:var(--voco-text-muted);margin-bottom:8px">
+      <button onclick="_selCliMarcarTodos(true)" style="background:none;border:none;color:var(--voco-brand);font-weight:600;cursor:pointer;font-size:.78rem">Marcar todos</button>
+      <button onclick="_selCliMarcarTodos(false)" style="background:none;border:none;color:var(--voco-text-muted);font-weight:600;cursor:pointer;font-size:.78rem">Desmarcar todos</button>
+      <span style="margin-left:auto"><b id="sel-cli-count">0</b> seleccionados</span>
+    </div>
+    <!-- Lista -->
+    <div id="sel-cli-lista" style="flex:1;overflow-y:auto;border:1px solid var(--voco-border);border-radius:8px">
+      <div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">Cargando…</div>
+    </div>
+    <!-- Footer acciones -->
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+      <button onclick="cerrarSelectorClientes()"
+        style="padding:9px 16px;background:none;border:1.5px solid var(--voco-border);border-radius:8px;font-weight:600;color:var(--voco-text);cursor:pointer;font-size:.85rem">Cancelar</button>
+      <button onclick="agregarSeleccionadosADifusion()"
+        style="padding:9px 18px;background:var(--voco-brand);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:.85rem">
+        Agregar a difusión →
+      </button>
     </div>
   </div>
 </div>
@@ -5804,6 +5873,152 @@ function _parsearDestinatarios() {
   });
 }
 
+/* #72 — Selector de clientes desde módulo Clientes para difusiones.
+   El merchant abre el modal, filtra por segmento o búsqueda, marca con
+   checkbox y al confirmar se rellena el textarea de difusión con los
+   teléfonos+nombres seleccionados. Reusa el endpoint /inbox/api/clientes
+   que ya devuelve la base de clientes con su estado. */
+var _selCliData = [];
+var _selCliFiltroSeg = 'todos';  // 'todos' | 'activo' | 'tibio' | 'frio'
+var _selCliSeleccionados = {};    // {telefono: true}
+
+async function abrirSelectorClientes() {
+  document.getElementById('modal-selector-clientes').style.display = 'flex';
+  _selCliSeleccionados = {};
+  _selCliFiltroSeg = 'todos';
+  document.getElementById('sel-cli-buscar').value = '';
+  document.getElementById('sel-cli-sub').textContent = 'Cargando…';
+  document.getElementById('sel-cli-lista').innerHTML =
+    '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">Cargando…</div>';
+  try {
+    var r = await fetch('/inbox/api/clientes', {credentials:'include'});
+    var d = await r.json();
+    _selCliData = d.clientes || [];
+    document.getElementById('sel-cli-sub').textContent = _selCliData.length + ' clientes en tu base';
+    _selCliRenderChips(d.resumen || {});
+    _selCliFiltrar();
+  } catch (e) {
+    document.getElementById('sel-cli-lista').innerHTML =
+      '<div style="padding:18px;color:#dc2626;font-size:.85rem">Error: ' + e.message + '</div>';
+  }
+}
+
+function cerrarSelectorClientes(ev) {
+  if (ev && ev.target && ev.target.id !== 'modal-selector-clientes') return;
+  document.getElementById('modal-selector-clientes').style.display = 'none';
+}
+
+function _selCliRenderChips(resumen) {
+  var cont = document.getElementById('sel-cli-chips');
+  var segs = [
+    ['todos',  'Todos',  resumen.total  || _selCliData.length],
+    ['activo', 'Activos', resumen.activo || 0],
+    ['tibio',  'Tibios',  resumen.tibio  || 0],
+    ['frio',   'Fríos',   resumen.frio   || 0],
+  ];
+  cont.innerHTML = segs.map(function(s) {
+    var activo = _selCliFiltroSeg === s[0];
+    var bg = activo ? 'var(--voco-brand)' : 'var(--voco-content-bg-alt)';
+    var col = activo ? '#fff' : 'var(--voco-text)';
+    var bd = activo ? 'var(--voco-brand)' : 'var(--voco-border)';
+    return '<button type="button" onclick="_selCliSetSeg(\'' + s[0] + '\')"'
+      + ' style="background:' + bg + ';color:' + col + ';border:1px solid ' + bd
+      + ';border-radius:14px;padding:4px 11px;font-size:.74rem;font-weight:600;cursor:pointer">'
+      + s[1] + ' · <span style="opacity:.7">' + s[2] + '</span></button>';
+  }).join('');
+}
+
+function _selCliSetSeg(seg) {
+  _selCliFiltroSeg = seg;
+  _selCliRenderChips({total:_selCliData.length});  // re-render chips para estado activo
+  _selCliFiltrar();
+}
+
+function _selCliFiltrar() {
+  var q = (document.getElementById('sel-cli-buscar').value || '').toLowerCase().trim();
+  var items = _selCliData.filter(function(c) {
+    if (_selCliFiltroSeg !== 'todos' && c.estado !== _selCliFiltroSeg) return false;
+    if (q) {
+      var hay = ((c.nombre || '') + ' ' + (c.telefono || '')).toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+  var cont = document.getElementById('sel-cli-lista');
+  if (!items.length) {
+    cont.innerHTML = '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">Sin resultados</div>';
+    return;
+  }
+  cont.innerHTML = items.map(function(c) {
+    var checked = !!_selCliSeleccionados[c.telefono];
+    var nombre  = c.nombre || ('+' + c.telefono);
+    return '<label style="display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;'
+      + 'border-bottom:1px solid var(--voco-border);font-size:.84rem">'
+      + '<input type="checkbox" ' + (checked ? 'checked' : '')
+      + ' onchange="_selCliToggle(\'' + c.telefono + '\', this.checked)"'
+      + ' style="cursor:pointer;width:16px;height:16px;accent-color:var(--voco-brand)">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-weight:600;color:var(--voco-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _msjEscapeHtml(nombre) + '</div>'
+      +   '<div style="font-size:.74rem;color:var(--voco-text-muted)">+' + _msjEscapeHtml(c.telefono) + (c.ciudad ? ' · ' + _msjEscapeHtml(c.ciudad) : '') + '</div>'
+      + '</div>'
+      + '</label>';
+  }).join('');
+  _selCliActualizarCount();
+}
+
+function _selCliToggle(tel, checked) {
+  if (checked) _selCliSeleccionados[tel] = true;
+  else         delete _selCliSeleccionados[tel];
+  _selCliActualizarCount();
+}
+
+function _selCliMarcarTodos(marcar) {
+  // Solo aplica a los items que están visibles con el filtro actual
+  var q = (document.getElementById('sel-cli-buscar').value || '').toLowerCase().trim();
+  _selCliData.forEach(function(c) {
+    if (_selCliFiltroSeg !== 'todos' && c.estado !== _selCliFiltroSeg) return;
+    if (q) {
+      var hay = ((c.nombre || '') + ' ' + (c.telefono || '')).toLowerCase();
+      if (hay.indexOf(q) < 0) return;
+    }
+    if (marcar) _selCliSeleccionados[c.telefono] = true;
+    else        delete _selCliSeleccionados[c.telefono];
+  });
+  _selCliFiltrar();
+}
+
+function _selCliActualizarCount() {
+  document.getElementById('sel-cli-count').textContent = Object.keys(_selCliSeleccionados).length;
+}
+
+function agregarSeleccionadosADifusion() {
+  var keys = Object.keys(_selCliSeleccionados);
+  if (!keys.length) { alert('No has seleccionado ningún cliente'); return; }
+  // Mapear teléfonos a líneas "número,nombre" que es el formato del textarea
+  var nuevas = [];
+  _selCliData.forEach(function(c) {
+    if (_selCliSeleccionados[c.telefono]) {
+      var nombre = c.nombre || '';
+      nuevas.push(c.telefono + (nombre ? ',' + nombre : ''));
+    }
+  });
+  var ta = document.getElementById('dif-phones');
+  // Preservar lo que el merchant ya tenía manualmente — agregamos al final, sin duplicar
+  var existentes = (ta.value || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
+  var existentesSet = {};
+  existentes.forEach(function(l){
+    var tel = l.split(',')[0].trim();
+    existentesSet[tel] = true;
+  });
+  nuevas.forEach(function(l) {
+    var tel = l.split(',')[0].trim();
+    if (!existentesSet[tel]) existentes.push(l);
+  });
+  ta.value = existentes.join('\n');
+  if (typeof actualizarConteo === 'function') actualizarConteo();
+  cerrarSelectorClientes();
+}
+
 function actualizarConteo() {
   var dests = _parsearDestinatarios();
   var n = dests.length;
@@ -5879,6 +6094,9 @@ async function enviarDifusion() {
           header_url:  tpl.header_url  || null,
           campaign_name: campaignName,
           campaign_id:   campaignId,
+          // #71 — mandamos el texto del body para que backend lo guarde en
+          // el historial del cliente con las variables sustituidas.
+          body_text:     tpl.preview || tpl.body || '',
           recipients: lote,
         }),
       });
@@ -7479,7 +7697,9 @@ function togglePwd(inputId, btn) {
    ESTADO DEL SISTEMA — diagnóstico en tiempo real de tokens
    ══════════════════════════════════════════════════════════════ */
 function _setSistemaEstado(servicio, estado, mensaje, detalle, sugerencia) {
-  /* estado: 'ok' | 'warn' | 'error' | 'loading' */
+  /* estado: 'ok' | 'warn' | 'error' | 'loading'
+     sugerencia: string. Si empieza con '<' se interpreta como HTML crudo
+     (para incrustar botones de fix). Si no, se escapa como texto plano. */
   var dot = document.getElementById('dot-' + servicio);
   var msg = document.getElementById('msg-' + servicio);
   var det = document.getElementById('det-' + servicio);
@@ -7489,7 +7709,8 @@ function _setSistemaEstado(servicio, estado, mensaje, detalle, sugerencia) {
   if (det) {
     var detHtml = detalle || '';
     if (sugerencia) {
-      detHtml += '<div class="sistema-sugerencia">💡 ' + he(sugerencia) + '</div>';
+      var esHtml = typeof sugerencia === 'string' && sugerencia.trim().startsWith('<');
+      detHtml += '<div class="sistema-sugerencia">' + (esHtml ? sugerencia : '💡 ' + he(sugerencia)) + '</div>';
     }
     det.innerHTML = detHtml;
   }
@@ -7570,6 +7791,15 @@ async function _verificarCatalogo() {
   try {
     var r = await fetch('/inbox/api/sistema/fallas-catalogo', {credentials:'include'});
     var d = await r.json();
+    // Si el agente NO tiene catálogo configurado, no asumas que está sano
+    // solo porque no hay fallas — no hay nada montado todavía.
+    if (!d.configurado) {
+      _setSistemaEstado('catalogo', 'warn',
+        '⚪ Sin configurar',
+        'Conecta tu Meta Commerce Catalog para activar el catálogo nativo de WhatsApp.',
+        'Ve a Configuración → Integraciones → Meta y completa META_CATALOG_ID.');
+      return;
+    }
     var total = d.total_24h || 0;
     if (total === 0) {
       _setSistemaEstado('catalogo', 'ok',
@@ -7616,13 +7846,59 @@ async function _verificarShopify() {
   }
 }
 
+/* Verifica si nuestra app está suscrita al webhook de la WABA. Es el
+   problema más común tras re-activar números: el token sigue válido pero
+   Meta desuscribió la app y por eso no llegan los mensajes entrantes. */
+async function _verificarWebhook() {
+  _setSistemaEstado('webhook', 'loading', 'Verificando…', '');
+  try {
+    var r = await fetch('/inbox/api/sistema/webhook-suscripcion', {credentials:'include'});
+    var d = await r.json();
+    if (!d.ok) {
+      _setSistemaEstado('webhook', 'warn', '⚠ ' + (d.error || 'No verificable'), '');
+      return;
+    }
+    if (d.suscrito) {
+      _setSistemaEstado('webhook', 'ok',
+        '✅ Webhook suscrito',
+        d.total_apps + ' app(s) recibiendo mensajes de tu WABA');
+    } else {
+      // El estado warn permite mostrar el botón de fix
+      _setSistemaEstado('webhook', 'error',
+        '❌ Webhook no suscrito',
+        'Los mensajes entrantes NO llegan al panel — toca reactivar.',
+        '<button onclick="reSuscribirWebhook()" style="background:#10b981;color:#0a1929;border:none;padding:7px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:.78rem">↻ Re-suscribir ahora</button>');
+    }
+  } catch(e) {
+    _setSistemaEstado('webhook', 'warn', 'No verificable', he(String(e)));
+  }
+}
+
+/* Suscribe la app al webhook y reverifica. */
+async function reSuscribirWebhook() {
+  _setSistemaEstado('webhook', 'loading', 'Suscribiendo…', '');
+  try {
+    var r = await fetch('/inbox/api/sistema/webhook-suscribir', {method:'POST', credentials:'include'});
+    var d = await r.json();
+    if (d.ok) {
+      await _verificarWebhook();  // reverificar para confirmar el cambio
+    } else {
+      _setSistemaEstado('webhook', 'error', '❌ Falló la suscripción',
+        he(d.detalle || d.error || 'desconocido'));
+    }
+  } catch(e) {
+    _setSistemaEstado('webhook', 'error', 'Error de red', he(String(e)));
+  }
+}
+
 async function cargarEstadoSistema() {
-  // Ejecutar las 4 verificaciones en paralelo para velocidad
+  // Ejecutar las verificaciones en paralelo para velocidad
   await Promise.all([
     _verificarWhatsApp(),
     _verificarCAPI(),
     _verificarCatalogo(),
     _verificarShopify(),
+    _verificarWebhook(),
   ]);
 }
 
@@ -11048,10 +11324,11 @@ body{{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--
 .topbar{{background:var(--bg-card);border-bottom:1px solid var(--border);padding:0 28px;
   display:flex;align-items:center;justify-content:space-between;height:58px}}
 .voco-logo{{display:flex;align-items:center;gap:10px;text-decoration:none}}
-.voco-logo-ic{{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
-  display:flex;align-items:center;justify-content:center;font-size:1.1rem;box-shadow:0 2px 8px #6366f144;color:#fff}}
-.voco-logo-txt{{font-weight:800;font-size:1.15rem;color:var(--text);letter-spacing:-.5px}}
-.voco-logo-txt span{{color:var(--brand)}}
+.voco-logo-ic{{width:36px;height:36px;display:flex;align-items:center;justify-content:center}}
+/* Tipografía wordmark — geométrica sans tipo Avenir/Inter, peso semi-bold,
+   letter-spacing ligeramente expandido para alinear con el símbolo redondeado. */
+.voco-logo-txt{{font-weight:700;font-size:1.45rem;color:var(--text);letter-spacing:-.02em;
+  font-family:'Inter','Avenir Next','Avenir','Segoe UI',system-ui,sans-serif;line-height:1}}
 .topbar-right{{display:flex;align-items:center;gap:12px}}
 .topbar-user{{font-size:.78rem;color:var(--text-soft);padding:4px 10px;
   border:1px solid var(--border);border-radius:6px}}
@@ -11164,9 +11441,14 @@ html.dark .agent-pill{{background:var(--pill-bg-dark)!important;color:var(--pill
 <div class="topbar">
   <div class="voco-logo">
     <div class="voco-logo-ic">
-      <i data-lucide="zap" style="width:18px;height:18px"></i>
+      <!-- Logo Voco — símbolo de bocadillo hexagonal -->
+      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none"
+           style="width:36px;height:36px">
+        <path d="M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z"
+              stroke="#10b981" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
     </div>
-    <div class="voco-logo-txt">Vo<span>co</span></div>
+    <div class="voco-logo-txt">Voco</div>
   </div>
   <div class="topbar-right">
     {_build_user_topbar(user)}
@@ -11312,17 +11594,61 @@ function renderWizStep() {{
       '<div class="wiz-field" style="flex:1"><label class="wiz-label">Color</label>'+
       '<div class="color-swatches">'+swatchHtml+'</div></div></div>';
   }} else if (_wizStep === 2) {{
-    body.innerHTML = dots +
-      '<div class="wiz-field"><label class="wiz-label">Access Token de Meta *</label>'+
-      '<input class="wiz-inp" id="wiz-mat" type="password" placeholder="EAAxxxxx..." value="'+((_wizData.meta_access_token)||'')+'"></div>'+
-      '<div class="wiz-field"><label class="wiz-label">Phone Number ID *</label>'+
-      '<input class="wiz-inp" id="wiz-mpid" placeholder="1234567890" value="'+((_wizData.phone_number_id)||'')+'"></div>'+
-      '<div class="wiz-field"><label class="wiz-label">WABA ID</label>'+
-      '<input class="wiz-inp" id="wiz-waba" placeholder="WhatsApp Business Account ID" value="'+((_wizData.waba_id)||'')+'"></div>'+
-      '<div class="wiz-field"><label class="wiz-label">Verify Token (puedes inventar uno)</label>'+
-      '<input class="wiz-inp" id="wiz-vt" placeholder="mi-agente-2024" value="'+((_wizData.verify_token)||'voco-verify-'+Math.random().toString(36).slice(2,8))+'"></div>'+
-      '<button class="btn-wiz-next" style="width:100%;margin-top:4px" onclick="probarMetaWiz()" type="button"><i data-lucide="plug" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar conexión</button>'+
-      '<div class="wiz-result" id="wiz-conn-result"></div>';
+    var modo = _wizData._meta_modo || '';  // '', 'tengo', 'despues'
+    // Pantalla inicial: dos caminos. Antes el wizard pedía credenciales
+    // inline asumiendo que el merchant ya las tenía — si no las tenía,
+    // se atascaba. Ahora ofrecemos: ya las tengo / configurar después.
+    // Los apóstrofes dentro de onclick van como \\'tengo\\' porque el f-string
+    // de Python come un nivel de escape — sin doble backslash, se rompía la
+    // cadena JS y el wizard no abría.
+    if (!modo) {{
+      body.innerHTML = dots +
+        '<p style="font-size:.86rem;color:var(--voco-text);margin-bottom:16px;line-height:1.55">'+
+        'Para que tu agente reciba mensajes de WhatsApp necesita estar conectado a Meta. '+
+        '¿Ya tienes tus credenciales (Access Token, Phone Number ID, WABA ID)?</p>'+
+        '<button class="btn-wiz-next" onclick="_wizMetaModo(\\'tengo\\')" type="button" '+
+        'style="width:100%;margin-bottom:10px;justify-content:flex-start;text-align:left;padding:14px 16px">'+
+        '<div style="display:flex;align-items:center;gap:10px;width:100%">'+
+        '<i data-lucide="check-circle" style="width:18px;height:18px;color:#10b981;flex-shrink:0"></i>'+
+        '<div style="flex:1"><div style="font-weight:600">Sí, ya las tengo</div>'+
+        '<div style="font-size:.74rem;opacity:.8;font-weight:400;margin-top:2px">Pegar credenciales y conectar ahora</div></div></div></button>'+
+        '<button class="btn-secondary" onclick="_wizMetaModo(\\'despues\\')" type="button" '+
+        'style="width:100%;justify-content:flex-start;text-align:left;padding:14px 16px;background:var(--voco-card-bg);'+
+        'border:1px solid var(--voco-border);color:var(--voco-text);border-radius:8px;cursor:pointer">'+
+        '<div style="display:flex;align-items:center;gap:10px;width:100%">'+
+        '<i data-lucide="clock" style="width:18px;height:18px;color:var(--voco-text-muted);flex-shrink:0"></i>'+
+        '<div style="flex:1"><div style="font-weight:600">Aún no las tengo</div>'+
+        '<div style="font-size:.74rem;opacity:.8;font-weight:400;margin-top:2px">Crea el agente ahora y conecta WhatsApp con el wizard guiado después</div></div></div></button>'+
+        '<div style="margin-top:14px;padding:12px 14px;background:var(--voco-nav-bg-active);border:1px solid var(--voco-border);border-radius:8px;font-size:.78rem;color:var(--voco-text-muted);line-height:1.55">'+
+        '<i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px;margin-right:4px"></i> '+
+        'Si no tienes Meta configurado, te llevamos paso a paso después de crear el agente. Toma ~30 min para no-técnicos.</div>';
+    }} else if (modo === 'tengo') {{
+      body.innerHTML = dots +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+        '<span style="font-size:.78rem;color:var(--voco-text-muted)">Pega las credenciales de Meta y prueba la conexión.</span>'+
+        '<button onclick="_wizMetaModo(\\'\\')" type="button" style="background:none;border:none;color:var(--voco-brand);font-size:.76rem;cursor:pointer;font-weight:600">← Cambiar</button></div>'+
+        '<div class="wiz-field"><label class="wiz-label">Access Token de Meta *</label>'+
+        '<input class="wiz-inp" id="wiz-mat" type="password" placeholder="EAAxxxxx..." value="'+((_wizData.meta_access_token)||'')+'"></div>'+
+        '<div class="wiz-field"><label class="wiz-label">Phone Number ID *</label>'+
+        '<input class="wiz-inp" id="wiz-mpid" placeholder="1234567890" value="'+((_wizData.phone_number_id)||'')+'"></div>'+
+        '<div class="wiz-field"><label class="wiz-label">WABA ID</label>'+
+        '<input class="wiz-inp" id="wiz-waba" placeholder="WhatsApp Business Account ID" value="'+((_wizData.waba_id)||'')+'"></div>'+
+        '<div class="wiz-field"><label class="wiz-label">Verify Token (puedes inventar uno)</label>'+
+        '<input class="wiz-inp" id="wiz-vt" placeholder="mi-agente-2024" value="'+((_wizData.verify_token)||'voco-verify-'+Math.random().toString(36).slice(2,8))+'"></div>'+
+        '<button class="btn-wiz-next" style="width:100%;margin-top:4px" onclick="probarMetaWiz()" type="button"><i data-lucide="plug" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar conexión</button>'+
+        '<div class="wiz-result" id="wiz-conn-result"></div>';
+    }} else {{  // modo === 'despues'
+      body.innerHTML = dots +
+        '<div style="text-align:center;padding:24px 12px">'+
+        '<div style="width:64px;height:64px;border-radius:50%;background:rgba(16,185,129,.12);'+
+        'display:inline-flex;align-items:center;justify-content:center;margin-bottom:14px">'+
+        '<i data-lucide="rocket" style="width:30px;height:30px;color:#10b981"></i></div>'+
+        '<h3 style="margin:0 0 8px;color:var(--voco-text);font-size:1rem">Continuamos sin Meta por ahora</h3>'+
+        '<p style="color:var(--voco-text-muted);font-size:.84rem;margin-bottom:14px;line-height:1.55">'+
+        'Vas a poder armar tu agente, prompt y mensajes. Cuando termines de crearlo, te llevaremos al wizard guiado para conectar tu cuenta de WhatsApp Business.</p>'+
+        '<button onclick="_wizMetaModo(\\'\\')" type="button" style="background:none;border:none;color:var(--voco-brand);font-size:.78rem;cursor:pointer;font-weight:600">← Cambiar de opinión y conectar ahora</button>'+
+        '</div>';
+    }}
   }} else if (_wizStep === 3) {{
     var tmpl = _PROMPT_TEMPLATES[_wizData.business_type] || _PROMPT_TEMPLATES['personalizado'];
     var name = _wizData.name || 'Mi Negocio';
@@ -11479,6 +11805,13 @@ async function probarMetaWiz() {{
   }} catch(e) {{ res.className='wiz-result err'; res.textContent='Error de red: '+e; }}
 }}
 
+/* Cambia el sub-modo del paso 2 ('', 'tengo', 'despues') y re-renderiza
+   para mostrar inputs o el card de "configurar después". */
+function _wizMetaModo(modo) {{
+  _wizData._meta_modo = modo;
+  renderWizStep();
+}}
+
 async function wizNext() {{
   // Guardar datos del paso actual antes de avanzar
   if(_wizStep===1) {{
@@ -11489,12 +11822,26 @@ async function wizNext() {{
     _wizData.agent_name = aname;
     _wizData.slug = _generarSlug(name);
   }} else if(_wizStep===2) {{
-    var at = (document.getElementById('wiz-mat').value||'').trim();
-    var pid = (document.getElementById('wiz-mpid').value||'').trim();
-    _wizData.meta_access_token = at;
-    _wizData.phone_number_id = pid;
-    _wizData.waba_id = (document.getElementById('wiz-waba').value||'').trim();
-    _wizData.verify_token = (document.getElementById('wiz-vt').value||'').trim();
+    // Si eligió 'configurar después', no validamos credenciales — solo
+    // marcamos un flag para mostrar el CTA hacia /inbox/onboarding-meta al final.
+    if (_wizData._meta_modo === 'despues') {{
+      _wizData.meta_pendiente = true;
+      _wizData.meta_access_token = '';
+      _wizData.phone_number_id = '';
+      _wizData.waba_id = '';
+      _wizData.verify_token = '';
+    }} else if (_wizData._meta_modo === 'tengo') {{
+      var at = (document.getElementById('wiz-mat').value||'').trim();
+      var pid = (document.getElementById('wiz-mpid').value||'').trim();
+      _wizData.meta_pendiente = false;
+      _wizData.meta_access_token = at;
+      _wizData.phone_number_id = pid;
+      _wizData.waba_id = (document.getElementById('wiz-waba').value||'').trim();
+      _wizData.verify_token = (document.getElementById('wiz-vt').value||'').trim();
+    }} else {{
+      alert('Elige cómo quieres configurar Meta WhatsApp para continuar');
+      return;
+    }}
   }} else if(_wizStep===3) {{
     _wizData.prompt = (document.getElementById('wiz-prompt').value||'').trim();
     _wizData.descripcion = (document.getElementById('wiz-desc').value||'').trim();
@@ -11594,9 +11941,18 @@ async function crearAgente() {{
     }});
 
     res.className='wiz-result ok';
-    res.textContent = '✅ ¡Agente creado! Redirigiendo al panel...';
-    res.style.display='';
-    setTimeout(function(){{ window.location.href = '/inbox/'+newSlug; }}, 1500);
+    // Si el merchant eligió "configurar Meta después", llevarlo al wizard
+    // guiado de Meta en vez del panel — así enlaza la tarea pendiente
+    // inmediatamente sin que tenga que buscar por dónde seguir.
+    if (_wizData.meta_pendiente) {{
+      res.textContent = '✅ ¡Agente creado! Te llevamos a conectar WhatsApp paso a paso…';
+      res.style.display='';
+      setTimeout(function(){{ window.location.href = '/inbox/onboarding-meta'; }}, 1500);
+    }} else {{
+      res.textContent = '✅ ¡Agente creado! Redirigiendo al panel...';
+      res.style.display='';
+      setTimeout(function(){{ window.location.href = '/inbox/'+newSlug; }}, 1500);
+    }}
   }} catch(e) {{
     res.className='wiz-result err';
     res.textContent = '⚠️ Error: '+String(e);
@@ -11612,3 +11968,506 @@ async function editarAgente(agentId) {{
 </script>
 </body>
 </html>""".replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# #51 — Wizard onboarding Meta WhatsApp
+# ══════════════════════════════════════════════════════════════════════════════
+# Página standalone (sin shell del panel) para foco total en la tarea.
+# Stepper vertical con 8 pasos. Cada paso tiene: estado, instrucción visual,
+# botón "Abrir en Meta" con URL exacta, validación cuando aplica, y "Marcar
+# como hecho". Progreso persistido via /inbox/api/onboarding/estado.
+# El placeholder __WEBHOOK_URL__ se reemplaza en el handler con la URL real.
+
+HTML_WIZARD_ONBOARDING = r"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voco — Conectar WhatsApp</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none'><path d='M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z' stroke='%2310b981' stroke-width='10' stroke-linejoin='round' stroke-linecap='round'/></svg>">
+<style>
+* {box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+body {background:#0a1929;color:#e6edf3;min-height:100vh;line-height:1.5}
+.wiz-hdr {background:linear-gradient(180deg,rgba(16,185,129,.08),transparent);padding:30px 24px 20px;border-bottom:1px solid #1f2a3a}
+.wiz-hdr-inner {max-width:880px;margin:0 auto;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.wiz-logo {width:40px;height:40px;flex-shrink:0}
+.wiz-titulo h1 {font-size:1.4rem;font-weight:700;margin:0}
+.wiz-titulo p {font-size:.86rem;color:#94a3b8;margin-top:2px}
+.wiz-volver {margin-left:auto;background:transparent;border:1px solid #334155;color:#cbd5e1;padding:7px 14px;border-radius:8px;cursor:pointer;font-size:.82rem;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.wiz-volver:hover {background:#1f2a3a}
+
+.wiz-progreso-wrap {max-width:880px;margin:18px auto 0;padding:0 24px}
+.wiz-progreso-bar {height:6px;background:#1f2a3a;border-radius:3px;overflow:hidden}
+.wiz-progreso-fill {height:100%;background:linear-gradient(90deg,#10b981,#22c55e);width:0%;transition:width .3s}
+.wiz-progreso-meta {display:flex;justify-content:space-between;align-items:center;font-size:.76rem;color:#94a3b8;margin-top:6px}
+
+.wiz-main {max-width:880px;margin:30px auto;padding:0 24px 60px}
+.wiz-paso {background:#11212f;border:1px solid #1f2a3a;border-radius:12px;margin-bottom:14px;overflow:hidden;transition:all .2s}
+.wiz-paso.completado {border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.04)}
+.wiz-paso-hdr {display:flex;align-items:center;gap:14px;padding:16px 20px;cursor:pointer;user-select:none}
+.wiz-paso-num {width:32px;height:32px;border-radius:50%;background:#1f2a3a;border:2px solid #334155;color:#94a3b8;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.86rem;flex-shrink:0;transition:.2s}
+.wiz-paso.completado .wiz-paso-num {background:#10b981;border-color:#10b981;color:#0a1929}
+.wiz-paso-titulo {flex:1;min-width:0}
+.wiz-paso-titulo h3 {font-size:.98rem;font-weight:600;color:#e6edf3;margin:0}
+.wiz-paso-titulo p {font-size:.78rem;color:#94a3b8;margin-top:2px}
+.wiz-paso-toggle {color:#64748b;font-size:1.2rem;transition:transform .2s}
+.wiz-paso.expandido .wiz-paso-toggle {transform:rotate(180deg)}
+
+.wiz-paso-body {max-height:0;overflow:hidden;transition:max-height .3s ease}
+.wiz-paso.expandido .wiz-paso-body {max-height:1500px}
+.wiz-paso-body-inner {padding:0 20px 20px;border-top:1px solid #1f2a3a;margin-top:0;padding-top:18px}
+.wiz-paso-body-inner p {font-size:.86rem;color:#cbd5e1;margin-bottom:12px}
+.wiz-paso-body-inner ol, .wiz-paso-body-inner ul {margin-left:20px;font-size:.84rem;color:#cbd5e1;line-height:1.7}
+.wiz-paso-body-inner code {background:#1f2a3a;padding:2px 7px;border-radius:4px;font-size:.78rem;color:#10b981;font-family:ui-monospace,monospace;word-break:break-all}
+.wiz-paso-body-inner .nota {background:rgba(217,119,6,.1);border-left:3px solid #d97706;padding:10px 14px;border-radius:6px;font-size:.82rem;color:#fbbf24;margin:10px 0}
+.wiz-paso-body-inner .tip {background:rgba(16,185,129,.08);border-left:3px solid #10b981;padding:10px 14px;border-radius:6px;font-size:.82rem;color:#86efac;margin:10px 0}
+
+.wiz-acciones {display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.wiz-btn-primario {background:#10b981;color:#0a1929;border:none;padding:9px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:.85rem;display:inline-flex;align-items:center;gap:6px;text-decoration:none}
+.wiz-btn-primario:hover {background:#22c55e}
+.wiz-btn-primario:disabled {opacity:.5;cursor:not-allowed}
+.wiz-btn-secundario {background:transparent;color:#cbd5e1;border:1px solid #334155;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:.83rem;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.wiz-btn-secundario:hover {background:#1f2a3a}
+
+.wiz-input {width:100%;background:#0a1929;border:1px solid #334155;color:#e6edf3;padding:9px 12px;border-radius:7px;font-size:.85rem;outline:none;font-family:ui-monospace,monospace}
+.wiz-input:focus {border-color:#10b981}
+.wiz-label {display:block;font-size:.78rem;color:#94a3b8;margin-bottom:5px;font-weight:600}
+
+.wiz-validacion {margin-top:12px;padding:12px 14px;border-radius:8px;font-size:.82rem}
+.wiz-validacion.ok {background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.3);color:#86efac}
+.wiz-validacion.error {background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.3);color:#fca5a5}
+
+.wiz-copy-row {display:flex;gap:6px;align-items:stretch;margin:8px 0}
+.wiz-copy-row code {flex:1;padding:8px 12px}
+.wiz-copy-btn {background:#10b981;color:#0a1929;border:none;padding:0 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:.78rem;flex-shrink:0}
+
+/* Botón pequeño inline para abrir URL específica dentro de una instrucción.
+   Aparece al lado del texto que dice "abre X", para no obligar al usuario a
+   buscar el botón principal abajo. Tamaño deliberadamente compacto. */
+.wiz-link-inline {display:inline-flex;align-items:center;gap:3px;background:rgba(16,185,129,.12);color:#10b981;
+  text-decoration:none;font-size:.72rem;font-weight:600;padding:2px 9px;border-radius:6px;
+  border:1px solid rgba(16,185,129,.3);margin-left:5px;vertical-align:middle;transition:.15s}
+.wiz-link-inline:hover {background:rgba(16,185,129,.22);border-color:rgba(16,185,129,.5)}
+</style>
+</head>
+<body>
+
+<header class="wiz-hdr">
+  <div class="wiz-hdr-inner">
+    <svg class="wiz-logo" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none">
+      <path d="M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z" stroke="#10b981" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div class="wiz-titulo">
+      <h1>Conectar WhatsApp Business a Voco</h1>
+      <p>Asistente paso a paso · 6 pasos · ~25 min</p>
+    </div>
+    <button type="button" onclick="reiniciarWizard()" class="wiz-volver"
+      style="background:transparent;border:1px solid #475569;color:#94a3b8;cursor:pointer"
+      title="Borra el progreso y vuelve al inicio">↻ Reiniciar</button>
+    <a href="/inbox" class="wiz-volver">← Volver al panel</a>
+  </div>
+  <div class="wiz-progreso-wrap">
+    <div class="wiz-progreso-bar"><div class="wiz-progreso-fill" id="wiz-fill"></div></div>
+    <div class="wiz-progreso-meta">
+      <span><span id="wiz-completados">0</span> de <span id="wiz-total">6</span> pasos</span>
+      <span id="wiz-porcentaje">0% completado</span>
+    </div>
+  </div>
+</header>
+
+<main class="wiz-main" id="wiz-pasos">
+  <!-- Pantalla de bifurcación (solo aparece si el user ya tiene Meta en otro agente) -->
+  <div id="wiz-bifurcacion" style="display:none;background:#11212f;border:1px solid #1f2a3a;border-radius:12px;padding:28px 24px;margin-bottom:20px">
+    <h2 style="margin:0 0 8px;color:#e6edf3;font-size:1.15rem">¿Cómo conectarás este nuevo agente?</h2>
+    <p style="color:#94a3b8;font-size:.88rem;margin-bottom:20px;line-height:1.55">
+      Ya configuraste Meta para otro agente — puedes reutilizar esa configuración o crear una nueva si este agente
+      es de otro negocio con verificación legal separada.
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button onclick="elegirCamino('corto')" type="button"
+        style="background:transparent;border:1.5px solid #10b981;color:#e6edf3;padding:16px 18px;border-radius:10px;cursor:pointer;text-align:left;font-size:.95rem">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <div style="background:#10b981;color:#0a1929;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">✓</div>
+          <div style="flex:1">
+            <div style="font-weight:600;margin-bottom:4px">Usar mi Business Manager existente <span style="font-size:.72rem;color:#10b981;font-weight:600;background:rgba(16,185,129,.15);padding:2px 8px;border-radius:10px;margin-left:6px">recomendado</span></div>
+            <div style="color:#94a3b8;font-size:.82rem;line-height:1.55">Reutiliza tu cuenta verificada. Solo agregamos el nuevo número, generamos token y conectamos.</div>
+            <div style="color:#10b981;font-size:.74rem;margin-top:6px;font-weight:600">2 pasos · ~10 minutos</div>
+          </div>
+        </div>
+      </button>
+      <button onclick="elegirCamino('completo')" type="button"
+        style="background:transparent;border:1.5px solid #334155;color:#e6edf3;padding:16px 18px;border-radius:10px;cursor:pointer;text-align:left;font-size:.95rem">
+        <div style="display:flex;align-items:flex-start;gap:12px">
+          <div style="background:#1f2a3a;color:#94a3b8;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">+</div>
+          <div style="flex:1">
+            <div style="font-weight:600;margin-bottom:4px">Crear un nuevo Business Manager</div>
+            <div style="color:#94a3b8;font-size:.82rem;line-height:1.55">Si este agente es para otro negocio con razón social y verificación legal separada de los anteriores.</div>
+            <div style="color:#94a3b8;font-size:.74rem;margin-top:6px;font-weight:600">6 pasos · ~30 minutos</div>
+          </div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Pasos se inyectan via JS -->
+  <div id="wiz-pasos-wrap">
+    <div style="text-align:center;color:#64748b;padding:40px">Cargando…</div>
+  </div>
+</main>
+
+<script>
+var _wizEstado = {pasos: {}, completados: 0, total: 6, camino: ''};
+var _wizExpandido = null;
+// Pasos del camino corto — solo los que cambian por agente nuevo
+// (crear WABA+número, conectar). Los demás se heredan del primer agente.
+var WIZ_PASOS_CORTO_IDS = [3, 6];
+
+// Helper: botón pequeño inline con ícono — para abrir secciones específicas
+// de Meta sin que el usuario tenga que buscar dónde están.
+function abrirBtn(url, label) {
+  return '<a href="' + url + '" target="_blank" rel="noopener" class="wiz-link-inline">'
+    + '<span style="font-size:.7rem">↗</span> ' + (label || 'Abrir') + '</a>';
+}
+
+// Datos de cada paso. El array es la fuente de verdad de la UX.
+// IDs y números en placeholders están enmascarados — no exponemos datos reales
+// de ningún negocio existente.
+var WIZ_PASOS = [
+  {
+    num: 1,
+    titulo: 'Crear cuenta de Meta Business',
+    subtitulo: 'Si ya tienes Business Manager, salta este paso',
+    body: function(){return ''
+      + '<p>Necesitas una cuenta de <b>Meta Business Suite</b> (antes Business Manager) para administrar tu negocio en WhatsApp. Es gratis.</p>'
+      + '<ol>'
+      +   '<li>Abre <code>business.facebook.com</code> ' + abrirBtn('https://business.facebook.com', 'Ir') + '</li>'
+      +   '<li>Click en <b>"Crear cuenta"</b> arriba a la derecha</li>'
+      +   '<li>Pon el nombre de tu negocio, tu nombre y tu correo</li>'
+      +   '<li>Confirma el correo cuando llegue</li>'
+      + '</ol>'
+      + '<div class="tip">Si tu cuenta ya existe, simplemente verifica que puedes entrar y marca este paso como hecho.</div>'
+      + '<div class="wiz-acciones">'
+      +   marcarBtn(1)
+      + '</div>';
+    },
+  },
+  {
+    num: 2,
+    titulo: 'Verificar tu negocio',
+    subtitulo: 'Sube documentos legales — Meta tarda 1-3 días en aprobar',
+    body: function(){return ''
+      + '<p>Meta exige verificar que el negocio es real antes de permitir enviar mensajes. Vas a subir documentos como RUT o registro mercantil.</p>'
+      + '<ol>'
+      +   '<li>Abre <b>Configuración del negocio → Info del negocio</b> ' + abrirBtn('https://business.facebook.com/settings/info', 'Ir') + '</li>'
+      +   '<li>Sección <b>"Verificación del negocio"</b> → click <b>"Empezar verificación"</b></li>'
+      +   '<li>Sigue el flujo: cargar documentos legales (NIT/RUT en Colombia)</li>'
+      +   '<li>Espera 1-3 días hábiles a que Meta responda</li>'
+      + '</ol>'
+      + '<div class="nota">⏱ Este es el paso que más tarda. Mientras Meta revisa, puedes seguir con los demás pasos.</div>'
+      + '<div class="wiz-acciones">'
+      +   marcarBtn(2, 'Marcar como enviada')
+      + '</div>';
+    },
+  },
+  {
+    num: 3,
+    titulo: 'Crear cuenta WhatsApp Business y agregar tu número',
+    subtitulo: 'Meta lo hace todo en un solo asistente: nombre, número, verificación',
+    body: function(){return ''
+      + '<p>Meta tiene un asistente que crea la cuenta de WhatsApp Business y agrega tu número en un solo flujo.</p>'
+      + '<ol>'
+      +   '<li>Abre <b>Configuración → Cuentas de WhatsApp</b> ' + abrirBtn('https://business.facebook.com/latest/settings/whatsapp_account/', 'Ir') + '</li>'
+      +   '<li>Click <b>"Agregar"</b> arriba a la derecha → <b>"Crear una nueva cuenta de WhatsApp Business"</b></li>'
+      +   '<li>Meta abre un asistente con 3 pestañas. Sigue cada una:</li>'
+      +   '<ul style="margin-left:20px;margin-top:4px">'
+      +     '<li><b>Detalles</b> — Nombre visible (lo que verán tus clientes en WhatsApp) y categoría del negocio</li>'
+      +     '<li><b>Número de teléfono</b> — Ingresa con código de país (ej: +57 3xx xxx xxxx)</li>'
+      +     '<li><b>Verificación telefónica</b> — Recibes un código por SMS o llamada y lo ingresas</li>'
+      +   '</ul>'
+      +   '<li>Al terminar, en la pantalla de tu cuenta vas a ver dos números importantes: el <b>Identificador de la cuenta de WhatsApp</b> (al lado del nombre de tu cuenta) y el <b>Identificador del número de teléfono</b> (en la pestaña "Números de teléfono"). Cópialos.</li>'
+      + '</ol>'
+      + '<div class="nota">⚠ El número NO debe estar activo en WhatsApp normal. Si lo está, elimina primero la cuenta desde la app móvil (Configuración → Cuenta → Eliminar mi cuenta) antes de continuar.</div>'
+      + '<label class="wiz-label" style="margin-top:14px">Identificador de la cuenta de WhatsApp <span style="color:var(--voco-text-muted);font-weight:400">(16 dígitos, ej: 30747xxxxxxxxxxx)</span></label>'
+      + '<input class="wiz-input" id="wiz-waba-id" placeholder="Pega aquí el identificador" value="' + (getDato(3,'waba_id')||'') + '">'
+      + '<label class="wiz-label" style="margin-top:14px">Identificador del número de teléfono <span style="color:var(--voco-text-muted);font-weight:400">(16 dígitos, ej: 11353xxxxxxxxxxx)</span></label>'
+      + '<input class="wiz-input" id="wiz-phone-id" placeholder="Pega aquí el identificador" value="' + (getDato(3,'phone_number_id')||'') + '">'
+      + '<label class="wiz-label" style="margin-top:14px">Tu número de WhatsApp (con código país)</label>'
+      + '<input class="wiz-input" id="wiz-phone" placeholder="ej: +573xxxxxxxxxx" value="' + (getDato(3,'telefono')||'') + '">'
+      + '<div class="wiz-acciones">'
+      +   '<button class="wiz-btn-primario" onclick="guardarPaso3()">Guardar y continuar</button>'
+      + '</div>';
+    },
+  },
+  {
+    num: 4,
+    titulo: 'Invitar a Voco como socio de tu negocio',
+    subtitulo: 'Para que Voco pueda operar tu WhatsApp',
+    body: function(){return ''
+      + '<p>En tu Business Manager vas a agregar a Voco como socio para que nuestra plataforma tenga permiso de operar tu WhatsApp.</p>'
+      + '<ol>'
+      +   '<li>Abre <b>Configuración del negocio → Socios</b> ' + abrirBtn('https://business.facebook.com/settings/partners', 'Ir') + '</li>'
+      +   '<li>Click <b>"Agregar"</b> → <b>"Compartir activos con socio"</b></li>'
+      +   '<li>Ingresa el <b>ID de Voco</b> (cópialo abajo)</li>'
+      +   '<li>Selecciona los activos: <b>WhatsApp Business Account</b> + <b>Phone Number</b></li>'
+      +   '<li>Asigna permisos <b>"Control total"</b> y confirma</li>'
+      + '</ol>'
+      + '<div class="wiz-copy-row">'
+      +   '<code>2057787125091810</code>'
+      +   '<button class="wiz-copy-btn" onclick="copiarIdVoco(this)">Copiar ID</button>'
+      + '</div>'
+      + '<div class="wiz-acciones">'
+      +   marcarBtn(4, 'Marcar como invitado')
+      + '</div>';
+    },
+  },
+  {
+    num: 5,
+    titulo: 'Generar token de acceso',
+    subtitulo: 'La llave para que Voco administre tu cuenta de WhatsApp',
+    body: function(){return ''
+      + '<p>Genera un token y asocia tu cuenta de WhatsApp a Voco para que la podamos administrar.</p>'
+      + '<ol>'
+      +   '<li>Abre <b>Configuración del negocio → Usuarios → Usuarios del sistema</b> ' + abrirBtn('https://business.facebook.com/settings/system-users', 'Ir') + '</li>'
+      +   '<li>Crea un nuevo System User (rol: <b>Administrador</b>)</li>'
+      +   '<li>Asigna tu <b>cuenta de WhatsApp Business</b> (el número viene incluido)</li>'
+      +   '<li>Click <b>"Generar nuevo token"</b> → cuando pregunte la app, selecciona <b>Voco</b></li>'
+      +   '<li>Marca estos permisos: <code>whatsapp_business_messaging</code>, <code>whatsapp_business_management</code>, <code>business_management</code></li>'
+      +   '<li>Elige "Token sin caducidad" si aparece la opción</li>'
+      +   '<li>Copia el token completo (empieza con <code>EAA…</code>) — Meta no lo vuelve a mostrar</li>'
+      + '</ol>'
+      + '<div class="tip">Pegarás el token en el siguiente paso. Voco se encarga de todo lo demás (registro del número, suscripción al webhook) automáticamente.</div>'
+      + '<div class="wiz-acciones">'
+      +   marcarBtn(5, 'Listo, ya tengo el token')
+      + '</div>';
+    },
+  },
+  {
+    num: 6,
+    titulo: 'Conectar Voco y activar',
+    subtitulo: 'Pegamos credenciales, validamos y activamos automáticamente',
+    body: function(){return ''
+      + '<p>Pega aquí el token que generaste. Voco hace 3 cosas: confirma que el token funciona, <b>registra el número en Cloud API</b> y <b>suscribe el webhook</b> para que empieces a recibir mensajes.</p>'
+      + '<label class="wiz-label">Token de acceso (empieza con EAA...)</label>'
+      + '<input class="wiz-input" id="wiz7-token" placeholder="EAA..." value="">'
+      + '<label class="wiz-label" style="margin-top:10px">Identificador del número de teléfono</label>'
+      + '<input class="wiz-input" id="wiz7-phone" value="' + (getDato(3,'phone_number_id')||'') + '">'
+      + '<label class="wiz-label" style="margin-top:10px">Identificador de la cuenta de WhatsApp</label>'
+      + '<input class="wiz-input" id="wiz7-waba" value="' + (getDato(3,'waba_id')||'') + '">'
+      + '<div id="wiz7-resultado"></div>'
+      + '<div class="wiz-acciones">'
+      +   '<button class="wiz-btn-primario" onclick="validarPaso7()">Conectar y activar →</button>'
+      + '</div>';
+    },
+  },
+];
+
+function getDato(num, key) {
+  var p = _wizEstado.pasos[num];
+  return (p && p.datos && p.datos[key]) || '';
+}
+
+function marcarBtn(num, label) {
+  return '<button class="wiz-btn-secundario" onclick="marcarPaso(' + num + ')">' + (label || 'Marcar como hecho') + '</button>';
+}
+
+/* Handler del botón "Guardar y continuar" del paso 3 (crear WABA + número).
+   Extraído a función nombrada para evitar quote-escaping en inline onclick,
+   ya que el HTML del wizard es un raw string en Python. */
+function guardarPaso3() {
+  var datos = {
+    waba_id:         (document.getElementById('wiz-waba-id').value || '').trim(),
+    phone_number_id: (document.getElementById('wiz-phone-id').value || '').trim(),
+    telefono:        (document.getElementById('wiz-phone').value || '').trim(),
+  };
+  marcarPaso(3, datos);
+}
+
+/* Copia el ID de Voco del paso 4 al clipboard. */
+function copiarIdVoco(btn) {
+  copiarTexto(btn, '2057787125091810');
+}
+
+async function cargarEstado() {
+  try {
+    var r = await fetch('/inbox/api/onboarding/estado', {credentials:'include'});
+    var d = await r.json();
+    _wizEstado = d;
+    renderWizard();
+  } catch (e) {
+    document.getElementById('wiz-pasos-wrap').innerHTML =
+      '<div style="text-align:center;color:#fca5a5;padding:40px">Error: ' + e.message + '</div>';
+  }
+}
+
+/* Renderiza la UI según el estado: si toca elegir camino, muestra bifurcación;
+   si no, muestra los pasos (filtrados al camino corto cuando aplica). */
+function renderWizard() {
+  var bifBox  = document.getElementById('wiz-bifurcacion');
+  var pasosBx = document.getElementById('wiz-pasos-wrap');
+  // Si el merchant aún no eligió camino Y el backend dice que tiene Meta previo,
+  // mostramos solo la bifurcación. No renderizamos pasos hasta que elija.
+  if (_wizEstado.mostrar_bifurcacion && !_wizEstado.camino) {
+    bifBox.style.display = 'block';
+    pasosBx.style.display = 'none';
+    return;
+  }
+  bifBox.style.display = 'none';
+  pasosBx.style.display = 'block';
+  renderPasos();
+}
+
+/* Filtra WIZ_PASOS según el camino elegido. Camino corto = solo pasos 3,4,7. */
+function pasosVisibles() {
+  if (_wizEstado.camino === 'corto') {
+    return WIZ_PASOS.filter(function(p){ return WIZ_PASOS_CORTO_IDS.indexOf(p.num) >= 0; });
+  }
+  return WIZ_PASOS;  // completo por default
+}
+
+function renderPasos() {
+  document.getElementById('wiz-completados').textContent = _wizEstado.completados;
+  document.getElementById('wiz-total').textContent       = _wizEstado.total;
+  document.getElementById('wiz-porcentaje').textContent  = (_wizEstado.porcentaje || 0) + '% completado';
+  document.getElementById('wiz-fill').style.width        = (_wizEstado.porcentaje || 0) + '%';
+
+  var pasos = pasosVisibles();
+  // El primer paso no completado se expande por defecto
+  if (_wizExpandido === null) {
+    for (var i = 0; i < pasos.length; i++) {
+      if (!_isCompletado(pasos[i].num)) { _wizExpandido = pasos[i].num; break; }
+    }
+    if (_wizExpandido === null && pasos.length) _wizExpandido = pasos[0].num;
+  }
+
+  var html = '';
+  pasos.forEach(function(p) {
+    var done = _isCompletado(p.num);
+    var expand = _wizExpandido === p.num;
+    html += '<div class="wiz-paso' + (done ? ' completado' : '') + (expand ? ' expandido' : '') + '" id="wiz-paso-' + p.num + '">'
+      + '<div class="wiz-paso-hdr" onclick="toggleExpandir(' + p.num + ')">'
+      +   '<div class="wiz-paso-num">' + (done ? '✓' : p.num) + '</div>'
+      +   '<div class="wiz-paso-titulo"><h3>' + p.titulo + '</h3><p>' + p.subtitulo + '</p></div>'
+      +   '<div class="wiz-paso-toggle">⌃</div>'
+      + '</div>'
+      + '<div class="wiz-paso-body"><div class="wiz-paso-body-inner">' + p.body() + '</div></div>'
+      + '</div>';
+  });
+  document.getElementById('wiz-pasos-wrap').innerHTML = html;
+}
+
+/* Borra el progreso del wizard del agente actual y vuelve al inicio. */
+async function reiniciarWizard() {
+  if (!confirm('¿Reiniciar el wizard?\n\nSe borrará todo el progreso registrado de este agente (los pasos marcados como completados). No afecta nada en Meta — solo los marcadores del panel.')) return;
+  try {
+    var r = await fetch('/inbox/api/onboarding/reset', {method:'POST', credentials:'include'});
+    var d = await r.json();
+    if (!d.ok) { alert('Error: ' + (d.error || 'desconocido')); return; }
+    _wizExpandido = null;
+    _wizEstado = {pasos: {}, completados: 0, total: 6, camino: ''};
+    await cargarEstado();
+  } catch (e) { alert('Error de red: ' + e.message); }
+}
+
+/* Llamado desde los botones de bifurcación. Persiste la decisión y recarga. */
+async function elegirCamino(nombre) {
+  try {
+    var r = await fetch('/inbox/api/onboarding/camino/' + nombre, {
+      method:'POST', credentials:'include',
+    });
+    var d = await r.json();
+    if (!d.ok) { alert('Error: ' + (d.error || 'desconocido')); return; }
+    _wizExpandido = null;
+    await cargarEstado();
+  } catch (e) { alert('Error de red: ' + e.message); }
+}
+
+function _isCompletado(num) {
+  var p = _wizEstado.pasos[num];
+  return !!(p && p.completado);
+}
+
+function toggleExpandir(num) {
+  _wizExpandido = (_wizExpandido === num) ? null : num;
+  renderPasos();
+}
+
+async function marcarPaso(num, datos) {
+  try {
+    await fetch('/inbox/api/onboarding/paso/' + num + '/completar', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({datos: datos || {}}),
+    });
+    _wizExpandido = null;  // expand el siguiente paso pendiente
+    await cargarEstado();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+async function validarPaso7() {
+  var tok   = document.getElementById('wiz7-token').value.trim();
+  var phone = document.getElementById('wiz7-phone').value.trim();
+  var waba  = document.getElementById('wiz7-waba').value.trim();
+  var resBox = document.getElementById('wiz7-resultado');
+  resBox.innerHTML = '<div class="wiz-validacion">Probando conexión con Meta…</div>';
+  try {
+    var r = await fetch('/inbox/api/onboarding/validar-meta', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({access_token: tok, phone_number_id: phone, waba_id: waba}),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      // El backend hace 2 cosas tras validar:
+      // 1) Registra el número para Cloud API (equivalente a "Enviar mensaje"
+      //    en API Setup — sin esto Meta no enruta mensajes al webhook)
+      // 2) Suscribe nuestra app a los webhooks de la WABA
+      var reg = d.registro_numero;
+      var wh  = d.webhook_subscrito;
+      var lineas = ['✓ Conexión validada (token, número y WABA OK).'];
+
+      if (reg) {
+        if (reg.ok) lineas.push('✓ Número registrado en Cloud API — ya puede enviar/recibir mensajes.');
+        else        lineas.push('⚠ No se pudo registrar el número automáticamente: ' + (reg.detalle || ''));
+      }
+      if (wh) {
+        if (wh.ok) lineas.push('✓ Webhook activado — los mensajes entrantes llegarán al panel.');
+        else       lineas.push('⚠ Webhook no se suscribió: ' + (wh.detalle || ''));
+      }
+
+      var todoOK = (!reg || reg.ok) && (!wh || wh.ok);
+      var html = '<div class="wiz-validacion ' + (todoOK ? 'ok' : '') + '" style="' + (todoOK ? '' : 'background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.3);color:#fbbf24') + '">'
+        + lineas.map(function(l){ return l; }).join('<br>')
+        + (todoOK ? '<br><b style="color:#10b981">¡Listo! Mándate un mensaje desde otro celular para confirmar.</b>' : '')
+        + '</div>';
+      resBox.innerHTML = html;
+      await marcarPaso(6, {
+        phone_number_id: phone, waba_id: waba, token_ok: true,
+        registro_ok: !!(reg && reg.ok),
+        webhook_ok:  !!(wh  && wh.ok),
+      });
+    } else {
+      var html = '<div class="wiz-validacion error">✕ Falló alguna validación:<ul style="margin-top:6px;margin-left:18px">';
+      ['me','phone','waba'].forEach(function(k){
+        var r = d.resultados[k];
+        if (r) html += '<li><b>' + k + ':</b> ' + (r.ok ? '✓' : '✕ ' + JSON.stringify(r.detalle).substring(0,150)) + '</li>';
+      });
+      html += '</ul></div>';
+      resBox.innerHTML = html;
+    }
+  } catch (e) {
+    resBox.innerHTML = '<div class="wiz-validacion error">Error de red: ' + e.message + '</div>';
+  }
+}
+
+function copiarTexto(btn, texto) {
+  navigator.clipboard.writeText(texto);
+  var prev = btn.textContent;
+  btn.textContent = '✓ Copiado';
+  setTimeout(function(){ btn.textContent = prev; }, 1500);
+}
+
+cargarEstado();
+</script>
+</body>
+</html>"""

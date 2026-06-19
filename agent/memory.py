@@ -3087,6 +3087,42 @@ async def obtener_agentes_de_usuario(user_id: int) -> list[dict]:
         return [_agent_to_dict(a) for a in result.scalars().all()]
 
 
+async def usuario_tiene_meta_configurado(user_id: int) -> bool:
+    """True si el usuario ya completó el onboarding de Meta en algún otro agente.
+
+    Criterio: existe al menos un agente del usuario con paso 8 (webhook) marcado
+    como completado en el JSON de ONBOARDING_META_PROGRESS. Si lo cumple, sabemos
+    que ya tiene Business Manager + verificación + número + token + webhook activo,
+    por lo que para un agente NUEVO solo necesita el "camino corto" (3 pasos).
+    """
+    import json as _json
+    async with async_session() as session:
+        agentes_r = await session.execute(
+            select(Agent.id).where(Agent.owner_id == user_id)
+        )
+        agent_ids = [a[0] for a in agentes_r.all()]
+        if not agent_ids:
+            return False
+        rows = await session.execute(
+            select(ConfigValue.valor).where(
+                ConfigValue.clave == "ONBOARDING_META_PROGRESS",
+                ConfigValue.agent_id.in_(agent_ids),
+            )
+        )
+        for (raw,) in rows.all():
+            if not raw:
+                continue
+            try:
+                data = _json.loads(raw)
+                pasos = (data or {}).get("pasos", {})
+                # Paso 8 = webhook configurado, el último del wizard largo
+                if pasos.get("8", {}).get("completado"):
+                    return True
+            except Exception:
+                continue
+    return False
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SPRINT 1 — Usuarios internos (agentes humanos de soporte)
 # ══════════════════════════════════════════════════════════════════════════════

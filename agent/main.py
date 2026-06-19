@@ -4348,6 +4348,68 @@ async def api_capi_status(
     return JSONResponse(content=resultado)
 
 
+@app.get("/inbox/api/sistema/webhook-suscripcion")
+async def api_webhook_suscripcion_status(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Verifica si nuestra app está suscrita al webhook de la WABA del agente.
+    Sin esta suscripción Meta no envía los mensajes entrantes al backend, los
+    clientes escriben y Andrea nunca se entera (token funciona OK pero no
+    recibe nada). Pasa después de re-activar números o cambios en la WABA."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    waba_id = await get_config_value("META_WABA_ID", 1) or os.getenv("META_WABA_ID", "")
+    tok     = await get_config_value("META_ACCESS_TOKEN", 1) or os.getenv("META_ACCESS_TOKEN", "")
+    if not waba_id or not tok:
+        return JSONResponse({"ok": False, "error": "Falta META_WABA_ID o META_ACCESS_TOKEN"})
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                f"https://graph.facebook.com/v21.0/{waba_id}/subscribed_apps",
+                params={"access_token": tok},
+            )
+            if r.status_code != 200:
+                return JSONResponse({"ok": False, "error": f"Meta API {r.status_code}: {r.text[:200]}"})
+            data = r.json() or {}
+            apps = data.get("data", []) or []
+            return JSONResponse({
+                "ok":         True,
+                "suscrito":   len(apps) > 0,
+                "total_apps": len(apps),
+                "apps":       apps,
+            })
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
+@app.post("/inbox/api/sistema/webhook-suscribir")
+async def api_webhook_suscribir(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Suscribe la app Voco al webhook de la WABA. Reemplaza el paso manual
+    que antes había que hacer en developers.facebook.com → WhatsApp → Configuration."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    waba_id = await get_config_value("META_WABA_ID", 1) or os.getenv("META_WABA_ID", "")
+    tok     = await get_config_value("META_ACCESS_TOKEN", 1) or os.getenv("META_ACCESS_TOKEN", "")
+    if not waba_id or not tok:
+        return JSONResponse({"ok": False, "error": "Falta META_WABA_ID o META_ACCESS_TOKEN"})
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(
+                f"https://graph.facebook.com/v21.0/{waba_id}/subscribed_apps",
+                params={"access_token": tok},
+            )
+            ok = r.status_code == 200
+            return JSONResponse({"ok": ok, "status": r.status_code, "detalle": r.text[:300]})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
 @app.get("/inbox/api/sistema/fallas-catalogo")
 async def api_fallas_catalogo(
     token: str = "",
@@ -4368,7 +4430,13 @@ async def api_fallas_catalogo(
     por_tipo: dict[str, int] = {}
     for f in recientes:
         por_tipo[f["tipo"]] = por_tipo.get(f["tipo"], 0) + 1
+    # Flag de "configurado" — sin esto el panel mostraba "Catálogo funcionando"
+    # para agentes nuevos que NO tienen META_CATALOG_ID, dando una sensación
+    # falsa de salud verde cuando en realidad no hay nada montado.
+    meta_cat_id = await get_config_value("META_CATALOG_ID", 1) or os.getenv("META_CATALOG_ID", "")
+    configurado = bool(meta_cat_id.strip())
     return JSONResponse(content={
+        "configurado": configurado,
         "total_24h":  len(recientes),
         "por_tipo":   por_tipo,
         "ultimas":    list(recientes)[-20:],   # las 20 más recientes
@@ -4932,6 +5000,10 @@ async def inbox_broadcast_send(
     header_url    = body.get("header_url")       # URL de imagen del header (si aplica)
     campaign_name = body.get("campaign_name", "")  # nombre de la campaña dado por el usuario
     campaign_id   = body.get("campaign_id", "")    # ID único compartido entre todos los lotes
+    # Texto del body del template — el frontend lo manda para que podamos
+    # guardarlo en el historial del cliente con variables sustituidas (#71).
+    # Si no viene, usamos un fallback descriptivo.
+    body_text     = body.get("body_text", "")
 
     if not template_name or not recipients:
         return JSONResponse(content={"error": "Faltan template o recipients"}, status_code=400)
@@ -5037,6 +5109,26 @@ async def inbox_broadcast_send(
                             logger.warning(f"[broadcast⚠️] No se guardó wamid en difusion_mensajes: {_e}")
                     elif not campaign_id:
                         logger.warning(f"[broadcast⚠️] campaign_id vacío — no se guarda wamid para {tel[-4:]}****")
+
+                    # #71 — Guardar el mensaje en historial de Conversaciones para
+                    # que el merchant vea la difusión enviada en el chat del cliente.
+                    # Renderizamos el body sustituyendo variables ({{1}}, {{nombre}}, etc).
+                    try:
+                        texto_render = body_text or ""
+                        if texto_render and vars_dest:
+                            for i, val in enumerate(vars_dest, start=1):
+                                # Sustituir tanto posicionales {{1}} como nombradas {{nombre}}
+                                texto_render = texto_render.replace("{{" + str(i) + "}}", str(val))
+                                if is_named and i - 1 < len(var_names):
+                                    texto_render = texto_render.replace("{{" + var_names[i-1] + "}}", str(val))
+                        # Si no llegó body_text, marcador descriptivo
+                        if not texto_render:
+                            texto_render = f"[Plantilla: {template_name}]"
+                        # Prefijo 📣 para distinguir visualmente del chat orgánico
+                        texto_para_historial = f"📣 {texto_render}"
+                        await guardar_mensaje(tel, "assistant", texto_para_historial, agent_id=1)
+                    except Exception as _e:
+                        logger.warning(f"[broadcast⚠️] No se guardó en historial mensajes: {_e}")
                 else:
                     fallidos += 1
                     try:
@@ -5112,6 +5204,348 @@ async def inbox_difusion_detalle(
         raise HTTPException(status_code=401, detail="No autorizado")
     data = await obtener_detalle_campana(campaign_id)
     return JSONResponse(content=data)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# #51 — Wizard onboarding Meta WhatsApp (8 pasos guiados)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# El progreso se persiste en un único registro ConfigValue como JSON,
+# scopeado por agent_id — así cada agente (cada tenant) tiene su propio
+# estado del wizard. Cuando cambian de usuario, ven el progreso de SU agente,
+# no el de otro.
+_ONBOARDING_KEY = "ONBOARDING_META_PROGRESS"
+# 6 pasos en total:
+#   1 Crear Business Manager
+#   2 Verificar negocio
+#   3 Crear WABA + agregar número (Meta lo combina en un solo modal)
+#   4 Invitar Voco como socio
+#   5 Generar token System User
+#   6 Conectar Voco (valida + registra número + suscribe webhook automático)
+_ONBOARDING_TOTAL_PASOS = 6
+# Camino corto = solo 2 pasos NUEVOS (3 = crear WABA+número, 6 = conectar).
+_ONBOARDING_TOTAL_PASOS_CORTO = 2
+
+
+async def _resolver_agent_id_para_user(user: dict) -> int | None:
+    """Devuelve el agent_id activo del usuario para el wizard.
+
+    Estrategia: primer agente del que el user es owner. Si el user no tiene
+    agentes propios (ej: cuenta recién creada), retorna None — el handler
+    debe redirigir a Mis Agentes para crear uno.
+    """
+    if not user or not user.get("id"):
+        return None
+    from agent.memory import obtener_agentes_de_usuario
+    agentes = await obtener_agentes_de_usuario(int(user["id"]))
+    if not agentes:
+        return None
+    return int(agentes[0]["id"])
+
+
+async def _leer_onboarding_estado(agent_id: int = 1) -> dict:
+    raw = await get_config_value(_ONBOARDING_KEY, agent_id) or ""
+    if not raw:
+        return {"pasos": {}}
+    try:
+        import json as _json
+        data = _json.loads(raw)
+        if not isinstance(data, dict) or "pasos" not in data:
+            return {"pasos": {}}
+        return data
+    except Exception:
+        return {"pasos": {}}
+
+
+async def _guardar_onboarding_estado(estado: dict, agent_id: int = 1, user: dict | None = None) -> None:
+    import json as _json
+    await set_config_value(
+        _ONBOARDING_KEY,
+        _json.dumps(estado),
+        agent_id=agent_id,
+        usuario_id=(user or {}).get("id"),
+        usuario_email=(user or {}).get("email", ""),
+    )
+
+
+@app.get("/inbox/api/onboarding/estado")
+async def api_onboarding_estado(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Devuelve el estado del wizard del agente del usuario actual + flag
+    `tiene_meta_previo` para que el frontend muestre la bifurcación si aplica."""
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    agent_id = await _resolver_agent_id_para_user(user)
+    if agent_id is None:
+        return JSONResponse({"pasos": {}, "completados": 0, "total": _ONBOARDING_TOTAL_PASOS,
+                             "porcentaje": 0, "sin_agente": True})
+    from agent.memory import usuario_tiene_meta_configurado
+    estado = await _leer_onboarding_estado(agent_id)
+    # tiene_meta_previo: el user ya completó el wizard largo en OTRO agente.
+    # Si esto es true Y este agente todavía no eligió camino, mostramos
+    # la pantalla de bifurcación.
+    tiene_previo = await usuario_tiene_meta_configurado(int(user["id"]))
+    # Es "el agente actual ya completó algo" si tiene cualquier paso marcado
+    actual_tiene_progreso = any(p.get("completado") for p in estado["pasos"].values())
+    # Es propiamente "otro agente" si tiene_previo Y el agente activo no es
+    # el que tiene el paso 8 — chequeo simple: si este mismo tiene paso 8, no
+    # es escenario de "segundo agente"
+    este_ya_termino = estado["pasos"].get("8", {}).get("completado", False)
+    mostrar_bifurcacion = bool(tiene_previo and not este_ya_termino and not actual_tiene_progreso)
+
+    # Camino del wizard que el merchant eligió para ESTE agente — guardado
+    # como una clave especial dentro del propio JSON de progreso.
+    camino = estado.get("_camino") or ""
+
+    completados = sum(1 for p in estado["pasos"].values() if p.get("completado"))
+    total = _ONBOARDING_TOTAL_PASOS_CORTO if camino == "corto" else _ONBOARDING_TOTAL_PASOS
+    return JSONResponse({
+        "agent_id": agent_id,
+        "pasos": estado["pasos"],
+        "completados": completados,
+        "total": total,
+        "porcentaje": round((completados / total) * 100) if total else 0,
+        "mostrar_bifurcacion": mostrar_bifurcacion,
+        "camino": camino,  # '' / 'corto' / 'completo'
+    })
+
+
+@app.post("/inbox/api/onboarding/reset")
+async def api_onboarding_reset(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Borra TODO el progreso del wizard para el agente actual. Útil cuando el
+    merchant quiere recomenzar (cambió de número, se equivocó de cuenta, etc).
+    El historial de cambios queda registrado vía set_config_value."""
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    agent_id = await _resolver_agent_id_para_user(user)
+    if agent_id is None:
+        return JSONResponse({"ok": False, "error": "Sin agente"}, status_code=400)
+    await _guardar_onboarding_estado({"pasos": {}}, agent_id, user)
+    logger.info(f"[onboarding] Wizard reiniciado para agent_id={agent_id} por user={user.get('email')}")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/inbox/api/onboarding/camino/{nombre}")
+async def api_onboarding_set_camino(
+    nombre: str,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Marca qué camino eligió el merchant: 'corto' (reusa BM) o 'completo'.
+    Esto define qué pasos rendea el wizard a partir de ahora para este agente."""
+    if nombre not in ("corto", "completo"):
+        return JSONResponse({"ok": False, "error": "Camino inválido"}, status_code=400)
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    agent_id = await _resolver_agent_id_para_user(user)
+    if agent_id is None:
+        return JSONResponse({"ok": False, "error": "Sin agente"}, status_code=400)
+    estado = await _leer_onboarding_estado(agent_id)
+    estado["_camino"] = nombre
+    # Si eligió camino corto, marcamos automáticamente los pasos heredados
+    # del BM existente: 1 (BM creado), 2 (verificado), 5 (Voco invitado),
+    # 6 (token generado), 8 (webhook activo a nivel app)
+    if nombre == "corto":
+        ahora = datetime.utcnow().isoformat()
+        # 1=BM, 2=verificación, 4=socio invitado, 5=token generado — todos
+        # heredables del primer agente. Paso 6 (conectar+webhook+registro) sí
+        # toca hacerlo de nuevo porque el número y WABA son nuevos.
+        for paso_n in ("1", "2", "4", "5"):
+            estado["pasos"][paso_n] = {
+                "completado": True,
+                "datos": {"_heredado": True},
+                "fecha": ahora,
+                "usuario_email": user.get("email", ""),
+            }
+    await _guardar_onboarding_estado(estado, agent_id, user)
+    return JSONResponse({"ok": True, "camino": nombre})
+
+
+@app.post("/inbox/api/onboarding/paso/{n}/completar")
+async def api_onboarding_completar(
+    n: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Marca un paso como completado. Body opcional: {"datos": {...}} con campos
+    capturados en ese paso (Business Manager ID, número de teléfono, etc)."""
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if n < 0 or n > _ONBOARDING_TOTAL_PASOS:
+        return JSONResponse({"ok": False, "error": f"Paso {n} fuera de rango"}, status_code=400)
+    agent_id = await _resolver_agent_id_para_user(user)
+    if agent_id is None:
+        return JSONResponse({"ok": False, "error": "Primero crea un agente"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    datos = body.get("datos") or {}
+    estado = await _leer_onboarding_estado(agent_id)
+    estado["pasos"][str(n)] = {
+        "completado": True,
+        "datos": datos,
+        "fecha": datetime.utcnow().isoformat(),
+        "usuario_email": user.get("email", ""),
+    }
+    await _guardar_onboarding_estado(estado, agent_id, user)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/inbox/api/onboarding/paso/{n}/reabrir")
+async def api_onboarding_reabrir(
+    n: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Reabre un paso (desmarca como completado). Útil si el merchant quiere
+    volver a revisar algo."""
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    agent_id = await _resolver_agent_id_para_user(user)
+    if agent_id is None:
+        return JSONResponse({"ok": False, "error": "Sin agente"}, status_code=400)
+    estado = await _leer_onboarding_estado(agent_id)
+    if str(n) in estado["pasos"]:
+        estado["pasos"][str(n)]["completado"] = False
+        await _guardar_onboarding_estado(estado, agent_id, user)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/inbox/api/onboarding/validar-meta")
+async def api_onboarding_validar_meta(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Valida credenciales Meta haciendo 3 llamadas reales: /me, /{phone_id},
+    /{waba_id}/templates. Devuelve qué pasó con cada una para feedback claro."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    tok      = (body.get("access_token") or "").strip()
+    phone_id = (body.get("phone_number_id") or "").strip()
+    waba_id  = (body.get("waba_id") or "").strip()
+    if not tok or not phone_id:
+        return JSONResponse({"ok": False, "error": "Faltan access_token y/o phone_number_id"})
+
+    resultados = {"me": None, "phone": None, "waba": None}
+    api_ver = "v21.0"
+    async with httpx.AsyncClient(timeout=10) as client:
+        # /me — token válido?
+        try:
+            r = await client.get(f"https://graph.facebook.com/{api_ver}/me",
+                                 params={"access_token": tok})
+            resultados["me"] = {"ok": r.status_code == 200, "detalle": r.json() if r.status_code == 200 else r.text[:200]}
+        except Exception as e:
+            resultados["me"] = {"ok": False, "detalle": str(e)}
+        # /{phone_id} — token tiene acceso al número?
+        try:
+            r = await client.get(f"https://graph.facebook.com/{api_ver}/{phone_id}",
+                                 params={"access_token": tok})
+            resultados["phone"] = {"ok": r.status_code == 200, "detalle": r.json() if r.status_code == 200 else r.text[:200]}
+        except Exception as e:
+            resultados["phone"] = {"ok": False, "detalle": str(e)}
+        # /{waba_id}/message_templates — token tiene scope whatsapp_business_management?
+        if waba_id:
+            try:
+                r = await client.get(f"https://graph.facebook.com/{api_ver}/{waba_id}/message_templates",
+                                     params={"access_token": tok, "limit": 1})
+                resultados["waba"] = {"ok": r.status_code == 200, "detalle": r.json() if r.status_code == 200 else r.text[:200]}
+            except Exception as e:
+                resultados["waba"] = {"ok": False, "detalle": str(e)}
+
+    todo_ok = resultados["me"]["ok"] and resultados["phone"]["ok"] and (not waba_id or resultados["waba"]["ok"])
+
+    # Si las 3 validaciones pasaron, ejecutamos lo que el merchant antes hacía
+    # MANUALMENTE en API Setup → "Enviar mensaje": registrar el número para
+    # Cloud API (sin esto Meta no enruta los mensajes al webhook) + suscribir
+    # nuestra app a los webhooks de la WABA. Todo en backend, sin que el
+    # merchant tenga que entrar a developers.facebook.com.
+    registro_numero = None
+    webhook_subscrito = None
+    if todo_ok:
+        # PIN para 2FA del número. Default '000000' — Meta lo acepta como nuevo
+        # PIN si el número aún no tiene 2FA. El merchant puede cambiarlo después
+        # desde WhatsApp Manager si quiere.
+        pin = (body.get("pin") or "000000").strip()
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                rr = await client.post(
+                    f"https://graph.facebook.com/{api_ver}/{phone_id}/register",
+                    headers={"Authorization": f"Bearer {tok}"},
+                    json={"messaging_product": "whatsapp", "pin": pin},
+                )
+                # Códigos comunes:
+                # 200 → registro exitoso
+                # 400 con "already registered" → ya estaba registrado, OK
+                # 400 con "pin mismatch" → ya tiene 2FA con otro PIN
+                resp_text = rr.text[:300]
+                ok = rr.status_code == 200 or "already" in resp_text.lower()
+                registro_numero = {
+                    "ok":      ok,
+                    "status":  rr.status_code,
+                    "detalle": resp_text,
+                }
+        except Exception as e:
+            registro_numero = {"ok": False, "detalle": str(e)}
+
+        if waba_id:
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    rs = await client.post(
+                        f"https://graph.facebook.com/{api_ver}/{waba_id}/subscribed_apps",
+                        params={"access_token": tok},
+                    )
+                    webhook_subscrito = {"ok": rs.status_code == 200,
+                                         "detalle": rs.json() if rs.status_code == 200 else rs.text[:200]}
+            except Exception as e:
+                webhook_subscrito = {"ok": False, "detalle": str(e)}
+
+    return JSONResponse({
+        "ok": todo_ok,
+        "resultados": resultados,
+        "registro_numero":   registro_numero,
+        "webhook_subscrito": webhook_subscrito,
+    })
+
+
+# Página del wizard (HTML standalone, fuera del panel principal)
+@app.get("/inbox/onboarding-meta", response_class=HTMLResponse)
+async def inbox_onboarding_meta(
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Página del wizard de onboarding Meta WhatsApp.
+    Standalone — no usa el shell del panel para foco total en la tarea."""
+    user = await _obtener_sesion_usuario(voco_session or inbox_session)
+    if not user:
+        return HTMLResponse(status_code=302, headers={"Location": "/inbox/login"}, content="")
+    # Si el usuario no tiene agentes, no tiene sentido abrir el wizard.
+    # Lo enviamos a Mis Agentes para que cree uno primero.
+    agent_id = await _resolver_agent_id_para_user(user)
+    if agent_id is None:
+        return HTMLResponse(status_code=302, headers={"Location": "/inbox"}, content="")
+    from agent.inbox import HTML_WIZARD_ONBOARDING
+    webhook_url = (os.getenv("PUBLIC_BASE_URL") or "").rstrip("/") + "/webhook"
+    return HTMLResponse(content=HTML_WIZARD_ONBOARDING.replace("__WEBHOOK_URL__", webhook_url))
 
 
 @app.get("/inbox/api/metricas/operacion")
