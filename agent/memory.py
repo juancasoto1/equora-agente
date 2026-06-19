@@ -87,6 +87,15 @@ class Mensaje(Base):
     role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # #79 — chulitos de confirmación al estilo WhatsApp.
+    # wamid: ID del mensaje en Meta (lo retorna la API al enviar). Solo
+    #   tienen los mensajes salientes (role='assistant') enviados vía Meta;
+    #   los entrantes y los locales (terminal test) lo tienen vacío.
+    # status: sent | delivered | read | failed | '' (sin actualizar todavía).
+    wamid:        Mapped[str]            = mapped_column(String(200), default="", index=True)
+    status:       Mapped[str]            = mapped_column(String(20),  default="")
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    read_at:      Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
 
 class Cliente(Base):
@@ -336,6 +345,12 @@ async def inicializar_db():
         # PostgreSQL soporta IF NOT EXISTS en ALTER TABLE ADD COLUMN
         for sql in (
             "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            # #79 — chulitos confirmación WhatsApp
+            "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS wamid VARCHAR(200) DEFAULT ''",
+            "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP",
+            "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS read_at TIMESTAMP",
+            "CREATE INDEX IF NOT EXISTS ix_mensajes_wamid ON mensajes(wamid)",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_pendiente TEXT DEFAULT ''",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_pendiente_at TIMESTAMP",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS carrito_activo TEXT DEFAULT ''",
@@ -472,16 +487,53 @@ async def inicializar_db():
                 pass  # tabla puede no existir aún
 
 
-async def guardar_mensaje(telefono: str, role: str, content: str, agent_id: int = 1):
+async def guardar_mensaje(
+    telefono: str, role: str, content: str, agent_id: int = 1,
+    wamid: str = "", status: str = "",
+):
+    """Guarda un mensaje. wamid + status opcionales para tracking de
+    confirmación WhatsApp (#79). Solo aplican a salientes (role='assistant')
+    enviados vía Meta — los demás se quedan vacíos."""
     async with async_session() as session:
         mensaje = Mensaje(
             agent_id=agent_id,
             telefono=telefono,
             role=role,
             content=content,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.utcnow(),
+            wamid=(wamid or "")[:200],
+            status=(status or "")[:20],
         )
         session.add(mensaje)
+        await session.commit()
+
+
+async def actualizar_status_mensaje(wamid: str, status: str) -> None:
+    """Actualiza el status (sent/delivered/read/failed) de un mensaje por su
+    wamid de Meta. Llamado desde el webhook handler cuando Meta envía status
+    updates. Idempotente: si el mensaje no existe (mensajes antiguos sin
+    wamid guardado), no falla."""
+    if not wamid or not status:
+        return
+    ahora = datetime.utcnow()
+    async with async_session() as session:
+        r = await session.execute(
+            select(Mensaje).where(Mensaje.wamid == wamid)
+        )
+        msg = r.scalar_one_or_none()
+        if not msg:
+            return
+        # Las transiciones avanzan: sent → delivered → read. No bajamos.
+        orden = {"": 0, "sent": 1, "delivered": 2, "read": 3, "failed": 9}
+        if orden.get(status, 0) <= orden.get(msg.status, 0) and status != "failed":
+            return  # ya está en un estado igual o más avanzado
+        msg.status = status
+        if status == "delivered" and not msg.delivered_at:
+            msg.delivered_at = ahora
+        elif status == "read":
+            if not msg.delivered_at:
+                msg.delivered_at = ahora  # implícito
+            msg.read_at = ahora
         await session.commit()
 
 
@@ -2303,6 +2355,11 @@ async def obtener_historial_con_timestamps(telefono: str, limite: int = 150, age
                 "role": msg.role,
                 "content": msg.content,
                 "timestamp": msg.timestamp.isoformat() if msg.timestamp else "",
+                # #79 — chulitos de confirmación. Solo tienen valor en mensajes
+                # salientes que pasaron por Meta API (sent/delivered/read).
+                "status":       msg.status or "",
+                "delivered_at": msg.delivered_at.isoformat() if msg.delivered_at else "",
+                "read_at":      msg.read_at.isoformat() if msg.read_at else "",
             }
             for msg in mensajes
         ]

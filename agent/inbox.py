@@ -4994,6 +4994,33 @@ function loadMsgs(scroll) {
   }).catch(function() {});
 }
 
+/* #79 — chulitos de confirmación al estilo WhatsApp. Iconos SVG inline para
+   evitar dependencia de fuentes/emojis. Color azul (#53bdeb) solo cuando
+   está leído, gris (#8696a0) en otros estados. */
+function renderEstadoMensaje(status) {
+  var color = (status === 'read') ? '#53bdeb' : '#8696a0';
+  var titulo = status === 'failed' ? 'Falló el envío'
+             : status === 'read'      ? 'Leído'
+             : status === 'delivered' ? 'Entregado'
+             : 'Enviado';
+  if (status === 'failed') {
+    return ' <span title="Falló el envío" style="color:#dc2626;font-size:.7rem;margin-left:4px">⚠</span>';
+  }
+  // Un chulo para 'sent', dos chulos para 'delivered'/'read'
+  var paths = '';
+  if (status === 'sent') {
+    paths = '<path d="M2 7L5 10L11 3" stroke="' + color + '" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+  } else if (status === 'delivered' || status === 'read') {
+    paths = '<path d="M2 7L5 10L11 3" stroke="' + color + '" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+          + '<path d="M6 7L9 10L15 3" stroke="' + color + '" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>';
+  } else {
+    return '';
+  }
+  return ' <svg viewBox="0 0 17 12" title="' + titulo + '" '
+       + 'style="width:14px;height:11px;vertical-align:-1px;margin-left:4px;display:inline-block">'
+       + paths + '</svg>';
+}
+
 function setHeader(c) {
   var nm = (c.nombre && c.nombre !== c.telefono) ? c.nombre : ('+' + c.telefono);
   document.getElementById('cnm').textContent = nm;
@@ -5018,9 +5045,16 @@ function renderMsgs(msgs, scroll) {
     }
     var cls = m.role === 'user' ? 'usr' : 'bot';
     var bodyHtml = renderMediaOrText(m.content);
+    // #79 — chulitos de confirmación. Solo en mensajes salientes que tienen
+    // status registrado. Iconos al estilo WhatsApp: ✓ enviado, ✓✓ entregado,
+    // ✓✓ azul leído.
+    var statusHtml = '';
+    if (m.role !== 'user' && m.status) {
+      statusHtml = renderEstadoMensaje(m.status);
+    }
     h += '<div class="msg ' + cls + '">'
        + '<div class="mb">' + bodyHtml + '</div>'
-       + '<div class="mt">' + fmtH(m.timestamp) + '</div>'
+       + '<div class="mt">' + fmtH(m.timestamp) + statusHtml + '</div>'
        + '</div>';
   }
   var box = document.getElementById('msgs');
@@ -9029,10 +9063,16 @@ function _escRenderMensajes(mensajes) {
       ? renderMediaOrText(m.content)
       : _escEsc(m.content);
 
+    // #79 — chulitos solo en mensajes salientes con status
+    var statusHtml = '';
+    if (m.role !== 'user' && m.status && typeof renderEstadoMensaje === 'function') {
+      statusHtml = renderEstadoMensaje(m.status);
+    }
     wrap.innerHTML =
       (label ? '<div style="font-size:.68rem;color:var(--voco-text-muted);margin-bottom:2px;padding:0 4px">' + label + '</div>' : '') +
       '<div class="esc-bbl ' + cls + '">' + bodyHtml + '<div class="esc-bbl-ts">' +
         (m.timestamp ? new Date(m.timestamp).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) : '') +
+        statusHtml +
       '</div></div>';
     el.appendChild(wrap);
   });

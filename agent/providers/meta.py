@@ -40,6 +40,10 @@ class ProveedorMeta(ProveedorWhatsApp):
         self.verify_token = verify_token or os.getenv("META_VERIFY_TOKEN", "equora-andrea-2024")
         self.catalog_id = _ascii_only(catalog_id or os.getenv("META_CATALOG_ID", ""))
         self.api_version = "v21.0"
+        # #79 — el wamid del último mensaje enviado exitosamente. Lo callers
+        # lo leen después de cada enviar_mensaje() para vincular el status
+        # update con el row de mensajes en BD.
+        self.ultimo_wamid: str = ""
 
     async def validar_webhook(self, request: Request):
         params = request.query_params
@@ -185,7 +189,10 @@ class ProveedorMeta(ProveedorWhatsApp):
         return mensajes
 
     async def enviar_mensaje(self, telefono: str, mensaje: str) -> bool:
-        """Envía mensaje de texto plano."""
+        """Envía mensaje de texto plano. Tras éxito guarda el wamid de Meta
+        en self.ultimo_wamid para que el caller pueda trackear status updates
+        (sent/delivered/read) — feature #79 de chulitos de confirmación."""
+        self.ultimo_wamid = ""
         if not self.access_token or not self.phone_number_id:
             logger.warning("META_ACCESS_TOKEN o META_PHONE_NUMBER_ID no configurados")
             return False
@@ -204,7 +211,12 @@ class ProveedorMeta(ProveedorWhatsApp):
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API texto: {r.status_code} — {r.text}")
-            return r.status_code == 200
+                return False
+            try:
+                self.ultimo_wamid = (r.json().get("messages") or [{}])[0].get("id", "")
+            except Exception:
+                self.ultimo_wamid = ""
+            return True
 
     async def enviar_botones(self, telefono: str, texto: str, botones: list[str]) -> bool:
         """Envía mensaje con hasta 3 botones de respuesta rápida."""

@@ -1480,7 +1480,10 @@ def extraer_marcador_tienda(respuesta: str) -> tuple[str, bool, str]:
 
 
 async def _procesar_status_difusion(status: dict) -> None:
-    """Procesa un status update de Meta (delivered/read/failed) para tracking de difusiones."""
+    """Procesa un status update de Meta (delivered/read/failed). Actualiza
+    DOS tablas: difusion_mensajes (tracking de campañas) y mensajes (chulitos
+    de confirmación en el chat — #79). Los mismos status updates aplican a
+    ambos sin distinguir si fue mensaje regular o de difusión."""
     wamid      = status.get("id", "")
     status_val = status.get("status", "")   # sent | delivered | read | failed
     ts_str     = status.get("timestamp", "")
@@ -1501,7 +1504,14 @@ async def _procesar_status_difusion(status: dict) -> None:
         if status_val == "failed":
             logger.info(f"[webhook-status] FAILED wamid={wamid[:20]} code={error_code} title={error_title}")
     except Exception as e:
-        logger.debug(f"[webhook-status] Error actualizando {wamid[:20]}: {e}")
+        logger.debug(f"[webhook-status] Error actualizando difusion_mensajes {wamid[:20]}: {e}")
+
+    # #79 — actualizar tabla mensajes para chulitos en el chat
+    try:
+        from agent.memory import actualizar_status_mensaje
+        await actualizar_status_mensaje(wamid, status_val)
+    except Exception as e:
+        logger.debug(f"[webhook-status] Error actualizando mensajes {wamid[:20]}: {e}")
 
 
 # ── Palabras clave de opt-out (baja de difusiones) ───────────────────────────
@@ -2345,7 +2355,11 @@ async def webhook_handler(request: Request):
             )
 
             await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
-            await guardar_mensaje(msg.telefono, "assistant", respuesta, agent_id=_agent_id)
+            # Capturar wamid del último envío del provider para chulitos (#79).
+            # Solo aplica si Andrea envió texto antes (no aplica para CTA/productos).
+            _wamid_resp = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
+            await guardar_mensaje(msg.telefono, "assistant", respuesta, agent_id=_agent_id,
+                                  wamid=_wamid_resp, status="sent" if _wamid_resp else "")
             await registrar_mensaje_asistente(msg.telefono, agent_id=_agent_id)
 
             # Procesar marcadores via dispatcher MARKER_HANDLERS:
@@ -3742,7 +3756,11 @@ async def inbox_responder(
                          f"ventana de 24h cerrada, o scope insuficiente. Logs de Railway "
                          f"tienen la respuesta exacta de Meta."
             })
-        await guardar_mensaje(telefono, "assistant", mensaje, agent_id=agent_id)
+        # Capturar wamid para chulitos de confirmación (#79). El provider lo
+        # guarda en self.ultimo_wamid tras enviar OK; vacío si Meta no lo retorna.
+        _wamid = getattr(_prov, "ultimo_wamid", "") or ""
+        await guardar_mensaje(telefono, "assistant", mensaje, agent_id=agent_id,
+                              wamid=_wamid, status="sent" if _wamid else "")
         await registrar_mensaje_asistente(telefono)
         logger.info(f"Mensaje manual enviado a {telefono} desde inbox (agent_id={agent_id})")
         return JSONResponse(content={"ok": True})
