@@ -490,10 +490,14 @@ async def inicializar_db():
 async def guardar_mensaje(
     telefono: str, role: str, content: str, agent_id: int = 1,
     wamid: str = "", status: str = "",
-):
+) -> int:
     """Guarda un mensaje. wamid + status opcionales para tracking de
     confirmación WhatsApp (#79). Solo aplican a salientes (role='assistant')
-    enviados vía Meta — los demás se quedan vacíos."""
+    enviados vía Meta — los demás se quedan vacíos.
+
+    Retorna el id de la fila — útil cuando el wamid solo se conoce DESPUÉS
+    de guardar (el envío real ocurre después por procesamiento de marcadores),
+    para poder actualizarlo luego con actualizar_wamid_mensaje()."""
     async with async_session() as session:
         mensaje = Mensaje(
             agent_id=agent_id,
@@ -505,6 +509,23 @@ async def guardar_mensaje(
             status=(status or "")[:20],
         )
         session.add(mensaje)
+        await session.commit()
+        return mensaje.id
+
+
+async def actualizar_wamid_mensaje(msg_id: int, wamid: str) -> None:
+    """Setea wamid + status='sent' en un mensaje ya guardado, por su id.
+    Usado cuando el envío real ocurre después de guardar_mensaje (#79)."""
+    if not msg_id or not wamid:
+        return
+    async with async_session() as session:
+        r = await session.execute(select(Mensaje).where(Mensaje.id == msg_id))
+        msg = r.scalar_one_or_none()
+        if not msg:
+            return
+        msg.wamid = wamid[:200]
+        if not msg.status:
+            msg.status = "sent"
         await session.commit()
 
 

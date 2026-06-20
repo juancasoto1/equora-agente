@@ -41,6 +41,7 @@ from agent.memory import (
     registrar_difusion, obtener_difusiones,
     guardar_borrador_plantilla, obtener_borradores_plantillas, eliminar_borrador_plantilla,
     guardar_mensaje_difusion, actualizar_status_difusion, obtener_detalle_campana,
+    actualizar_wamid_mensaje,
     obtener_metricas_internas, obtener_campana_reciente_para_telefono,
     marcar_opt_out, verificar_opt_out, revertir_opt_out, obtener_opt_outs,
     obtener_clientes_con_estado,
@@ -2355,11 +2356,13 @@ async def webhook_handler(request: Request):
             )
 
             await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
-            # Capturar wamid del último envío del provider para chulitos (#79).
-            # Solo aplica si Andrea envió texto antes (no aplica para CTA/productos).
-            _wamid_resp = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-            await guardar_mensaje(msg.telefono, "assistant", respuesta, agent_id=_agent_id,
-                                  wamid=_wamid_resp, status="sent" if _wamid_resp else "")
+            # El wamid se conoce recién tras el envío real más abajo (después
+            # de procesar marcadores) — guardamos sin wamid y lo actualizamos
+            # luego con actualizar_wamid_mensaje() (#79, fix: capturaba antes
+            # del envío y siempre quedaba vacío).
+            _msg_id_assistant = await guardar_mensaje(
+                msg.telefono, "assistant", respuesta, agent_id=_agent_id,
+            )
             await registrar_mensaje_asistente(msg.telefono, agent_id=_agent_id)
 
             # Procesar marcadores via dispatcher MARKER_HANDLERS:
@@ -2410,6 +2413,11 @@ async def webhook_handler(request: Request):
             _texto_absorbido_por_cta = abrir_tienda and not tienda_query and respuesta.strip()
             if respuesta and not _texto_absorbido_por_cta:
                 await _proveedor_agente.enviar_mensaje(msg.telefono, respuesta)
+                # Chulitos de confirmación (#79): ahora sí el provider ya tiene
+                # el wamid real de este envío — actualizamos el mensaje guardado.
+                _wamid_resp = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
+                if _wamid_resp:
+                    await actualizar_wamid_mensaje(_msg_id_assistant, _wamid_resp)
 
             # ── [[PRODUCTO:nombre]] — enviar uno o más productos del catálogo ──
             # Andrea lo usa cuando menciona un producto específico. Por cada
