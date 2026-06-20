@@ -544,6 +544,13 @@ async def _procesar_carrito_unificado():
             logger.info(f"[carrito-loop] {telefono} sin retailer_ids (no nativo) — cancelando")
             continue
 
+        # Provider del agente real del cliente — NUNCA el singleton global
+        # `proveedor` (solo tiene credenciales del agente por defecto).
+        # Usarlo enviaría el seguimiento desde el número de WhatsApp
+        # equivocado para cualquier otro agente (Meta acepta el envío,
+        # pero el cliente nunca lo recibe en su chat real).
+        proveedor = await _get_meta_para_agente({"id": await _resolver_agent_id_principal(telefono)})
+
         async def _crear_checkout_para_seguimiento() -> str | None:
             """Crea un checkout de Shopify a partir de los items del carrito
             y guarda la URL en el cliente. Retorna la URL o None si falla."""
@@ -833,8 +840,9 @@ async def _procesar_followups():
                 # El agente desactivó este mensaje desde el panel — no insistir
                 logger.info(f"[followup] {telefono} mensaje desactivado para agent={aid} — saltando")
                 continue
-            await proveedor.enviar_mensaje(telefono, texto)
-            await _guardar_con_wamid(proveedor, telefono, texto, agent_id=aid)
+            _prov = await _get_meta_para_agente({"id": aid})
+            await _prov.enviar_mensaje(telefono, texto)
+            await _guardar_con_wamid(_prov, telefono, texto, agent_id=aid)
             await marcar_followup_enviado(telefono)
             logger.info(f"Follow-up enviado a {telefono}")
         except Exception as e:
@@ -857,8 +865,9 @@ async def _procesar_cierres():
                 # Aún así marcar como cerrado para que el timer no vuelva a evaluarlo
                 await marcar_cierre_enviado(telefono)
                 continue
-            await proveedor.enviar_mensaje(telefono, texto)
-            await _guardar_con_wamid(proveedor, telefono, texto, agent_id=aid)
+            _prov = await _get_meta_para_agente({"id": aid})
+            await _prov.enviar_mensaje(telefono, texto)
+            await _guardar_con_wamid(_prov, telefono, texto, agent_id=aid)
             await marcar_cierre_enviado(telefono)
             logger.info(f"Cierre enviado a {telefono}")
         except Exception as e:
@@ -944,10 +953,11 @@ async def _procesar_abandono_checkout():
                 # Marcar como enviado para evitar reintentos dentro del cooldown
                 await marcar_checkout_abandono_enviado(telefono)
                 continue
+            _prov = await _get_meta_para_agente({"id": aid})
             enviado = False
-            if hasattr(proveedor, "enviar_cta_url"):
+            if hasattr(_prov, "enviar_cta_url"):
                 try:
-                    enviado = await proveedor.enviar_cta_url(
+                    enviado = await _prov.enviar_cta_url(
                         telefono,
                         texto,
                         "Terminar pedido ✅",
@@ -956,11 +966,11 @@ async def _procesar_abandono_checkout():
                 except Exception:
                     pass
             if not enviado:
-                await proveedor.enviar_mensaje(
+                await _prov.enviar_mensaje(
                     telefono,
                     f"{texto}\n\n👉 {checkout_url}"
                 )
-            await _guardar_con_wamid(proveedor, telefono, texto, agent_id=aid)
+            await _guardar_con_wamid(_prov, telefono, texto, agent_id=aid)
             await marcar_checkout_abandono_enviado(telefono)
             logger.info(f"Recuperación de checkout enviada a {telefono}")
         except Exception as e:
@@ -1255,8 +1265,9 @@ async def _escalar_meta_fallo(
             "Para ayudarte mejor te conecto con un asesor "
             "que te va a mostrar los productos. Ya viene 🌿"
         )
-        await proveedor.enviar_mensaje(telefono, msg_cliente)
-        await _guardar_con_wamid(proveedor, telefono, msg_cliente, agent_id=agent_id)
+        _prov = await _get_meta_para_agente({"id": agent_id})
+        await _prov.enviar_mensaje(telefono, msg_cliente)
+        await _guardar_con_wamid(_prov, telefono, msg_cliente, agent_id=agent_id)
 
         # 2. Obtener nombre del cliente para el ticket (mejora UX panel)
         try:
@@ -7559,13 +7570,14 @@ async def _registrar_falla_catalogo(
         f"Próxima alerta en {_CATALOGO_ALERTA_COOLDOWN_SEG // 60} min si sigue fallando."
     )
 
+    _prov = await _get_meta_para_agente({"id": agent_id})
     cliente_digits = "".join(filter(str.isdigit, telefono_cliente))
     for admin in ADMIN_WHATSAPP_NUMBERS:
         admin_digits = "".join(filter(str.isdigit, admin))
         if admin_digits == cliente_digits or admin_digits.endswith(cliente_digits[-10:]):
             continue
         try:
-            await proveedor.enviar_mensaje(admin, mensaje_alerta)
+            await _prov.enviar_mensaje(admin, mensaje_alerta)
             logger.info(f"[alerta-catalogo] Notificado al admin {admin}")
         except Exception as e:
             logger.error(f"[alerta-catalogo] Error notificando a {admin}: {e}")
@@ -7673,6 +7685,7 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
         f"[escalacion] notificando a {len(receptores)} receptor(es) "
         f"(origen={origen_receptores}) para agent={agent_id}"
     )
+    _prov = await _get_meta_para_agente({"id": agent_id})
     for admin in receptores:
         admin_digits = "".join(filter(str.isdigit, admin))
         # Filtro de seguridad: no notificarse a uno mismo si el cliente es el
@@ -7681,7 +7694,7 @@ async def _notificar_escalacion(telefono_cliente: str, datos: dict, agent_id: in
             logger.warning(f"Escalación omitida para {admin}: es el mismo número del cliente")
             continue
         try:
-            await proveedor.enviar_mensaje(admin, mensaje)
+            await _prov.enviar_mensaje(admin, mensaje)
             logger.info(f"Escalación notificada al asesor {admin}")
         except Exception as e:
             logger.error(f"Error notificando escalación a {admin}: {e}")
@@ -8094,9 +8107,10 @@ async def shopify_webhook(request: Request):
             return {"status": "ok"}
 
     try:
-        await proveedor.enviar_mensaje(telefono, mensaje)
+        _prov = await _get_meta_para_agente({"id": _aid_shopify})
+        await _prov.enviar_mensaje(telefono, mensaje)
         # Guardar en BD para que aparezca en el inbox
-        await _guardar_con_wamid(proveedor, telefono, mensaje)
+        await _guardar_con_wamid(_prov, telefono, mensaje, agent_id=_aid_shopify)
         # Suprimir follow-up y cierre: esta es una notificación automática,
         # no un mensaje conversacional — no debe activar los timers de seguimiento
         await marcar_followup_enviado(telefono)
