@@ -811,7 +811,10 @@ html.dark{
   }
   #nav::-webkit-scrollbar{height:2px}
   #nav::-webkit-scrollbar-thumb{background:var(--voco-border);border-radius:1px}
-  .nav-section,.nav-footer{display:none}
+  /* !important necesario: .nav-footer tiene style="display:flex" inline
+     (gana por especificidad a una regla de clase normal), por eso el
+     logo "Voco · v1" seguía apareciendo cortado junto a los tabs. */
+  .nav-section,.nav-footer{display:none!important}
   .nav-item{
     position:relative; /* ancla para #esc-badge — antes faltaba y el badge
                            flotaba con coordenadas de página, cayendo sobre
@@ -902,6 +905,11 @@ html.dark{
   }
   #ib-pill #attach-wrap{order:2;flex-shrink:0}
   #ib-pill #attach-btn{padding:4px 8px!important;font-size:1.2rem!important}
+  /* El menú de adjuntar abre con left:0 (inline) — eso lo manda hacia la
+     derecha del botón, pero en móvil #attach-wrap quedó pegado al borde
+     derecho de la pantalla (order:2 arriba), así que el menú se cortaba.
+     Lo invertimos para que abra hacia la izquierda (como el de emojis). */
+  #attach-menu{left:auto!important;right:0!important}
   #ib-pill .voco-emoji-trigger{
     order:-1;flex-shrink:0;display:flex!important;
     align-items:center;justify-content:center;
