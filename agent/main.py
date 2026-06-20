@@ -214,6 +214,13 @@ CHECKOUT_ABANDONO_COOLDOWN_SEG = CHECKOUT_COOLDOWN_MIN * 60
 # Loop general
 CHECK_INTERVAL_SEG   = int(os.getenv("CHECK_INTERVAL_SEG", 30))   # segundos entre cada ciclo del loop
 
+# #77 — Watchdog del loop de seguimientos. Si _loop_seguimientos() no
+# arranca un ciclo nuevo en WATCHDOG_UMBRAL_SEG, se asume colgado (ej. una
+# llamada externa sin timeout que nunca retorna) y se fuerza un reinicio
+# del proceso (Railway lo reinicia automáticamente al detectar el crash).
+WATCHDOG_UMBRAL_SEG = max(300, CHECK_INTERVAL_SEG * 10)  # al menos 5 min
+_ultimo_ciclo_seguimiento: float = 0.0  # time.monotonic() del último ciclo arrancado
+
 # Legacy (no usados activamente, se conservan por compatibilidad)
 ABANDONO_MIN_INACTIVO = CARRITO_MIN_MIN
 ABANDONO_MAX_INACTIVO = CARRITO_MAX_MIN
@@ -336,22 +343,30 @@ async def lifespan(app: FastAPI):
         f"loop cada: {CHECK_INTERVAL_SEG} seg"
     )
     seguimiento_task = asyncio.create_task(_loop_seguimientos())
+    watchdog_task = asyncio.create_task(_watchdog_seguimientos())
     try:
         yield
     finally:
         seguimiento_task.cancel()
-        try:
-            await seguimiento_task
-        except asyncio.CancelledError:
-            pass
+        watchdog_task.cancel()
+        for t in (seguimiento_task, watchdog_task):
+            try:
+                await t
+            except asyncio.CancelledError:
+                pass
 
 
 async def _loop_seguimientos():
     """Cada CHECK_INTERVAL_SEG revisa conversaciones inactivas.
     Prioridad: cierre > checkout abandonado > carrito (estados 3-5) > follow-up genérico."""
+    global _ultimo_ciclo_seguimiento
     while True:
         try:
             await asyncio.sleep(CHECK_INTERVAL_SEG)
+            # Marcar el ciclo ANTES de procesar — si alguna de las 4 llamadas
+            # se cuelga (ej. await sin timeout que nunca retorna), este
+            # timestamp deja de avanzar y _watchdog_seguimientos lo detecta.
+            _ultimo_ciclo_seguimiento = time.monotonic()
             await _procesar_abandono_checkout()     # prioridad 2: checkout sin completar
             await _procesar_carrito_unificado()     # prioridad 3-5: carrito activo
             await _procesar_followups()             # prioridad 6: sin carrito, sin checkout
@@ -360,6 +375,24 @@ async def _loop_seguimientos():
             raise
         except Exception as e:
             logger.error(f"Error en loop de seguimientos: {e}")
+
+
+async def _watchdog_seguimientos():
+    """#77 — vigila que _loop_seguimientos() siga ticando. Revisa cada
+    minuto; si pasó WATCHDOG_UMBRAL_SEG sin que arranque un ciclo nuevo,
+    el proceso se asume colgado y se fuerza su salida con os._exit(1) —
+    Railway reinicia automáticamente el contenedor al detectar el crash."""
+    while True:
+        await asyncio.sleep(60)
+        if _ultimo_ciclo_seguimiento == 0:
+            continue  # aún no corrió el primer ciclo (deploy recién hecho)
+        inactivo_seg = time.monotonic() - _ultimo_ciclo_seguimiento
+        if inactivo_seg > WATCHDOG_UMBRAL_SEG:
+            logger.critical(
+                f"[watchdog] _loop_seguimientos sin ticar hace {inactivo_seg:.0f}s "
+                f"(umbral {WATCHDOG_UMBRAL_SEG}s) — forzando reinicio del proceso"
+            )
+            os._exit(1)
 
 
 def _calcular_total_carrito(items: list[dict]) -> int:
@@ -1327,6 +1360,39 @@ app.add_middleware(
 @app.get("/")
 async def health_check():
     return {"status": "ok", "service": "voco"}
+
+
+@app.get("/health")
+async def health_check_deep():
+    """#77 — Healthcheck profundo: verifica conexión a BD y que el loop de
+    seguimientos siga ticando (no solo que el proceso responda HTTP).
+    Pensado para Railway (healthcheckPath) y monitoreo externo — a
+    diferencia de "/", acá un problema real devuelve 503."""
+    problemas = []
+
+    try:
+        from agent.memory import obtener_agente
+        await obtener_agente(1)
+    except Exception as e:
+        problemas.append(f"db: {e}")
+
+    inactivo_seg = (
+        round(time.monotonic() - _ultimo_ciclo_seguimiento, 1)
+        if _ultimo_ciclo_seguimiento else None
+    )
+    # Si nunca corrió un ciclo (deploy recién hecho, aún en warm-up) no es
+    # error — el primer ciclo tarda hasta CHECK_INTERVAL_SEG en arrancar.
+    if inactivo_seg is not None and inactivo_seg > WATCHDOG_UMBRAL_SEG:
+        problemas.append(f"loop_seguimientos sin ticar hace {inactivo_seg}s")
+
+    if problemas:
+        return JSONResponse(status_code=503, content={
+            "status": "unhealthy", "service": "voco", "problemas": problemas,
+        })
+    return {
+        "status": "ok", "service": "voco",
+        "loop_seguimientos_inactivo_seg": inactivo_seg,
+    }
 
 
 @app.get("/webhook")
