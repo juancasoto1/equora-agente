@@ -813,6 +813,9 @@ html.dark{
   #nav::-webkit-scrollbar-thumb{background:var(--voco-border);border-radius:1px}
   .nav-section,.nav-footer{display:none}
   .nav-item{
+    position:relative; /* ancla para #esc-badge — antes faltaba y el badge
+                           flotaba con coordenadas de página, cayendo sobre
+                           otro tab (ej. Métricas) en vez de Escalaciones. */
     flex:0 0 auto;
     flex-direction:column;align-items:center;justify-content:center;
     gap:3px;padding:8px 4px;border-left:none!important;
@@ -823,8 +826,41 @@ html.dark{
   }
   .nav-item.active{border-top-color:var(--az);border-left-color:transparent!important}
   .nav-item .ni{font-size:1.25rem;width:auto;line-height:1}
-  /* El badge en nav móvil */
-  #esc-badge{position:absolute;top:6px;right:10px;font-size:.6rem;padding:0 5px}
+  /* El badge en nav móvil — ahora relativo a su propio .nav-item (ver
+     position:relative arriba), siempre sobre "Escalaciones". */
+  #esc-badge{position:absolute;top:3px;right:8px;font-size:.6rem;padding:0 5px}
+
+  /* #41 fase 2 — Bottom nav reducido a 4 tabs + "Más":
+     Conversaciones / Difusiones / Clientes / Escalaciones quedan visibles
+     siempre; el resto (.nav-secondary) se agrupa en el sheet de "Más". */
+  .nav-item.nav-secondary{display:none}
+  .nav-mas-btn{display:flex!important}
+
+  #nav-mas-backdrop{display:none}
+  #nav-mas-backdrop.show{
+    display:block;position:fixed;inset:0;background:rgba(0,0,0,.45);
+    z-index:499; /* justo debajo de #nav (z-index:500) */
+  }
+  /* Sheet abierto: #nav pasa de barra horizontal de 60px a panel vertical
+     que crece hacia arriba, mostrando solo los items secundarios + Más
+     (que ahora actúa de "Cerrar"). */
+  #nav.nav-mas-open{
+    height:auto;max-height:64vh;flex-direction:column;align-items:stretch;
+    overflow-y:auto;overflow-x:hidden;border-radius:14px 14px 0 0;
+    box-shadow:0 -6px 24px rgba(0,0,0,.3);padding-bottom:env(safe-area-inset-bottom);
+  }
+  #nav.nav-mas-open .nav-item:not(.nav-secondary):not(.nav-mas-btn){display:none}
+  #nav.nav-mas-open .nav-item.nav-secondary{
+    display:flex!important;flex-direction:row;justify-content:flex-start;
+    width:100%;max-width:unset;min-width:unset;
+    padding:13px 20px;gap:14px;font-size:.85rem;
+    border-top:1px solid var(--voco-border);border-left:none!important;
+  }
+  #nav.nav-mas-open .nav-item.nav-secondary .ni{font-size:1.1rem;width:24px;text-align:left}
+  #nav.nav-mas-open .nav-mas-btn{
+    order:-1;border-top:none;border-bottom:1px solid var(--voco-border);
+    font-weight:600;color:var(--az);
+  }
 
   /* Body: espacio para la barra inferior */
   #body{padding-bottom:60px}
@@ -843,14 +879,37 @@ html.dark{
     position:fixed!important;
     bottom:60px;left:0;right:0;
     z-index:100;
-    padding-bottom:max(10px, env(safe-area-inset-bottom));
+    padding:8px 10px max(8px, env(safe-area-inset-bottom));
     background:var(--hd);
     border-top:1px solid var(--bd);
+    align-items:center;gap:6px;
   }
   /* #msgs gana padding-bottom para no quedar tapado por #ib.
      Cálculo: #ib mide ~60px (textarea + padding) + safe-area-inset
      + holgura de un mensaje completo (~50px) ≈ 130px. */
   #msgs{padding-bottom:140px!important}
+
+  /* #41 fase 2 — Input bar estilo WhatsApp: adjuntar + emoji DENTRO del
+     "pill" del campo de texto, en vez de íconos sueltos al lado. El botón
+     enviar queda afuera, más pequeño, dándole más ancho al textarea. */
+  #ib-pill{
+    display:flex!important;align-items:center;flex:1;min-width:0;
+    background:var(--sb);border-radius:22px;padding:2px 4px;gap:0;
+  }
+  #ib-pill #ti{
+    background:transparent!important;border-radius:0;
+    padding:8px 2px;flex:1;min-width:0;max-height:90px;
+  }
+  #ib-pill #attach-wrap{order:2;flex-shrink:0}
+  #ib-pill #attach-btn{padding:4px 8px!important;font-size:1.2rem!important}
+  #ib-pill .voco-emoji-trigger{
+    order:-1;flex-shrink:0;display:flex!important;
+    align-items:center;justify-content:center;
+    font-size:1.15rem!important;padding:0 6px!important;
+  }
+  #sendbtn{
+    width:36px;height:36px;min-width:36px;font-size:1rem;flex-shrink:0;
+  }
 
   /* Secciones: full width */
   .sec-light .sec-hdr{padding:12px 14px}
@@ -911,10 +970,46 @@ html.dark{
   /* Ocultar columnas no esenciales en tablas */
   .mob-hide{display:none!important}
 
-  /* Emoji picker: ocultar en móvil — el teclado del SO ya trae emojis
-     nativos y el botón ocupa espacio crítico del input bar. Quitarlo
-     evita además romper el flex layout en pantallas angostas. */
-  .voco-emoji-trigger{display:none!important}
+  /* Emoji picker: antes se ocultaba en móvil por completo. Ahora se
+     mantiene visible dentro del pill del input (#ib-pill arriba, estilo
+     WhatsApp) — solo en Escalaciones (reply/nota interna, layout propio
+     sin pill) sigue viéndose como botón suelto, que es su comportamiento
+     normal en desktop también. */
+
+  /* #41 fase 2 — Optimizar espacio vertical superior para que el
+     historial de chat (#msgs) tenga más alto disponible.
+     #topbar es el header del panel global (/inbox, sin agente en la URL).
+     #agent-bar es el que realmente se usa al entrar a un agente específico
+     (/inbox/{slug}) — son DOS headers distintos (obtener_inbox_html() oculta
+     #topbar e inyecta #agent-bar encima), antes sin ningún ajuste mobile,
+     lo que rompía el layout en pantallas angostas (texto se desbordaba). */
+  #topbar{height:46px;padding:0 12px;gap:8px}
+  #topbar .logo-ic{width:26px;height:26px;font-size:.85rem}
+  #topbar .logo-txt{font-size:.8rem}
+  #topbar .logo-sub{display:none}
+  #topbar .badge{font-size:.6rem;padding:1px 6px;margin-left:2px}
+  #logout-top{padding:4px 10px;font-size:.72rem}
+
+  #agent-bar{padding:6px 10px!important;gap:6px!important}
+  #agent-bar-id{gap:6px!important;flex:1;min-width:0}
+  #agent-bar-emoji{font-size:1rem!important}
+  #agent-bar-name{font-size:.78rem!important;max-width:140px}
+  #agent-bar-status{font-size:.62rem!important}
+  #agent-bar-actions{gap:4px!important}
+  #agent-bar-username{display:none}
+  #agent-bar-back{padding:4px 8px!important;font-size:.72rem!important}
+  #agent-bar-back-label{display:none}
+
+  #ch{padding:6px 12px;gap:8px}
+  #ch .av2{width:32px;height:32px;font-size:.92rem}
+  #ch .nm2{font-size:.85rem}
+  #ch .st2{font-size:.68rem}
+
+  #mbar{padding:4px 12px;gap:8px}
+  #mbar .lbl{font-size:.7rem}
+  .tog{width:34px;height:19px}
+  .sl::before{width:13px;height:13px}
+  .tog input:checked+.sl::before{transform:translateX(15px)}
 }
 
 /* sidebar header */
@@ -989,6 +1084,10 @@ html.dark .bot .mb,html.dark .usr .mb,html.dark .esc-bbl-bot,html.dark .esc-bbl-
 html.dark .msys{box-shadow:none}
 
 #ib{background:var(--hd);padding:10px 16px;display:flex;gap:10px;align-items:flex-end;flex-shrink:0}
+/* #ib-pill envuelve adjuntar+textarea+emoji. En desktop es invisible para
+   el layout (display:contents = como si no existiera el wrapper); en
+   móvil se vuelve el "pill" estilo WhatsApp (ver @media 768px). */
+#ib-pill{display:contents}
 #ti{flex:1;background:var(--sb);border:none;border-radius:10px;padding:10px 14px;color:var(--tx);
   font-size:.9rem;resize:none;outline:none;max-height:120px;line-height:1.4}
 #ti::placeholder{color:var(--ts)}
@@ -1723,19 +1822,19 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
            onclick="showSec('clientes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('clientes')">
         <span class="ni" aria-hidden="true"><i data-lucide="users" style="width:16px;height:16px;vertical-align:-3px"></i></span> Clientes
       </div>
-      <div class="nav-item" role="button" tabindex="0" data-sec="equipo"
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="equipo"
            onclick="showSec('equipo')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('equipo')">
         <span class="ni" aria-hidden="true"><i data-lucide="user-cog" style="width:16px;height:16px;vertical-align:-3px"></i></span> Equipo
       </div>
-      <div class="nav-item" role="button" tabindex="0" data-sec="plantillas"
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="plantillas"
            onclick="showSec('plantillas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('plantillas')">
         <span class="ni" aria-hidden="true"><i data-lucide="file-text" style="width:16px;height:16px;vertical-align:-3px"></i></span> Plantillas
       </div>
-      <div class="nav-item" role="button" tabindex="0" data-sec="mensajes"
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="mensajes"
            onclick="showSec('mensajes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('mensajes')">
         <span class="ni" aria-hidden="true"><i data-lucide="message-square-text" style="width:16px;height:16px;vertical-align:-3px"></i></span> Mensajes
       </div>
-      <div class="nav-item" role="button" tabindex="0" data-sec="metricas"
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="metricas"
            onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')">
         <span class="ni" aria-hidden="true"><i data-lucide="bar-chart-3" style="width:16px;height:16px;vertical-align:-3px"></i></span> Métricas
       </div>
@@ -1743,7 +1842,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
            el JS aplicarVisibilidadModulos() las muestra/oculta según
            Agent.modules_json. Por default OFF para no romper UX de agentes
            que no usan estas features. -->
-      <div class="nav-item" role="button" tabindex="0" data-sec="pipeline" data-module="pipeline"
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="pipeline" data-module="pipeline"
            style="display:none"
            onclick="showSec('pipeline')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('pipeline')">
         <span class="ni" aria-hidden="true"><i data-lucide="trending-up" style="width:16px;height:16px;vertical-align:-3px"></i></span> Pipeline
@@ -1755,9 +1854,19 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
       </div>
       <div class="nav-section">Sistema</div>
-      <div class="nav-item" role="button" tabindex="0" data-sec="configuracion"
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="configuracion"
            onclick="showSec('configuracion')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('configuracion')">
         <span class="ni" aria-hidden="true"><i data-lucide="settings" style="width:16px;height:16px;vertical-align:-3px"></i></span> Configuración
+      </div>
+      <!-- "Más" — solo móvil (#41 fase 2). Agrupa los items .nav-secondary
+           (Equipo, Plantillas, Mensajes, Métricas, Pipeline, Configuración)
+           en un sheet vertical para que la barra inferior solo muestre
+           Conversaciones/Difusiones/Clientes/Escalaciones + Más. -->
+      <div class="nav-item nav-mas-btn" role="button" tabindex="0" id="nav-mas-btn"
+           style="display:none" onclick="toggleNavMas()"
+           onkeydown="if(event.key==='Enter'||event.key===' ')toggleNavMas()">
+        <span class="ni" aria-hidden="true"><i id="nav-mas-icon" data-lucide="more-horizontal" style="width:16px;height:16px;vertical-align:-3px"></i></span>
+        <span id="nav-mas-label">Más</span>
       </div>
       <div class="nav-footer" style="display:flex;align-items:center;gap:8px">
         <!-- Logo Voco real (símbolo de bocadillo hexagonal). Era un placeholder
@@ -1770,6 +1879,9 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         <small style="color:var(--voco-text-muted);font-weight:600">Voco · v1</small>
       </div>
     </nav>
+    <!-- Backdrop del sheet "Más" (#41 fase 2) — solo visible cuando #nav
+         tiene la clase nav-mas-open. Tocar fuera del sheet lo cierra. -->
+    <div id="nav-mas-backdrop" onclick="toggleNavMas(false)"></div>
 
     <!-- ── MAIN ── -->
     <div id="main">
@@ -1867,6 +1979,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div id="msgs"></div>
 
             <div id="ib">
+              <!-- #ib-pill: en móvil agrupa adjuntar+texto+emoji en un solo
+                   "pill" estilo WhatsApp (#41 fase 2). En desktop es
+                   transparente al layout (display:contents). -->
+              <div id="ib-pill">
               <!-- Botón adjuntar (Sprint 4) -->
               <div id="attach-wrap" style="position:relative">
                 <button id="attach-btn" onclick="toggleAttachMenu()" aria-label="Adjuntar"
@@ -1903,6 +2019,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               <button type="button" class="voco-emoji-trigger" onclick="vocoEmojiToggle('ti')"
                 aria-label="Insertar emoji" title="Insertar emoji"
                 style="background:none;border:none;font-size:1.25rem;padding:0 8px;cursor:pointer;line-height:1">😊</button>
+              </div>
               <button id="sendbtn" onclick="sendMsg()" aria-label="Enviar mensaje">➤</button>
             </div>
 
@@ -4634,6 +4751,35 @@ function showSec(id) {
   }
   // Reflejar sección en el hash de la URL para deep-linking
   try { history.replaceState(null, '', '#' + id); } catch(e) {}
+  // Cerrar el sheet "Más" si estaba abierto (no-op si nunca se abrió o si
+  // estamos en desktop, donde #nav nunca tiene nav-mas-open).
+  toggleNavMas(false);
+}
+
+/* ══════════════════════════════════════════════════════
+   #41 fase 2 — Sheet "Más" del nav inferior móvil
+   ══════════════════════════════════════════════════════
+   Agrupa los .nav-item.nav-secondary (Equipo, Plantillas, Mensajes,
+   Métricas, Pipeline, Configuración) en un panel deslizable para que
+   la barra inferior solo muestre 4 tabs + "Más". Reutiliza los mismos
+   elementos .nav-item (no los duplica) — showSec() los encuentra por
+   data-sec sin importar si están en la barra o en el sheet abierto. */
+function toggleNavMas(force) {
+  var nav = document.getElementById('nav');
+  if (!nav) return;
+  var isOpen = nav.classList.contains('nav-mas-open');
+  var open = (typeof force === 'boolean') ? force : !isOpen;
+  if (open === isOpen) return;
+  nav.classList.toggle('nav-mas-open', open);
+  var backdrop = document.getElementById('nav-mas-backdrop');
+  if (backdrop) backdrop.classList.toggle('show', open);
+  var label = document.getElementById('nav-mas-label');
+  if (label) label.textContent = open ? 'Cerrar' : 'Más';
+  var icon = document.getElementById('nav-mas-icon');
+  if (icon) {
+    icon.setAttribute('data-lucide', open ? 'x' : 'more-horizontal');
+    if (window.lucide) window.lucide.createIcons();
+  }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -11019,21 +11165,21 @@ def obtener_inbox_html(agent: dict | None = None, user: dict | None = None) -> s
             pc = plan_colors.get(plan, "#64748b")
             pb = plan_bg.get(plan, "#1e293b")
             user_badge = f'<span style="background:{pb};color:{pc};font-size:.68rem;padding:2px 8px;border-radius:10px;font-weight:700;text-transform:capitalize">{plan}</span>'
-        user_info = f'<span style="color:var(--voco-text-muted);font-size:.76rem;margin-right:6px">{nombre_u}</span>{user_badge}'
+        user_info = f'<span id="agent-bar-username" style="color:var(--voco-text-muted);font-size:.76rem;margin-right:6px">{nombre_u}</span>{user_badge}'
     else:
         user_info = ""
 
-    agent_bar = f"""<div style="background:var(--voco-nav-bg);padding:7px 20px;display:flex;align-items:center;
+    agent_bar = f"""<div id="agent-bar" style="background:var(--voco-nav-bg);padding:7px 20px;display:flex;align-items:center;
 justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
-  <div style="display:flex;align-items:center;gap:10px">
-    <span style="font-size:1.3rem">{emoji}</span>
-    <div>
-      <div style="color:var(--voco-text);font-weight:700;font-size:.85rem;line-height:1.2">{name}</div>
-      <div style="color:var(--voco-text-muted);font-size:.72rem">{aname} &nbsp;·&nbsp;
+  <div id="agent-bar-id" style="display:flex;align-items:center;gap:10px;min-width:0">
+    <span id="agent-bar-emoji" style="font-size:1.3rem">{emoji}</span>
+    <div style="min-width:0">
+      <div id="agent-bar-name" style="color:var(--voco-text);font-weight:700;font-size:.85rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{name}</div>
+      <div id="agent-bar-status" style="color:var(--voco-text-muted);font-size:.72rem;white-space:nowrap">{aname} &nbsp;·&nbsp;
         <span style="color:{status_color}">{status_label}</span></div>
     </div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px">
+  <div id="agent-bar-actions" style="display:flex;align-items:center;gap:10px;flex-shrink:0">
     {user_info}
     <button type="button" onclick="vocoToggleTheme()" title="Cambiar tema"
       aria-label="Cambiar tema claro/oscuro"
@@ -11045,12 +11191,12 @@ justify-content:space-between;border-bottom:2px solid {color};flex-shrink:0">
       <i data-lucide="sun"  class="hidden dark:inline-block" style="width:15px;height:15px"></i>
       <i data-lucide="moon" class="inline-block dark:hidden" style="width:15px;height:15px"></i>
     </button>
-    <a href="/inbox" style="color:var(--voco-text-muted);font-size:.76rem;text-decoration:none;
+    <a href="/inbox" id="agent-bar-back" style="color:var(--voco-text-muted);font-size:.76rem;text-decoration:none;
       padding:4px 12px;border:1px solid var(--voco-border);border-radius:6px;
       transition:.15s;white-space:nowrap"
       onmouseover="this.style.color='var(--voco-text)';this.style.background='var(--voco-nav-bg-hover)'"
       onmouseout="this.style.color='var(--voco-text-muted)';this.style.background='transparent'">
-      ← Voco
+      ← <span id="agent-bar-back-label">Voco</span>
     </a>
     <a href="/inbox/logout" style="color:var(--voco-text-muted);font-size:.72rem;text-decoration:none;
       padding:4px 10px;border:1px solid var(--voco-border);border-radius:6px">Salir</a>
