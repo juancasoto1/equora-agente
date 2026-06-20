@@ -11,6 +11,7 @@ El resto del sistema no se ve afectado.
 """
 
 import os
+import time
 import logging
 import httpx
 from openai import AsyncOpenAI
@@ -19,18 +20,24 @@ logger = logging.getLogger("agentkit")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 _openai_client: AsyncOpenAI | None = None
+_openai_client_created_at: float = 0.0
+# #78 — mismo criterio anti-stale que el cliente Anthropic (agent/brain.py).
+CLIENT_MAX_AGE_SEG = int(os.getenv("AI_CLIENT_MAX_AGE_SEG", 6 * 3600))
 
 # Tamaño máximo de audio que procesamos: 10 MB (Whisper acepta hasta 25 MB)
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
 
 def _cliente_openai() -> AsyncOpenAI:
-    """Retorna (o crea) el cliente de OpenAI reutilizable."""
-    global _openai_client
-    if _openai_client is None:
-        if not OPENAI_API_KEY:
-            raise ValueError("OPENAI_API_KEY no configurada en .env / Railway")
+    """Retorna el cliente de OpenAI, recreándolo si pasó CLIENT_MAX_AGE_SEG."""
+    global _openai_client, _openai_client_created_at
+    if not OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY no configurada en .env / Railway")
+    ahora = time.monotonic()
+    if _openai_client is None or (ahora - _openai_client_created_at) > CLIENT_MAX_AGE_SEG:
         _openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+        _openai_client_created_at = ahora
+        logger.info("[anti-stale] Cliente OpenAI (re)creado")
     return _openai_client
 
 

@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import yaml
 import logging
 from anthropic import AsyncAnthropic
@@ -10,7 +11,25 @@ from agent.memory import obtener_cliente, obtener_pedido_pendiente, obtener_carr
 load_dotenv()
 logger = logging.getLogger("agentkit")
 
-client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+# #78 — el SDK de Anthropic mantiene un AsyncAnthropic (y su pool de conexiones
+# httpx subyacente) vivo por toda la vida del proceso. En un container de
+# Railway corriendo semanas, ese pool puede acumular conexiones "stale" que
+# el servidor remoto ya cerró silenciosamente. Recreamos el cliente cada
+# CLIENT_MAX_AGE_SEG (default 6h) en vez de confiar en uno solo para siempre.
+CLIENT_MAX_AGE_SEG = int(os.getenv("AI_CLIENT_MAX_AGE_SEG", 6 * 3600))
+_client: AsyncAnthropic | None = None
+_client_created_at: float = 0.0
+
+
+def _get_client() -> AsyncAnthropic:
+    """Retorna el cliente Anthropic, recreándolo si pasó CLIENT_MAX_AGE_SEG."""
+    global _client, _client_created_at
+    ahora = time.monotonic()
+    if _client is None or (ahora - _client_created_at) > CLIENT_MAX_AGE_SEG:
+        _client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        _client_created_at = ahora
+        logger.info("[anti-stale] Cliente Anthropic (re)creado")
+    return _client
 
 # ── Cache del system prompt desde archivo (se recarga si cambia el archivo) ───
 _prompt_config_cache: dict = {}
@@ -288,7 +307,7 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
     mensajes.append({"role": "user", "content": mensaje})
 
     try:
-        response = await client.messages.create(
+        response = await _get_client().messages.create(
             model=os.getenv("AI_MODEL", "claude-haiku-4-5"),  # Configurable desde panel de Configuración
             max_tokens=1024,
             system=system_prompt,
