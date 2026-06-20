@@ -743,6 +743,9 @@ async def _procesar_carrito_unificado():
                     # Fallback texto con la URL del checkout (sigue siendo Shopify pago)
                     await proveedor.enviar_mensaje(telefono, f"{msg}\n\n👉 {checkout_url_seg}")
 
+                # Persistir el mensaje del seguimiento (panel lo necesita).
+                await _guardar_con_wamid(proveedor, telefono, msg)
+
                 # Mensaje complementario con botones Ver/Vaciar — el cliente
                 # SIEMPRE debe poder revisar/limpiar su carrito antes de pagar.
                 if hasattr(proveedor, "enviar_botones_reply"):
@@ -754,7 +757,6 @@ async def _procesar_carrito_unificado():
                     except Exception as e:
                         logger.warning(f"[carrito-est5] botones complementarios fallaron: {e}")
 
-            await _guardar_con_wamid(proveedor, telefono, msg)
             _carrito_unif_cooldown[telefono] = ahora
             _carrito_ultimo_estado[telefono] = estado_actual
             logger.info(f"Seguimiento carrito estado {estado_actual} → {telefono} (${total_fmt})")
