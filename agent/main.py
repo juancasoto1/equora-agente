@@ -1055,6 +1055,12 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
 
     Returns: True si envió, False si carrito vacío (manda mensaje aparte).
     """
+    # Provider del agente correcto — NUNCA el singleton global `proveedor`,
+    # que solo tiene las credenciales del agente por defecto (id=1). Usarlo
+    # acá enviaría desde el número de WhatsApp equivocado para cualquier
+    # otro agente: Meta acepta el envío (200 OK, wamid válido → chulito ✓
+    # en el panel) pero el cliente nunca lo recibe en su chat real.
+    proveedor = await _get_meta_para_agente({"id": agent_id})
     carrito = await obtener_carrito_activo(telefono, agent_id=agent_id)
     if not carrito:
         msg_vacio = "🛒 Tu carrito está vacío en este momento.\n\nCuando agregues productos te lo confirmo aquí."
