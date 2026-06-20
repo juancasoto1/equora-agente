@@ -4571,6 +4571,64 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               </div>
             </div>
 
+            <!-- Sistema de diseño -->
+            <div class="doc-section">
+              <p class="doc-section-title">🎨 Sistema de diseño</p>
+              <div class="doc-grid">
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🎨 Paleta de color</div>
+                  <table class="doc-table">
+                    <tr><td>Brand (indigo-600)</td><td><strong>#4f46e5</strong> · dark: #818cf8</td></tr>
+                    <tr><td>Acento (emerald-500)</td><td><strong>#10b981</strong></td></tr>
+                    <tr><td>Error (red-500)</td><td><strong>#ef4444</strong></td></tr>
+                    <tr><td>Fondo / texto</td><td>surface-50…900 (slate), tokens <code>--voco-*</code></td></tr>
+                  </table>
+                  <p style="font-size:.78rem;color:var(--voco-text-muted);margin-top:8px">
+                    Definida como variables CSS en <code>:root</code> / <code>html.dark</code> en <code>agent/inbox.py</code>.
+                    El chat (estilo WhatsApp Web) usa su propio sub-set de tokens (<code>--bbl</code>, <code>--bbr</code>, <code>--az</code>…), independiente de la paleta del shell/admin.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🔤 Tipografía e iconografía</div>
+                  <table class="doc-table">
+                    <tr><td>Familia</td><td><strong>Inter</strong> (Google Fonts), fallback system-ui</td></tr>
+                    <tr><td>Pesos</td><td>400, 500, 600, 700</td></tr>
+                    <tr><td>Iconos</td><td><strong>Lucide</strong> (CDN unpkg)</td></tr>
+                  </table>
+                  <p style="font-size:.78rem;color:var(--voco-text-muted);margin-top:8px">
+                    Los iconos de navegación y acciones del panel usan Lucide (<code>data-lucide</code> + <code>window.lucide.createIcons()</code>).
+                    Los emojis se mantienen solo en contenido de chat/marketing, no como iconografía de UI.
+                  </p>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">📐 Espaciado y bordes</div>
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0 0 8px">
+                    No hay una escala estricta de tokens, pero el patrón dominante en el panel es:
+                  </p>
+                  <table class="doc-table">
+                    <tr><td>Inputs / botones</td><td><strong>6–10px</strong> de radio</td></tr>
+                    <tr><td>Cards</td><td><strong>12px</strong> de radio</td></tr>
+                    <tr><td>Modales</td><td><strong>14–16px</strong> de radio</td></tr>
+                    <tr><td>Sombra de card</td><td><code>--voco-card-shadow</code></td></tr>
+                  </table>
+                </div>
+
+                <div class="doc-card">
+                  <div class="doc-card-title">🌗 Tema claro / oscuro</div>
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0 0 8px">
+                    Toggle en la topbar (ícono de luna/sol). Claro es el tema por defecto para el panel de administración.
+                  </p>
+                  <p style="font-size:.82rem;color:var(--voco-text-muted);line-height:1.6;margin:0">
+                    La preferencia se guarda en <code>localStorage</code> (clave <code>voco-theme</code>) y se aplica agregando/quitando la clase <code>dark</code> en <code>&lt;html&gt;</code>.
+                  </p>
+                </div>
+
+              </div>
+            </div>
+
           </div><!-- /pane documentacion -->
 
         </div>
