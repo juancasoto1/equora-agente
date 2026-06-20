@@ -2685,6 +2685,14 @@ async def webhook_handler(request: Request):
                             )
                             if enviado_catalogo_wa:
                                 logger.info(f"[TIENDA→catalogo-WA] product_list enviado a {msg.telefono} (cat={categoria_solicitada})")
+                                # #79 — si el texto de Andrea se fusionó en este
+                                # mensaje (_texto_absorbido_por_cta), el row de
+                                # historial guardado antes (_msg_id_assistant)
+                                # aún no tiene wamid: actualizarlo ahora.
+                                if _texto_absorbido_por_cta:
+                                    _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
+                                    if _w:
+                                        await actualizar_wamid_mensaje(_msg_id_assistant, _w)
                     except Exception as e:
                         logger.warning(f"[TIENDA] product_list falló: {e}")
 
