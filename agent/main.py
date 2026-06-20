@@ -127,6 +127,59 @@ async def _get_meta_para_agente(agent: dict) -> "ProveedorMeta":
         catalog_id=catalog_id,
     )
 
+
+# ──────────────────────────────────────────────────────────────────────────
+# #79 — Chulitos de confirmación WhatsApp (✓ enviado / ✓✓ entregado / ✓✓ leído)
+#
+# Bug original: el wamid (id de Meta del mensaje enviado) se leía ANTES de
+# que el envío ocurriera, o se llamaba guardar_mensaje() sin pasar wamid en
+# absoluto — en ~25 puntos distintos del código. Resultado: ningún mensaje
+# mostraba chulitos.
+#
+# Para que esto NO se repita cada vez que se agregue un seguimiento, webhook
+# o canal de envío nuevo, SIEMPRE usar uno de estos dos helpers en vez de
+# llamar guardar_mensaje() directamente para mensajes role="assistant":
+#
+#   1. _guardar_con_wamid(...)        — caso normal: el envío YA ocurrió
+#      (proveedor.enviar_mensaje / enviar_botones / enviar_catalogo_productos
+#      / etc. ya se llamó) y ahora hay que persistir el mensaje en historial.
+#
+#   2. _vincular_wamid_post_envio(...) — caso especial: el mensaje ya se
+#      guardó en BD ANTES del envío real (ej. el texto de Andrea se fusiona
+#      con un mensaje de catálogo/CTA que se arma más abajo). Llamar esto
+#      justo después del envío real para vincular el wamid al row existente.
+# ──────────────────────────────────────────────────────────────────────────
+
+async def _guardar_con_wamid(
+    proveedor_local, telefono: str, contenido: str, agent_id: int = 1,
+    role: str = "assistant",
+) -> int:
+    """Guarda un mensaje en el historial capturando el wamid del envío que
+    se acaba de hacer con proveedor_local (lee proveedor_local.ultimo_wamid,
+    poblado por CUALQUIER método de envío del provider — enviar_mensaje,
+    enviar_botones, enviar_catalogo_productos, enviar_producto, etc.).
+
+    Llamar SIEMPRE justo después de un envío exitoso en vez de invocar
+    guardar_mensaje() a mano — evita repetir el bug de #79. Retorna el id
+    de la fila guardada (útil si luego hace falta _vincular_wamid_post_envio)."""
+    wamid = getattr(proveedor_local, "ultimo_wamid", "") or ""
+    return await guardar_mensaje(
+        telefono, role, contenido, agent_id=agent_id,
+        wamid=wamid, status="sent" if wamid else "",
+    )
+
+
+async def _vincular_wamid_post_envio(proveedor_local, msg_id: int) -> None:
+    """Vincula el wamid del último envío al row de historial que YA se
+    guardó antes de que el envío ocurriera (caso: texto absorbido por un
+    mensaje de catálogo/CTA armado más abajo). No hace nada si no hay
+    wamid (envío falló) o msg_id es 0 (guardar_mensaje no se llamó)."""
+    if not msg_id:
+        return
+    wamid = getattr(proveedor_local, "ultimo_wamid", "") or ""
+    if wamid:
+        await actualizar_wamid_mensaje(msg_id, wamid)
+
 # URL pública del servidor (se usa para el link de la mini-tienda)
 _railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
 APP_URL = os.getenv("APP_URL") or (f"https://{_railway_domain}" if _railway_domain else f"http://localhost:{PORT}")
@@ -566,8 +619,7 @@ async def _procesar_carrito_unificado():
                     logger.info(f"[carrito-est3] {telefono} product_list no disponible — cancelando silencioso")
                     continue
                 # Persistir el mensaje del seguimiento (panel lo necesita).
-                _w = getattr(proveedor, "ultimo_wamid", "") or ""
-                await guardar_mensaje(telefono, "assistant", msg, wamid=_w, status="sent" if _w else "")
+                await _guardar_con_wamid(proveedor, telefono, msg)
 
                 # Mensaje complementario con botones Ver/Vaciar carrito —
                 # SIEMPRE accesibles para el cliente (acciones determinísticas).
@@ -643,8 +695,7 @@ async def _procesar_carrito_unificado():
                     if not enviado_pl:
                         logger.info(f"[carrito-est4] {telefono} ningún canal nativo funcionó — cancelando silencioso")
                         continue
-                _w = getattr(proveedor, "ultimo_wamid", "") or ""
-                await guardar_mensaje(telefono, "assistant", msg, wamid=_w, status="sent" if _w else "")
+                await _guardar_con_wamid(proveedor, telefono, msg)
 
             else:
                 # ── Estado 5 (timer de seguimiento): pedido alto, invitar a pagar ──
@@ -696,8 +747,7 @@ async def _procesar_carrito_unificado():
                     except Exception as e:
                         logger.warning(f"[carrito-est5] botones complementarios fallaron: {e}")
 
-            _w = getattr(proveedor, "ultimo_wamid", "") or ""
-            await guardar_mensaje(telefono, "assistant", msg, wamid=_w, status="sent" if _w else "")
+            await _guardar_con_wamid(proveedor, telefono, msg)
             _carrito_unif_cooldown[telefono] = ahora
             _carrito_ultimo_estado[telefono] = estado_actual
             logger.info(f"Seguimiento carrito estado {estado_actual} → {telefono} (${total_fmt})")
@@ -784,9 +834,7 @@ async def _procesar_followups():
                 logger.info(f"[followup] {telefono} mensaje desactivado para agent={aid} — saltando")
                 continue
             await proveedor.enviar_mensaje(telefono, texto)
-            _w = getattr(proveedor, "ultimo_wamid", "") or ""
-            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid,
-                                  wamid=_w, status="sent" if _w else "")
+            await _guardar_con_wamid(proveedor, telefono, texto, agent_id=aid)
             await marcar_followup_enviado(telefono)
             logger.info(f"Follow-up enviado a {telefono}")
         except Exception as e:
@@ -810,9 +858,7 @@ async def _procesar_cierres():
                 await marcar_cierre_enviado(telefono)
                 continue
             await proveedor.enviar_mensaje(telefono, texto)
-            _w = getattr(proveedor, "ultimo_wamid", "") or ""
-            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid,
-                                  wamid=_w, status="sent" if _w else "")
+            await _guardar_con_wamid(proveedor, telefono, texto, agent_id=aid)
             await marcar_cierre_enviado(telefono)
             logger.info(f"Cierre enviado a {telefono}")
         except Exception as e:
@@ -914,9 +960,7 @@ async def _procesar_abandono_checkout():
                     telefono,
                     f"{texto}\n\n👉 {checkout_url}"
                 )
-            _w = getattr(proveedor, "ultimo_wamid", "") or ""
-            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid,
-                                  wamid=_w, status="sent" if _w else "")
+            await _guardar_con_wamid(proveedor, telefono, texto, agent_id=aid)
             await marcar_checkout_abandono_enviado(telefono)
             logger.info(f"Recuperación de checkout enviada a {telefono}")
         except Exception as e:
@@ -1015,9 +1059,7 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
     if not carrito:
         msg_vacio = "🛒 Tu carrito está vacío en este momento.\n\nCuando agregues productos te lo confirmo aquí."
         await proveedor.enviar_mensaje(telefono, msg_vacio)
-        _w = getattr(proveedor, "ultimo_wamid", "") or ""
-        await guardar_mensaje(telefono, "assistant", msg_vacio, agent_id=agent_id,
-                              wamid=_w, status="sent" if _w else "")
+        await _guardar_con_wamid(proveedor, telefono, msg_vacio, agent_id=agent_id)
         return False
 
     lineas_items = []
@@ -1062,9 +1104,7 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
             logger.warning(f"[ver-carrito] botones fallaron: {e}")
     if not enviado:
         await proveedor.enviar_mensaje(telefono, resumen)
-    _w = getattr(proveedor, "ultimo_wamid", "") or ""
-    await guardar_mensaje(telefono, "assistant", resumen, agent_id=agent_id,
-                          wamid=_w, status="sent" if _w else "")
+    await _guardar_con_wamid(proveedor, telefono, resumen, agent_id=agent_id)
     return True
 
 
@@ -1210,9 +1250,7 @@ async def _escalar_meta_fallo(
             "que te va a mostrar los productos. Ya viene 🌿"
         )
         await proveedor.enviar_mensaje(telefono, msg_cliente)
-        _w = getattr(proveedor, "ultimo_wamid", "") or ""
-        await guardar_mensaje(telefono, "assistant", msg_cliente, agent_id=agent_id,
-                              wamid=_w, status="sent" if _w else "")
+        await _guardar_con_wamid(proveedor, telefono, msg_cliente, agent_id=agent_id)
 
         # 2. Obtener nombre del cliente para el ticket (mejora UX panel)
         try:
@@ -1755,9 +1793,7 @@ async def webhook_handler(request: Request):
                         _txt_no_enc = await obtener_mensaje(_agent_id, "error.checkout_no_encontrado")
                         if _txt_no_enc:
                             await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_no_enc)
-                            _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                            await guardar_mensaje(msg.telefono, "assistant", _txt_no_enc, agent_id=_agent_id,
-                                                  wamid=_w, status="sent" if _w else "")
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _txt_no_enc, agent_id=_agent_id)
                     continue
 
                 if accion == "act_vaciar_carrito":
@@ -1780,12 +1816,7 @@ async def webhook_handler(request: Request):
                         "o pídeme el catálogo 🌿"
                     )
                     await _proveedor_agente.enviar_mensaje(msg.telefono, msg_confirmacion)
-                    _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                    await guardar_mensaje(
-                        msg.telefono, "assistant", msg_confirmacion,
-                        agent_id=_agent_id,
-                        wamid=_w, status="sent" if _w else "",
-                    )
+                    await _guardar_con_wamid(_proveedor_agente, msg.telefono, msg_confirmacion, agent_id=_agent_id)
                     continue
 
                 if accion == "act_ir_pago":
@@ -1798,9 +1829,7 @@ async def webhook_handler(request: Request):
                         _txt_no_enc = await obtener_mensaje(_agent_id, "error.checkout_no_encontrado")
                         if _txt_no_enc:
                             await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_no_enc)
-                            _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                            await guardar_mensaje(msg.telefono, "assistant", _txt_no_enc, agent_id=_agent_id,
-                                                  wamid=_w, status="sent" if _w else "")
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _txt_no_enc, agent_id=_agent_id)
                         continue
                     boton_label = (await obtener_mensaje(_agent_id, "cart.checkout_listo_boton")).strip() or "Pagar ahora"
                     txt = "Toca el botón para completar tu pago de forma segura 🔒"
@@ -1853,9 +1882,7 @@ async def webhook_handler(request: Request):
                     "nuestras ofertas y novedades, solo escríbenos. 🌿"
                 )
                 await _proveedor_agente.enviar_mensaje(msg.telefono, respuesta_baja)
-                _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                await guardar_mensaje(msg.telefono, "assistant", respuesta_baja, agent_id=_agent_id,
-                                      wamid=_w, status="sent" if _w else "")
+                await _guardar_con_wamid(_proveedor_agente, msg.telefono, respuesta_baja, agent_id=_agent_id)
                 logger.info(f"[opt-out] {msg.telefono} dado de baja — motivo: {msg.texto[:50]}")
                 continue  # no pasar por Claude
 
@@ -2074,12 +2101,7 @@ async def webhook_handler(request: Request):
                             await _proveedor_agente.enviar_mensaje(msg.telefono, mensaje_minimo)
                             # Persistir en BD para que el operador vea este mensaje
                             # en el panel de Conversaciones (antes se perdía).
-                            _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                            await guardar_mensaje(
-                                msg.telefono, "assistant", mensaje_minimo,
-                                agent_id=_agent_id,
-                                wamid=_w, status="sent" if _w else "",
-                            )
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, mensaje_minimo, agent_id=_agent_id)
 
                             # Catalog_message removido: cuelga WhatsApp Business
                             # app en algunos Android (Meta side bug). Vamos directo
@@ -2121,12 +2143,7 @@ async def webhook_handler(request: Request):
                                     "o explora el catálogo en *Ver artículos* 👆🌿"
                                 )
                                 await _proveedor_agente.enviar_mensaje(msg.telefono, texto_final)
-                                _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                                await guardar_mensaje(
-                                    msg.telefono, "assistant", texto_final,
-                                    agent_id=_agent_id,
-                                    wamid=_w, status="sent" if _w else "",
-                                )
+                                await _guardar_con_wamid(_proveedor_agente, msg.telefono, texto_final, agent_id=_agent_id)
                             else:
                                 # Meta nativo no disponible → escalar
                                 await _escalar_meta_fallo(
@@ -2254,12 +2271,7 @@ async def webhook_handler(request: Request):
                                     # Siempre persistir el texto del mensaje (sea por product_list o por
                                     # fallback). El cuerpo del product_list NO se guarda automáticamente
                                     # — sin esto el operador NO ve el "¡Pedido confirmado!" en el panel.
-                                    _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                                    await guardar_mensaje(
-                                        msg.telefono, "assistant", mensaje_agregar,
-                                        agent_id=_agent_id,
-                                        wamid=_w, status="sent" if _w else "",
-                                    )
+                                    await _guardar_con_wamid(_proveedor_agente, msg.telefono, mensaje_agregar, agent_id=_agent_id)
 
                                 # ── Mensaje 2: CTA al checkout (texto + botón configurables) ──
                                 mensaje_confirmar = format_seguro(
@@ -2279,12 +2291,7 @@ async def webhook_handler(request: Request):
                                         msg.telefono, f"{mensaje_confirmar}\n\n👉 {checkout_url}"
                                     )
                                 # Persistir el mensaje en BD (panel lo necesita).
-                                _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                                await guardar_mensaje(
-                                    msg.telefono, "assistant", mensaje_confirmar,
-                                    agent_id=_agent_id,
-                                    wamid=_w, status="sent" if _w else "",
-                                )
+                                await _guardar_con_wamid(_proveedor_agente, msg.telefono, mensaje_confirmar, agent_id=_agent_id)
                                 # Botones determinísticos del carrito (Ver/Vaciar)
                                 # — el cliente SIEMPRE debe poder gestionar antes de pagar.
                                 if hasattr(_proveedor_agente, "enviar_botones_reply"):
@@ -2322,12 +2329,7 @@ async def webhook_handler(request: Request):
                                     msg.telefono, f"{texto_checkout}\n\n👉 {checkout_url}"
                                 )
                             # Persistir el mensaje (panel lo necesita)
-                            _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                            await guardar_mensaje(
-                                msg.telefono, "assistant", texto_checkout,
-                                agent_id=_agent_id,
-                                wamid=_w, status="sent" if _w else "",
-                            )
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, texto_checkout, agent_id=_agent_id)
                             # Botones determinísticos del carrito
                             if hasattr(_proveedor_agente, "enviar_botones_reply"):
                                 try:
@@ -2341,16 +2343,12 @@ async def webhook_handler(request: Request):
                             _txt_err = await obtener_mensaje(_agent_id, "error.procesar_pedido_fallo")
                             if _txt_err:
                                 await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_err)
-                                _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                                await guardar_mensaje(msg.telefono, "assistant", _txt_err, agent_id=_agent_id,
-                                                      wamid=_w, status="sent" if _w else "")
+                                await _guardar_con_wamid(_proveedor_agente, msg.telefono, _txt_err, agent_id=_agent_id)
                     else:
                         _txt_err2 = await obtener_mensaje(_agent_id, "error.productos_no_reconocidos")
                         if _txt_err2:
                             await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_err2)
-                            _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                            await guardar_mensaje(msg.telefono, "assistant", _txt_err2, agent_id=_agent_id,
-                                                  wamid=_w, status="sent" if _w else "")
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _txt_err2, agent_id=_agent_id)
                 except Exception as e:
                     logger.error(f"Error procesando orden catálogo: {e}")
                     _txt_exc = await obtener_mensaje(_agent_id, "error.excepcion_pedido")
@@ -2452,9 +2450,7 @@ async def webhook_handler(request: Request):
                 await _proveedor_agente.enviar_mensaje(msg.telefono, respuesta)
                 # Chulitos de confirmación (#79): ahora sí el provider ya tiene
                 # el wamid real de este envío — actualizamos el mensaje guardado.
-                _wamid_resp = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                if _wamid_resp:
-                    await actualizar_wamid_mensaje(_msg_id_assistant, _wamid_resp)
+                await _vincular_wamid_post_envio(_proveedor_agente, _msg_id_assistant)
 
             # ── [[PRODUCTO:nombre]] — enviar uno o más productos del catálogo ──
             # Andrea lo usa cuando menciona un producto específico. Por cada
@@ -2553,12 +2549,7 @@ async def webhook_handler(request: Request):
                     if lineas:
                         _texto_cat_fb = "\n".join(lineas).strip()
                         await _proveedor_agente.enviar_mensaje(msg.telefono, _texto_cat_fb)
-                        _wamid_cat_fb = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                        await guardar_mensaje(
-                            msg.telefono, "assistant", _texto_cat_fb,
-                            agent_id=_agent_id,
-                            wamid=_wamid_cat_fb, status="sent" if _wamid_cat_fb else "",
-                        )
+                        await _guardar_con_wamid(_proveedor_agente, msg.telefono, _texto_cat_fb, agent_id=_agent_id)
 
             # Luego enviar mensajes interactivos
             if datos_botones and hasattr(_proveedor_agente, "enviar_botones"):
@@ -2604,12 +2595,7 @@ async def webhook_handler(request: Request):
                     if fallback_text.strip():
                         _txt_fb = fallback_text[:4000]
                         await _proveedor_agente.enviar_mensaje(msg.telefono, _txt_fb)
-                        _wamid_lista_fb = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                        await guardar_mensaje(
-                            msg.telefono, "assistant", _txt_fb,
-                            agent_id=_agent_id,
-                            wamid=_wamid_lista_fb, status="sent" if _wamid_lista_fb else "",
-                        )
+                        await _guardar_con_wamid(_proveedor_agente, msg.telefono, _txt_fb, agent_id=_agent_id)
                         logger.info(f"Fallback texto de lista enviado a {msg.telefono}")
 
             # Cuando Andrea usa [[TIENDA:]] PRIORIZAR catálogo nativo de WhatsApp
@@ -2705,9 +2691,7 @@ async def webhook_handler(request: Request):
                                 # historial guardado antes (_msg_id_assistant)
                                 # aún no tiene wamid: actualizarlo ahora.
                                 if _texto_absorbido_por_cta:
-                                    _w = getattr(_proveedor_agente, "ultimo_wamid", "") or ""
-                                    if _w:
-                                        await actualizar_wamid_mensaje(_msg_id_assistant, _w)
+                                    await _vincular_wamid_post_envio(_proveedor_agente, _msg_id_assistant)
                     except Exception as e:
                         logger.warning(f"[TIENDA] product_list falló: {e}")
 
@@ -3813,11 +3797,7 @@ async def inbox_responder(
                          f"ventana de 24h cerrada, o scope insuficiente. Logs de Railway "
                          f"tienen la respuesta exacta de Meta."
             })
-        # Capturar wamid para chulitos de confirmación (#79). El provider lo
-        # guarda en self.ultimo_wamid tras enviar OK; vacío si Meta no lo retorna.
-        _wamid = getattr(_prov, "ultimo_wamid", "") or ""
-        await guardar_mensaje(telefono, "assistant", mensaje, agent_id=agent_id,
-                              wamid=_wamid, status="sent" if _wamid else "")
+        await _guardar_con_wamid(_prov, telefono, mensaje, agent_id=agent_id)
         await registrar_mensaje_asistente(telefono)
         logger.info(f"Mensaje manual enviado a {telefono} desde inbox (agent_id={agent_id})")
         return JSONResponse(content={"ok": True})
@@ -3930,9 +3910,7 @@ async def inbox_responder_media(
             "filename":  file.filename or "",
             "caption":   cap,
         }, ensure_ascii=False)
-        _wamid_media = getattr(_prov, "ultimo_wamid", "") or ""
-        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id,
-                              wamid=_wamid_media, status="sent" if _wamid_media else "")
+        await _guardar_con_wamid(_prov, telefono, f"__MEDIA__:{marcador}", agent_id=agent_id)
         await registrar_mensaje_asistente(telefono)
         logger.info(f"Media {tipo} enviada a {telefono} desde inbox")
         return JSONResponse(content={
@@ -4006,9 +3984,7 @@ async def inbox_responder_ubicacion(
             "nombre":    nombre,
             "direccion": direccion,
         }, ensure_ascii=False)
-        _w = getattr(_prov, "ultimo_wamid", "") or ""
-        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id,
-                              wamid=_w, status="sent" if _w else "")
+        await _guardar_con_wamid(_prov, telefono, f"__MEDIA__:{marcador}", agent_id=agent_id)
         await registrar_mensaje_asistente(telefono)
         return JSONResponse(content={"ok": True})
     except Exception as e:
@@ -4054,9 +4030,7 @@ async def inbox_responder_producto(
             "retailer_id": retailer_id,
             "cuerpo":      cuerpo,
         }, ensure_ascii=False)
-        _w = getattr(_prov, "ultimo_wamid", "") or ""
-        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id,
-                              wamid=_w, status="sent" if _w else "")
+        await _guardar_con_wamid(_prov, telefono, f"__MEDIA__:{marcador}", agent_id=agent_id)
         await registrar_mensaje_asistente(telefono)
         return JSONResponse(content={"ok": True})
     except Exception as e:
@@ -8116,8 +8090,7 @@ async def shopify_webhook(request: Request):
     try:
         await proveedor.enviar_mensaje(telefono, mensaje)
         # Guardar en BD para que aparezca en el inbox
-        _w = getattr(proveedor, "ultimo_wamid", "") or ""
-        await guardar_mensaje(telefono, "assistant", mensaje, wamid=_w, status="sent" if _w else "")
+        await _guardar_con_wamid(proveedor, telefono, mensaje)
         # Suprimir follow-up y cierre: esta es una notificación automática,
         # no un mensaje conversacional — no debe activar los timers de seguimiento
         await marcar_followup_enviado(telefono)
