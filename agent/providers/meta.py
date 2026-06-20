@@ -45,6 +45,16 @@ class ProveedorMeta(ProveedorWhatsApp):
         # update con el row de mensajes en BD.
         self.ultimo_wamid: str = ""
 
+    def _capturar_wamid(self, r: "httpx.Response") -> None:
+        """Extrae el wamid de una respuesta exitosa de Meta y lo guarda en
+        self.ultimo_wamid (#79 — chulitos de confirmación). Todos los métodos
+        de envío pegan al mismo endpoint /messages y Meta siempre devuelve
+        {"messages": [{"id": "wamid..."}]} en éxito."""
+        try:
+            self.ultimo_wamid = (r.json().get("messages") or [{}])[0].get("id", "")
+        except Exception:
+            self.ultimo_wamid = ""
+
     async def validar_webhook(self, request: Request):
         params = request.query_params
         mode = params.get("hub.mode")
@@ -212,10 +222,7 @@ class ProveedorMeta(ProveedorWhatsApp):
             if r.status_code != 200:
                 logger.error(f"Error Meta API texto: {r.status_code} — {r.text}")
                 return False
-            try:
-                self.ultimo_wamid = (r.json().get("messages") or [{}])[0].get("id", "")
-            except Exception:
-                self.ultimo_wamid = ""
+            self._capturar_wamid(r)
             return True
 
     async def enviar_botones(self, telefono: str, texto: str, botones: list[str]) -> bool:
@@ -244,11 +251,14 @@ class ProveedorMeta(ProveedorWhatsApp):
                 "action": {"buttons": botones_payload},
             },
         }
+        self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API botones: {r.status_code} — {r.text}")
-            return r.status_code == 200
+                return False
+            self._capturar_wamid(r)
+            return True
 
     async def enviar_botones_reply(
         self, telefono: str, texto: str, botones: list[dict]
@@ -287,11 +297,14 @@ class ProveedorMeta(ProveedorWhatsApp):
                 "action": {"buttons": botones_payload},
             },
         }
+        self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta botones_reply: {r.status_code} — {r.text[:300]}")
-            return r.status_code == 200
+                return False
+            self._capturar_wamid(r)
+            return True
 
     async def enviar_cta_url(self, telefono: str, texto: str, boton: str, url: str) -> bool:
         """Envía un mensaje con un botón que abre una URL (tipo CTA URL)."""
@@ -318,11 +331,14 @@ class ProveedorMeta(ProveedorWhatsApp):
                 },
             },
         }
+        self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(api_url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API cta_url: {r.status_code} — {r.text}")
-            return r.status_code == 200
+                return False
+            self._capturar_wamid(r)
+            return True
 
     async def enviar_lista(self, telefono: str, texto: str, boton: str, secciones: list[dict]) -> bool:
         """Envía mensaje con lista de opciones seleccionables.
@@ -375,11 +391,14 @@ class ProveedorMeta(ProveedorWhatsApp):
                 },
             },
         }
+        self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API lista: {r.status_code} — {r.text}")
-            return r.status_code == 200
+                return False
+            self._capturar_wamid(r)
+            return True
 
     async def enviar_plantilla(
         self,
@@ -412,11 +431,8 @@ class ProveedorMeta(ProveedorWhatsApp):
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code == 200:
-                try:
-                    message_id = r.json().get("messages", [{}])[0].get("id", "")
-                except Exception:
-                    message_id = ""
-                return {"ok": True, "message_id": message_id}
+                self._capturar_wamid(r)
+                return {"ok": True, "message_id": self.ultimo_wamid}
             else:
                 try:
                     err = r.json().get("error", {}).get("message", r.text[:200])
@@ -473,13 +489,15 @@ class ProveedorMeta(ProveedorWhatsApp):
         ids_por_seccion = {s["title"]: [i["product_retailer_id"] for i in s.get("product_items", [])] for s in secciones}
         logger.info(f"product_list payload — catalog_id={self.catalog_id} secciones={ids_por_seccion}")
 
+        self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API product_list: {r.status_code} — {r.text}")
-            else:
-                logger.info(f"Catálogo nativo enviado a {telefono} ({len(secciones)} secciones)")
-            return r.status_code == 200
+                return False
+            self._capturar_wamid(r)
+            logger.info(f"Catálogo nativo enviado a {telefono} ({len(secciones)} secciones)")
+            return True
 
     async def enviar_catalog_message(
         self, telefono: str, cuerpo: str, thumbnail_retailer_id: str = ""
@@ -517,6 +535,7 @@ class ProveedorMeta(ProveedorWhatsApp):
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
         }
+        self.ultimo_wamid = ""
         payload = {
             "messaging_product": "whatsapp",
             "recipient_type": "individual",
@@ -549,6 +568,7 @@ class ProveedorMeta(ProveedorWhatsApp):
                 except Exception:
                     logger.error(f"Error Meta catalog_message: {r.status_code} — {r.text[:300]}")
                 return False
+            self._capturar_wamid(r)
             logger.info(f"catalog_message enviado a {telefono} (thumbnail={thumbnail_retailer_id})")
             return True
 
@@ -648,11 +668,14 @@ class ProveedorMeta(ProveedorWhatsApp):
             "type": tipo,
             tipo: media_obj,
         }
+        self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=30) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API {tipo}: {r.status_code} — {r.text[:300]}")
-            return r.status_code == 200
+                return False
+            self._capturar_wamid(r)
+            return True
 
     async def enviar_imagen(self, telefono: str, media_id: str = "", link: str = "", caption: str = "") -> bool:
         """Envía una imagen por WhatsApp. Usa media_id (subido previamente) o link público."""
@@ -696,11 +719,14 @@ class ProveedorMeta(ProveedorWhatsApp):
             "type": "location",
             "location": location_obj,
         }
+        self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
                 logger.error(f"Error Meta API ubicacion: {r.status_code} — {r.text[:200]}")
-            return r.status_code == 200
+                return False
+            self._capturar_wamid(r)
+            return True
 
     async def enviar_producto(
         self, telefono: str, retailer_id: str, cuerpo: str = ""
@@ -731,6 +757,7 @@ class ProveedorMeta(ProveedorWhatsApp):
         # Body es opcional, solo lo agregamos si hay texto
         if cuerpo:
             payload["interactive"]["body"] = {"text": cuerpo[:1024]}
+        self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(url, json=payload, headers=headers)
             if r.status_code != 200:
@@ -750,4 +777,5 @@ class ProveedorMeta(ProveedorWhatsApp):
                     "ok": False, "error": err_msg, "code": err_code,
                     "catalog_id": self.catalog_id, "retailer_id": retailer_id,
                 }
+            self._capturar_wamid(r)
             return {"ok": True, "catalog_id": self.catalog_id, "retailer_id": retailer_id}
