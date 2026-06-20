@@ -566,7 +566,8 @@ async def _procesar_carrito_unificado():
                     logger.info(f"[carrito-est3] {telefono} product_list no disponible — cancelando silencioso")
                     continue
                 # Persistir el mensaje del seguimiento (panel lo necesita).
-                await guardar_mensaje(telefono, "assistant", msg)
+                _w = getattr(proveedor, "ultimo_wamid", "") or ""
+                await guardar_mensaje(telefono, "assistant", msg, wamid=_w, status="sent" if _w else "")
 
                 # Mensaje complementario con botones Ver/Vaciar carrito —
                 # SIEMPRE accesibles para el cliente (acciones determinísticas).
@@ -642,7 +643,8 @@ async def _procesar_carrito_unificado():
                     if not enviado_pl:
                         logger.info(f"[carrito-est4] {telefono} ningún canal nativo funcionó — cancelando silencioso")
                         continue
-                await guardar_mensaje(telefono, "assistant", msg)
+                _w = getattr(proveedor, "ultimo_wamid", "") or ""
+                await guardar_mensaje(telefono, "assistant", msg, wamid=_w, status="sent" if _w else "")
 
             else:
                 # ── Estado 5 (timer de seguimiento): pedido alto, invitar a pagar ──
@@ -694,7 +696,8 @@ async def _procesar_carrito_unificado():
                     except Exception as e:
                         logger.warning(f"[carrito-est5] botones complementarios fallaron: {e}")
 
-            await guardar_mensaje(telefono, "assistant", msg)
+            _w = getattr(proveedor, "ultimo_wamid", "") or ""
+            await guardar_mensaje(telefono, "assistant", msg, wamid=_w, status="sent" if _w else "")
             _carrito_unif_cooldown[telefono] = ahora
             _carrito_ultimo_estado[telefono] = estado_actual
             logger.info(f"Seguimiento carrito estado {estado_actual} → {telefono} (${total_fmt})")
@@ -781,7 +784,9 @@ async def _procesar_followups():
                 logger.info(f"[followup] {telefono} mensaje desactivado para agent={aid} — saltando")
                 continue
             await proveedor.enviar_mensaje(telefono, texto)
-            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid)
+            _w = getattr(proveedor, "ultimo_wamid", "") or ""
+            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid,
+                                  wamid=_w, status="sent" if _w else "")
             await marcar_followup_enviado(telefono)
             logger.info(f"Follow-up enviado a {telefono}")
         except Exception as e:
@@ -805,7 +810,9 @@ async def _procesar_cierres():
                 await marcar_cierre_enviado(telefono)
                 continue
             await proveedor.enviar_mensaje(telefono, texto)
-            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid)
+            _w = getattr(proveedor, "ultimo_wamid", "") or ""
+            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid,
+                                  wamid=_w, status="sent" if _w else "")
             await marcar_cierre_enviado(telefono)
             logger.info(f"Cierre enviado a {telefono}")
         except Exception as e:
@@ -907,7 +914,9 @@ async def _procesar_abandono_checkout():
                     telefono,
                     f"{texto}\n\n👉 {checkout_url}"
                 )
-            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid)
+            _w = getattr(proveedor, "ultimo_wamid", "") or ""
+            await guardar_mensaje(telefono, "assistant", texto, agent_id=aid,
+                                  wamid=_w, status="sent" if _w else "")
             await marcar_checkout_abandono_enviado(telefono)
             logger.info(f"Recuperación de checkout enviada a {telefono}")
         except Exception as e:
@@ -1006,7 +1015,9 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
     if not carrito:
         msg_vacio = "🛒 Tu carrito está vacío en este momento.\n\nCuando agregues productos te lo confirmo aquí."
         await proveedor.enviar_mensaje(telefono, msg_vacio)
-        await guardar_mensaje(telefono, "assistant", msg_vacio, agent_id=agent_id)
+        _w = getattr(proveedor, "ultimo_wamid", "") or ""
+        await guardar_mensaje(telefono, "assistant", msg_vacio, agent_id=agent_id,
+                              wamid=_w, status="sent" if _w else "")
         return False
 
     lineas_items = []
@@ -1051,7 +1062,9 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
             logger.warning(f"[ver-carrito] botones fallaron: {e}")
     if not enviado:
         await proveedor.enviar_mensaje(telefono, resumen)
-    await guardar_mensaje(telefono, "assistant", resumen, agent_id=agent_id)
+    _w = getattr(proveedor, "ultimo_wamid", "") or ""
+    await guardar_mensaje(telefono, "assistant", resumen, agent_id=agent_id,
+                          wamid=_w, status="sent" if _w else "")
     return True
 
 
@@ -1197,7 +1210,9 @@ async def _escalar_meta_fallo(
             "que te va a mostrar los productos. Ya viene 🌿"
         )
         await proveedor.enviar_mensaje(telefono, msg_cliente)
-        await guardar_mensaje(telefono, "assistant", msg_cliente, agent_id=agent_id)
+        _w = getattr(proveedor, "ultimo_wamid", "") or ""
+        await guardar_mensaje(telefono, "assistant", msg_cliente, agent_id=agent_id,
+                              wamid=_w, status="sent" if _w else "")
 
         # 2. Obtener nombre del cliente para el ticket (mejora UX panel)
         try:
@@ -3991,7 +4006,9 @@ async def inbox_responder_ubicacion(
             "nombre":    nombre,
             "direccion": direccion,
         }, ensure_ascii=False)
-        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id)
+        _w = getattr(_prov, "ultimo_wamid", "") or ""
+        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id,
+                              wamid=_w, status="sent" if _w else "")
         await registrar_mensaje_asistente(telefono)
         return JSONResponse(content={"ok": True})
     except Exception as e:
@@ -4037,7 +4054,9 @@ async def inbox_responder_producto(
             "retailer_id": retailer_id,
             "cuerpo":      cuerpo,
         }, ensure_ascii=False)
-        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id)
+        _w = getattr(_prov, "ultimo_wamid", "") or ""
+        await guardar_mensaje(telefono, "assistant", f"__MEDIA__:{marcador}", agent_id=agent_id,
+                              wamid=_w, status="sent" if _w else "")
         await registrar_mensaje_asistente(telefono)
         return JSONResponse(content={"ok": True})
     except Exception as e:
@@ -5198,7 +5217,8 @@ async def inbox_broadcast_send(
                             texto_render = f"[Plantilla: {template_name}]"
                         # Prefijo 📣 para distinguir visualmente del chat orgánico
                         texto_para_historial = f"📣 {texto_render}"
-                        await guardar_mensaje(tel, "assistant", texto_para_historial, agent_id=1)
+                        await guardar_mensaje(tel, "assistant", texto_para_historial, agent_id=1,
+                                              wamid=wamid, status="sent" if wamid else "")
                     except Exception as _e:
                         logger.warning(f"[broadcast⚠️] No se guardó en historial mensajes: {_e}")
                 else:
@@ -6079,7 +6099,9 @@ async def inbox_enviar_mensaje_cliente(
     if resultado.get("ok"):
         # Registrar en historial
         try:
-            await guardar_mensaje(tel, "assistant", f"[Plantilla: {template_name}]", agent_id=agent_id)
+            _w = resultado.get("message_id") or ""
+            await guardar_mensaje(tel, "assistant", f"[Plantilla: {template_name}]", agent_id=agent_id,
+                                  wamid=_w, status="sent" if _w else "")
         except Exception:
             pass
         logger.info(f"[clientes/message] Plantilla '{template_name}' enviada a {tel[-4:]}**** message_id={resultado.get('message_id','?')}")
@@ -8094,7 +8116,8 @@ async def shopify_webhook(request: Request):
     try:
         await proveedor.enviar_mensaje(telefono, mensaje)
         # Guardar en BD para que aparezca en el inbox
-        await guardar_mensaje(telefono, "assistant", mensaje)
+        _w = getattr(proveedor, "ultimo_wamid", "") or ""
+        await guardar_mensaje(telefono, "assistant", mensaje, wamid=_w, status="sent" if _w else "")
         # Suprimir follow-up y cierre: esta es una notificación automática,
         # no un mensaje conversacional — no debe activar los timers de seguimiento
         await marcar_followup_enviado(telefono)
