@@ -5209,14 +5209,18 @@ function loadMsgs(scroll) {
 /* #79 — chulitos de confirmación al estilo WhatsApp. Iconos SVG inline para
    evitar dependencia de fuentes/emojis. Color azul (#53bdeb) solo cuando
    está leído, gris (#8696a0) en otros estados. */
-function renderEstadoMensaje(status) {
+function renderEstadoMensaje(status, errorTitle) {
   var color = (status === 'read') ? '#53bdeb' : '#8696a0';
   var titulo = status === 'failed' ? 'Falló el envío'
              : status === 'read'      ? 'Leído'
              : status === 'delivered' ? 'Entregado'
              : 'Enviado';
   if (status === 'failed') {
-    return ' <span title="Falló el envío" style="color:#dc2626;font-size:.7rem;margin-left:4px">⚠</span>';
+    // Antes mostraba solo "Falló el envío" sin explicar por qué — ahora
+    // expone el motivo real de Meta (ej. "Ventana de 24 h expirada") en el
+    // tooltip si está disponible.
+    var tipTxt = errorTitle ? 'Falló el envío: ' + errorTitle : 'Falló el envío (motivo no registrado — revisa logs)';
+    return ' <span title="' + he(tipTxt) + '" style="color:#dc2626;font-size:.7rem;margin-left:4px;cursor:help">⚠</span>';
   }
   // Un chulo para 'sent', dos chulos para 'delivered'/'read'
   var paths = '';
@@ -5248,9 +5252,13 @@ function renderMsgs(msgs, scroll) {
   var lastDate = '';
   for (var i = 0; i < msgs.length; i++) {
     var m = msgs[i];
-    var dia = m.timestamp ? m.timestamp.substring(0, 10) : '';
+    // Bug previo: se agrupaba por la fecha UTC cruda (substring del timestamp),
+    // así que un mensaje de las 7pm-12am hora Colombia (que ya cruzó medianoche
+    // en UTC) quedaba etiquetado con la fecha del día siguiente. Construimos un
+    // Date real y dejamos que el navegador lo convierta a hora local, igual que fmtH().
+    var ds = m.timestamp ? new Date(m.timestamp.endsWith('Z') ? m.timestamp : m.timestamp + 'Z') : null;
+    var dia = ds ? ds.toLocaleDateString('es-CO') : '';
     if (dia && dia !== lastDate) {
-      var ds = new Date(dia + 'T12:00:00Z');
       var dLabel = ds.toLocaleDateString('es-CO', {weekday:'long', day:'numeric', month:'long'});
       h += '<div class="msys">' + he(dLabel) + '</div>';
       lastDate = dia;
@@ -5262,7 +5270,7 @@ function renderMsgs(msgs, scroll) {
     // ✓✓ azul leído.
     var statusHtml = '';
     if (m.role !== 'user' && m.status) {
-      statusHtml = renderEstadoMensaje(m.status);
+      statusHtml = renderEstadoMensaje(m.status, m.error_title);
     }
     h += '<div class="msg ' + cls + '">'
        + '<div class="mb">' + bodyHtml + '</div>'
@@ -9278,7 +9286,7 @@ function _escRenderMensajes(mensajes) {
     // #79 — chulitos solo en mensajes salientes con status
     var statusHtml = '';
     if (m.role !== 'user' && m.status && typeof renderEstadoMensaje === 'function') {
-      statusHtml = renderEstadoMensaje(m.status);
+      statusHtml = renderEstadoMensaje(m.status, m.error_title);
     }
     wrap.innerHTML =
       (label ? '<div style="font-size:.68rem;color:var(--voco-text-muted);margin-bottom:2px;padding:0 4px">' + label + '</div>' : '') +

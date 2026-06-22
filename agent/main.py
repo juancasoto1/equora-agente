@@ -1648,7 +1648,7 @@ async def _procesar_status_difusion(status: dict) -> None:
     # #79 — actualizar tabla mensajes para chulitos en el chat
     try:
         from agent.memory import actualizar_status_mensaje
-        await actualizar_status_mensaje(wamid, status_val)
+        await actualizar_status_mensaje(wamid, status_val, error_code=error_code, error_title=error_title)
     except Exception as e:
         logger.debug(f"[webhook-status] Error actualizando mensajes {wamid[:20]}: {e}")
 

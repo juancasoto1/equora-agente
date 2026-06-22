@@ -96,6 +96,10 @@ class Mensaje(Base):
     status:       Mapped[str]            = mapped_column(String(20),  default="")
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
     read_at:      Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    # Motivo real del fallo (cuando status='failed'), igual que en DifusionMensaje.
+    # Antes el panel solo mostraba un triángulo genérico sin explicar por qué.
+    error_code:   Mapped[int | None]      = mapped_column(Integer, nullable=True)
+    error_title:  Mapped[str]            = mapped_column(String(500), default="")
 
 
 class Cliente(Base):
@@ -350,6 +354,8 @@ async def inicializar_db():
             "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT ''",
             "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP",
             "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS read_at TIMESTAMP",
+            "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS error_code INTEGER",
+            "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS error_title VARCHAR(500) DEFAULT ''",
             "CREATE INDEX IF NOT EXISTS ix_mensajes_wamid ON mensajes(wamid)",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_pendiente TEXT DEFAULT ''",
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pedido_pendiente_at TIMESTAMP",
@@ -529,11 +535,20 @@ async def actualizar_wamid_mensaje(msg_id: int, wamid: str) -> None:
         await session.commit()
 
 
-async def actualizar_status_mensaje(wamid: str, status: str) -> None:
+async def actualizar_status_mensaje(
+    wamid: str,
+    status: str,
+    error_code: int | None = None,
+    error_title: str = "",
+) -> None:
     """Actualiza el status (sent/delivered/read/failed) de un mensaje por su
     wamid de Meta. Llamado desde el webhook handler cuando Meta envía status
     updates. Idempotente: si el mensaje no existe (mensajes antiguos sin
-    wamid guardado), no falla."""
+    wamid guardado), no falla.
+
+    Cuando status='failed', guarda también el motivo real de Meta
+    (error_code/error_title) — antes el panel solo mostraba un triángulo
+    genérico sin explicar por qué falló el envío."""
     if not wamid or not status:
         return
     ahora = datetime.utcnow()
@@ -555,6 +570,9 @@ async def actualizar_status_mensaje(wamid: str, status: str) -> None:
             if not msg.delivered_at:
                 msg.delivered_at = ahora  # implícito
             msg.read_at = ahora
+        elif status == "failed":
+            msg.error_code = error_code
+            msg.error_title = (_META_ERROR_CODES.get(error_code, "") or error_title or "")[:500]
         await session.commit()
 
 
@@ -2381,6 +2399,9 @@ async def obtener_historial_con_timestamps(telefono: str, limite: int = 150, age
                 "status":       msg.status or "",
                 "delivered_at": msg.delivered_at.isoformat() if msg.delivered_at else "",
                 "read_at":      msg.read_at.isoformat() if msg.read_at else "",
+                # Motivo real del fallo de Meta (solo presente si status='failed')
+                "error_code":  msg.error_code,
+                "error_title": msg.error_title or "",
             }
             for msg in mensajes
         ]
