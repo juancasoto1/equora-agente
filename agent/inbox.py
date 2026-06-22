@@ -1947,6 +1947,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   onmouseout="this.style.background='none';this.style.color='var(--ts)'">
                   <i data-lucide="external-link" style="width:18px;height:18px"></i>
                 </button>
+                <button onclick="abrirCarritoModal()" title="Carrito del cliente" aria-label="Ver o editar el carrito del cliente"
+                  style="background:none;border:none;color:var(--ts);cursor:pointer;
+                  padding:8px;border-radius:8px;transition:all .15s;display:flex;align-items:center;justify-content:center"
+                  onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.color='var(--az)'"
+                  onmouseout="this.style.background='none';this.style.color='var(--ts)'">
+                  <i data-lucide="shopping-cart" style="width:18px;height:18px"></i>
+                </button>
               </div>
             </div>
 
@@ -2061,6 +2068,36 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
                 <div id="cat-resultados" style="flex:1;overflow-y:auto;border:1px solid var(--voco-border);border-radius:8px;padding:6px;background:var(--voco-content-bg-alt)"></div>
                 <button onclick="cerrarModalCatalogo()" style="margin-top:12px;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer">Cerrar</button>
+              </div>
+            </div>
+
+            <!-- Modal: Carrito omnichannel — un humano arma/edita el carrito del
+                 cliente desde el panel (clientes con dificultad para usar el
+                 catálogo nativo de WhatsApp). Reusa carrito_activo, el mismo
+                 que ya usa Andrea — lo que arma el humano se confirma igual. -->
+            <div id="modal-carrito" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+              background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+              <div style="background:var(--voco-card-bg);border-radius:12px;padding:20px;max-width:560px;width:92%;max-height:85vh;display:flex;flex-direction:column">
+                <h3 style="margin:0 0 4px;color:var(--voco-text);font-size:1.05rem">🛒 Carrito del cliente</h3>
+                <p style="margin:0 0 12px;color:var(--voco-text-muted);font-size:.78rem">
+                  Agrega productos del catálogo y ajusta cantidades. El cliente lo ve igual que si lo hubiera armado solo.
+                </p>
+
+                <div id="carrito-lista" style="border:1px solid var(--voco-border);border-radius:8px;max-height:180px;overflow-y:auto;margin-bottom:10px"></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:0 2px">
+                  <span style="font-size:.82rem;color:var(--voco-text-muted)">Total</span>
+                  <span id="carrito-total" style="font-size:1.05rem;font-weight:700;color:var(--voco-text)">$0</span>
+                </div>
+
+                <input id="carrito-buscar" type="text" placeholder="Buscar producto para agregar…" oninput="buscarProductosCarrito()"
+                  style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:8px;box-sizing:border-box">
+                <div id="carrito-resultados" style="max-height:160px;overflow-y:auto;border:1px solid var(--voco-border);border-radius:8px;padding:6px;background:var(--voco-content-bg-alt);margin-bottom:14px"></div>
+
+                <div style="display:flex;gap:8px">
+                  <button onclick="vaciarCarritoManual()" style="padding:9px 14px;background:none;border:1.5px solid var(--voco-border);border-radius:7px;font-weight:600;color:#ef4444;cursor:pointer;font-size:.84rem">Vaciar</button>
+                  <button onclick="cerrarCarritoModal()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer;font-size:.84rem">Cancelar</button>
+                  <button onclick="guardarCarritoManual()" style="flex:1;padding:9px;background:var(--voco-brand);color:#fff;border:none;border-radius:7px;font-weight:700;cursor:pointer;font-size:.84rem">Guardar carrito</button>
+                </div>
               </div>
             </div>
 
@@ -10210,6 +10247,153 @@ async function enviarProducto(retailerId) {
       loadMsgs(true);
     } else { alert('Error: ' + (d.error || 'desconocido')); }
   } catch(e) { alert('Error de red'); }
+}
+
+/* ── Carrito omnichannel: un humano arma/edita el carrito del cliente ───── */
+var _carritoItems = [];
+var _carritoBuscarTimer = null;
+var _carritoResultadosActuales = [];
+
+function abrirCarritoModal() {
+  if (!TEL) return;
+  document.getElementById('carrito-buscar').value = '';
+  document.getElementById('carrito-resultados').innerHTML = '';
+  document.getElementById('modal-carrito').style.display = 'flex';
+  cargarCarritoActual();
+}
+function cerrarCarritoModal() {
+  document.getElementById('modal-carrito').style.display = 'none';
+}
+
+async function cargarCarritoActual() {
+  var lista = document.getElementById('carrito-lista');
+  lista.innerHTML = '<div style="padding:16px;text-align:center;color:var(--voco-text-muted);font-size:.84rem">Cargando…</div>';
+  try {
+    var r = await fetch('/inbox/api/carrito/' + encodeURIComponent(TEL), {credentials:'include'});
+    var d = await r.json();
+    _carritoItems = (d.items || []).map(function(it) {
+      return {
+        producto:        it.producto || '',
+        presentacion:    it.presentacion || '',
+        cantidad:        Number(it.cantidad || it.quantity || 1),
+        precio_unitario: Number(it.precio_unitario || 0)
+      };
+    });
+    _renderCarritoLista();
+  } catch (e) {
+    lista.innerHTML = '<div style="padding:16px;color:#ef4444;font-size:.84rem">Error cargando el carrito</div>';
+  }
+}
+
+function _renderCarritoLista() {
+  var lista   = document.getElementById('carrito-lista');
+  var totalEl = document.getElementById('carrito-total');
+  if (!_carritoItems.length) {
+    lista.innerHTML = '<div style="padding:16px;text-align:center;color:var(--voco-text-muted);font-size:.84rem">Carrito vacío — busca productos abajo para agregar</div>';
+    totalEl.textContent = '$0';
+    return;
+  }
+  var total = 0;
+  lista.innerHTML = _carritoItems.map(function(it, idx) {
+    var subtotal = it.cantidad * it.precio_unitario;
+    total += subtotal;
+    var label = he(it.producto) + (it.presentacion ? ' · ' + he(it.presentacion) : '');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--voco-border)">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-weight:600;font-size:.84rem;color:var(--voco-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + label + '</div>'
+      +   '<div style="font-size:.76rem;color:var(--voco-text-muted)">$' + it.precio_unitario.toLocaleString('es-CO') + ' c/u</div>'
+      + '</div>'
+      + '<button onclick="_carritoCambiarCantidad(' + idx + ',-1)" aria-label="Restar uno" style="width:26px;height:26px;border:1px solid var(--voco-border);background:var(--voco-card-bg);border-radius:6px;cursor:pointer;font-weight:700;color:var(--voco-text)">−</button>'
+      + '<span style="min-width:20px;text-align:center;font-weight:600;font-size:.84rem;color:var(--voco-text)">' + it.cantidad + '</span>'
+      + '<button onclick="_carritoCambiarCantidad(' + idx + ',1)" aria-label="Sumar uno" style="width:26px;height:26px;border:1px solid var(--voco-border);background:var(--voco-card-bg);border-radius:6px;cursor:pointer;font-weight:700;color:var(--voco-text)">+</button>'
+      + '<div style="min-width:72px;text-align:right;font-weight:700;font-size:.84rem;color:var(--voco-text)">$' + subtotal.toLocaleString('es-CO') + '</div>'
+      + '<button onclick="_carritoQuitarItem(' + idx + ')" title="Quitar" aria-label="Quitar producto" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:1rem;padding:2px 4px">✕</button>'
+      + '</div>';
+  }).join('');
+  totalEl.textContent = '$' + total.toLocaleString('es-CO');
+}
+
+function _carritoCambiarCantidad(idx, delta) {
+  var it = _carritoItems[idx];
+  if (!it) return;
+  it.cantidad = Math.max(1, it.cantidad + delta);
+  _renderCarritoLista();
+}
+function _carritoQuitarItem(idx) {
+  _carritoItems.splice(idx, 1);
+  _renderCarritoLista();
+}
+
+function buscarProductosCarrito() {
+  clearTimeout(_carritoBuscarTimer);
+  _carritoBuscarTimer = setTimeout(_buscarProductosCarritoExec, 200);
+}
+async function _buscarProductosCarritoExec() {
+  var q   = document.getElementById('carrito-buscar').value || '';
+  var box = document.getElementById('carrito-resultados');
+  if (!q.trim()) { box.innerHTML = ''; _carritoResultadosActuales = []; return; }
+  try {
+    var r = await fetch('/inbox/api/catalogo/buscar?q=' + encodeURIComponent(q), {credentials:'include'});
+    var d = await r.json();
+    _carritoResultadosActuales = d.productos || [];
+    if (!_carritoResultadosActuales.length) {
+      box.innerHTML = '<div style="padding:12px;text-align:center;color:var(--voco-text-muted);font-size:.8rem">Sin resultados</div>';
+      return;
+    }
+    box.innerHTML = _carritoResultadosActuales.map(function(p, i) {
+      var img = p.image ? '<img class="cat-item-img" src="' + he(p.image) + '">' :
+        '<div class="cat-item-img" style="display:flex;align-items:center;justify-content:center">🛒</div>';
+      var label  = he(p.title) + (p.variant && p.variant !== 'Default Title' ? ' · ' + he(p.variant) : '');
+      var precio = p.price ? '$' + Number(p.price).toLocaleString('es-CO') : '$0';
+      return '<div class="cat-item" onclick="_carritoAgregarDesdeResultado(' + i + ')">'
+        + img
+        + '<div class="cat-item-info">'
+        +   '<div class="cat-item-titulo">' + label + '</div>'
+        +   '<div class="cat-item-precio">' + precio + '</div>'
+        + '</div></div>';
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '<div style="padding:12px;color:#ef4444;font-size:.8rem">Error de red</div>';
+  }
+}
+function _carritoAgregarDesdeResultado(i) {
+  var p = _carritoResultadosActuales[i];
+  if (!p) return;
+  var variant = (p.variant && p.variant !== 'Default Title') ? p.variant : '';
+  var existente = _carritoItems.find(function(it) { return it.producto === p.title && it.presentacion === variant; });
+  if (existente) {
+    existente.cantidad += 1;
+  } else {
+    _carritoItems.push({
+      producto:        p.title || '',
+      presentacion:    variant,
+      cantidad:        1,
+      precio_unitario: Number(p.price || 0)
+    });
+  }
+  _renderCarritoLista();
+}
+
+function vaciarCarritoManual() {
+  if (!_carritoItems.length) return;
+  if (!confirm('¿Vaciar el carrito de este cliente?')) return;
+  _carritoItems = [];
+  _renderCarritoLista();
+}
+
+async function guardarCarritoManual() {
+  if (!TEL) return;
+  try {
+    var r = await fetch('/inbox/api/carrito/' + encodeURIComponent(TEL), {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({items: _carritoItems})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      cerrarCarritoModal();
+    } else { alert('Error: ' + (d.error || 'desconocido')); }
+  } catch (e) { alert('Error de red'); }
 }
 
 async function toggleAutoAsignar(activo) {

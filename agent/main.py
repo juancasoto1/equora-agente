@@ -4189,6 +4189,77 @@ async def inbox_buscar_catalogo(
         return JSONResponse(content={"productos": [], "error": str(e)[:200]})
 
 
+# ── Carrito omnichannel — un agente humano arma/edita el carrito de un ──────
+# cliente desde el panel (clientes con dificultad para usar el catálogo
+# nativo de WhatsApp). Reusa el mismo carrito_activo que ya usa Andrea, así
+# que lo que arma el humano se ve y se puede confirmar igual que un carrito
+# armado por el bot.
+
+@app.get("/inbox/api/carrito/{telefono}")
+async def inbox_obtener_carrito(
+    telefono: str,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    items = await obtener_carrito_activo(telefono, agent_id=agent_id)
+    total = sum(int(it.get("subtotal", 0)) for it in items)
+    return JSONResponse(content={"items": items, "total": total})
+
+
+@app.post("/inbox/api/carrito/{telefono}")
+async def inbox_guardar_carrito(
+    telefono: str,
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Reemplaza el carrito activo del cliente con la lista de items recibida
+    desde el panel. No se setea retailer_id aunque el producto venga del
+    catálogo nativo — este carrito lo arma un humano, no es un checkout
+    nativo de WhatsApp, y el prompt de Andrea usa retailer_id para decidir
+    si está "en medio de un checkout nativo" (ver brain.py)."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    items_raw = body.get("items") or []
+    if not isinstance(items_raw, list):
+        return JSONResponse(status_code=400, content={"error": "items debe ser una lista"})
+
+    items = []
+    for it in items_raw:
+        try:
+            cantidad = int(it.get("cantidad", 1))
+            precio_unitario = int(it.get("precio_unitario", 0))
+        except (TypeError, ValueError):
+            return JSONResponse(status_code=400, content={"error": "cantidad o precio_unitario inválido"})
+        if cantidad <= 0 or not (it.get("producto") or "").strip():
+            continue
+        items.append({
+            "retailer_id":     "",
+            "quantity":        cantidad,
+            "cantidad":        cantidad,
+            "producto":        (it.get("producto") or "").strip(),
+            "presentacion":    (it.get("presentacion") or "").strip(),
+            "precio_unitario": precio_unitario,
+            "subtotal":        precio_unitario * cantidad,
+        })
+
+    if items:
+        await guardar_carrito_activo(telefono, items, agent_id=agent_id)
+    else:
+        await limpiar_carrito_activo(telefono, agent_id=agent_id)
+
+    logger.info(f"[carrito-manual] Carrito de {telefono} actualizado desde inbox (agent_id={agent_id}, {len(items)} items)")
+    total = sum(it["subtotal"] for it in items)
+    return JSONResponse(content={"ok": True, "items": items, "total": total})
+
+
 @app.post("/inbox/api/modo/{telefono}")
 async def inbox_modo(
     telefono: str,
