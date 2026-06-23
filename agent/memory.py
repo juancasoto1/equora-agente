@@ -4137,6 +4137,28 @@ async def listar_deals(agent_id: int = 1, pipeline_id: int | None = None) -> lis
         return [_deal_a_dict(d) for d in result.scalars().all()]
 
 
+async def obtener_deal_abierto(agent_id: int, pipeline_id: int, cliente_telefono: str) -> dict | None:
+    """Deal SIN cerrar (closed_at IS NULL) más reciente de ese cliente en el
+    pipeline. Usado por el marcador [[DEAL_STAGE:]] para decidir si crea una
+    oportunidad nueva o actualiza la que ya está en curso — un cliente no
+    debería terminar con varias oportunidades abiertas duplicadas por cada
+    mensaje en el que Andrea detecta intención de compra."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Deal)
+            .where(
+                Deal.agent_id == agent_id,
+                Deal.pipeline_id == pipeline_id,
+                Deal.cliente_telefono == cliente_telefono,
+                Deal.closed_at.is_(None),
+            )
+            .order_by(Deal.created_at.desc())
+            .limit(1)
+        )
+        deal = result.scalars().first()
+        return _deal_a_dict(deal) if deal else None
+
+
 async def crear_deal(
     agent_id: int,
     pipeline_id: int,

@@ -6,7 +6,10 @@ import logging
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from agent.tools import obtener_catalogo_shopify, obtener_costo_envio, obtener_umbral_envio_gratis
-from agent.memory import obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo, get_config_value, obtener_perfil_enriquecido
+from agent.memory import (
+    obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo, get_config_value,
+    obtener_perfil_enriquecido, get_agent_modules, obtener_pipeline_activo, obtener_deal_abierto,
+)
 
 load_dotenv()
 logger = logging.getLogger("agentkit")
@@ -302,6 +305,54 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
                     "- Si quiere algo distinto, ignora el pendiente y arranca de cero."
                 )
                 system_prompt += "\n".join(bloque_p)
+
+        # ── Pipeline (mini-CRM) — Fase 1, ver BACKLOG.md ──────────────────────
+        # Gateado al módulo "pipeline" de Agent.modules_json (Sprint A), NO al
+        # sistema viejo de ACTIVE_MODULES que usa _mod() — son dos sistemas
+        # de toggles distintos, ver comentario sobre DEFAULT_MODULES en memory.py.
+        if (await get_agent_modules(agent_id)).get("pipeline", False):
+            pipeline = await obtener_pipeline_activo(agent_id)
+            stages = pipeline.get("stages") or []
+            if stages:
+                deal_abierto = await obtener_deal_abierto(agent_id, pipeline["id"], telefono)
+                bloque_pl = ["\n\n## Pipeline (CRM interno) — revisa esto antes de terminar tu respuesta"]
+                bloque_pl.append(
+                    "No es opcional: en cada mensaje del cliente, evalúa rápido si cambia su "
+                    "intención de compra. Si aplica, agrega [[DEAL_STAGE:Nombre exacto de la "
+                    "etapa]] al final de tu respuesta, junto a cualquier otro marcador que ya "
+                    "uses ([[PRODUCTO:]], [[TIENDA:]], [[PEDIDO:]] — no son excluyentes)."
+                )
+                bloque_pl.append(f"\nEtapas disponibles, en orden: {' → '.join(stages)}")
+                if deal_abierto:
+                    bloque_pl.append(
+                        f"Este cliente YA tiene una oportunidad abierta en la etapa "
+                        f"\"{deal_abierto['stage']}\" (valor estimado: ${deal_abierto['valor_cop']:,})."
+                    )
+                else:
+                    bloque_pl.append("Este cliente no tiene ninguna oportunidad abierta todavía.")
+                bloque_pl.append(
+                    "\nSÍ usa el marcador cuando el cliente:\n"
+                    "- pregunta precio o detalles de un producto específico → etapa de calificación\n"
+                    "- confirma que quiere comprar / pide cómo pagar → etapa de negociación\n"
+                    "- completa el pedido / paga → etapa de ganado\n"
+                    "- dice explícitamente que ya no le interesa o se arrepiente → etapa de perdido\n"
+                    "\nNO uses el marcador cuando el cliente:\n"
+                    "- solo saluda, agradece, o pregunta algo sin relación a comprar (ej. "
+                    "'¿hola, cómo estás?', '¿tienen domicilios a tal ciudad?' sin haber mencionado "
+                    "un producto) — esto NO es intención de compra todavía, déjalo sin marcador.\n"
+                    "- ya está en la etapa correcta y este mensaje no cambia nada\n"
+                    "\nReglas adicionales:\n"
+                    "- Usa el nombre de la etapa EXACTO de la lista de arriba (copia el texto, "
+                    "no traduzcas ni inventes uno nuevo). Si ninguna etapa encaja, no uses el "
+                    "marcador.\n"
+                    "- Si el cliente ya tiene oportunidad abierta, el marcador la actualiza — no "
+                    "se crea una nueva.\n"
+                    "- Avanza la etapa con el progreso real de la conversación; no retrocedas sin "
+                    "que el cliente lo exprese explícitamente.\n"
+                    "- El marcador es invisible para el cliente — nunca menciones \"pipeline\", "
+                    "\"etapa\" ni \"oportunidad\" en tu respuesta, son términos internos de Voco."
+                )
+                system_prompt += "\n".join(bloque_pl)
 
     mensajes = [{"role": m["role"], "content": m["content"]} for m in historial]
     mensajes.append({"role": "user", "content": mensaje})

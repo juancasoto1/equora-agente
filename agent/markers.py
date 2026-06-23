@@ -36,6 +36,13 @@ from agent.memory import (
     guardar_pedido_pendiente,
     limpiar_carrito_activo,
     marcar_cierre_enviado,
+    get_agent_modules,
+    obtener_pipeline_activo,
+    obtener_deal_abierto,
+    crear_deal,
+    actualizar_deal,
+    obtener_cliente,
+    obtener_carrito_activo,
 )
 from agent.tools import crear_checkout_shopify
 
@@ -419,6 +426,77 @@ async def handle_cierre_conv(ctx: MarkerContext) -> MarkerContext:
         logger.info(f"Conversación cerrada para {ctx.telefono} — seguimientos suprimidos")
     except Exception as e:
         logger.error(f"Error marcando cierre: {e}")
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[DEAL_STAGE:Nombre del stage]] — Pipeline Fase 1 (mini-CRM, ver BACKLOG.md)
+# ──────────────────────────────────────────────────────────────────────────────
+# Andrea lo emite cuando detecta un cambio real de intención de compra (ver
+# guía inyectada en brain.py). Un cliente tiene como máximo UNA oportunidad
+# ABIERTA a la vez (closed_at IS NULL) — si ya existe, este marcador la mueve
+# de stage en vez de crear una duplicada por cada mensaje.
+#
+# El nombre de stage tiene que coincidir EXACTO con uno de los stages reales
+# del pipeline (los mismos que se inyectan en el prompt). Si Andrea alucina
+# un nombre que no existe, el marcador se ignora — fail-safe: preferimos
+# perder un movimiento de stage a corromper el kanban con etapas inventadas.
+#
+# Gateado al módulo "pipeline" (Agent.modules_json, no el sistema viejo de
+# ACTIVE_MODULES) — si el negocio no activó Pipeline, el marcador no hace
+# nada aunque por algún motivo el LLM lo emita.
+@register_marker("DEAL_STAGE")
+async def handle_deal_stage(ctx: MarkerContext) -> MarkerContext:
+    match = re.search(r"\[\[DEAL_STAGE:([^\]]+)\]\]", ctx.respuesta)
+    if not match:
+        return ctx
+    stage_nombre = match.group(1).strip()
+    ctx.respuesta = re.sub(r"\s*\[\[DEAL_STAGE:[^\]]+\]\]", "", ctx.respuesta).strip()
+    if not stage_nombre:
+        return ctx
+    try:
+        modules = await get_agent_modules(ctx.agent_id)
+        if not modules.get("pipeline", False):
+            return ctx
+
+        pipeline = await obtener_pipeline_activo(ctx.agent_id)
+        stages_validos = pipeline.get("stages") or []
+        if stage_nombre not in stages_validos:
+            logger.warning(
+                f"[DEAL_STAGE] '{stage_nombre}' no es un stage válido del pipeline "
+                f"(agent_id={ctx.agent_id}) — se ignora. Stages: {stages_validos}"
+            )
+            return ctx
+
+        deal_abierto = await obtener_deal_abierto(ctx.agent_id, pipeline["id"], ctx.telefono)
+        if deal_abierto:
+            await actualizar_deal(
+                deal_abierto["id"], ctx.agent_id,
+                stage=stage_nombre, autor_nombre="Andrea (IA)",
+            )
+            logger.info(f"[DEAL_STAGE] Deal {deal_abierto['id']} de {ctx.telefono} → '{stage_nombre}'")
+        else:
+            cliente = await obtener_cliente(ctx.telefono, ctx.agent_id) or {}
+            cliente_nombre = " ".join(filter(None, [
+                cliente.get("nombres", ""), cliente.get("apellidos", ""),
+            ])).strip()
+            # Si ya hay carrito activo, lo usamos como valor inicial estimado
+            # del deal — dato gratis que ya existe, mejor que arrancar en $0.
+            carrito = await obtener_carrito_activo(ctx.telefono, agent_id=ctx.agent_id)
+            valor_inicial = sum(int(it.get("subtotal", 0)) for it in carrito) if carrito else 0
+            nuevo = await crear_deal(
+                agent_id=ctx.agent_id,
+                pipeline_id=pipeline["id"],
+                cliente_telefono=ctx.telefono,
+                cliente_nombre=cliente_nombre,
+                valor_cop=valor_inicial,
+                source="whatsapp",
+                stage=stage_nombre,
+                autor_nombre="Andrea (IA)",
+            )
+            logger.info(f"[DEAL_STAGE] Deal {nuevo['id']} creado para {ctx.telefono} en '{stage_nombre}'")
+    except Exception as e:
+        logger.error(f"[DEAL_STAGE] Error procesando para {ctx.telefono}: {e}")
     return ctx
 
 
