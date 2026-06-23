@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, select, update, Integer, Boolean, func, text, PrimaryKeyConstraint
+from sqlalchemy import String, Text, DateTime, select, update, delete, Integer, Boolean, func, text, PrimaryKeyConstraint
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -4053,3 +4053,201 @@ async def set_agent_modules(agent_id: int, modules: dict[str, bool]) -> dict[str
         agent.modules_json = json.dumps(sanitized)
         await session.commit()
         return sanitized
+
+
+# ── Pipeline — CRUD de pipelines, deals y actividades (Sprint A) ───────────
+# Las tablas (Pipeline, Deal, DealActivity) existían desde Sprint A pero sin
+# ninguna función que las usara. Estas son las primeras.
+
+# Stages que se consideran "cerrados" — heurística simple basada en el nombre
+# (no hay un flag explícito de "stage final" en el modelo). Si el operador
+# renombra sus stages a otra cosa, closed_at simplemente no se setea solo.
+_STAGES_GANADOS  = {"ganado", "ganada", "won"}
+_STAGES_PERDIDOS = {"perdido", "perdida", "lost"}
+
+
+def _deal_a_dict(d: "Deal") -> dict:
+    return {
+        "id":               d.id,
+        "agent_id":         d.agent_id,
+        "pipeline_id":      d.pipeline_id,
+        "cliente_telefono": d.cliente_telefono,
+        "cliente_nombre":   d.cliente_nombre,
+        "cliente_email":    d.cliente_email,
+        "titulo":           d.titulo,
+        "stage":            d.stage,
+        "valor_cop":        d.valor_cop,
+        "score":            d.score,
+        "source":           d.source,
+        "owner_id":         d.owner_id,
+        "notas":            d.notas,
+        "created_at":       d.created_at.isoformat() if d.created_at else "",
+        "updated_at":       d.updated_at.isoformat() if d.updated_at else "",
+        "closed_at":        d.closed_at.isoformat() if d.closed_at else None,
+    }
+
+
+async def obtener_pipeline_activo(agent_id: int = 1) -> dict:
+    """Devuelve el pipeline activo del agente, creándolo con los stages
+    default la primera vez que se pide (no requiere setup manual)."""
+    async with async_session() as session:
+        r = await session.execute(
+            select(Pipeline).where(Pipeline.agent_id == agent_id, Pipeline.activo == True)  # noqa: E712
+            .order_by(Pipeline.id)
+        )
+        pipeline = r.scalars().first()
+        if not pipeline:
+            pipeline = Pipeline(agent_id=agent_id)
+            session.add(pipeline)
+            await session.commit()
+            await session.refresh(pipeline)
+        try:
+            stages = json.loads(pipeline.stages_json) or []
+        except Exception:
+            stages = []
+        return {"id": pipeline.id, "agent_id": pipeline.agent_id, "nombre": pipeline.nombre, "stages": stages}
+
+
+async def actualizar_stages_pipeline(pipeline_id: int, agent_id: int, stages: list[str]) -> dict | None:
+    """Reemplaza la lista de stages del pipeline. No reasigna los deals que
+    quedaron en un stage eliminado — el kanban los sigue mostrando en una
+    columna aparte hasta que el operador los mueva."""
+    stages = [s.strip() for s in stages if s.strip()][:12]
+    if not stages:
+        return None
+    async with async_session() as session:
+        r = await session.execute(
+            select(Pipeline).where(Pipeline.id == pipeline_id, Pipeline.agent_id == agent_id)
+        )
+        pipeline = r.scalar_one_or_none()
+        if not pipeline:
+            return None
+        pipeline.stages_json = json.dumps(stages, ensure_ascii=False)
+        await session.commit()
+        return {"id": pipeline.id, "nombre": pipeline.nombre, "stages": stages}
+
+
+async def listar_deals(agent_id: int = 1, pipeline_id: int | None = None) -> list[dict]:
+    async with async_session() as session:
+        query = select(Deal).where(Deal.agent_id == agent_id)
+        if pipeline_id is not None:
+            query = query.where(Deal.pipeline_id == pipeline_id)
+        query = query.order_by(Deal.created_at.desc())
+        result = await session.execute(query)
+        return [_deal_a_dict(d) for d in result.scalars().all()]
+
+
+async def crear_deal(
+    agent_id: int,
+    pipeline_id: int,
+    cliente_telefono: str,
+    cliente_nombre: str = "",
+    titulo: str = "",
+    valor_cop: int = 0,
+    source: str = "manual",
+    stage: str = "",
+    autor_nombre: str = "Sistema",
+) -> dict:
+    ahora = datetime.utcnow()
+    async with async_session() as session:
+        deal = Deal(
+            agent_id=agent_id,
+            pipeline_id=pipeline_id,
+            cliente_telefono=cliente_telefono.strip(),
+            cliente_nombre=cliente_nombre.strip(),
+            titulo=(titulo.strip() or cliente_nombre.strip() or cliente_telefono.strip()),
+            stage=(stage.strip() or "Nuevo"),
+            valor_cop=max(0, int(valor_cop or 0)),
+            source=(source.strip() or "manual"),
+            created_at=ahora,
+            updated_at=ahora,
+        )
+        session.add(deal)
+        await session.flush()
+        session.add(DealActivity(
+            deal_id=deal.id, tipo="deal_created",
+            contenido=f"Oportunidad creada en \"{deal.stage}\"",
+            autor_nombre=autor_nombre,
+        ))
+        await session.commit()
+        await session.refresh(deal)
+        return _deal_a_dict(deal)
+
+
+async def actualizar_deal(deal_id: int, agent_id: int, autor_nombre: str = "Sistema", **campos) -> dict | None:
+    """Actualiza campos del deal. Si viene `stage` y es distinto al actual,
+    registra un DealActivity de tipo stage_change y ajusta closed_at según
+    la heurística de nombres de stage (ver _STAGES_GANADOS/_PERDIDOS)."""
+    permitidos = {"titulo", "stage", "valor_cop", "source", "owner_id", "notas", "cliente_nombre", "cliente_email"}
+    cambios = {k: v for k, v in campos.items() if k in permitidos and v is not None}
+    if not cambios:
+        return None
+    async with async_session() as session:
+        r = await session.execute(select(Deal).where(Deal.id == deal_id, Deal.agent_id == agent_id))
+        deal = r.scalar_one_or_none()
+        if not deal:
+            return None
+
+        stage_anterior = deal.stage
+        for k, v in cambios.items():
+            if k == "valor_cop":
+                v = max(0, int(v or 0))
+            setattr(deal, k, v)
+        deal.updated_at = datetime.utcnow()
+
+        if "stage" in cambios and cambios["stage"] != stage_anterior:
+            nuevo_norm = cambios["stage"].strip().lower()
+            if nuevo_norm in _STAGES_GANADOS or nuevo_norm in _STAGES_PERDIDOS:
+                deal.closed_at = datetime.utcnow()
+            else:
+                deal.closed_at = None
+            session.add(DealActivity(
+                deal_id=deal.id, tipo="stage_change",
+                contenido=f"{stage_anterior} → {cambios['stage']}",
+                metadata_json=json.dumps({"old": stage_anterior, "new": cambios["stage"]}),
+                autor_nombre=autor_nombre,
+            ))
+
+        await session.commit()
+        await session.refresh(deal)
+        return _deal_a_dict(deal)
+
+
+async def eliminar_deal(deal_id: int, agent_id: int) -> bool:
+    async with async_session() as session:
+        r = await session.execute(select(Deal).where(Deal.id == deal_id, Deal.agent_id == agent_id))
+        deal = r.scalar_one_or_none()
+        if not deal:
+            return False
+        await session.execute(delete(DealActivity).where(DealActivity.deal_id == deal_id))
+        await session.delete(deal)
+        await session.commit()
+        return True
+
+
+async def listar_actividades_deal(deal_id: int) -> list[dict]:
+    async with async_session() as session:
+        result = await session.execute(
+            select(DealActivity).where(DealActivity.deal_id == deal_id).order_by(DealActivity.created_at.desc())
+        )
+        return [
+            {
+                "id": a.id, "tipo": a.tipo, "contenido": a.contenido,
+                "autor_nombre": a.autor_nombre,
+                "created_at": a.created_at.isoformat() if a.created_at else "",
+            }
+            for a in result.scalars().all()
+        ]
+
+
+async def agregar_actividad_deal(deal_id: int, tipo: str, contenido: str, autor_nombre: str = "Sistema") -> dict:
+    async with async_session() as session:
+        actividad = DealActivity(deal_id=deal_id, tipo=tipo, contenido=contenido, autor_nombre=autor_nombre)
+        session.add(actividad)
+        await session.commit()
+        await session.refresh(actividad)
+        return {
+            "id": actividad.id, "tipo": actividad.tipo, "contenido": actividad.contenido,
+            "autor_nombre": actividad.autor_nombre,
+            "created_at": actividad.created_at.isoformat() if actividad.created_at else "",
+        }

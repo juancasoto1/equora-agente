@@ -64,6 +64,10 @@ from agent.memory import (
     # Sprint 3 — auditoría, supervisor, round-robin
     registrar_evento_ticket, obtener_eventos_ticket,
     obtener_stats_equipo, obtener_siguiente_agente_roundrobin,
+    # Sprint A — Pipeline
+    obtener_pipeline_activo, actualizar_stages_pipeline,
+    listar_deals, crear_deal, actualizar_deal, eliminar_deal,
+    listar_actividades_deal, agregar_actividad_deal,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html
 from agent.providers import obtener_proveedor
@@ -4256,8 +4260,21 @@ async def inbox_guardar_carrito(
         await limpiar_carrito_activo(telefono, agent_id=agent_id)
 
     logger.info(f"[carrito-manual] Carrito de {telefono} actualizado desde inbox (agent_id={agent_id}, {len(items)} items)")
+
+    # Avisar al cliente — mismo resumen + botón "Confirmar pedido ✅" que
+    # recibiría si hubiera armado el carrito él mismo (ver _enviar_resumen_carrito,
+    # llamada también desde act_ver_carrito y [[MOSTRAR_CARRITO]]). Si Meta
+    # rechaza el envío (ej. ventana de 24h cerrada), el mensaje queda marcado
+    # como "failed" en el chat con el motivo real — no rompemos el guardado
+    # del carrito por un fallo de notificación.
+    notificado = False
+    try:
+        notificado = await _enviar_resumen_carrito(telefono, agent_id=agent_id)
+    except Exception as e:
+        logger.error(f"[carrito-manual] Error notificando a {telefono}: {e}")
+
     total = sum(it["subtotal"] for it in items)
-    return JSONResponse(content={"ok": True, "items": items, "total": total})
+    return JSONResponse(content={"ok": True, "items": items, "total": total, "cliente_notificado": notificado})
 
 
 @app.post("/inbox/api/modo/{telefono}")
@@ -4718,6 +4735,155 @@ async def api_historial_ticket(
         raise HTTPException(status_code=404, detail="Ticket no encontrado")
     mensajes = await obtener_historial_con_timestamps(t.telefono_cliente, 150, agent_id=t.agent_id)
     return JSONResponse(content={"mensajes": mensajes, "telefono": t.telefono_cliente})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Item #3 del backlog — Pipeline. Las tablas (Pipeline/Deal/DealActivity)
+# existían desde Sprint A pero sin ningún endpoint que las usara — el módulo
+# vivía como placeholder "en construcción" en el panel. Estos son los
+# primeros endpoints CRUD.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/inbox/api/pipeline")
+async def api_obtener_pipeline(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Pipeline activo del agente (se crea con stages default si no existe)
+    + todos sus deals. Pensado para cargar el kanban en una sola llamada."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    pipeline = await obtener_pipeline_activo(agent_id)
+    deals = await listar_deals(agent_id, pipeline_id=pipeline["id"])
+    return JSONResponse(content={"pipeline": pipeline, "deals": deals})
+
+
+@app.post("/inbox/api/pipeline/{pipeline_id}/stages")
+async def api_actualizar_stages_pipeline(
+    pipeline_id: int,
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    stages = body.get("stages") or []
+    if not isinstance(stages, list):
+        return JSONResponse(status_code=400, content={"error": "stages debe ser una lista"})
+    pipeline = await actualizar_stages_pipeline(pipeline_id, agent_id, [str(s) for s in stages])
+    if not pipeline:
+        return JSONResponse(status_code=400, content={"error": "Pipeline no encontrado o lista de stages vacía"})
+    return JSONResponse(content={"ok": True, "pipeline": pipeline})
+
+
+@app.post("/inbox/api/deals")
+async def api_crear_deal(
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    telefono = (body.get("cliente_telefono") or "").strip()
+    if not telefono:
+        return JSONResponse(status_code=400, content={"error": "cliente_telefono es requerido"})
+    pipeline = await obtener_pipeline_activo(agent_id)
+    stages = pipeline["stages"] or ["Nuevo"]
+    stage_inicial = body.get("stage") or stages[0]
+    deal = await crear_deal(
+        agent_id=agent_id,
+        pipeline_id=pipeline["id"],
+        cliente_telefono=telefono,
+        cliente_nombre=(body.get("cliente_nombre") or "").strip(),
+        titulo=(body.get("titulo") or "").strip(),
+        valor_cop=body.get("valor_cop") or 0,
+        source=(body.get("source") or "manual").strip(),
+        stage=stage_inicial,
+        autor_nombre=user.get("nombre") or user.get("email") or "Sistema",
+    )
+    return JSONResponse(content={"ok": True, "deal": deal})
+
+
+@app.patch("/inbox/api/deals/{deal_id}")
+async def api_actualizar_deal(
+    deal_id: int,
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    campos = {k: body[k] for k in
+              ("titulo", "stage", "valor_cop", "source", "owner_id", "notas", "cliente_nombre", "cliente_email")
+              if k in body}
+    deal = await actualizar_deal(deal_id, agent_id, autor_nombre=user.get("nombre") or user.get("email") or "Sistema", **campos)
+    if not deal:
+        return JSONResponse(status_code=404, content={"error": "Deal no encontrado o sin cambios válidos"})
+    return JSONResponse(content={"ok": True, "deal": deal})
+
+
+@app.delete("/inbox/api/deals/{deal_id}")
+async def api_eliminar_deal(
+    deal_id: int,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    ok = await eliminar_deal(deal_id, agent_id)
+    if not ok:
+        return JSONResponse(status_code=404, content={"error": "Deal no encontrado"})
+    return JSONResponse(content={"ok": True})
+
+
+@app.get("/inbox/api/deals/{deal_id}/actividades")
+async def api_listar_actividades_deal(
+    deal_id: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    actividades = await listar_actividades_deal(deal_id)
+    return JSONResponse(content={"actividades": actividades})
+
+
+@app.post("/inbox/api/deals/{deal_id}/actividades")
+async def api_crear_actividad_deal(
+    deal_id: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = await request.json()
+    contenido = (body.get("contenido") or "").strip()
+    if not contenido:
+        return JSONResponse(status_code=400, content={"error": "contenido es requerido"})
+    actividad = await agregar_actividad_deal(
+        deal_id, tipo="note", contenido=contenido,
+        autor_nombre=user.get("nombre") or user.get("email") or "Sistema",
+    )
+    return JSONResponse(content={"ok": True, "actividad": actividad})
 
 
 # ── API de Equipo (Usuarios Internos) ─────────────────────────────────────────

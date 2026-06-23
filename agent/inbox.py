@@ -3451,26 +3451,80 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
            ═══════════════════════════════════════ -->
       <div class="sec sec-light" id="sec-pipeline">
         <div class="sec-hdr">
-          <div>
+          <div style="flex:1">
             <h1 style="display:flex;align-items:center;gap:10px">
               <i data-lucide="trending-up" style="width:22px;height:22px"></i> Pipeline de ventas
             </h1>
             <p style="margin:6px 0 0;color:var(--voco-text-muted);font-size:.86rem">
-              Gestiona deals, etapas y kanban para calificar leads y mover oportunidades.
+              Arrastra oportunidades entre etapas con el selector de cada tarjeta — click en la tarjeta para ver el detalle.
             </p>
           </div>
+          <button onclick="abrirNuevoDealModal()" style="padding:10px 18px;background:var(--voco-brand);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.86rem;display:flex;align-items:center;gap:6px;white-space:nowrap">
+            <i data-lucide="plus" style="width:16px;height:16px"></i> Nueva oportunidad
+          </button>
         </div>
-        <div style="padding:60px 24px;text-align:center;color:var(--voco-text-muted)">
-          <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:18px;background:var(--voco-content-bg-alt);margin-bottom:16px">
-            <i data-lucide="construction" style="width:32px;height:32px;color:var(--voco-brand)"></i>
+        <div class="sec-body" style="overflow-x:auto">
+          <div id="pipeline-kanban" style="display:flex;gap:14px;align-items:flex-start;min-height:200px">
+            <div style="padding:60px 24px;text-align:center;color:var(--voco-text-muted)">Cargando…</div>
           </div>
-          <h2 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem;font-weight:700">Módulo en construcción</h2>
-          <p style="margin:0 auto;max-width:420px;font-size:.86rem;line-height:1.55">
-            La interfaz del pipeline (kanban, deals, etapas) llegará en una próxima
-            entrega. El backend ya está listo: tablas <code>pipelines</code>, <code>deals</code>
-            y <code>deal_activities</code> existen en la BD y son accesibles desde marcadores
-            del LLM como <code>[[STAGE:]]</code>, <code>[[DEAL:]]</code>.
-          </p>
+        </div>
+
+        <!-- Modal: Nueva oportunidad -->
+        <div id="modal-deal-nuevo" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+          background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+          <div style="background:var(--voco-card-bg);border-radius:12px;padding:20px;max-width:440px;width:92%">
+            <h3 style="margin:0 0 14px;color:var(--voco-text);font-size:1.05rem">✨ Nueva oportunidad</h3>
+            <label style="font-size:.8rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Teléfono del cliente *</label>
+            <input id="deal-nuevo-telefono" type="text" placeholder="573001234567"
+              style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
+            <label style="font-size:.8rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Nombre del cliente</label>
+            <input id="deal-nuevo-nombre" type="text" placeholder="Opcional"
+              style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
+            <label style="font-size:.8rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Título de la oportunidad</label>
+            <input id="deal-nuevo-titulo" type="text" placeholder="Ej: Pedido combo lavandería"
+              style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
+            <label style="font-size:.8rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Valor estimado (COP)</label>
+            <input id="deal-nuevo-valor" type="number" min="0" placeholder="0"
+              style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:18px;box-sizing:border-box">
+            <div style="display:flex;gap:8px">
+              <button onclick="cerrarNuevoDealModal()" style="flex:1;padding:9px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer;font-size:.84rem">Cancelar</button>
+              <button onclick="crearDealManual()" style="flex:1;padding:9px;background:var(--voco-brand);color:#fff;border:none;border-radius:7px;font-weight:700;cursor:pointer;font-size:.84rem">Crear</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal: Detalle de oportunidad -->
+        <div id="modal-deal-detalle" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+          background:rgba(0,0,0,.6);z-index:1000;align-items:center;justify-content:center">
+          <div style="background:var(--voco-card-bg);border-radius:12px;padding:20px;max-width:480px;width:92%;max-height:85vh;display:flex;flex-direction:column">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2px">
+              <h3 id="deal-det-titulo" style="margin:0;color:var(--voco-text);font-size:1.02rem;flex:1">—</h3>
+              <button onclick="eliminarDealActual()" title="Eliminar oportunidad" aria-label="Eliminar oportunidad"
+                style="background:none;border:none;color:#ef4444;cursor:pointer;padding:2px 4px">
+                <i data-lucide="trash-2" style="width:16px;height:16px"></i>
+              </button>
+            </div>
+            <p id="deal-det-cliente" style="margin:0 0 14px;color:var(--voco-text-muted);font-size:.82rem">—</p>
+
+            <label style="font-size:.8rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Valor estimado (COP)</label>
+            <input id="deal-det-valor" type="number" min="0"
+              style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box">
+
+            <label style="font-size:.8rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Notas</label>
+            <textarea id="deal-det-notas" rows="3" placeholder="Notas internas sobre esta oportunidad…"
+              style="width:100%;padding:8px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.85rem;margin-bottom:12px;box-sizing:border-box;resize:vertical;font-family:inherit"></textarea>
+
+            <button onclick="guardarDetalleDeal()" style="width:100%;padding:9px;background:var(--voco-brand);color:#fff;border:none;border-radius:7px;font-weight:700;cursor:pointer;font-size:.84rem;margin-bottom:16px">Guardar cambios</button>
+
+            <label style="font-size:.78rem;font-weight:700;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:8px">Actividad</label>
+            <div id="deal-det-timeline" style="flex:1;overflow-y:auto;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;margin-bottom:10px;max-height:160px"></div>
+            <div style="display:flex;gap:8px">
+              <input id="deal-det-actividad-nueva" type="text" placeholder="Agregar nota…"
+                style="flex:1;padding:7px 10px;border:1px solid var(--voco-border);border-radius:7px;font-size:.82rem;box-sizing:border-box">
+              <button onclick="agregarNotaDeal()" style="padding:7px 14px;background:var(--voco-nav-bg-hover);border:none;border-radius:7px;font-weight:600;cursor:pointer;font-size:.82rem">Agregar</button>
+            </div>
+            <button onclick="cerrarDetalleDeal()" style="width:100%;margin-top:14px;padding:9px;background:none;border:1.5px solid var(--voco-border);border-radius:7px;font-weight:600;color:var(--voco-text);cursor:pointer;font-size:.84rem">Cerrar</button>
+          </div>
         </div>
       </div><!-- /sec-pipeline -->
 
@@ -4842,6 +4896,7 @@ function showSec(id) {
     if (id === 'mensajes')      { cargarMensajes(); }
     if (id === 'configuracion') { cargarConfiguracion(); cargarEstadoSistema(); }
     if (id === 'escalaciones')  { escCargarLista(); }
+    if (id === 'pipeline')      { cargarPipeline(); }
   }
   // En móvil al entrar a Escalaciones, forzar vista de LISTA (no detalle).
   // Sin esto el #esc-detalle (position:fixed z-index:200) tapaba la lista
@@ -10392,7 +10447,221 @@ async function guardarCarritoManual() {
     var d = await r.json();
     if (d.ok) {
       cerrarCarritoModal();
+      // El backend ya le mandó al cliente el resumen + botón "Confirmar
+      // pedido" — recargamos el chat para que se vea ese mensaje saliente.
+      // Si Meta rechaza el envío (token vencido, ventana de 24h, etc.) el
+      // mensaje queda marcado con el triángulo rojo + motivo real, igual
+      // que cualquier otro mensaje saliente — no hace falta una alerta
+      // aparte acá.
+      loadMsgs(true);
     } else { alert('Error: ' + (d.error || 'desconocido')); }
+  } catch (e) { alert('Error de red'); }
+}
+
+/* ── Pipeline (kanban de oportunidades) ──────────────────────────────────── */
+var _pipelineData = {pipeline: null, deals: []};
+var _pipelineDealActual = null;
+
+async function cargarPipeline() {
+  var box = document.getElementById('pipeline-kanban');
+  box.innerHTML = '<div style="padding:60px 24px;text-align:center;color:var(--voco-text-muted)">Cargando…</div>';
+  try {
+    var r = await fetch('/inbox/api/pipeline?agent_id=' + (_escAgentId || 1), {credentials:'include'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _pipelineData = await r.json();
+    _renderKanban();
+  } catch (e) {
+    box.innerHTML = '<div style="padding:40px;text-align:center;color:#ef4444;font-size:.85rem">Error cargando el pipeline</div>';
+  }
+}
+
+function _sourceChip(source) {
+  var map = {whatsapp: 'doc-chip-green', instagram: 'doc-chip-blue', messenger: 'doc-chip-blue'};
+  var cls = map[source] || 'doc-chip-orange';
+  return '<span class="doc-chip ' + cls + '">' + he(source || 'manual') + '</span>';
+}
+
+function _renderKanban() {
+  var box = document.getElementById('pipeline-kanban');
+  var stages = (_pipelineData.pipeline && _pipelineData.pipeline.stages) || [];
+  var deals = _pipelineData.deals || [];
+  if (!stages.length) {
+    box.innerHTML = '<div style="padding:40px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">Sin etapas configuradas</div>';
+    return;
+  }
+  // Deals en un stage que ya no existe en la lista actual (ej. tras renombrar
+  // stages) van en una columna "Otros" aparte — no se pierden ni se reasignan solos.
+  var porStage = {};
+  stages.forEach(function(s) { porStage[s] = []; });
+  var otros = [];
+  deals.forEach(function(d) {
+    if (porStage[d.stage]) porStage[d.stage].push(d); else otros.push(d);
+  });
+
+  var cols = stages.map(function(stage) { return _renderColumnaPipeline(stage, porStage[stage], stages); });
+  if (otros.length) cols.push(_renderColumnaPipeline('Otros', otros, stages));
+  box.innerHTML = cols.join('');
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function _renderColumnaPipeline(stage, deals, todosStages) {
+  var total = deals.reduce(function(acc, d) { return acc + (d.valor_cop || 0); }, 0);
+  var cards = deals.map(function(d) { return _renderCardDeal(d, todosStages); }).join('')
+    || '<div style="padding:20px 8px;text-align:center;color:var(--voco-text-muted);font-size:.78rem">Sin oportunidades</div>';
+  return '<div style="flex:0 0 280px;background:var(--voco-content-bg-alt);border-radius:12px;padding:12px;align-self:stretch">'
+    + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;padding:0 4px">'
+    +   '<span style="font-weight:700;font-size:.84rem;color:var(--voco-text)">' + he(stage) + '</span>'
+    +   '<span style="font-size:.72rem;color:var(--voco-text-muted)">' + deals.length + ' · $' + total.toLocaleString('es-CO') + '</span>'
+    + '</div>'
+    + '<div>' + cards + '</div>'
+    + '</div>';
+}
+
+function _renderCardDeal(d, todosStages) {
+  var nombre = d.cliente_nombre || ('+' + d.cliente_telefono);
+  var opciones = todosStages.map(function(s) {
+    return '<option value="' + he(s) + '"' + (s === d.stage ? ' selected' : '') + '>' + he(s) + '</option>';
+  }).join('');
+  return '<div onclick="abrirDetalleDeal(' + d.id + ')" style="background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:10px;padding:12px;margin-bottom:10px;cursor:pointer">'
+    + '<div style="font-weight:700;font-size:.85rem;color:var(--voco-text);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + he(d.titulo || nombre) + '</div>'
+    + '<div style="font-size:.76rem;color:var(--voco-text-muted);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + he(nombre) + '</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    +   '<span style="font-size:.8rem;font-weight:700;color:#16a34a">$' + (d.valor_cop || 0).toLocaleString('es-CO') + '</span>'
+    +   _sourceChip(d.source)
+    + '</div>'
+    + '<select onclick="event.stopPropagation()" onchange="moverDealStage(' + d.id + ', this.value)" '
+    +   'style="width:100%;padding:5px 6px;border:1px solid var(--voco-border);border-radius:6px;background:var(--voco-card-bg);color:var(--voco-text);font-size:.76rem">'
+    +   opciones
+    + '</select>'
+    + '</div>';
+}
+
+async function moverDealStage(dealId, nuevoStage) {
+  try {
+    var r = await fetch('/inbox/api/deals/' + dealId, {
+      method: 'PATCH', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({stage: nuevoStage})
+    });
+    var d = await r.json();
+    if (!d.ok) alert('Error: ' + (d.error || 'desconocido'));
+  } catch (e) { alert('Error de red'); }
+  await cargarPipeline();
+}
+
+function abrirNuevoDealModal() {
+  document.getElementById('deal-nuevo-telefono').value = '';
+  document.getElementById('deal-nuevo-nombre').value = '';
+  document.getElementById('deal-nuevo-titulo').value = '';
+  document.getElementById('deal-nuevo-valor').value = '';
+  document.getElementById('modal-deal-nuevo').style.display = 'flex';
+}
+function cerrarNuevoDealModal() {
+  document.getElementById('modal-deal-nuevo').style.display = 'none';
+}
+async function crearDealManual() {
+  var telefono = document.getElementById('deal-nuevo-telefono').value.trim();
+  if (!telefono) { alert('El teléfono del cliente es requerido'); return; }
+  var body = {
+    cliente_telefono: telefono,
+    cliente_nombre: document.getElementById('deal-nuevo-nombre').value.trim(),
+    titulo: document.getElementById('deal-nuevo-titulo').value.trim(),
+    valor_cop: parseInt(document.getElementById('deal-nuevo-valor').value, 10) || 0,
+    source: 'manual'
+  };
+  try {
+    var r = await fetch('/inbox/api/deals?agent_id=' + (_escAgentId || 1), {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    var d = await r.json();
+    if (d.ok) { cerrarNuevoDealModal(); await cargarPipeline(); } else { alert('Error: ' + (d.error || 'desconocido')); }
+  } catch (e) { alert('Error de red'); }
+}
+
+async function abrirDetalleDeal(dealId) {
+  var deal = (_pipelineData.deals || []).find(function(d) { return d.id === dealId; });
+  if (!deal) return;
+  _pipelineDealActual = deal;
+  document.getElementById('deal-det-titulo').textContent = deal.titulo || ('+' + deal.cliente_telefono);
+  document.getElementById('deal-det-cliente').textContent = (deal.cliente_nombre ? deal.cliente_nombre + ' · ' : '') + '+' + deal.cliente_telefono;
+  document.getElementById('deal-det-valor').value = deal.valor_cop || 0;
+  document.getElementById('deal-det-notas').value = deal.notas || '';
+  document.getElementById('deal-det-actividad-nueva').value = '';
+  document.getElementById('deal-det-timeline').innerHTML = '<div style="padding:12px;text-align:center;color:var(--voco-text-muted);font-size:.8rem">Cargando…</div>';
+  document.getElementById('modal-deal-detalle').style.display = 'flex';
+  if (window.lucide) window.lucide.createIcons();
+  await _cargarTimelineDeal(dealId);
+}
+function cerrarDetalleDeal() {
+  document.getElementById('modal-deal-detalle').style.display = 'none';
+  _pipelineDealActual = null;
+}
+async function _cargarTimelineDeal(dealId) {
+  try {
+    var r = await fetch('/inbox/api/deals/' + dealId + '/actividades', {credentials:'include'});
+    var d = await r.json();
+    _renderTimelineDeal(d.actividades || []);
+  } catch (e) {
+    document.getElementById('deal-det-timeline').innerHTML = '<div style="padding:12px;color:#ef4444;font-size:.8rem">Error cargando actividad</div>';
+  }
+}
+function _renderTimelineDeal(actividades) {
+  var box = document.getElementById('deal-det-timeline');
+  if (!actividades.length) {
+    box.innerHTML = '<div style="padding:12px;text-align:center;color:var(--voco-text-muted);font-size:.8rem">Sin actividad todavía</div>';
+    return;
+  }
+  var iconos = {deal_created: '✨', stage_change: '↪️', note: '📝'};
+  box.innerHTML = actividades.map(function(a) {
+    var fecha = a.created_at
+      ? new Date(a.created_at.endsWith('Z') ? a.created_at : a.created_at + 'Z').toLocaleString('es-CO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})
+      : '';
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--voco-border)">'
+      + '<div style="font-size:.82rem;color:var(--voco-text)">' + (iconos[a.tipo] || '•') + ' ' + he(a.contenido) + '</div>'
+      + '<div style="font-size:.7rem;color:var(--voco-text-muted);margin-top:2px">' + he(a.autor_nombre) + ' · ' + fecha + '</div>'
+      + '</div>';
+  }).join('');
+}
+async function guardarDetalleDeal() {
+  if (!_pipelineDealActual) return;
+  var valor = parseInt(document.getElementById('deal-det-valor').value, 10) || 0;
+  var notas = document.getElementById('deal-det-notas').value;
+  try {
+    var r = await fetch('/inbox/api/deals/' + _pipelineDealActual.id, {
+      method: 'PATCH', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({valor_cop: valor, notas: notas})
+    });
+    var d = await r.json();
+    if (d.ok) { cerrarDetalleDeal(); await cargarPipeline(); } else { alert('Error: ' + (d.error || 'desconocido')); }
+  } catch (e) { alert('Error de red'); }
+}
+async function agregarNotaDeal() {
+  if (!_pipelineDealActual) return;
+  var contenido = document.getElementById('deal-det-actividad-nueva').value.trim();
+  if (!contenido) return;
+  try {
+    var r = await fetch('/inbox/api/deals/' + _pipelineDealActual.id + '/actividades', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({contenido: contenido})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      document.getElementById('deal-det-actividad-nueva').value = '';
+      await _cargarTimelineDeal(_pipelineDealActual.id);
+    } else { alert('Error: ' + (d.error || 'desconocido')); }
+  } catch (e) { alert('Error de red'); }
+}
+async function eliminarDealActual() {
+  if (!_pipelineDealActual) return;
+  if (!confirm('¿Eliminar esta oportunidad? Esta acción no se puede deshacer.')) return;
+  try {
+    var r = await fetch('/inbox/api/deals/' + _pipelineDealActual.id, {method: 'DELETE', credentials: 'include'});
+    var d = await r.json();
+    if (d.ok) { cerrarDetalleDeal(); await cargarPipeline(); } else { alert('Error: ' + (d.error || 'desconocido')); }
   } catch (e) { alert('Error de red'); }
 }
 
