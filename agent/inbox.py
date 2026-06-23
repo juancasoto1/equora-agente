@@ -1195,6 +1195,7 @@ html.dark .doc-formula{color:#c7d2fe}
 .btn-secondary{background:var(--voco-card-bg);color:var(--voco-text);border:1.5px solid var(--voco-border);border-radius:9px;
   padding:10px 18px;font-size:.88rem;font-weight:600;cursor:pointer;transition:all .15s}
 .btn-secondary:hover{border-color:var(--voco-brand);color:var(--voco-brand);background:var(--voco-nav-bg-active)}
+.btn-toggle-on{border-color:var(--voco-brand)!important;color:var(--voco-brand)!important;background:var(--voco-nav-bg-active)!important;font-weight:700}
 .sep{height:1px;background:var(--voco-border);margin:20px 0}
 
 /* ── DIFUSIÓN ── */
@@ -3579,6 +3580,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   <div class="cfg-ov-status cfg-pill-pend" id="ov-shopify-status">Verificando…</div>
                 </div>
               </div>
+              <div class="cfg-ov-item">
+                <span class="cfg-ov-icon"><i data-lucide="calendar" style="width:20px;height:20px;color:var(--voco-brand)"></i></span>
+                <div>
+                  <div class="cfg-ov-name">Calendly</div>
+                  <div class="cfg-ov-status cfg-pill-pend" id="ov-calendly-status">Verificando…</div>
+                </div>
+              </div>
             </div>
 
             <!-- ── Card: Meta ── -->
@@ -3925,6 +3933,74 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </button>
               </div>
             </div><!-- /card-shopify -->
+
+            <!-- ── Card: Calendly (Pipeline Fase 2) ── -->
+            <div class="cfg-card" id="card-calendly">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="calendar" style="width:18px;height:18px;color:var(--voco-brand)"></i> Calendly — Agendamiento de citas</div>
+                <span class="cfg-status-pill cfg-pill-pending" id="pill-calendly">Verificando…</span>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">1</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">¿Ya tienes cuenta de Calendly?</div>
+                  <div style="display:flex;gap:8px;margin-top:6px">
+                    <button type="button" class="btn-secondary" id="cal-tiene-si" onclick="calSetTieneCuenta(true)" style="padding:7px 16px;font-size:.82rem">Sí, ya tengo</button>
+                    <button type="button" class="btn-secondary" id="cal-tiene-no" onclick="calSetTieneCuenta(false)" style="padding:7px 16px;font-size:.82rem">No todavía</button>
+                  </div>
+                  <div id="cal-crear-cuenta" style="display:none;margin-top:10px;padding:12px 14px;background:var(--voco-content-bg-alt);border-radius:8px">
+                    <p style="font-size:.8rem;color:var(--voco-text-muted);margin:0 0 8px">
+                      Crear una cuenta es gratis — no necesitas pagar para empezar a compartir tu link de agendamiento.
+                    </p>
+                    <a href="https://calendly.com/signup" target="_blank" rel="noopener noreferrer" class="btn-secondary"
+                       style="display:inline-flex;align-items:center;gap:6px;padding:7px 16px;font-size:.82rem;text-decoration:none">
+                      <i data-lucide="external-link" style="width:13px;height:13px"></i> Crear cuenta en Calendly
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-step" id="cal-plan-step" style="display:none">
+                <div class="cfg-step-num">2</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">¿Tu plan de Calendly es de pago o gratis?</div>
+                  <div style="display:flex;gap:8px;margin-top:6px">
+                    <button type="button" class="btn-secondary" id="cal-plan-pago" onclick="calSetPlan('pago')" style="padding:7px 16px;font-size:.82rem">De pago</button>
+                    <button type="button" class="btn-secondary" id="cal-plan-gratis" onclick="calSetPlan('gratis')" style="padding:7px 16px;font-size:.82rem">Gratis</button>
+                  </div>
+                  <p id="cal-plan-nota" style="font-size:.78rem;color:var(--voco-text-muted);margin-top:8px;line-height:1.5"></p>
+                </div>
+              </div>
+
+              <div class="cfg-step" id="cal-token-step" style="display:none">
+                <div class="cfg-step-num">3</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Personal Access Token
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-cal-token')" type="button" aria-label="Ayuda">?</button>
+                  </div>
+                  <div class="cfg-help-box" id="help-cal-token">
+                    En Calendly: <b>Integraciones → API y Webhooks → Personal Access Tokens → Generate New Token</b>.
+                    Cópialo y pégalo aquí — Calendly no lo vuelve a mostrar después de generarlo.
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-cal-token" class="f-inp" placeholder="Pega tu Personal Access Token" autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-cal-token',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-cal-token"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-actions">
+                <div id="cfg-calendly-result" class="cfg-test-result" style="display:none;flex-basis:100%"></div>
+                <button class="btn-primary" onclick="guardarCalendly()" type="button">
+                  <i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Guardar
+                </button>
+              </div>
+            </div><!-- /card-calendly -->
 
             <!-- ══════════════════════════════════════════════════════════
                  REGLAS DEL NEGOCIO (Sprint 4 — multi-tenant)
@@ -8407,6 +8483,113 @@ async function cargarConfiguracion() {
   } catch(e) {
     console.error('Error cargando configuración:', e);
   }
+
+  cargarCalendly();
+}
+
+/* ── Calendly (Pipeline Fase 2) — tiene_cuenta/plan se autoguardan al
+   elegir; el token requiere click explícito en "Guardar" por ser sensible. */
+var _calState = {tiene_cuenta: null, plan: null, tiene_token: false};
+
+async function cargarCalendly() {
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/calendly', {credentials:'include'});
+    var d = await r.json();
+    var s = d.settings || {};
+    _calState = {
+      tiene_cuenta: (typeof s.tiene_cuenta === 'boolean') ? s.tiene_cuenta : null,
+      plan: s.plan || null,
+      tiene_token: !!d.tiene_token,
+    };
+    if (d.tiene_token) {
+      var inp = document.getElementById('cfg-cal-token');
+      if (inp) inp.placeholder = '••••••••  (guardado)';
+    }
+    _renderCalendlyUI();
+    var calOk = _calState.tiene_token;
+    _setCfgPill('pill-calendly', calOk ? 'ok' : 'error');
+    _setCfgOvStatus('ov-calendly-status', calOk ? 'ok' : 'error');
+  } catch (e) {
+    console.error('Error cargando Calendly:', e);
+  }
+}
+
+function _renderCalendlyUI() {
+  var btnSi  = document.getElementById('cal-tiene-si');
+  var btnNo  = document.getElementById('cal-tiene-no');
+  var crear  = document.getElementById('cal-crear-cuenta');
+  var planStep  = document.getElementById('cal-plan-step');
+  var btnPago   = document.getElementById('cal-plan-pago');
+  var btnGratis = document.getElementById('cal-plan-gratis');
+  var nota      = document.getElementById('cal-plan-nota');
+  var tokenStep = document.getElementById('cal-token-step');
+  if (!btnSi) return;
+
+  btnSi.classList.toggle('btn-toggle-on', _calState.tiene_cuenta === true);
+  btnNo.classList.toggle('btn-toggle-on', _calState.tiene_cuenta === false);
+  crear.style.display = (_calState.tiene_cuenta === false) ? 'block' : 'none';
+  planStep.style.display = (_calState.tiene_cuenta === true) ? '' : 'none';
+
+  btnPago.classList.toggle('btn-toggle-on', _calState.plan === 'pago');
+  btnGratis.classList.toggle('btn-toggle-on', _calState.plan === 'gratis');
+
+  if (_calState.plan === 'pago') {
+    nota.textContent = '';
+    tokenStep.style.display = '';
+  } else if (_calState.plan === 'gratis') {
+    nota.textContent = 'Con plan gratis puedes compartir tu link de agendamiento, pero Andrea no puede ofrecer horarios ni agendar directo desde WhatsApp — eso necesita el plan de pago de Calendly.';
+    tokenStep.style.display = 'none';
+  } else {
+    nota.textContent = '';
+    tokenStep.style.display = 'none';
+  }
+}
+
+async function _guardarSettingsCalendly(settings) {
+  try {
+    await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/calendly', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({settings: settings}),
+    });
+  } catch (e) { console.error('Error guardando Calendly:', e); }
+}
+
+function calSetTieneCuenta(valor) {
+  _calState.tiene_cuenta = valor;
+  if (!valor) _calState.plan = null;
+  _renderCalendlyUI();
+  _guardarSettingsCalendly({tiene_cuenta: valor});
+}
+
+function calSetPlan(valor) {
+  _calState.plan = valor;
+  _renderCalendlyUI();
+  _guardarSettingsCalendly({plan: valor});
+}
+
+async function guardarCalendly() {
+  var token = (document.getElementById('cfg-cal-token').value || '').trim();
+  var resultDiv = document.getElementById('cfg-calendly-result');
+  try {
+    var body = {};
+    if (token) { body.api_token = token; body.activo = true; }
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/calendly', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      document.getElementById('cfg-cal-token').value = '';
+      _showCfgResult('cfg-calendly-result', true, 'Guardado ✓');
+      await cargarCalendly();
+    } else {
+      _showCfgResult('cfg-calendly-result', false, d.error || 'Error guardando');
+    }
+  } catch (e) {
+    _showCfgResult('cfg-calendly-result', false, 'Error de red');
+  }
 }
 
 /* ── guardarConfig: POST /inbox/api/config/save con campos del servicio ── */
@@ -12396,19 +12579,47 @@ function renderWizStep() {{
     var modsNew = _wizData.modules_new || _defaultModulesNew(_wizData.business_type);
     /* togRow soporta 2 buckets: 'old' (vive en _wizData.modules) y
        'new' (vive en _wizData.modules_new → se guarda en Agent.modules_json) */
-    function togRow(key, label, desc, bucket) {{
+    function togRow(key, label, desc, bucket, onchange) {{
       var src = (bucket === 'new') ? modsNew : mods;
       var chk = (key in src) ? src[key] : (bucket === 'new' ? false : true);
       var pfx = (bucket === 'new') ? 'wtogn-' : 'wtog-';
+      var oc  = onchange ? (' onchange="'+onchange+'"') : '';
       return '<div class="toggle-row"><div><div class="toggle-lbl">'+label+'</div>'+
         '<div class="toggle-desc">'+desc+'</div></div>'+
-        '<label class="tog-sw"><input type="checkbox" id="'+pfx+key+'"'+(chk?' checked':'')+'>'+
+        '<label class="tog-sw"><input type="checkbox" id="'+pfx+key+'"'+(chk?' checked':'')+oc+'>'+
         '<span class="tog-slider"></span></label></div>';
     }}
     function sectionLabel(txt) {{
       return '<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;'+
         'color:var(--voco-text-muted);margin:18px 0 8px;padding-bottom:6px;'+
         'border-bottom:1px solid var(--voco-border)">'+txt+'</div>';
+    }}
+    /* Sub-bloque de Calendly (#79b): solo tiene sentido preguntarlo si el
+       merchant activó el toggle. Se re-renderiza completo cada vez que
+       _wizCalTiene/_wizCalPlan cambian _wizData.calendly — más simple que
+       tratar de mutar el DOM a mano para un bloque condicional anidado. */
+    function calendlySubBlock() {{
+      var cal = _wizData.calendly || {{}};
+      var html = '<div id="wiz-cal-sub" style="display:'+(modsNew.calendly?'block':'none')+
+        ';margin:-4px 0 10px;padding:12px 14px;background:var(--voco-nav-bg-active);border-radius:8px">';
+      html += '<div style="font-size:.8rem;font-weight:600;color:var(--voco-text);margin-bottom:8px">¿Ya tienes cuenta de Calendly?</div>';
+      html += '<div style="display:flex;gap:8px">';
+      html += '<button type="button" class="btn-secondary'+(cal.tiene_cuenta===true?' btn-toggle-on':'')+'" onclick="_wizCalTiene(true)" style="padding:6px 14px;font-size:.78rem">Sí, ya tengo</button>';
+      html += '<button type="button" class="btn-secondary'+(cal.tiene_cuenta===false?' btn-toggle-on':'')+'" onclick="_wizCalTiene(false)" style="padding:6px 14px;font-size:.78rem">No todavía</button>';
+      html += '</div>';
+      if (cal.tiene_cuenta === true) {{
+        html += '<div style="font-size:.8rem;font-weight:600;color:var(--voco-text);margin:10px 0 8px">¿Tu plan es de pago o gratis?</div>';
+        html += '<div style="display:flex;gap:8px">';
+        html += '<button type="button" class="btn-secondary'+(cal.plan==='pago'?' btn-toggle-on':'')+'" onclick="_wizCalPlan(\\'pago\\')" style="padding:6px 14px;font-size:.78rem">De pago</button>';
+        html += '<button type="button" class="btn-secondary'+(cal.plan==='gratis'?' btn-toggle-on':'')+'" onclick="_wizCalPlan(\\'gratis\\')" style="padding:6px 14px;font-size:.78rem">Gratis</button>';
+        html += '</div>';
+      }} else if (cal.tiene_cuenta === false) {{
+        html += '<a href="https://calendly.com/signup" target="_blank" rel="noopener noreferrer" class="btn-secondary" '+
+          'style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;font-size:.78rem;text-decoration:none;margin-top:8px">'+
+          '<i data-lucide="external-link" style="width:12px;height:12px"></i> Crear cuenta en Calendly</a>';
+      }}
+      html += '</div>';
+      return html;
     }}
     body.innerHTML = dots +
       '<p style="font-size:.78rem;color:var(--voco-text-muted);margin-bottom:14px">Activa los módulos que apliquen a tu tipo de negocio.</p>'+
@@ -12419,7 +12630,9 @@ function renderWizStep() {{
       togRow('campaign_context','<i data-lucide=\"megaphone\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Contexto de campaña','Sabe a qué difusión responde el cliente','old')+
       sectionLabel('Pipeline e integraciones')+
       togRow('pipeline','<i data-lucide=\"trending-up\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Pipeline de ventas','Habilita deals, stages y kanban para calificar leads','new')+
-      togRow('calendly','<i data-lucide=\"calendar\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Calendly','El agente puede enviar links de agendamiento y registrar reuniones','new')+
+      togRow('calendly','<i data-lucide=\"calendar\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Calendly','El agente puede enviar links de agendamiento y registrar reuniones','new',
+        'document.getElementById(\\'wiz-cal-sub\\').style.display=this.checked?\\'block\\':\\'none\\'')+
+      calendlySubBlock()+
       togRow('sendgrid','<i data-lucide=\"mail\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>SendGrid email','Envío de correos transaccionales y follow-ups desde el agente','new')+
       togRow('knowledge_base','<i data-lucide=\"book-open\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Knowledge Base','Base de conocimiento consultable para agentes de soporte','new')+
       togRow('order_status','<i data-lucide=\"package\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Estado de pedidos','Consulta tracking y estado de órdenes Shopify','new');
@@ -12463,6 +12676,21 @@ function selColor(el, c) {{
   document.querySelectorAll('.color-swatch').forEach(function(b){{b.classList.remove('selected')}});
   el.classList.add('selected');
   _wizData.color = c;
+}}
+
+function _wizCalTiene(valor) {{
+  _wizData.calendly = _wizData.calendly || {{}};
+  _wizData.calendly.tiene_cuenta = valor;
+  if (!valor) _wizData.calendly.plan = null;
+  renderWizStep();
+  if (window.lucide) window.lucide.createIcons();
+}}
+
+function _wizCalPlan(valor) {{
+  _wizData.calendly = _wizData.calendly || {{}};
+  _wizData.calendly.plan = valor;
+  renderWizStep();
+  if (window.lucide) window.lucide.createIcons();
 }}
 
 function he(s) {{
@@ -12631,6 +12859,17 @@ async function crearAgente() {{
         method:'POST', credentials:'include',
         headers:{{'Content-Type':'application/json'}},
         body: JSON.stringify({{modules: _wizData.modules_new}})
+      }});
+    }}
+
+    // 2.6 — Guardar respuesta de "¿ya tienes cuenta de Calendly?" (Pipeline
+    // Fase 2). El token real se pega después en Configuración → Integraciones,
+    // acá solo queda registrado el punto de partida del merchant.
+    if (_wizData.calendly && typeof _wizData.calendly.tiene_cuenta === 'boolean') {{
+      await fetch('/inbox/api/agents/'+newId+'/integrations/calendly', {{
+        method:'POST', credentials:'include',
+        headers:{{'Content-Type':'application/json'}},
+        body: JSON.stringify({{settings: _wizData.calendly}})
       }});
     }}
 

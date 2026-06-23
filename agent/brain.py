@@ -9,6 +9,7 @@ from agent.tools import obtener_catalogo_shopify, obtener_costo_envio, obtener_u
 from agent.memory import (
     obtener_cliente, obtener_pedido_pendiente, obtener_carrito_activo, get_config_value,
     obtener_perfil_enriquecido, get_agent_modules, obtener_pipeline_activo, obtener_deal_abierto,
+    obtener_integration_config,
 )
 
 load_dotenv()
@@ -353,6 +354,27 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
                     "\"etapa\" ni \"oportunidad\" en tu respuesta, son términos internos de Voco."
                 )
                 system_prompt += "\n".join(bloque_pl)
+
+        # ── Calendly (agendamiento) — Pipeline Fase 2, ver BACKLOG.md ─────────
+        # Gateado igual que Pipeline: módulo "calendly" de Agent.modules_json +
+        # que el agente realmente tenga un token de Calendly conectado (chequeo
+        # local en BD, sin llamar a la API de Calendly en cada mensaje — eso
+        # solo pasa cuando el marcador realmente dispara el envío de horarios).
+        if (await get_agent_modules(agent_id)).get("calendly", False):
+            cal_cfg = await obtener_integration_config(agent_id, "calendly")
+            if cal_cfg and cal_cfg.get("api_token"):
+                bloque_cal = ["\n\n## Agendamiento de citas — revisa esto antes de terminar tu respuesta"]
+                bloque_cal.append(
+                    "Si el cliente quiere agendar una cita, reunión o llamada (o pregunta "
+                    "por disponibilidad de horario), agrega el marcador "
+                    "[[CITA_DISPONIBILIDAD:]] al final de tu respuesta. El sistema se "
+                    "encarga de consultar los horarios reales y mandarle una lista para "
+                    "elegir — tú NO inventes horarios ni fechas, nunca digas una hora "
+                    "específica disponible, eso lo hace el sistema después de tu mensaje.\n"
+                    "No uses este marcador si el cliente solo pregunta algo general sobre "
+                    "el negocio sin intención de agendar."
+                )
+                system_prompt += "\n".join(bloque_cal)
 
     mensajes = [{"role": m["role"], "content": m["content"]} for m in historial]
     mensajes.append({"role": "user", "content": mensaje})

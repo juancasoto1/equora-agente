@@ -247,6 +247,14 @@ class EstadoConversacion(Base):
     cierre_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     modo_humano: Mapped[int] = mapped_column(Integer, default=0)  # 1 = humano responde, 0 = Andrea
     actualizado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # Pipeline Fase 2 (Calendly) — mini estado de la conversación de agendamiento
+    # en curso. JSON: {"paso": "esperando_seleccion"|"esperando_datos",
+    # "event_type_uri": "...", "opciones": {"titulo mostrado": "2026-06-24T14:00:00Z", ...},
+    # "seleccion": "2026-06-24T14:00:00Z"|null, "intentos": 0}.
+    # Texto plano (no columnas separadas) porque es estado transitorio de UN
+    # flujo conversacional — mismo criterio que carrito_activo/pedido_pendiente
+    # en Cliente, no amerita una tabla nueva.
+    calendly_pendiente: Mapped[str] = mapped_column(Text, default="")
 
 
 class OptOut(Base):
@@ -366,6 +374,7 @@ async def inicializar_db():
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
             "ALTER TABLE estado_conversacion ADD COLUMN IF NOT EXISTS modo_humano INTEGER DEFAULT 0",
             "ALTER TABLE estado_conversacion ADD COLUMN IF NOT EXISTS agent_id INTEGER DEFAULT 1",
+            "ALTER TABLE estado_conversacion ADD COLUMN IF NOT EXISTS calendly_pendiente TEXT DEFAULT ''",
             "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS campaign_name TEXT DEFAULT ''",
             "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS campaign_id TEXT DEFAULT ''",
             "ALTER TABLE difusiones ADD COLUMN IF NOT EXISTS template_name TEXT DEFAULT ''",
@@ -431,6 +440,10 @@ async def inicializar_db():
             "CREATE INDEX IF NOT EXISTS ix_dealact_created       ON deal_activities     (created_at)",
             "CREATE INDEX IF NOT EXISTS ix_intcfg_agent_tipo     ON integration_configs (agent_id, tipo)",
             "CREATE INDEX IF NOT EXISTS ix_kbart_agent           ON kb_articles         (agent_id)",
+            # Pipeline Fase 2 — Calendly/citas
+            "CREATE INDEX IF NOT EXISTS ix_appt_agent            ON appointments        (agent_id)",
+            "CREATE INDEX IF NOT EXISTS ix_appt_telefono         ON appointments        (cliente_telefono)",
+            "CREATE INDEX IF NOT EXISTS ix_appt_fecha_inicio     ON appointments        (fecha_inicio)",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -1614,6 +1627,41 @@ async def set_modo_humano(telefono: str, activo: bool, agent_id: int = 1):
     async with async_session() as session:
         estado = await _get_or_create_estado(session, telefono, agent_id)
         estado.modo_humano = 1 if activo else 0
+        estado.actualizado = datetime.utcnow()
+        await session.commit()
+
+
+async def obtener_calendly_pendiente(telefono: str, agent_id: int = 1) -> dict | None:
+    """Estado del flujo de agendamiento en curso para este cliente, o None
+    si no hay ninguno pendiente."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(EstadoConversacion).where(
+                EstadoConversacion.agent_id == agent_id,
+                EstadoConversacion.telefono == telefono,
+            )
+        )
+        estado = result.scalar_one_or_none()
+        if not estado or not estado.calendly_pendiente:
+            return None
+        try:
+            return json.loads(estado.calendly_pendiente)
+        except Exception:
+            return None
+
+
+async def guardar_calendly_pendiente(telefono: str, datos: dict, agent_id: int = 1):
+    async with async_session() as session:
+        estado = await _get_or_create_estado(session, telefono, agent_id)
+        estado.calendly_pendiente = json.dumps(datos, ensure_ascii=False)
+        estado.actualizado = datetime.utcnow()
+        await session.commit()
+
+
+async def limpiar_calendly_pendiente(telefono: str, agent_id: int = 1):
+    async with async_session() as session:
+        estado = await _get_or_create_estado(session, telefono, agent_id)
+        estado.calendly_pendiente = ""
         estado.actualizado = datetime.utcnow()
         await session.commit()
 
@@ -3980,6 +4028,39 @@ class KbArticle(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class Appointment(Base):
+    """Cita agendada con un cliente — Pipeline Fase 2 (Calendly), ver BACKLOG.md.
+
+    origen distingue cómo se agendó:
+      - "calendly_api": agendada sin salir de WhatsApp via Scheduling API
+        (requiere que el agente tenga Calendly en plan pago + token)
+      - "calendly_link": el cliente agendó solo en la página de Calendly
+        (webhook de Calendly nos avisa) — funciona con Calendly gratis
+      - "manual": un humano la creó a mano desde el panel
+
+    Los links de cancelar/reprogramar los devuelve la propia API de Calendly
+    al crear el invitee — no los generamos nosotros.
+    """
+    __tablename__ = "appointments"
+
+    id:                 Mapped[int]             = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:           Mapped[int]              = mapped_column(Integer, index=True, nullable=False)
+    cliente_telefono:   Mapped[str]              = mapped_column(String(50), index=True, default="")
+    cliente_nombre:     Mapped[str]              = mapped_column(String(200), default="")
+    cliente_email:      Mapped[str]              = mapped_column(String(200), default="")
+    titulo:             Mapped[str]              = mapped_column(String(200), default="")
+    fecha_inicio:        Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    fecha_fin:           Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    estado:             Mapped[str]              = mapped_column(String(20), default="pendiente")  # pendiente|confirmada|cancelada|completada
+    origen:             Mapped[str]              = mapped_column(String(20), default="manual")  # calendly_api|calendly_link|manual
+    calendly_event_uri: Mapped[str]              = mapped_column(String(500), default="")
+    calendly_cancel_url:     Mapped[str]         = mapped_column(String(500), default="")
+    calendly_reschedule_url: Mapped[str]         = mapped_column(String(500), default="")
+    reminder_sent_at:   Mapped[datetime | None]  = mapped_column(DateTime, nullable=True, default=None)
+    created_at:         Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at:         Mapped[datetime]         = mapped_column(DateTime, default=datetime.utcnow)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers de módulos por agente
 # ──────────────────────────────────────────────────────────────────────────────
@@ -4273,3 +4354,166 @@ async def agregar_actividad_deal(deal_id: int, tipo: str, contenido: str, autor_
             "autor_nombre": actividad.autor_nombre,
             "created_at": actividad.created_at.isoformat() if actividad.created_at else "",
         }
+
+
+# ── IntegrationConfig — CRUD genérico para Calendly/HubSpot/etc (Pipeline ──
+# Fase 2+, ver BACKLOG.md). La tabla existía desde Sprint A sin ninguna
+# función que la usara.
+
+def _integration_config_a_dict(row: "IntegrationConfig") -> dict:
+    try:
+        settings = json.loads(row.settings_json) if row.settings_json else {}
+    except Exception:
+        settings = {}
+    return {
+        "id": row.id,
+        "agent_id": row.agent_id,
+        "tipo": row.tipo,
+        "api_token": row.api_token or "",
+        "settings": settings,
+        "activo": row.activo,
+        "last_sync_at": row.last_sync_at.isoformat() if row.last_sync_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else "",
+    }
+
+
+async def obtener_integration_config(agent_id: int, tipo: str) -> dict | None:
+    async with async_session() as session:
+        result = await session.execute(
+            select(IntegrationConfig).where(IntegrationConfig.agent_id == agent_id, IntegrationConfig.tipo == tipo)
+        )
+        row = result.scalar_one_or_none()
+        return _integration_config_a_dict(row) if row else None
+
+
+async def listar_integration_configs(agent_id: int) -> list[dict]:
+    async with async_session() as session:
+        result = await session.execute(
+            select(IntegrationConfig).where(IntegrationConfig.agent_id == agent_id)
+        )
+        return [_integration_config_a_dict(r) for r in result.scalars().all()]
+
+
+async def guardar_integration_config(
+    agent_id: int,
+    tipo: str,
+    api_token: str | None = None,
+    settings: dict | None = None,
+    activo: bool | None = None,
+) -> dict:
+    """Crea la integración si no existe, o actualiza solo los campos que
+    vengan no-None. `settings` hace merge superficial con lo ya guardado
+    (no reemplaza el dict completo) para no perder claves que otro flujo
+    haya guardado antes."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(IntegrationConfig).where(IntegrationConfig.agent_id == agent_id, IntegrationConfig.tipo == tipo)
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            row = IntegrationConfig(agent_id=agent_id, tipo=tipo)
+            session.add(row)
+            await session.flush()
+        if api_token is not None:
+            row.api_token = api_token
+        if settings is not None:
+            try:
+                existentes = json.loads(row.settings_json) if row.settings_json else {}
+            except Exception:
+                existentes = {}
+            existentes.update(settings)
+            row.settings_json = json.dumps(existentes, ensure_ascii=False)
+        if activo is not None:
+            row.activo = activo
+        await session.commit()
+        await session.refresh(row)
+        return _integration_config_a_dict(row)
+
+
+# ── Appointment (Citas) — Pipeline Fase 2, ver BACKLOG.md ───────────────────
+
+def _appointment_a_dict(row: "Appointment") -> dict:
+    return {
+        "id": row.id,
+        "agent_id": row.agent_id,
+        "cliente_telefono": row.cliente_telefono,
+        "cliente_nombre": row.cliente_nombre,
+        "cliente_email": row.cliente_email,
+        "titulo": row.titulo,
+        "fecha_inicio": row.fecha_inicio.isoformat() if row.fecha_inicio else None,
+        "fecha_fin": row.fecha_fin.isoformat() if row.fecha_fin else None,
+        "estado": row.estado,
+        "origen": row.origen,
+        "calendly_event_uri": row.calendly_event_uri,
+        "calendly_cancel_url": row.calendly_cancel_url,
+        "calendly_reschedule_url": row.calendly_reschedule_url,
+        "reminder_sent_at": row.reminder_sent_at.isoformat() if row.reminder_sent_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else "",
+    }
+
+
+async def crear_appointment_pendiente(
+    agent_id: int, cliente_telefono: str, fecha_inicio: datetime, titulo: str = "",
+) -> dict:
+    """Crea la cita en estado 'pendiente' apenas el cliente elige un horario
+    — antes de tener nombre/correo todavía. Se confirma con confirmar_appointment()."""
+    async with async_session() as session:
+        row = Appointment(
+            agent_id=agent_id,
+            cliente_telefono=cliente_telefono,
+            fecha_inicio=fecha_inicio,
+            titulo=titulo,
+            estado="pendiente",
+            origen="calendly_api",
+        )
+        session.add(row)
+        await session.commit()
+        await session.refresh(row)
+        return _appointment_a_dict(row)
+
+
+async def confirmar_appointment(
+    appointment_id: int,
+    cliente_nombre: str,
+    cliente_email: str,
+    calendly_event_uri: str = "",
+    calendly_cancel_url: str = "",
+    calendly_reschedule_url: str = "",
+) -> dict | None:
+    async with async_session() as session:
+        result = await session.execute(select(Appointment).where(Appointment.id == appointment_id))
+        row = result.scalar_one_or_none()
+        if not row:
+            return None
+        row.cliente_nombre = cliente_nombre
+        row.cliente_email = cliente_email
+        row.calendly_event_uri = calendly_event_uri
+        row.calendly_cancel_url = calendly_cancel_url
+        row.calendly_reschedule_url = calendly_reschedule_url
+        row.estado = "confirmada"
+        row.updated_at = datetime.utcnow()
+        await session.commit()
+        await session.refresh(row)
+        return _appointment_a_dict(row)
+
+
+async def cancelar_appointment(appointment_id: int) -> bool:
+    async with async_session() as session:
+        result = await session.execute(select(Appointment).where(Appointment.id == appointment_id))
+        row = result.scalar_one_or_none()
+        if not row:
+            return False
+        row.estado = "cancelada"
+        row.updated_at = datetime.utcnow()
+        await session.commit()
+        return True
+
+
+async def listar_appointments(agent_id: int = 1, cliente_telefono: str | None = None) -> list[dict]:
+    async with async_session() as session:
+        query = select(Appointment).where(Appointment.agent_id == agent_id)
+        if cliente_telefono:
+            query = query.where(Appointment.cliente_telefono == cliente_telefono)
+        query = query.order_by(Appointment.fecha_inicio.desc())
+        result = await session.execute(query)
+        return [_appointment_a_dict(r) for r in result.scalars().all()]

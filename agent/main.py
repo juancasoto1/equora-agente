@@ -68,6 +68,17 @@ from agent.memory import (
     obtener_pipeline_activo, actualizar_stages_pipeline,
     listar_deals, crear_deal, actualizar_deal, eliminar_deal,
     listar_actividades_deal, agregar_actividad_deal,
+    # Pipeline Fase 2 — Calendly/integraciones
+    obtener_integration_config, listar_integration_configs, guardar_integration_config,
+    # Pipeline Fase 2 — flujo conversacional Calendly
+    obtener_calendly_pendiente, guardar_calendly_pendiente, limpiar_calendly_pendiente,
+    crear_appointment_pendiente, confirmar_appointment,
+)
+from agent.calendly import (
+    obtener_usuario as calendly_usuario,
+    obtener_event_types as calendly_event_types,
+    obtener_horarios_disponibles as calendly_horarios,
+    crear_cita as calendly_crear_cita,
 )
 from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html
 from agent.providers import obtener_proveedor
@@ -1163,6 +1174,132 @@ async def _enviar_resumen_carrito(telefono: str, agent_id: int = 1) -> bool:
     return True
 
 
+async def _enviar_horarios_calendly(telefono: str, agent_id: int = 1) -> None:
+    """Obtiene horarios reales de Calendly y los envía como lista interactiva de WA.
+
+    Guarda el mapeo título→ISO en calendly_pendiente para que la intercepción
+    del webhook pueda recuperarlo cuando el cliente seleccione un horario.
+    """
+    from zoneinfo import ZoneInfo
+    _DIAS_ES = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+    _MESES_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+    _TZ_BOGOTA = ZoneInfo("America/Bogota")
+
+    proveedor = await _get_meta_para_agente({"id": agent_id})
+
+    async def _fallback(msg: str) -> None:
+        await proveedor.enviar_mensaje(telefono, msg)
+        await _guardar_con_wamid(proveedor, telefono, msg, agent_id=agent_id)
+
+    # 1) Obtener user_uri de Calendly (valida el token también)
+    usuario = await calendly_usuario(agent_id)
+    if not usuario.get("ok"):
+        await _fallback(
+            "Lo siento, no pude conectarme a Calendly en este momento 😔\n"
+            "Por favor intenta más tarde o contáctanos directamente."
+        )
+        return
+
+    user_uri = usuario["uri"]
+
+    # 2) Obtener tipos de evento activos
+    event_types = await calendly_event_types(agent_id, user_uri)
+    if not event_types:
+        await _fallback(
+            "No encontré tipos de cita configurados en Calendly. "
+            "Por favor contáctanos para coordinar tu cita."
+        )
+        return
+
+    # Usar el primer tipo de evento activo
+    et = event_types[0]
+    event_type_uri = et["uri"]
+    event_type_nombre = et["nombre"]
+    duracion_min = et.get("duracion_min", 0)
+    location_kinds = et.get("location_kinds", [])
+    location_kind = location_kinds[0] if location_kinds else None
+
+    # 3) Obtener horarios disponibles (próximos 7 días)
+    slots = await calendly_horarios(agent_id, event_type_uri, dias=7)
+    if not slots:
+        await _fallback(
+            "No encontré horarios disponibles para los próximos días 😔\n"
+            "Por favor escríbenos para coordinar tu cita directamente."
+        )
+        return
+
+    # 4) Convertir UTC → Bogota y construir filas de lista (máx 8 slots)
+    opciones: dict[str, str] = {}
+    filas = []
+    for slot in slots[:8]:
+        iso = slot.get("start_time", "")
+        if not iso:
+            continue
+        try:
+            dt_utc = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            dt = dt_utc.astimezone(_TZ_BOGOTA)
+        except Exception:
+            continue
+
+        dia_abr  = _DIAS_ES[dt.weekday()]
+        mes_abr  = _MESES_ES[dt.month - 1]
+        hora_str = dt.strftime("%I:%M %p").lstrip("0")
+        titulo = f"{dia_abr} {dt.day} {mes_abr}, {hora_str}"[:24]
+
+        desc_parts = []
+        if duracion_min:
+            desc_parts.append(f"{duracion_min} min")
+        if location_kind == "google_conference":
+            desc_parts.append("Google Meet")
+        elif location_kind == "physical":
+            desc_parts.append("Presencial")
+        elif location_kind:
+            desc_parts.append(location_kind.replace("_", " ").title())
+        descripcion = (" · ".join(desc_parts))[:72]
+
+        if titulo not in opciones:
+            opciones[titulo] = iso
+            filas.append({"id": f"slot_{len(filas)}", "titulo": titulo, "descripcion": descripcion})
+
+    if not filas:
+        await _fallback("No pude preparar la lista de horarios. Por favor intenta más tarde.")
+        return
+
+    # 5) Guardar estado en BD para la intercepción del webhook
+    await guardar_calendly_pendiente(telefono, {
+        "paso": "esperando_seleccion",
+        "event_type_uri": event_type_uri,
+        "event_type_nombre": event_type_nombre,
+        "location_kind": location_kind,
+        "opciones": opciones,
+        "seleccion": None,
+        "seleccion_titulo": None,
+        "appointment_id": None,
+        "intentos": 0,
+    }, agent_id)
+
+    # 6) Enviar lista interactiva
+    texto_intro = (
+        f"📅 *Horarios disponibles — {event_type_nombre}*\n\n"
+        "Toca el horario que prefieras:"
+    )
+    secciones = [{"titulo": "Horarios disponibles", "items": filas}]
+    enviado = False
+    if hasattr(proveedor, "enviar_lista"):
+        try:
+            enviado = await proveedor.enviar_lista(telefono, texto_intro, "Ver horarios", secciones)
+        except Exception as e:
+            logger.warning(f"[calendly] enviar_lista falló: {e}")
+    if not enviado:
+        # Fallback texto plano si el proveedor no soporta lista
+        opciones_txt = "\n".join(f"• {t}" for t in opciones)
+        fallback_txt = f"{texto_intro}\n\n{opciones_txt}\n\nResponde con el horario que prefieras."
+        await proveedor.enviar_mensaje(telefono, fallback_txt)
+        await _guardar_con_wamid(proveedor, telefono, fallback_txt, agent_id=agent_id)
+    else:
+        await _guardar_con_wamid(proveedor, telefono, texto_intro, agent_id=agent_id)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Helper: obtener o recrear checkout URL válido
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1975,6 +2112,105 @@ async def webhook_handler(request: Request):
                 logger.info(f"[opt-out] {msg.telefono} dado de baja — motivo: {msg.texto[:50]}")
                 continue  # no pasar por Claude
 
+            # ── Flujo conversacional Calendly (agendado sin salir de WA) ─────────
+            _cal_pend = await obtener_calendly_pendiente(msg.telefono, _agent_id)
+            if _cal_pend:
+                _paso_cal = _cal_pend.get("paso")
+
+                if _paso_cal == "esperando_seleccion":
+                    _opciones_cal = _cal_pend.get("opciones", {})
+                    if msg.texto in _opciones_cal:
+                        _iso_sel = _opciones_cal[msg.texto]
+                        _evt_titulo = _cal_pend.get("event_type_nombre", "Cita")
+                        await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
+                        await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
+                        _appt_id = await crear_appointment_pendiente(
+                            _agent_id, msg.telefono, _iso_sel, _evt_titulo
+                        )
+                        _cal_pend.update({
+                            "paso": "esperando_datos",
+                            "seleccion": _iso_sel,
+                            "seleccion_titulo": msg.texto,
+                            "appointment_id": _appt_id,
+                        })
+                        await guardar_calendly_pendiente(msg.telefono, _cal_pend, _agent_id)
+                        _pedir_datos = (
+                            f"Perfecto, reservé el horario *{msg.texto}* 🗓\n\n"
+                            "Para confirmar la cita necesito tu nombre completo y correo.\n"
+                            "Puedes escribirlos así:\n"
+                            "_Juan Pérez, juan@ejemplo.com_"
+                        )
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, _pedir_datos)
+                        await _guardar_con_wamid(_proveedor_agente, msg.telefono, _pedir_datos, agent_id=_agent_id)
+                        continue
+                    else:
+                        # Texto no coincide con ningún horario — LLM puede ayudar.
+                        # Incrementamos intentos y limpiamos el estado tras 3 fallos.
+                        _cal_pend["intentos"] = _cal_pend.get("intentos", 0) + 1
+                        if _cal_pend["intentos"] >= 3:
+                            await limpiar_calendly_pendiente(msg.telefono, _agent_id)
+                        else:
+                            await guardar_calendly_pendiente(msg.telefono, _cal_pend, _agent_id)
+                        # No hacer continue — deja pasar al LLM
+
+                elif _paso_cal == "esperando_datos":
+                    _email_match = re.search(r"[\w.+\-]+@[\w\-]+\.[a-z]{2,}", msg.texto, re.IGNORECASE)
+                    if _email_match:
+                        await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
+                        await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
+                        _email_cal = _email_match.group(0)
+                        _nombre_raw = msg.texto.replace(_email_cal, "").strip(" ,.-\n")
+                        _cli_cal = await obtener_cliente(msg.telefono, agent_id=_agent_id)
+                        _nombre_cal = (
+                            _nombre_raw
+                            or (_cli_cal.get("nombres", "") if _cli_cal else "")
+                            or "Cliente"
+                        )
+                        _resultado_cal = await calendly_crear_cita(
+                            agent_id=_agent_id,
+                            event_type_uri=_cal_pend.get("event_type_uri", ""),
+                            start_time_iso=_cal_pend.get("seleccion", ""),
+                            invitee_email=_email_cal,
+                            invitee_nombre=_nombre_cal,
+                            location_kind=_cal_pend.get("location_kind"),
+                        )
+                        if _resultado_cal.get("ok"):
+                            _appt_id_cal = _cal_pend.get("appointment_id")
+                            if _appt_id_cal:
+                                await confirmar_appointment(
+                                    _appt_id_cal, _nombre_cal, _email_cal,
+                                    _resultado_cal.get("uri", ""),
+                                    _resultado_cal.get("cancel_url", ""),
+                                    _resultado_cal.get("reschedule_url", ""),
+                                )
+                            await limpiar_calendly_pendiente(msg.telefono, _agent_id)
+                            _titulo_sel = _cal_pend.get("seleccion_titulo", "Cita agendada")
+                            _msg_conf = (
+                                f"✅ ¡Tu cita está confirmada!\n\n"
+                                f"📅 *{_titulo_sel}*\n"
+                                f"👤 {_nombre_cal}\n"
+                                f"📧 {_email_cal}\n\n"
+                                "Recibirás un correo de confirmación de Calendly con todos los detalles."
+                            )
+                            if _resultado_cal.get("reschedule_url"):
+                                _msg_conf += f"\n\n🔄 Reagendar: {_resultado_cal['reschedule_url']}"
+                            if _resultado_cal.get("cancel_url"):
+                                _msg_conf += f"\n❌ Cancelar: {_resultado_cal['cancel_url']}"
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_conf)
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_conf, agent_id=_agent_id)
+                            logger.info(f"[calendly] Cita confirmada para {msg.telefono} — {_email_cal}")
+                        else:
+                            await limpiar_calendly_pendiente(msg.telefono, _agent_id)
+                            _err_cal = _resultado_cal.get("error", "Error inesperado")
+                            _msg_err_cal = (
+                                f"Lo siento, no pude confirmar la cita: {_err_cal} 😔\n\n"
+                                "Escribe *agendar* para ver otros horarios disponibles."
+                            )
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_err_cal)
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_err_cal, agent_id=_agent_id)
+                        continue
+                    # Sin email → deja pasar al LLM para que pida los datos de nuevo
+
             # ── Media entrante (imagen/video/documento/ubicación) ──────────────
             # Guardamos el marcador en historial para que el inbox lo renderice,
             # y reemplazamos el texto que pasa a Claude por el caption o un placeholder
@@ -2514,6 +2750,13 @@ async def webhook_handler(request: Request):
                     logger.info(f"[MOSTRAR_CARRITO] resumen enviado a {msg.telefono}")
                 except Exception as e:
                     logger.error(f"Error mostrando carrito de {msg.telefono}: {e}")
+
+            if _marker_ctx.mostrar_citas_pendiente:
+                try:
+                    await _enviar_horarios_calendly(msg.telefono, agent_id=_agent_id)
+                    logger.info(f"[CITA_DISPONIBILIDAD] horarios enviados a {msg.telefono}")
+                except Exception as e:
+                    logger.error(f"Error enviando horarios Calendly a {msg.telefono}: {e}")
 
             # [[MOSTRAR_CARRITO]], [[PEDIDO:...]], [[ESCALAR:...]] y
             # [[CIERRE_CONV:]] ya fueron procesados por MARKER_HANDLERS arriba.
@@ -4884,6 +5127,100 @@ async def api_crear_actividad_deal(
         autor_nombre=user.get("nombre") or user.get("email") or "Sistema",
     )
     return JSONResponse(content={"ok": True, "actividad": actividad})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Pipeline Fase 2 — Integraciones externas (Calendly, HubSpot, ...). CRUD
+# genérico sobre IntegrationConfig — la tabla existía desde Sprint A sin
+# ningún endpoint que la usara. Un (agent_id, tipo) por integración.
+# ══════════════════════════════════════════════════════════════════════════════
+
+TIPOS_INTEGRACION_VALIDOS = {"calendly", "hubspot", "sendgrid", "pipedrive"}
+
+
+def _integracion_para_frontend(config: dict) -> dict:
+    """Nunca devolvemos el token real al frontend — mismo patrón que ya usa
+    Configuración para META_ACCESS_TOKEN/SHOPIFY_ADMIN_TOKEN (_ofuscar_secreto)."""
+    config = dict(config)
+    config["tiene_token"] = bool(config.get("api_token"))
+    config["api_token"] = _ofuscar_secreto(config["api_token"]) if config.get("api_token") else ""
+    return config
+
+
+@app.get("/inbox/api/agents/{agent_id_param}/integrations")
+async def api_listar_integraciones(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    configs = await listar_integration_configs(agent_id_param)
+    return JSONResponse(content={"integraciones": [_integracion_para_frontend(c) for c in configs]})
+
+
+@app.get("/inbox/api/agents/{agent_id_param}/integrations/{tipo}")
+async def api_obtener_integracion(
+    agent_id_param: int,
+    tipo: str,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    config = await obtener_integration_config(agent_id_param, tipo)
+    if not config:
+        return JSONResponse(content={
+            "tipo": tipo, "configurado": False, "settings": {}, "activo": False,
+            "tiene_token": False, "api_token": "",
+        })
+    config = _integracion_para_frontend(config)
+    config["configurado"] = True
+    return JSONResponse(content=config)
+
+
+@app.post("/inbox/api/agents/{agent_id_param}/integrations/{tipo}")
+async def api_guardar_integracion(
+    agent_id_param: int,
+    tipo: str,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if tipo not in TIPOS_INTEGRACION_VALIDOS:
+        return JSONResponse(status_code=400, content={"error": f"tipo inválido: {tipo}"})
+    body = await request.json()
+
+    api_token = body.get("api_token")
+    if isinstance(api_token, str):
+        api_token = api_token.strip()
+        # Mismo saneo de caracteres invisibles que ya existe para tokens de
+        # Meta/Shopify (bug real reportado al pegar tokens copiados de una web).
+        for ch in ("​", "‌", "‍", "\xa0", "﻿", "‪", "‬"):
+            api_token = api_token.replace(ch, "")
+        if not api_token:
+            api_token = None  # vacío = no tocar el token ya guardado, mismo patrón que Configuración
+    elif api_token is not None:
+        return JSONResponse(status_code=400, content={"error": "api_token debe ser texto"})
+
+    settings = body.get("settings")
+    if settings is not None and not isinstance(settings, dict):
+        return JSONResponse(status_code=400, content={"error": "settings debe ser un objeto"})
+
+    activo = body.get("activo")
+    if activo is not None and not isinstance(activo, bool):
+        return JSONResponse(status_code=400, content={"error": "activo debe ser booleano"})
+
+    config = await guardar_integration_config(
+        agent_id_param, tipo, api_token=api_token, settings=settings, activo=activo,
+    )
+    logger.info(f"[integraciones] '{tipo}' actualizado para agent_id={agent_id_param}")
+    return JSONResponse(content={"ok": True, "integracion": _integracion_para_frontend(config)})
 
 
 # ── API de Equipo (Usuarios Internos) ─────────────────────────────────────────

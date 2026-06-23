@@ -89,6 +89,8 @@ class MarkerContext:
     datos_lista: dict | None = None
     datos_catalogo_cat: dict | None = None
     texto_absorbido_por_cta: bool = False
+    # Pipeline Fase 2 (Calendly, ver BACKLOG.md) — del marcador [[CITA_DISPONIBILIDAD:]]
+    mostrar_citas_pendiente: bool = False
 
 
 # Type alias para handlers
@@ -202,6 +204,24 @@ async def handle_mostrar_carrito(ctx: MarkerContext) -> MarkerContext:
         return ctx
     ctx.respuesta = re.sub(patron, "", ctx.respuesta, flags=re.IGNORECASE).strip()
     ctx.mostrar_carrito_pendiente = True
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[CITA_DISPONIBILIDAD:]] — Pipeline Fase 2 (Calendly, ver BACKLOG.md)
+# ──────────────────────────────────────────────────────────────────────────────
+# Andrea lo emite cuando el cliente quiere agendar/agendarse una cita. Mismo
+# patrón que MOSTRAR_CARRITO: el handler solo levanta la bandera — consultar
+# Calendly (HTTP) y mandar la lista interactiva requiere el proveedor de
+# WhatsApp, que vive en main.py. main.py consume `mostrar_citas_pendiente`
+# al salir del dispatcher.
+@register_marker("CITA_DISPONIBILIDAD")
+async def handle_cita_disponibilidad(ctx: MarkerContext) -> MarkerContext:
+    patron = r"\[\[CITA_DISPONIBILIDAD:?\]\]"
+    if not re.search(patron, ctx.respuesta, flags=re.IGNORECASE):
+        return ctx
+    ctx.respuesta = re.sub(patron, "", ctx.respuesta, flags=re.IGNORECASE).strip()
+    ctx.mostrar_citas_pendiente = True
     return ctx
 
 
