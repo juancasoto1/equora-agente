@@ -1288,7 +1288,8 @@ async def _enviar_horarios_calendly(telefono: str, agent_id: int = 1) -> None:
     enviado = False
     if hasattr(proveedor, "enviar_lista"):
         try:
-            enviado = await proveedor.enviar_lista(telefono, texto_intro, "Ver horarios", secciones)
+            enviado = await proveedor.enviar_lista(telefono, texto_intro, "Ver horarios", secciones,
+                                                header_text="📅 Elige tu horario")
         except Exception as e:
             logger.warning(f"[calendly] enviar_lista falló: {e}")
     if not enviado:

@@ -372,7 +372,12 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
                     "elegir — tú NO inventes horarios ni fechas, nunca digas una hora "
                     "específica disponible, eso lo hace el sistema después de tu mensaje.\n"
                     "No uses este marcador si el cliente solo pregunta algo general sobre "
-                    "el negocio sin intención de agendar."
+                    "el negocio sin intención de agendar.\n"
+                    "CRÍTICO: NUNCA confirmes que una cita fue agendada, ni digas frases "
+                    "como 'tu cita está confirmada' o 'quedó agendado para el jueves'. "
+                    "La confirmación la genera el sistema automáticamente cuando el cliente "
+                    "completa el flujo de agendamiento. Si ves en el historial que el "
+                    "cliente eligió un horario, sigue el flujo normal — no lo des por hecho."
                 )
                 system_prompt += "\n".join(bloque_cal)
 

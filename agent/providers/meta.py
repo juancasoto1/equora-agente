@@ -340,10 +340,13 @@ class ProveedorMeta(ProveedorWhatsApp):
             self._capturar_wamid(r)
             return True
 
-    async def enviar_lista(self, telefono: str, texto: str, boton: str, secciones: list[dict]) -> bool:
+    async def enviar_lista(self, telefono: str, texto: str, boton: str, secciones: list[dict],
+                           header_text: str = "") -> bool:
         """Envía mensaje con lista de opciones seleccionables.
         WhatsApp impone: máx 10 filas TOTALES entre todas las secciones,
-        título de fila ≤ 24 chars, descripción ≤ 72 chars, botón ≤ 20 chars."""
+        título de fila ≤ 24 chars, descripción ≤ 72 chars, botón ≤ 20 chars.
+        `header_text` opcional añade un encabezado de texto (≤60 chars) que
+        hace más prominente el botón "Ver opciones" en el cliente de WhatsApp."""
         if not self.access_token or not self.phone_number_id:
             return False
 
@@ -378,18 +381,21 @@ class ProveedorMeta(ProveedorWhatsApp):
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
         }
+        interactive_payload: dict = {
+            "type": "list",
+            "body": {"text": texto[:1024]},
+            "action": {
+                "button": boton[:20] or "Ver opciones",
+                "sections": secciones_payload,
+            },
+        }
+        if header_text:
+            interactive_payload["header"] = {"type": "text", "text": str(header_text)[:60]}
         payload = {
             "messaging_product": "whatsapp",
             "to": telefono,
             "type": "interactive",
-            "interactive": {
-                "type": "list",
-                "body": {"text": texto[:1024]},
-                "action": {
-                    "button": boton[:20] or "Ver opciones",
-                    "sections": secciones_payload,
-                },
-            },
+            "interactive": interactive_payload,
         }
         self.ultimo_wamid = ""
         async with httpx.AsyncClient(timeout=10) as client:
