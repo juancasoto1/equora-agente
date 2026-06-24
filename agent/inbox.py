@@ -4032,11 +4032,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     <button class="cfg-help-btn" onclick="toggleHelp('help-hs-token')" type="button" aria-label="Ayuda">?</button>
                   </div>
                   <div class="cfg-help-box" id="help-hs-token">
-                    En HubSpot: <b>ícono de Desarrollo (</b><code>&lt;/&gt;</code><b>) → Aplicaciones anteriores → Crear aplicación privada</b>.<br>
-                    <span style="color:var(--voco-text-muted);font-size:.77rem">HubSpot movió las aplicaciones privadas a esa sección en 2025.</span><br><br>
-                    Scopes mínimos requeridos:<br>
-                    <code>crm.objects.contacts.read</code> · <code>crm.objects.contacts.write</code><br>
-                    <code>crm.objects.deals.read</code> · <code>crm.objects.deals.write</code><br><br>
+                    <b>Cómo generar la clave en HubSpot:</b><br>
+                    1. Clic en el ícono <code>&lt;/&gt;</code> (Desarrollo) en la barra izquierda<br>
+                    2. <b>Claves → Claves de servicio → Crear clave de servicio</b><br>
+                    3. Pon un nombre (ej. "Voco") y agrega estos 4 permisos:<br>
+                    &nbsp;&nbsp;<code>crm.objects.contacts.read</code> · <code>crm.objects.contacts.write</code><br>
+                    &nbsp;&nbsp;<code>crm.objects.deals.read</code> · <code>crm.objects.deals.write</code><br>
+                    4. Clic en <b>Crear</b> → copia la clave (empieza con <code>pat-na1-...</code>)<br><br>
                     Voco sincroniza en un solo sentido (Voco → HubSpot). Los cambios en HubSpot no se reflejan en Voco.
                   </div>
                   <div id="hs-cuenta-info" style="display:none;margin-bottom:10px;padding:10px 14px;background:var(--voco-content-bg-alt);border-radius:8px;border-left:3px solid var(--voco-success)">
