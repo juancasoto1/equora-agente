@@ -1414,12 +1414,12 @@ html.dark .wa-phone-bar .wa-sub{color:#8696a0}
 .cfg-card{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:14px;
   padding:24px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 /* Toggle switch módulos */
-.mod-toggle-wrap{position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0;cursor:pointer}
+.mod-toggle-wrap{position:relative;display:inline-block;width:48px;height:28px;flex-shrink:0;cursor:pointer}
 .mod-toggle-wrap input{opacity:0;width:0;height:0;position:absolute}
-.mod-toggle-slider{position:absolute;inset:0;background:#cbd5e0;border-radius:24px;transition:.2s}
-.mod-toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-.mod-toggle-wrap input:checked+.mod-toggle-slider{background:var(--voco-primary)}
-.mod-toggle-wrap input:checked+.mod-toggle-slider:before{transform:translateX(18px)}
+.mod-toggle-slider{position:absolute;top:0;left:0;right:0;bottom:0;background:#d1d5db;border-radius:28px;transition:.25s;box-shadow:inset 0 1px 3px rgba(0,0,0,.15)}
+.mod-toggle-slider:before{content:'';position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s;box-shadow:0 2px 5px rgba(0,0,0,.25)}
+.mod-toggle-wrap input:checked+.mod-toggle-slider{background:#22c55e}
+.mod-toggle-wrap input:checked+.mod-toggle-slider:before{transform:translateX(20px)}
 /* Sistema — luces de estado */
 .sistema-item{background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px}
 .sistema-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
