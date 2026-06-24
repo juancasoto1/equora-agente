@@ -444,6 +444,8 @@ async def inicializar_db():
             "CREATE INDEX IF NOT EXISTS ix_appt_agent            ON appointments        (agent_id)",
             "CREATE INDEX IF NOT EXISTS ix_appt_telefono         ON appointments        (cliente_telefono)",
             "CREATE INDEX IF NOT EXISTS ix_appt_fecha_inicio     ON appointments        (fecha_inicio)",
+            # Pipeline Fase 3 — HubSpot sync
+            "ALTER TABLE deals ADD COLUMN IF NOT EXISTS hs_deal_id TEXT DEFAULT ''",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -3968,6 +3970,7 @@ class Deal(Base):
     source:           Mapped[str]                = mapped_column(String(40), default="whatsapp")
     owner_id:         Mapped[int | None]         = mapped_column(Integer, nullable=True, default=None)
     notas:            Mapped[str]                = mapped_column(Text, default="")
+    hs_deal_id:       Mapped[str]                = mapped_column(Text, default="")
     created_at:       Mapped[datetime]           = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at:       Mapped[datetime]           = mapped_column(DateTime, default=datetime.utcnow)
     closed_at:        Mapped[datetime | None]    = mapped_column(DateTime, nullable=True, default=None)
@@ -4078,6 +4081,7 @@ DEFAULT_MODULES: dict[str, bool] = {
     # Sprint A — Pipeline + Soporte
     "pipeline":       False,
     "calendly":       False,
+    "hubspot":        False,
     "sendgrid":       False,
     "knowledge_base": False,
     "order_status":   False,
@@ -4162,6 +4166,7 @@ def _deal_a_dict(d: "Deal") -> dict:
         "source":           d.source,
         "owner_id":         d.owner_id,
         "notas":            d.notas,
+        "hs_deal_id":       d.hs_deal_id,
         "created_at":       d.created_at.isoformat() if d.created_at else "",
         "updated_at":       d.updated_at.isoformat() if d.updated_at else "",
         "closed_at":        d.closed_at.isoformat() if d.closed_at else None,
@@ -4354,6 +4359,25 @@ async def agregar_actividad_deal(deal_id: int, tipo: str, contenido: str, autor_
             "autor_nombre": actividad.autor_nombre,
             "created_at": actividad.created_at.isoformat() if actividad.created_at else "",
         }
+
+
+async def obtener_deal_por_id(deal_id: int) -> dict | None:
+    """Retorna el dict de un deal por su ID, o None si no existe."""
+    async with async_session() as session:
+        r = await session.execute(select(Deal).where(Deal.id == deal_id))
+        row = r.scalar_one_or_none()
+        return _deal_a_dict(row) if row else None
+
+
+async def set_hs_deal_id(deal_id: int, hs_deal_id: str) -> None:
+    """Persiste el HubSpot deal ID en el deal de Voco para evitar crear duplicados
+    en syncs posteriores."""
+    async with async_session() as session:
+        r = await session.execute(select(Deal).where(Deal.id == deal_id))
+        row = r.scalar_one_or_none()
+        if row:
+            row.hs_deal_id = hs_deal_id
+            await session.commit()
 
 
 # ── IntegrationConfig — CRUD genérico para Calendly/HubSpot/etc (Pipeline ──

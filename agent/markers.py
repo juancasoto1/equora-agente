@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -495,6 +496,7 @@ async def handle_deal_stage(ctx: MarkerContext) -> MarkerContext:
                 stage=stage_nombre, autor_nombre="Andrea (IA)",
             )
             logger.info(f"[DEAL_STAGE] Deal {deal_abierto['id']} de {ctx.telefono} → '{stage_nombre}'")
+            _hs_sync_if_enabled(modules, ctx.agent_id, deal_abierto["id"], ctx.telefono)
         else:
             cliente = await obtener_cliente(ctx.telefono, ctx.agent_id) or {}
             cliente_nombre = " ".join(filter(None, [
@@ -515,8 +517,19 @@ async def handle_deal_stage(ctx: MarkerContext) -> MarkerContext:
                 autor_nombre="Andrea (IA)",
             )
             logger.info(f"[DEAL_STAGE] Deal {nuevo['id']} creado para {ctx.telefono} en '{stage_nombre}'")
+            _hs_sync_if_enabled(modules, ctx.agent_id, nuevo["id"], ctx.telefono)
     except Exception as e:
         logger.error(f"[DEAL_STAGE] Error procesando para {ctx.telefono}: {e}")
     return ctx
+
+
+def _hs_sync_if_enabled(modules: dict, agent_id: int, deal_id: int, telefono: str) -> None:
+    """Lanza la sincronización HubSpot en background si el módulo está activo.
+    Fire-and-forget: usa asyncio.create_task() para no bloquear el webhook.
+    """
+    if not modules.get("hubspot", False):
+        return
+    from agent.hubspot import sincronizar_deal_bg
+    asyncio.create_task(sincronizar_deal_bg(agent_id, deal_id, telefono))
 
 

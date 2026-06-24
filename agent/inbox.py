@@ -3587,6 +3587,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   <div class="cfg-ov-status cfg-pill-pend" id="ov-calendly-status">Verificando…</div>
                 </div>
               </div>
+              <div class="cfg-ov-item">
+                <span class="cfg-ov-icon"><i data-lucide="bar-chart-2" style="width:20px;height:20px;color:var(--voco-brand)"></i></span>
+                <div>
+                  <div class="cfg-ov-name">HubSpot</div>
+                  <div class="cfg-ov-status cfg-pill-pend" id="ov-hubspot-status">Verificando…</div>
+                </div>
+              </div>
             </div>
 
             <!-- ── Card: Meta ── -->
@@ -4007,6 +4014,51 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </button>
               </div>
             </div><!-- /card-calendly -->
+
+            <!-- ══════════════════════════════════════════════════════════
+                 HUBSPOT CRM (Pipeline Fase 3)
+                 ══════════════════════════════════════════════════════════ -->
+            <div class="cfg-card" id="card-hubspot">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="bar-chart-2" style="width:18px;height:18px;color:var(--voco-brand)"></i> HubSpot CRM</div>
+                <span class="cfg-status-pill cfg-pill-pending" id="pill-hubspot">Verificando…</span>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">1</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Private App Token
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-hs-token')" type="button" aria-label="Ayuda">?</button>
+                  </div>
+                  <div class="cfg-help-box" id="help-hs-token">
+                    En HubSpot: <b>Configuración → Integraciones → Aplicaciones privadas → Crear aplicación privada</b>.<br>
+                    Scopes mínimos: <code>crm.objects.contacts.read</code>, <code>crm.objects.contacts.write</code>,
+                    <code>crm.objects.deals.read</code>, <code>crm.objects.deals.write</code>.<br>
+                    Voco sincroniza en un solo sentido (Voco → HubSpot). Los cambios que hagas en HubSpot no se reflejan en Voco.
+                  </div>
+                  <div id="hs-cuenta-info" style="display:none;margin-bottom:10px;padding:10px 14px;background:var(--voco-content-bg-alt);border-radius:8px;border-left:3px solid var(--voco-success)">
+                    <div style="font-size:.75rem;color:var(--voco-text-muted);margin-bottom:3px">Portal conectado</div>
+                    <div id="hs-portal-id" style="font-size:.84rem;font-weight:600;color:var(--voco-text)"></div>
+                    <div id="hs-portal-currency" style="font-size:.78rem;color:var(--voco-text-muted)"></div>
+                  </div>
+                  <div class="cfg-field-row">
+                    <div class="cfg-input-wrap" style="flex:1">
+                      <input type="password" id="cfg-hs-token" class="f-inp" placeholder="Pega tu Private App Token" autocomplete="off">
+                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-hs-token',this)" type="button">👁</button>
+                    </div>
+                    <span class="cfg-field-status" id="st-hs-token"></span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cfg-actions">
+                <div id="cfg-hubspot-result" class="cfg-test-result" style="display:none;flex-basis:100%"></div>
+                <button class="btn-primary" onclick="guardarHubspot()" type="button">
+                  <i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Guardar
+                </button>
+              </div>
+            </div><!-- /card-hubspot -->
 
             <!-- ══════════════════════════════════════════════════════════
                  REGLAS DEL NEGOCIO (Sprint 4 — multi-tenant)
@@ -8491,6 +8543,7 @@ async function cargarConfiguracion() {
   }
 
   cargarCalendly();
+  cargarHubspot();
 }
 
 /* ── Calendly (Pipeline Fase 2) — tiene_cuenta/plan se autoguardan al
@@ -8610,6 +8663,62 @@ async function guardarCalendly() {
     }
   } catch (e) {
     _showCfgResult('cfg-calendly-result', false, 'Error de red');
+  }
+}
+
+/* ── HubSpot CRM (Pipeline Fase 3) ───────────────────────────────────── */
+async function cargarHubspot() {
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/hubspot', {credentials:'include'});
+    var d = await r.json();
+    var hsOk = !!d.tiene_token;
+    if (d.tiene_token) {
+      var inp = document.getElementById('cfg-hs-token');
+      if (inp) inp.placeholder = '••••••••  (guardado)';
+      _verificarHubspot();
+    }
+    _setCfgPill('pill-hubspot', hsOk ? 'ok' : 'error');
+    _setCfgOvStatus('ov-hubspot-status', hsOk ? 'ok' : 'error');
+  } catch (e) { console.error('Error cargando HubSpot:', e); }
+}
+
+async function _verificarHubspot() {
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/hubspot/verify', {credentials:'include'});
+    var d = await r.json();
+    var box = document.getElementById('hs-cuenta-info');
+    if (!box) return;
+    if (d.ok) {
+      document.getElementById('hs-portal-id').textContent = 'Portal ID: ' + (d.portal_id || '');
+      document.getElementById('hs-portal-currency').textContent = d.currency ? 'Moneda: ' + d.currency : '';
+      box.style.display = '';
+    } else {
+      box.style.display = 'none';
+    }
+  } catch (e) { /* silencioso */ }
+}
+
+async function guardarHubspot() {
+  var token = (document.getElementById('cfg-hs-token').value || '').trim();
+  var resultDiv = document.getElementById('cfg-hubspot-result');
+  try {
+    var body = {};
+    if (token) { body.api_token = token; body.activo = true; }
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/hubspot', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      document.getElementById('cfg-hs-token').value = '';
+      _showCfgResult('cfg-hubspot-result', true, 'Guardado ✓');
+      await cargarHubspot();
+    } else {
+      _showCfgResult('cfg-hubspot-result', false, d.error || 'Error guardando');
+    }
+  } catch (e) {
+    _showCfgResult('cfg-hubspot-result', false, 'Error de red');
   }
 }
 

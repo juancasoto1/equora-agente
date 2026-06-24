@@ -80,6 +80,7 @@ from agent.calendly import (
     obtener_horarios_disponibles as calendly_horarios,
     crear_cita as calendly_crear_cita,
 )
+from agent.hubspot import obtener_portal_info as hubspot_portal_info
 from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html
 from agent.providers import obtener_proveedor
 from agent.capi import capi_lead, capi_view_content, capi_add_to_cart, capi_initiate_checkout
@@ -5158,6 +5159,20 @@ async def api_listar_integraciones(
         raise HTTPException(status_code=401, detail="No autorizado")
     configs = await listar_integration_configs(agent_id_param)
     return JSONResponse(content={"integraciones": [_integracion_para_frontend(c) for c in configs]})
+
+
+@app.get("/inbox/api/agents/{agent_id_param}/integrations/hubspot/verify")
+async def api_verificar_hubspot(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Llama a HubSpot /account-info/v3/details para confirmar qué portal está conectado."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    resultado = await hubspot_portal_info(agent_id_param)
+    return JSONResponse(content=resultado)
 
 
 @app.get("/inbox/api/agents/{agent_id_param}/integrations/calendly/verify")
