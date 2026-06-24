@@ -1413,6 +1413,13 @@ html.dark .wa-phone-bar .wa-sub{color:#8696a0}
 .cfg-pill-pend{color:#8a94a6}
 .cfg-card{background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:14px;
   padding:24px;margin-bottom:24px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+/* Toggle switch módulos */
+.mod-toggle-wrap{position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0;cursor:pointer}
+.mod-toggle-wrap input{opacity:0;width:0;height:0;position:absolute}
+.mod-toggle-slider{position:absolute;inset:0;background:#cbd5e0;border-radius:24px;transition:.2s}
+.mod-toggle-slider:before{content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.mod-toggle-wrap input:checked+.mod-toggle-slider{background:var(--voco-primary)}
+.mod-toggle-wrap input:checked+.mod-toggle-slider:before{transform:translateX(18px)}
 /* Sistema — luces de estado */
 .sistema-item{background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);border-radius:10px;padding:14px 16px}
 .sistema-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
@@ -3544,6 +3551,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <!-- Tabs -->
           <div class="cfg-tabs">
             <div class="cfg-tab active" onclick="cfgTab('integraciones',this)"><i data-lucide="plug" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Integraciones</div>
+            <div class="cfg-tab" onclick="cfgTab('modulos',this);cargarModulos()"><i data-lucide="toggle-right" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Módulos</div>
             <div class="cfg-tab" onclick="cfgTab('prompt',this);cargarPrompt()"><i data-lucide="brain" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Prompt</div>
             <div class="cfg-tab" onclick="cfgTab('probar',this);iniciarChatTest()"><i data-lucide="flask-conical" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Probar</div>
             <div class="cfg-tab" onclick="cfgTab('templates',this);cargarTemplatesRapidos()"><i data-lucide="zap" style="width:14px;height:14px;vertical-align:-2px;margin-right:6px"></i>Templates</div>
@@ -4476,6 +4484,52 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                showSec('mensajes') lo lleva a la sección correcta. -->
 
           <!-- ── Pane: Promociones (código descuento post-venta) ── -->
+          <!-- ── Pane: Módulos ── -->
+          <div class="cfg-pane" id="cfg-pane-modulos" style="padding:24px;overflow-y:auto">
+            <div style="max-width:680px">
+              <h3 style="margin:0 0 4px;font-size:1rem;font-weight:600">Módulos activos</h3>
+              <p style="margin:0 0 24px;font-size:.82rem;color:var(--voco-text-muted)">Activa o desactiva funcionalidades del agente. Los cambios aplican de inmediato.</p>
+
+              <div id="modulos-lista" style="display:flex;flex-direction:column;gap:12px">
+
+                <div class="cfg-card" style="padding:16px 20px;display:flex;align-items:center;gap:16px;margin:0">
+                  <div style="flex:1">
+                    <div style="font-size:.88rem;font-weight:600;margin-bottom:2px">Pipeline (CRM)</div>
+                    <div style="font-size:.78rem;color:var(--voco-text-muted)">Gestión de oportunidades con kanban. El agente crea y mueve deals automáticamente según el avance de la conversación.</div>
+                  </div>
+                  <label class="mod-toggle-wrap">
+                    <input type="checkbox" id="mod-toggle-pipeline" onchange="toggleModulo('pipeline',this.checked)">
+                    <span class="mod-toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div class="cfg-card" style="padding:16px 20px;display:flex;align-items:center;gap:16px;margin:0">
+                  <div style="flex:1">
+                    <div style="font-size:.88rem;font-weight:600;margin-bottom:2px">Calendly — Agendamiento</div>
+                    <div style="font-size:.78rem;color:var(--voco-text-muted)">El agente ofrece horarios disponibles y agenda citas sin que el cliente salga de WhatsApp. Requiere token configurado en Integraciones.</div>
+                  </div>
+                  <label class="mod-toggle-wrap">
+                    <input type="checkbox" id="mod-toggle-calendly" onchange="toggleModulo('calendly',this.checked)">
+                    <span class="mod-toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div class="cfg-card" style="padding:16px 20px;display:flex;align-items:center;gap:16px;margin:0">
+                  <div style="flex:1">
+                    <div style="font-size:.88rem;font-weight:600;margin-bottom:2px">HubSpot CRM</div>
+                    <div style="font-size:.78rem;color:var(--voco-text-muted)">Sincroniza contactos y deals automáticamente a HubSpot cada vez que el agente actualiza una oportunidad. Requiere clave de servicio configurada en Integraciones.</div>
+                  </div>
+                  <label class="mod-toggle-wrap">
+                    <input type="checkbox" id="mod-toggle-hubspot" onchange="toggleModulo('hubspot',this.checked)">
+                    <span class="mod-toggle-slider"></span>
+                  </label>
+                </div>
+
+              </div>
+              <div id="modulos-status" style="margin-top:14px;font-size:.78rem;color:var(--voco-success);display:none">✓ Guardado</div>
+            </div>
+          </div><!-- /cfg-pane-modulos -->
+
           <div class="cfg-pane" id="cfg-pane-promociones" style="padding:24px;overflow-y:auto">
             <div style="max-width:680px">
               <h2 style="margin:0 0 6px;color:var(--voco-text);font-size:1.05rem">
@@ -8548,6 +8602,7 @@ async function cargarConfiguracion() {
 
   cargarCalendly();
   cargarHubspot();
+  cargarModulos();
 }
 
 /* ── Calendly (Pipeline Fase 2) — tiene_cuenta/plan se autoguardan al
@@ -8668,6 +8723,38 @@ async function guardarCalendly() {
   } catch (e) {
     _showCfgResult('cfg-calendly-result', false, 'Error de red');
   }
+}
+
+/* ── Módulos ──────────────────────────────────────────────────────────── */
+var _modulesState = {};
+
+async function cargarModulos() {
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/modules', {credentials:'include'});
+    var d = await r.json();
+    _modulesState = d.modules || {};
+    ['pipeline','calendly','hubspot'].forEach(function(key) {
+      var el = document.getElementById('mod-toggle-' + key);
+      if (el) el.checked = !!_modulesState[key];
+    });
+  } catch (e) { console.error('Error cargando módulos:', e); }
+}
+
+async function toggleModulo(key, val) {
+  _modulesState[key] = val;
+  var statusEl = document.getElementById('modulos-status');
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/modules', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({modules: _modulesState}),
+    });
+    var d = await r.json();
+    if (d.ok && statusEl) {
+      statusEl.style.display = 'block';
+      setTimeout(function(){ statusEl.style.display = 'none'; }, 2000);
+    }
+  } catch (e) { console.error('Error guardando módulo:', e); }
 }
 
 /* ── HubSpot CRM (Pipeline Fase 3) ───────────────────────────────────── */
