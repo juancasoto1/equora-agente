@@ -3982,7 +3982,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   </div>
                   <div class="cfg-help-box" id="help-cal-token">
                     En Calendly: <b>Integraciones → API y Webhooks → Personal Access Tokens → Generate New Token</b>.
-                    Cópialo y pégalo aquí — Calendly no lo vuelve a mostrar después de generarlo.
+                    Cópialo y pégalo aquí — Calendly no lo vuelve a mostrar después de generarlo.<br>
+                    <span style="color:var(--voco-text-muted)">Necesario para agendar sin salir de WhatsApp (requiere plan estándar o superior de Calendly).</span>
+                  </div>
+                  <div id="cal-cuenta-info" style="display:none;margin-bottom:10px;padding:10px 14px;background:var(--voco-content-bg-alt);border-radius:8px;border-left:3px solid var(--voco-success)">
+                    <div style="font-size:.75rem;color:var(--voco-text-muted);margin-bottom:3px">Cuenta conectada</div>
+                    <div id="cal-cuenta-nombre" style="font-size:.84rem;font-weight:600;color:var(--voco-text)"></div>
+                    <div id="cal-cuenta-email" style="font-size:.78rem;color:var(--voco-text-muted)"></div>
                   </div>
                   <div class="cfg-field-row">
                     <div class="cfg-input-wrap" style="flex:1">
@@ -8509,9 +8515,26 @@ async function cargarCalendly() {
     var calOk = _calState.tiene_token;
     _setCfgPill('pill-calendly', calOk ? 'ok' : 'error');
     _setCfgOvStatus('ov-calendly-status', calOk ? 'ok' : 'error');
+    if (calOk) _verificarCuentaCalendly();
   } catch (e) {
     console.error('Error cargando Calendly:', e);
   }
+}
+
+async function _verificarCuentaCalendly() {
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/calendly/verify', {credentials:'include'});
+    var d = await r.json();
+    var box = document.getElementById('cal-cuenta-info');
+    if (!box) return;
+    if (d.ok) {
+      document.getElementById('cal-cuenta-nombre').textContent = d.nombre || '';
+      document.getElementById('cal-cuenta-email').textContent = d.email || '';
+      box.style.display = '';
+    } else {
+      box.style.display = 'none';
+    }
+  } catch (e) { /* silencioso — no romper la UI si Calendly no responde */ }
 }
 
 function _renderCalendlyUI() {
@@ -8533,15 +8556,13 @@ function _renderCalendlyUI() {
   btnPago.classList.toggle('btn-toggle-on', _calState.plan === 'pago');
   btnGratis.classList.toggle('btn-toggle-on', _calState.plan === 'gratis');
 
-  if (_calState.plan === 'pago') {
-    nota.textContent = '';
-    tokenStep.style.display = '';
-  } else if (_calState.plan === 'gratis') {
-    nota.textContent = 'Con plan gratis puedes compartir tu link de agendamiento, pero Andrea no puede ofrecer horarios ni agendar directo desde WhatsApp — eso necesita el plan de pago de Calendly.';
-    tokenStep.style.display = 'none';
+  // El token se muestra siempre que tiene_cuenta === true (sin gatear por plan).
+  // La nota informativa sigue siendo plan-adaptativa.
+  tokenStep.style.display = (_calState.tiene_cuenta === true) ? '' : 'none';
+  if (_calState.plan === 'gratis') {
+    nota.textContent = 'Con plan gratis puedes compartir tu link de agendamiento. Para que Voco ofrezca horarios y agende directo desde WhatsApp necesitarás el plan estándar de Calendly ($10/mes).';
   } else {
     nota.textContent = '';
-    tokenStep.style.display = 'none';
   }
 }
 

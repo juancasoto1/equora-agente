@@ -5160,6 +5160,20 @@ async def api_listar_integraciones(
     return JSONResponse(content={"integraciones": [_integracion_para_frontend(c) for c in configs]})
 
 
+@app.get("/inbox/api/agents/{agent_id_param}/integrations/calendly/verify")
+async def api_verificar_calendly(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Llama a Calendly /users/me para confirmar qué cuenta está conectada."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    resultado = await calendly_usuario(agent_id_param)
+    return JSONResponse(content=resultado)
+
+
 @app.get("/inbox/api/agents/{agent_id_param}/integrations/{tipo}")
 async def api_obtener_integracion(
     agent_id_param: int,
