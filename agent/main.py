@@ -2120,8 +2120,17 @@ async def webhook_handler(request: Request):
 
                 if _paso_cal == "esperando_seleccion":
                     _opciones_cal = _cal_pend.get("opciones", {})
-                    if msg.texto in _opciones_cal:
-                        _iso_sel = _opciones_cal[msg.texto]
+                    # Matching normalizado: strip + case-insensitive
+                    _texto_norm = msg.texto.strip()
+                    _iso_sel = _opciones_cal.get(_texto_norm)
+                    _titulo_sel_cal = _texto_norm
+                    if _iso_sel is None:
+                        for _k_cal, _v_cal in _opciones_cal.items():
+                            if _k_cal.strip().lower() == _texto_norm.lower():
+                                _iso_sel = _v_cal
+                                _titulo_sel_cal = _k_cal
+                                break
+                    if _iso_sel is not None:
                         _evt_titulo = _cal_pend.get("event_type_nombre", "Cita")
                         await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
                         await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
@@ -2131,12 +2140,12 @@ async def webhook_handler(request: Request):
                         _cal_pend.update({
                             "paso": "esperando_datos",
                             "seleccion": _iso_sel,
-                            "seleccion_titulo": msg.texto,
+                            "seleccion_titulo": _titulo_sel_cal,
                             "appointment_id": _appt_id,
                         })
                         await guardar_calendly_pendiente(msg.telefono, _cal_pend, _agent_id)
                         _pedir_datos = (
-                            f"Perfecto, reservé el horario *{msg.texto}* 🗓\n\n"
+                            f"Perfecto, reservé el horario *{_titulo_sel_cal}* 🗓\n\n"
                             "Para confirmar la cita necesito tu nombre completo y correo.\n"
                             "Puedes escribirlos así:\n"
                             "_Juan Pérez, juan@ejemplo.com_"
@@ -2145,14 +2154,19 @@ async def webhook_handler(request: Request):
                         await _guardar_con_wamid(_proveedor_agente, msg.telefono, _pedir_datos, agent_id=_agent_id)
                         continue
                     else:
-                        # Texto no coincide con ningún horario — LLM puede ayudar.
-                        # Incrementamos intentos y limpiamos el estado tras 3 fallos.
+                        # Texto no coincide — avisar sin invocar el LLM (evita bucle).
                         _cal_pend["intentos"] = _cal_pend.get("intentos", 0) + 1
                         if _cal_pend["intentos"] >= 3:
                             await limpiar_calendly_pendiente(msg.telefono, _agent_id)
+                            _msg_cal_err = "No pude identificar tu selección. Escribe *agendar* para ver los horarios de nuevo."
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_cal_err)
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_cal_err, agent_id=_agent_id)
                         else:
                             await guardar_calendly_pendiente(msg.telefono, _cal_pend, _agent_id)
-                        # No hacer continue — deja pasar al LLM
+                            _msg_cal_retry = "No reconocí esa opción 🤔 Toca *Ver horarios* y elige un horario de la lista."
+                            await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_cal_retry)
+                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_cal_retry, agent_id=_agent_id)
+                        continue  # nunca dejar pasar al LLM cuando hay estado Calendly activo
 
                 elif _paso_cal == "esperando_datos":
                     _email_match = re.search(r"[\w.+\-]+@[\w\-]+\.[a-z]{2,}", msg.texto, re.IGNORECASE)
@@ -2200,6 +2214,22 @@ async def webhook_handler(request: Request):
                             await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_conf)
                             await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_conf, agent_id=_agent_id)
                             logger.info(f"[calendly] Cita confirmada para {msg.telefono} — {_email_cal}")
+                            # Crear deal en Pipeline para visibilidad en el kanban
+                            try:
+                                from agent.memory import obtener_pipeline_activo, crear_deal
+                                _pipeline_cal = await obtener_pipeline_activo(_agent_id)
+                                if _pipeline_cal:
+                                    await crear_deal(
+                                        agent_id=_agent_id,
+                                        pipeline_id=_pipeline_cal["id"],
+                                        cliente_telefono=msg.telefono,
+                                        cliente_nombre=_nombre_cal,
+                                        titulo=f"📅 Cita: {_titulo_sel}",
+                                        stage="Calificado",
+                                        source="calendly",
+                                    )
+                            except Exception as _e_deal_cal:
+                                logger.warning(f"[calendly] No se pudo crear deal en pipeline: {_e_deal_cal}")
                         else:
                             await limpiar_calendly_pendiente(msg.telefono, _agent_id)
                             _err_cal = _resultado_cal.get("error", "Error inesperado")
@@ -2210,7 +2240,15 @@ async def webhook_handler(request: Request):
                             await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_err_cal)
                             await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_err_cal, agent_id=_agent_id)
                         continue
-                    # Sin email → deja pasar al LLM para que pida los datos de nuevo
+                    # Sin email → recordar al usuario sin invocar el LLM
+                    await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
+                    _recordatorio_cal = (
+                        "Para confirmar la cita necesito tu nombre y correo 📧\n"
+                        "Escríbelos así: _Juan Pérez, juan@ejemplo.com_"
+                    )
+                    await _proveedor_agente.enviar_mensaje(msg.telefono, _recordatorio_cal)
+                    await _guardar_con_wamid(_proveedor_agente, msg.telefono, _recordatorio_cal, agent_id=_agent_id)
+                    continue  # nunca dejar pasar al LLM cuando se esperan datos del invitado
 
             # ── Media entrante (imagen/video/documento/ubicación) ──────────────
             # Guardamos el marcador en historial para que el inbox lo renderice,
@@ -2755,6 +2793,7 @@ async def webhook_handler(request: Request):
             if _marker_ctx.mostrar_citas_pendiente:
                 try:
                     await _enviar_horarios_calendly(msg.telefono, agent_id=_agent_id)
+                    respuesta = ""  # la lista interactiva ya es la respuesta; evitar doble envío
                     logger.info(f"[CITA_DISPONIBILIDAD] horarios enviados a {msg.telefono}")
                 except Exception as e:
                     logger.error(f"Error enviando horarios Calendly a {msg.telefono}: {e}")
