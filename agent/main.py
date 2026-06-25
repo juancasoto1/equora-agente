@@ -2176,7 +2176,7 @@ async def webhook_handler(request: Request):
                         await guardar_calendly_pendiente(msg.telefono, _cal_pend, _agent_id)
                         _pedir_datos = (
                             f"Perfecto, reservé el horario *{_titulo_sel_cal}* 🗓\n\n"
-                            "Para confirmar la cita necesito tu nombre completo y correo.\n"
+                            "Para confirmar necesito tu nombre completo y correo electrónico.\n"
                             "Puedes escribirlos así:\n"
                             "_Juan Pérez, juan@ejemplo.com_"
                         )
@@ -2211,64 +2211,19 @@ async def webhook_handler(request: Request):
                             or (_cli_cal.get("nombres", "") if _cli_cal else "")
                             or "Cliente"
                         )
-                        _resultado_cal = await calendly_crear_cita(
-                            agent_id=_agent_id,
-                            event_type_uri=_cal_pend.get("event_type_uri", ""),
-                            start_time_iso=_cal_pend.get("seleccion", ""),
-                            invitee_email=_email_cal,
-                            invitee_nombre=_nombre_cal,
-                            location_kind=_cal_pend.get("location_kind"),
+                        _cal_pend.update({
+                            "paso": "esperando_asunto",
+                            "nombre_cal": _nombre_cal,
+                            "email_cal": _email_cal,
+                        })
+                        await guardar_calendly_pendiente(msg.telefono, _cal_pend, _agent_id)
+                        _pedir_asunto = (
+                            f"Gracias, {_nombre_cal} 👋\n\n"
+                            "¿Cuál es el asunto o motivo de la cita?\n"
+                            "_Ej: Consulta sobre productos de limpieza_"
                         )
-                        if _resultado_cal.get("ok"):
-                            _appt_id_cal = _cal_pend.get("appointment_id")
-                            if _appt_id_cal:
-                                await confirmar_appointment(
-                                    _appt_id_cal, _nombre_cal, _email_cal,
-                                    _resultado_cal.get("uri", ""),
-                                    _resultado_cal.get("cancel_url", ""),
-                                    _resultado_cal.get("reschedule_url", ""),
-                                )
-                            await limpiar_calendly_pendiente(msg.telefono, _agent_id)
-                            _titulo_sel = _cal_pend.get("seleccion_titulo", "Cita agendada")
-                            _msg_conf = (
-                                f"✅ ¡Tu cita está confirmada!\n\n"
-                                f"📅 *{_titulo_sel}*\n"
-                                f"👤 {_nombre_cal}\n"
-                                f"📧 {_email_cal}\n\n"
-                                "Recibirás un correo de confirmación de Calendly con todos los detalles."
-                            )
-                            if _resultado_cal.get("reschedule_url"):
-                                _msg_conf += f"\n\n🔄 Reagendar: {_resultado_cal['reschedule_url']}"
-                            if _resultado_cal.get("cancel_url"):
-                                _msg_conf += f"\n❌ Cancelar: {_resultado_cal['cancel_url']}"
-                            await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_conf)
-                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_conf, agent_id=_agent_id)
-                            logger.info(f"[calendly] Cita confirmada para {msg.telefono} — {_email_cal}")
-                            # Crear deal en Pipeline para visibilidad en el kanban
-                            try:
-                                from agent.memory import obtener_pipeline_activo, crear_deal
-                                _pipeline_cal = await obtener_pipeline_activo(_agent_id)
-                                if _pipeline_cal:
-                                    await crear_deal(
-                                        agent_id=_agent_id,
-                                        pipeline_id=_pipeline_cal["id"],
-                                        cliente_telefono=msg.telefono,
-                                        cliente_nombre=_nombre_cal,
-                                        titulo=f"📅 Cita: {_titulo_sel}",
-                                        stage="Calificado",
-                                        source="calendly",
-                                    )
-                            except Exception as _e_deal_cal:
-                                logger.warning(f"[calendly] No se pudo crear deal en pipeline: {_e_deal_cal}")
-                        else:
-                            await limpiar_calendly_pendiente(msg.telefono, _agent_id)
-                            _err_cal = _resultado_cal.get("error", "Error inesperado")
-                            _msg_err_cal = (
-                                f"Lo siento, no pude confirmar la cita: {_err_cal} 😔\n\n"
-                                "Escribe *agendar* para ver otros horarios disponibles."
-                            )
-                            await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_err_cal)
-                            await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_err_cal, agent_id=_agent_id)
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, _pedir_asunto)
+                        await _guardar_con_wamid(_proveedor_agente, msg.telefono, _pedir_asunto, agent_id=_agent_id)
                         continue
                     # Sin email → recordar al usuario sin invocar el LLM
                     await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
@@ -2279,6 +2234,72 @@ async def webhook_handler(request: Request):
                     await _proveedor_agente.enviar_mensaje(msg.telefono, _recordatorio_cal)
                     await _guardar_con_wamid(_proveedor_agente, msg.telefono, _recordatorio_cal, agent_id=_agent_id)
                     continue  # nunca dejar pasar al LLM cuando se esperan datos del invitado
+
+                elif _paso_cal == "esperando_asunto":
+                    await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
+                    await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
+                    _asunto_cal = msg.texto.strip() or "Sin asunto"
+                    _nombre_cal = _cal_pend.get("nombre_cal", "Cliente")
+                    _email_cal  = _cal_pend.get("email_cal", "")
+                    _resultado_cal = await calendly_crear_cita(
+                        agent_id=_agent_id,
+                        event_type_uri=_cal_pend.get("event_type_uri", ""),
+                        start_time_iso=_cal_pend.get("seleccion", ""),
+                        invitee_email=_email_cal,
+                        invitee_nombre=_nombre_cal,
+                        location_kind=_cal_pend.get("location_kind"),
+                    )
+                    if _resultado_cal.get("ok"):
+                        _appt_id_cal = _cal_pend.get("appointment_id")
+                        if _appt_id_cal:
+                            await confirmar_appointment(
+                                _appt_id_cal, _nombre_cal, _email_cal,
+                                _resultado_cal.get("uri", ""),
+                                _resultado_cal.get("cancel_url", ""),
+                                _resultado_cal.get("reschedule_url", ""),
+                            )
+                        await limpiar_calendly_pendiente(msg.telefono, _agent_id)
+                        _titulo_sel = _cal_pend.get("seleccion_titulo", "Cita agendada")
+                        _msg_conf = (
+                            f"✅ ¡Tu cita está confirmada!\n\n"
+                            f"📅 *{_titulo_sel}*\n"
+                            f"👤 {_nombre_cal}\n"
+                            f"📧 {_email_cal}\n"
+                            f"📝 {_asunto_cal}\n\n"
+                            "Recibirás un correo de confirmación de Calendly con todos los detalles."
+                        )
+                        if _resultado_cal.get("reschedule_url"):
+                            _msg_conf += f"\n\n🔄 Reagendar: {_resultado_cal['reschedule_url']}"
+                        if _resultado_cal.get("cancel_url"):
+                            _msg_conf += f"\n❌ Cancelar: {_resultado_cal['cancel_url']}"
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_conf)
+                        await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_conf, agent_id=_agent_id)
+                        logger.info(f"[calendly] Cita confirmada para {msg.telefono} — {_email_cal} — asunto: {_asunto_cal}")
+                        try:
+                            from agent.memory import obtener_pipeline_activo, crear_deal
+                            _pipeline_cal = await obtener_pipeline_activo(_agent_id)
+                            if _pipeline_cal:
+                                await crear_deal(
+                                    agent_id=_agent_id,
+                                    pipeline_id=_pipeline_cal["id"],
+                                    cliente_telefono=msg.telefono,
+                                    cliente_nombre=_nombre_cal,
+                                    titulo=f"📅 {_titulo_sel} — {_asunto_cal}",
+                                    stage="Calificado",
+                                    source="calendly",
+                                )
+                        except Exception as _e_deal_cal:
+                            logger.warning(f"[calendly] No se pudo crear deal en pipeline: {_e_deal_cal}")
+                    else:
+                        await limpiar_calendly_pendiente(msg.telefono, _agent_id)
+                        _err_cal = _resultado_cal.get("error", "Error inesperado")
+                        _msg_err_cal = (
+                            f"Lo siento, no pude confirmar la cita: {_err_cal} 😔\n\n"
+                            "Escribe *agendar* para ver otros horarios disponibles."
+                        )
+                        await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_err_cal)
+                        await _guardar_con_wamid(_proveedor_agente, msg.telefono, _msg_err_cal, agent_id=_agent_id)
+                    continue
 
             # ── Media entrante (imagen/video/documento/ubicación) ──────────────
             # Guardamos el marcador en historial para que el inbox lo renderice,
