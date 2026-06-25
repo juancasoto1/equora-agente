@@ -1672,6 +1672,128 @@ html.dark .chat-msg.assistant{box-shadow:none}
 .chat-send-btn:disabled{opacity:.5;cursor:not-allowed}
 /* ── loading spinner ── */
 .loading-txt{color:var(--voco-text-muted);font-size:.85rem;padding:32px;text-align:center}
+
+/* ── Sandbox phone mockup ── */
+.sandbox-phone{perspective:1200px}
+.sandbox-phone-frame{
+  width:320px;border-radius:42px;
+  background:linear-gradient(145deg,#1a1a1a,#2d2d2d);
+  box-shadow:0 0 0 1px #444,0 0 0 2px #222,
+    0 25px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);
+  overflow:hidden;position:relative;
+  border:8px solid #1a1a1a;
+}
+.sandbox-phone-notch{
+  background:#0a0a0a;height:32px;display:flex;
+  align-items:center;justify-content:space-between;
+  padding:0 18px;position:relative;
+}
+.sandbox-notch-notch{
+  position:absolute;left:50%;transform:translateX(-50%);
+  width:100px;height:24px;background:#0a0a0a;
+  border-radius:0 0 16px 16px;top:0;
+  box-shadow:inset 0 -2px 4px rgba(0,0,0,.5);
+}
+.sandbox-notch-time{font-size:.72rem;font-weight:700;color:#fff;letter-spacing:.02em;z-index:1}
+.sandbox-notch-icons{display:flex;gap:5px;align-items:center;color:#fff;z-index:1}
+.sandbox-wa-header{
+  background:#075e54;display:flex;align-items:center;
+  padding:8px 12px;gap:9px;
+  box-shadow:0 1px 3px rgba(0,0,0,.2);
+}
+.sandbox-wa-avatar{
+  width:34px;height:34px;border-radius:50%;
+  background:#128c7e;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.sandbox-wa-name{color:#fff;font-size:.82rem;font-weight:600;line-height:1.2}
+.sandbox-wa-status{color:rgba(255,255,255,.75);font-size:.68rem;display:flex;align-items:center;gap:4px;margin-top:1px}
+.sandbox-status-dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0}
+.sandbox-chat-bg{
+  flex:1;background:#e5ddd5;position:relative;
+  display:flex;flex-direction:column;overflow:hidden;
+  height:460px;
+}
+html.dark .sandbox-chat-bg{background:#0d1418}
+.sandbox-chat-pattern{
+  position:absolute;inset:0;opacity:.06;
+  background-image:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M30 0C13.4 0 0 13.4 0 30s13.4 30 30 30 30-13.4 30-30S46.6 0 30 0zm0 4c14.4 0 26 11.6 26 26S44.4 56 30 56 4 44.4 4 30 15.6 4 30 4z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;
+}
+.sandbox-date-pill{
+  text-align:center;font-size:.64rem;font-weight:600;
+  color:#667781;background:rgba(255,255,255,.7);
+  border-radius:8px;padding:3px 10px;margin:10px auto 4px;
+  display:inline-block;position:relative;z-index:1;align-self:center;
+  letter-spacing:.04em;
+}
+html.dark .sandbox-date-pill{background:rgba(255,255,255,.08);color:#8696a0}
+/* override chat-messages para el phone */
+#cfg-pane-probar .chat-messages{
+  flex:1;overflow-y:auto;display:flex;flex-direction:column;
+  gap:4px;background:transparent;
+  padding:4px 10px 10px;
+  scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.15) transparent;
+}
+#cfg-pane-probar .chat-msg.user{
+  background:#dcf8c6;color:#111;
+  border-radius:12px 12px 2px 12px;
+  align-self:flex-end;
+  box-shadow:0 1px 0.5px rgba(11,20,26,.13);
+}
+html.dark #cfg-pane-probar .chat-msg.user{background:#005c4b;color:#e9edef}
+#cfg-pane-probar .chat-msg.assistant{
+  background:#fff;color:#111;
+  border-radius:12px 12px 12px 2px;
+  align-self:flex-start;
+  box-shadow:0 1px 0.5px rgba(11,20,26,.13);
+}
+html.dark #cfg-pane-probar .chat-msg.assistant{background:#202c33;color:#e9edef}
+#cfg-pane-probar .chat-msg{font-size:.81rem;padding:6px 10px 4px;max-width:82%}
+#cfg-pane-probar .chat-msg-time{font-size:.62rem;color:#667781;margin-top:2px;text-align:right}
+html.dark #cfg-pane-probar .chat-msg-time{color:#8696a0}
+#cfg-pane-probar .chat-typing{
+  background:#fff;align-self:flex-start;
+  border-radius:12px 12px 12px 2px;
+  padding:8px 12px;
+  box-shadow:0 1px 0.5px rgba(11,20,26,.13);
+}
+html.dark #cfg-pane-probar .chat-typing{background:#202c33}
+.sandbox-input-bar{
+  background:#f0f2f5;display:flex;align-items:center;
+  padding:8px 10px;gap:8px;
+  border-top:1px solid rgba(0,0,0,.08);
+}
+html.dark .sandbox-input-bar{background:#1f2c34;border-top-color:rgba(255,255,255,.06)}
+.sandbox-input-wrap{
+  flex:1;background:#fff;border-radius:24px;
+  display:flex;align-items:center;padding:5px 12px;gap:8px;
+  min-height:38px;
+}
+html.dark .sandbox-input-wrap{background:#2a3942}
+.sandbox-emoji-btn{flex-shrink:0;cursor:pointer;opacity:.7}
+.sandbox-inp{
+  flex:1;border:none;outline:none;font-size:.82rem;
+  background:transparent;color:#111;resize:none;
+  max-height:80px;line-height:1.4;font-family:inherit;
+}
+html.dark .sandbox-inp{color:#e9edef}
+.sandbox-inp::placeholder{color:#8696a0}
+.sandbox-send-btn{
+  width:40px;height:40px;border-radius:50%;background:#075e54;
+  border:none;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0;transition:.18s;
+}
+.sandbox-send-btn:hover{background:#128c7e}
+.sandbox-send-btn:disabled{opacity:.5;cursor:not-allowed}
+.sandbox-home-bar{
+  background:#0a0a0a;height:20px;display:flex;
+  align-items:center;justify-content:center;
+}
+.sandbox-home-bar::after{
+  content:'';width:90px;height:4px;background:rgba(255,255,255,.25);
+  border-radius:2px;
+}
 /* ── Skeleton loaders (Voco design system) ───────────────────── */
 @keyframes voco-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 .skel{display:inline-block;background:linear-gradient(90deg,
@@ -4401,38 +4523,92 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <!-- ── Pane: Probar (Fase C) ── -->
           <div class="cfg-pane" id="cfg-pane-probar">
 
-            <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:.85rem;color:var(--voco-text);line-height:1.6;display:flex;align-items:flex-start;gap:8px">
-              <i data-lucide="flask-conical" style="width:18px;height:18px;color:#059669;flex-shrink:0;margin-top:1px"></i>
-              <div><b>Chat de prueba</b> — Habla con el agente usando las instrucciones del prompt actual.
-              No envía mensajes reales por WhatsApp. El historial de prueba es independiente de las conversaciones reales.</div>
+            <!-- Banner info -->
+            <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:.83rem;color:var(--voco-text);line-height:1.5;display:flex;align-items:flex-start;gap:8px">
+              <i data-lucide="flask-conical" style="width:16px;height:16px;color:#059669;flex-shrink:0;margin-top:2px"></i>
+              <div><b>Sandbox de prueba</b> — Simula una conversación de WhatsApp sin enviar mensajes reales. El historial es independiente de las conversaciones activas.</div>
             </div>
 
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-              <div style="font-size:.85rem;color:var(--voco-text-muted)">
-                Escribe un mensaje como si fueras un cliente para probar cómo responde el agente.
+            <!-- Controles -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+              <div style="font-size:.83rem;color:var(--voco-text-muted)">
+                <i data-lucide="smartphone" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px"></i>
+                Escribe como si fueras el cliente
               </div>
-              <button class="btn-secondary" style="font-size:.78rem;padding:6px 14px;white-space:nowrap" onclick="limpiarChatTest()" type="button">🗑 Limpiar chat</button>
+              <button class="btn-secondary" style="font-size:.77rem;padding:5px 13px;white-space:nowrap;display:flex;align-items:center;gap:5px" onclick="limpiarChatTest()" type="button">
+                <i data-lucide="trash-2" style="width:13px;height:13px"></i> Limpiar
+              </button>
             </div>
 
-            <!-- Ventana de chat estilo WhatsApp -->
-            <div class="chat-wrap">
-              <div class="chat-messages" id="chat-messages">
-                <div style="text-align:center;font-size:.76rem;color:var(--voco-text-muted);padding:8px 0">
-                  Inicio de la conversación de prueba
-                </div>
-              </div>
-              <div class="chat-input-bar">
-                <textarea class="chat-inp" id="chat-inp" rows="1"
-                  placeholder="Escribe tu mensaje…"
-                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMsgTest()}"
-                  oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
-                <button class="chat-send-btn" id="chat-send-btn" onclick="enviarMsgTest()" title="Enviar">
-                  ➤
-                </button>
-              </div>
+            <!-- Teléfono mockup centrado -->
+            <div style="display:flex;justify-content:center">
+              <div class="sandbox-phone">
+
+                <!-- Marco del teléfono -->
+                <div class="sandbox-phone-frame">
+
+                  <!-- Notch / barra superior del teléfono -->
+                  <div class="sandbox-phone-notch">
+                    <span class="sandbox-notch-time" id="sandbox-clock">9:41</span>
+                    <div class="sandbox-notch-notch"></div>
+                    <div class="sandbox-notch-icons">
+                      <svg width="14" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M1.5 8.5C5.4 4.6 10.4 2.5 12 2.5s6.6 2.1 10.5 6l-1.4 1.4C17.7 6.4 13.7 4.5 12 4.5S6.3 6.4 2.9 9.9L1.5 8.5z"/><path d="M4.3 11.3C7.2 8.4 9.7 7 12 7s4.8 1.4 7.7 4.3l-1.4 1.4C16 10.3 14 9 12 9s-4 1.3-6.3 3.7l-1.4-1.4z"/><path d="M7.1 14.1C9 12.2 10.5 11.5 12 11.5s3 .7 4.9 2.6l-1.4 1.4c-1.5-1.5-2.5-2-3.5-2s-2 .5-3.5 2l-1.4-1.4z"/><circle cx="12" cy="19" r="1.5"/></svg>
+                      <svg width="14" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="16" height="11" rx="2"/><path d="M22 11v3"/></svg>
+                    </div>
+                  </div>
+
+                  <!-- Header WhatsApp -->
+                  <div class="sandbox-wa-header">
+                    <div class="sandbox-wa-avatar">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <div style="flex:1;min-width:0">
+                      <div id="sandbox-agent-name" class="sandbox-wa-name">Agente</div>
+                      <div class="sandbox-wa-status">
+                        <span class="sandbox-status-dot"></span>en línea
+                      </div>
+                    </div>
+                    <div style="display:flex;gap:14px;color:#fff;opacity:.9">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.6 2.18h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 9.91a16 16 0 0 0 6.18 6.18l.91-.91a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.02z"/></svg>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                    </div>
+                  </div>
+
+                  <!-- Área de mensajes -->
+                  <div class="sandbox-chat-bg">
+                    <!-- Patrón de fondo estilo WhatsApp -->
+                    <div class="sandbox-chat-pattern"></div>
+
+                    <!-- Fecha -->
+                    <div class="sandbox-date-pill">HOY</div>
+
+                    <!-- Mensajes (mismo id que antes — el JS no cambia) -->
+                    <div class="chat-messages" id="chat-messages" style="position:relative;z-index:1;background:transparent;padding:8px 10px;gap:6px">
+                    </div>
+                  </div>
+
+                  <!-- Barra de input -->
+                  <div class="sandbox-input-bar">
+                    <div class="sandbox-input-wrap">
+                      <svg class="sandbox-emoji-btn" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8696a0" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                      <textarea class="chat-inp sandbox-inp" id="chat-inp" rows="1"
+                        placeholder="Escribe un mensaje"
+                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarMsgTest()}"
+                        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'"></textarea>
+                    </div>
+                    <button class="sandbox-send-btn chat-send-btn" id="chat-send-btn" onclick="enviarMsgTest()" title="Enviar">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                  </div>
+
+                  <!-- Barra home del teléfono -->
+                  <div class="sandbox-home-bar"></div>
+
+                </div><!-- /frame -->
+              </div><!-- /phone -->
             </div>
 
-            <div id="chat-test-error" style="display:none;margin-top:10px"></div>
+            <div id="chat-test-error" style="display:none;margin-top:16px;text-align:center;font-size:.82rem;color:#ef4444"></div>
 
           </div><!-- /pane probar -->
 
@@ -9455,11 +9631,34 @@ function cerrarDiff() {
    ══════════════════════════════════════════════════════ */
 
 var _chatTestIniciado = false;
+var _sandboxClockInterval = null;
+
+function _sandboxActualizarReloj() {
+  var el = document.getElementById('sandbox-clock');
+  if (!el) return;
+  var now = new Date();
+  el.textContent = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+}
 
 /* ── iniciarChatTest: llamado al abrir la pestaña Probar ── */
 async function iniciarChatTest() {
   if (_chatTestIniciado) return;
   _chatTestIniciado = true;
+
+  // Reloj en tiempo real
+  _sandboxActualizarReloj();
+  if (!_sandboxClockInterval) _sandboxClockInterval = setInterval(_sandboxActualizarReloj, 15000);
+
+  // Nombre del agente en el header del teléfono
+  var nameEl = document.getElementById('sandbox-agent-name');
+  if (nameEl) {
+    try {
+      var r = await fetch('/inbox/api/config?agent_id=' + (window._agentId||1), {credentials:'include'});
+      var d = await r.json();
+      if (d && d.nombre) nameEl.textContent = d.nombre;
+    } catch(e) {}
+  }
+
   await _cargarHistorialChat();
 }
 
@@ -9470,8 +9669,8 @@ async function _cargarHistorialChat() {
     var msgs = d.mensajes || [];
     var box = document.getElementById('chat-messages');
     if (!box) return;
-    // Limpiar (excepto el primer div de "Inicio")
-    while (box.children.length > 1) box.removeChild(box.lastChild);
+    // Limpiar todo
+    box.innerHTML = '';
     msgs.forEach(function(m) {
       _appendMsg(m.role, m.content, m.timestamp);
     });
