@@ -73,6 +73,7 @@ from agent.memory import (
     # Pipeline Fase 2 — flujo conversacional Calendly
     obtener_calendly_pendiente, guardar_calendly_pendiente, limpiar_calendly_pendiente,
     crear_appointment_pendiente, confirmar_appointment,
+    tiene_appointment_confirmado,
 )
 from agent.calendly import (
     obtener_usuario as calendly_usuario,
@@ -879,6 +880,12 @@ async def _procesar_followups():
             continue
         try:
             aid = await _resolver_agent_id_principal(telefono)
+            # Si hay cita confirmada reciente, Calendly ya notificó al cliente —
+            # no insistir con follow-up de ventas encima.
+            if await tiene_appointment_confirmado(telefono, aid):
+                logger.info(f"[followup] {telefono} tiene cita confirmada — saltando follow-up")
+                await marcar_cierre_enviado(telefono)
+                continue
             # Heurística defensiva: si la conversación cerró natural
             # (gracias / despedida) NO insistir con follow-up. Marcamos
             # como cerrado para que el timer no vuelva a evaluarlo.
@@ -910,6 +917,11 @@ async def _procesar_cierres():
             continue
         try:
             aid = await _resolver_agent_id_principal(telefono)
+            # Si hay cita confirmada reciente, no enviar cierre de ventas
+            if await tiene_appointment_confirmado(telefono, aid):
+                logger.info(f"[cierre] {telefono} tiene cita confirmada — saltando cierre")
+                await marcar_cierre_enviado(telefono)
+                continue
             texto = await obtener_mensaje(aid, "system.cierre")
             if not texto:
                 logger.info(f"[cierre] {telefono} mensaje desactivado para agent={aid} — saltando")

@@ -373,11 +373,18 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
                     "específica disponible, eso lo hace el sistema después de tu mensaje.\n"
                     "No uses este marcador si el cliente solo pregunta algo general sobre "
                     "el negocio sin intención de agendar.\n"
-                    "CRÍTICO: NUNCA confirmes que una cita fue agendada, ni digas frases "
-                    "como 'tu cita está confirmada' o 'quedó agendado para el jueves'. "
-                    "La confirmación la genera el sistema automáticamente cuando el cliente "
-                    "completa el flujo de agendamiento. Si ves en el historial que el "
-                    "cliente eligió un horario, sigue el flujo normal — no lo des por hecho."
+                    "CRÍTICO — REGLAS ABSOLUTAS SOBRE CITAS (nunca las ignores):\n"
+                    "1. NUNCA generes un mensaje de confirmación, reagendamiento o "
+                    "actualización de cita. Esto incluye cualquier variante de '¡Cita "
+                    "confirmada!', '¡Cita reagendada!', '¡Cita actualizada!', 'quedó "
+                    "agendado', 'reprogramamos para', etc. El sistema genera esos mensajes "
+                    "automáticamente — si tú los repites, el cliente recibe duplicados.\n"
+                    "2. NUNCA uses el formato ✅ + 📅 + 👤 + 📧 para listar detalles de "
+                    "una cita. Ese formato lo produce el sistema, no tú.\n"
+                    "3. Si en el historial aparece un mensaje '✅ ¡Tu cita está confirmada!' "
+                    "o similar, la cita YA quedó agendada. Solo responde normalmente a lo "
+                    "que el cliente pregunte, sin volver a mencionar los detalles de la cita "
+                    "a menos que el cliente lo pida explícitamente."
                 )
                 system_prompt += "\n".join(bloque_cal)
 

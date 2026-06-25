@@ -4533,6 +4533,22 @@ async def cancelar_appointment(appointment_id: int) -> bool:
         return True
 
 
+async def tiene_appointment_confirmado(telefono: str, agent_id: int, horas: int = 48) -> bool:
+    """True si existe una cita confirmada (no cancelada) para este teléfono en las últimas N horas.
+    Se usa para suprimir follow-ups automáticos cuando Calendly ya envió la confirmación."""
+    desde = datetime.utcnow() - timedelta(hours=horas)
+    async with async_session() as session:
+        result = await session.execute(
+            select(Appointment).where(
+                Appointment.agent_id == agent_id,
+                Appointment.cliente_telefono == telefono,
+                Appointment.estado.in_(["confirmada", "pendiente"]),
+                Appointment.created_at >= desde,
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+
 async def listar_appointments(agent_id: int = 1, cliente_telefono: str | None = None) -> list[dict]:
     async with async_session() as session:
         query = select(Appointment).where(Appointment.agent_id == agent_id)
