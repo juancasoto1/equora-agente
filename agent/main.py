@@ -1259,12 +1259,17 @@ async def _enviar_horarios_calendly(telefono: str, agent_id: int = 1) -> None:
         descripcion = (" · ".join(desc_parts))[:72]
 
         if titulo not in opciones:
+            _slot_id = f"slot_{len(filas)}"
             opciones[titulo] = iso
-            filas.append({"id": f"slot_{len(filas)}", "titulo": titulo, "descripcion": descripcion})
+            filas.append({"id": _slot_id, "titulo": titulo, "descripcion": descripcion})
 
     if not filas:
         await _fallback("No pude preparar la lista de horarios. Por favor intenta más tarde.")
         return
+
+    # id_map: slot_id → ISO (match por ID, más robusto que match por título)
+    id_map = {f["id"]: opciones[f["titulo"]] for f in filas}
+    titulos_map = {f["id"]: f["titulo"] for f in filas}
 
     # 5) Guardar estado en BD para la intercepción del webhook
     await guardar_calendly_pendiente(telefono, {
@@ -1273,6 +1278,8 @@ async def _enviar_horarios_calendly(telefono: str, agent_id: int = 1) -> None:
         "event_type_nombre": event_type_nombre,
         "location_kind": location_kind,
         "opciones": opciones,
+        "id_map": id_map,
+        "titulos_map": titulos_map,
         "seleccion": None,
         "seleccion_titulo": None,
         "appointment_id": None,
@@ -2120,17 +2127,38 @@ async def webhook_handler(request: Request):
                 _paso_cal = _cal_pend.get("paso")
 
                 if _paso_cal == "esperando_seleccion":
-                    _opciones_cal = _cal_pend.get("opciones", {})
-                    # Matching normalizado: strip + case-insensitive
-                    _texto_norm = msg.texto.strip()
-                    _iso_sel = _opciones_cal.get(_texto_norm)
+                    _opciones_cal  = _cal_pend.get("opciones", {})
+                    _id_map_cal    = _cal_pend.get("id_map", {})
+                    _titulos_map   = _cal_pend.get("titulos_map", {})
+                    _texto_norm    = msg.texto.strip()
+                    _iso_sel       = None
                     _titulo_sel_cal = _texto_norm
-                    if _iso_sel is None:
+
+                    # 1) Match por lista_id (más fiable — evita problemas de encoding del título)
+                    if msg.lista_id and msg.lista_id in _id_map_cal:
+                        _iso_sel = _id_map_cal[msg.lista_id]
+                        _titulo_sel_cal = _titulos_map.get(msg.lista_id, _texto_norm)
+                        logger.info(f"[calendly] match por id '{msg.lista_id}' → {_iso_sel}")
+                    # 2) Match por title exacto
+                    elif _texto_norm in _opciones_cal:
+                        _iso_sel = _opciones_cal[_texto_norm]
+                        logger.info(f"[calendly] match por título exacto '{_texto_norm}'")
+                    # 3) Match case-insensitive
+                    else:
                         for _k_cal, _v_cal in _opciones_cal.items():
                             if _k_cal.strip().lower() == _texto_norm.lower():
                                 _iso_sel = _v_cal
                                 _titulo_sel_cal = _k_cal
+                                logger.info(f"[calendly] match case-insensitive '{_k_cal}'")
                                 break
+
+                    if _iso_sel is None:
+                        logger.warning(
+                            f"[calendly] NO match: lista_id='{msg.lista_id}' "
+                            f"texto='{_texto_norm}' "
+                            f"opciones_keys={list(_opciones_cal.keys())[:4]} "
+                            f"id_map_keys={list(_id_map_cal.keys())[:4]}"
+                        )
                     if _iso_sel is not None:
                         _evt_titulo = _cal_pend.get("event_type_nombre", "Cita")
                         await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
@@ -2807,7 +2835,8 @@ async def webhook_handler(request: Request):
             # tiene dependencias de orden, fallbacks y estado local
             # (_proveedor_agente, _agent_id) que no conviene mover sin un
             # refactor mayor del bloque de envío.
-            respuesta              = _marker_ctx.respuesta
+            # NOTA: NO reasignar respuesta aquí — puede haber sido limpiada
+            # intencionalmente (e.g. respuesta="" cuando se envió la lista de Calendly).
             datos_catalogo_cat     = _marker_ctx.datos_catalogo_cat
             datos_botones          = _marker_ctx.datos_botones
             datos_lista            = _marker_ctx.datos_lista

@@ -10,6 +10,7 @@ class MensajeEntrante:
     texto: str
     mensaje_id: str
     es_propio: bool
+    lista_id: str = ""  # list_reply.id cuando el mensaje es una selección de lista interactiva
 
 
 class ProveedorWhatsApp(ABC):

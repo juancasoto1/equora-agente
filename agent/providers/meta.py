@@ -101,9 +101,12 @@ class ProveedorMeta(ProveedorWhatsApp):
                             else:
                                 texto = btn_title
                         elif tipo_interactivo == "list_reply":
-                            texto = interactivo.get("list_reply", {}).get("title", "")
+                            _lr = interactivo.get("list_reply", {})
+                            texto = _lr.get("title", "")
+                            _lr_id = _lr.get("id", "")
                         else:
                             texto = ""
+                            _lr_id = ""
 
                         if texto:
                             mensajes.append(MensajeEntrante(
@@ -111,6 +114,7 @@ class ProveedorMeta(ProveedorWhatsApp):
                                 texto=texto,
                                 mensaje_id=msg_id,
                                 es_propio=False,
+                                lista_id=_lr_id if tipo_interactivo == "list_reply" else "",
                             ))
 
                     elif tipo == "audio":
