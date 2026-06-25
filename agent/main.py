@@ -2163,14 +2163,15 @@ async def webhook_handler(request: Request):
                         _evt_titulo = _cal_pend.get("event_type_nombre", "Cita")
                         await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
                         await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
+                        _fecha_inicio_dt = datetime.fromisoformat(_iso_sel.replace("Z", "+00:00")).replace(tzinfo=None)
                         _appt_id = await crear_appointment_pendiente(
-                            _agent_id, msg.telefono, _iso_sel, _evt_titulo
+                            _agent_id, msg.telefono, _fecha_inicio_dt, _evt_titulo
                         )
                         _cal_pend.update({
                             "paso": "esperando_datos",
                             "seleccion": _iso_sel,
                             "seleccion_titulo": _titulo_sel_cal,
-                            "appointment_id": _appt_id,
+                            "appointment_id": _appt_id["id"] if isinstance(_appt_id, dict) else _appt_id,
                         })
                         await guardar_calendly_pendiente(msg.telefono, _cal_pend, _agent_id)
                         _pedir_datos = (
