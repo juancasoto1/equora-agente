@@ -4622,37 +4622,56 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </div>
               </div>
 
-              <!-- sandbox activo → QR + instrucciones -->
+              <!-- sandbox activo → enviar mensaje de inicio + QR -->
               <div id="sandbox-wa-active" style="display:none" class="sandbox-wa-real-card">
-                <div class="sandbox-wa-real-qr">
-                  <canvas id="sandbox-qr-canvas"></canvas>
-                </div>
+
+                <!-- Columna izquierda: acción principal -->
                 <div style="flex:1;min-width:0">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
                     <span class="sandbox-wa-badge-active">
                       <span style="width:6px;height:6px;background:#16a34a;border-radius:50%;display:inline-block"></span>
                       Activo
                     </span>
                     <span style="font-weight:600;font-size:.9rem;color:var(--voco-text)">Sandbox WhatsApp</span>
-                    <button onclick="resetearSandboxWA()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--voco-text-muted);padding:2px 4px" title="Cambiar número">
+                    <button onclick="resetearSandboxWA()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--voco-text-muted);padding:2px 6px" title="Cambiar número">
                       <i data-lucide="settings-2" style="width:14px;height:14px"></i>
                     </button>
                   </div>
-                  <p style="margin:0 0 6px;font-size:.81rem;color:var(--voco-text-muted)">Escanea el QR desde tu celular o toca el número:</p>
-                  <div class="sandbox-phone-chip" onclick="copiarNumeroSandbox(this)">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.138.563 4.144 1.545 5.878L0 24l6.32-1.51A11.93 11.93 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.787 9.787 0 0 1-5.16-1.47l-.368-.22-3.754.896.942-3.656-.24-.376A9.783 9.783 0 0 1 2.182 12c0-5.423 4.395-9.818 9.818-9.818 5.423 0 9.818 4.395 9.818 9.818 0 5.423-4.395 9.818-9.818 9.818z"/></svg>
-                    <span id="sandbox-phone-number-text">+1 555 659 2271</span>
-                    <i data-lucide="copy" style="width:11px;height:11px;opacity:.45"></i>
+
+                  <!-- Input + botón para enviar invitación -->
+                  <label style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:6px">
+                    Tu número de WhatsApp para probar
+                  </label>
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    <input id="sandbox-invite-phone" class="sandbox-wa-input"
+                      type="tel" placeholder="+57 316 538 4484"
+                      style="max-width:210px"
+                      onkeydown="if(event.key==='Enter') enviarInvitacionSandbox()">
+                    <button id="sandbox-invite-btn" class="sandbox-wa-open-btn" onclick="enviarInvitacionSandbox()" style="white-space:nowrap">
+                      <i data-lucide="send" style="width:14px;height:14px"></i> Enviar mensaje
+                    </button>
                   </div>
-                  <a id="sandbox-wa-link" href="#" target="_blank" rel="noopener" class="sandbox-wa-open-btn" style="display:inline-flex;margin-top:8px">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.138.563 4.144 1.545 5.878L0 24l6.32-1.51A11.93 11.93 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.787 9.787 0 0 1-5.16-1.47l-.368-.22-3.754.896.942-3.656-.24-.376A9.783 9.783 0 0 1 2.182 12c0-5.423 4.395-9.818 9.818-9.818 5.423 0 9.818 4.395 9.818 9.818 0 5.423-4.395 9.818-9.818 9.818z"/></svg>
-                    Abrir WhatsApp
-                  </a>
-                  <p style="margin:10px 0 0;font-size:.73rem;color:var(--voco-text-muted);line-height:1.6">
-                    Agrega hasta <b>5 contactos de prueba</b> en Meta Developer Console → WhatsApp → API Setup → <em>Para</em>.<br>
-                    Sin costo dentro del cupo gratuito mensual de Meta. Sin fecha de vencimiento.
+                  <div id="sandbox-invite-result" style="display:none;margin-top:8px;font-size:.8rem;padding:6px 10px;border-radius:7px"></div>
+                  <p style="margin:10px 0 0;font-size:.73rem;color:var(--voco-text-muted)">
+                    Recibirás un mensaje de WhatsApp desde el número de prueba. Respóndelo y el agente contestará.
                   </p>
                 </div>
+
+                <!-- Columna derecha: QR + número -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0">
+                  <div class="sandbox-wa-real-qr">
+                    <img id="sandbox-qr-img" src="" alt="QR WhatsApp" style="width:136px;height:136px;display:block">
+                  </div>
+                  <div class="sandbox-phone-chip" onclick="copiarNumeroSandbox(this)" style="margin:0;font-size:.78rem">
+                    <span id="sandbox-phone-number-text">+1 555 659 2271</span>
+                    <i data-lucide="copy" style="width:10px;height:10px;opacity:.45"></i>
+                  </div>
+                  <a id="sandbox-wa-link" href="#" target="_blank" rel="noopener"
+                    style="font-size:.75rem;color:#25d366;text-decoration:none;display:flex;align-items:center;gap:4px">
+                    <i data-lucide="external-link" style="width:11px;height:11px"></i> Abrir WhatsApp
+                  </a>
+                </div>
+
               </div>
 
             </div><!-- /sandbox-wa-real-wrap -->
@@ -9790,9 +9809,8 @@ function _renderSandboxWAUI(d) {
     document.getElementById('sandbox-phone-number-text').textContent = d.phone_number;
     document.getElementById('sandbox-wa-link').href = waLink;
     if (typeof QRCode !== 'undefined') {
-      var canvas = document.getElementById('sandbox-qr-canvas');
-      QRCode.toCanvas(canvas, waLink, {width:140,margin:1,color:{dark:'#111827',light:'#ffffff'}}, function(err){
-        if (err) console.warn('QR error:', err);
+      QRCode.toDataURL(waLink, {width:136,margin:1,color:{dark:'#111827',light:'#ffffff'}}, function(err, url){
+        if (!err) document.getElementById('sandbox-qr-img').src = url;
       });
     }
     document.getElementById('sandbox-wa-inactive').style.display = 'none';
@@ -9847,6 +9865,43 @@ async function guardarConfigSandbox() {
     btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px"></i> Guardar y conectar';
     if (window.lucide) lucide.createIcons();
   }
+}
+
+async function enviarInvitacionSandbox() {
+  var aid = window._agentId || 1;
+  var phone = (document.getElementById('sandbox-invite-phone').value || '').trim();
+  var res   = document.getElementById('sandbox-invite-result');
+  var btn   = document.getElementById('sandbox-invite-btn');
+  if (!phone) { res.textContent = 'Ingresa tu número de WhatsApp'; res.style.background='#fef2f2'; res.style.color='#dc2626'; res.style.display='block'; return; }
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:13px;height:13px"></i> Enviando…';
+  if (window.lucide) lucide.createIcons();
+  res.style.display = 'none';
+  try {
+    var r = await fetch('/inbox/api/agents/' + aid + '/sandbox/invite', {
+      method: 'POST', credentials: 'include',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({to: phone}),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      res.innerHTML = '✅ Mensaje enviado a <b>' + phone + '</b>. Revisa tu WhatsApp y responde para probar el agente.';
+      res.style.background = 'rgba(34,197,94,.08)';
+      res.style.color = 'var(--voco-text)';
+    } else {
+      res.textContent = d.error || 'Error al enviar';
+      res.style.background = '#fef2f2';
+      res.style.color = '#dc2626';
+    }
+    res.style.display = 'block';
+  } catch(e) {
+    res.textContent = 'Error de red';
+    res.style.background = '#fef2f2'; res.style.color = '#dc2626';
+    res.style.display = 'block';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i data-lucide="send" style="width:14px;height:14px"></i> Enviar mensaje';
+  if (window.lucide) lucide.createIcons();
 }
 
 function copiarNumeroSandbox(el) {

@@ -4219,6 +4219,62 @@ async def inbox_sandbox_activar(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.post("/inbox/api/agents/{agent_id_param}/sandbox/invite")
+async def inbox_sandbox_invite(
+    agent_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Envía hello_world template al número indicado para iniciar conversación de prueba."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import get_config_value
+    import httpx as _httpx
+
+    body = await request.json()
+    to_phone = re.sub(r"[^\d]", "", body.get("to", ""))
+    if not to_phone:
+        return JSONResponse(status_code=400, content={"error": "Número de teléfono requerido"})
+
+    sandbox_phone_id = (
+        os.getenv("META_SANDBOX_PHONE_NUMBER_ID")
+        or await get_config_value("SANDBOX_PHONE_NUMBER_ID", agent_id_param)
+        or ""
+    )
+    access_token = (
+        await get_config_value("META_ACCESS_TOKEN", agent_id_param)
+        or os.getenv("META_ACCESS_TOKEN", "")
+    )
+    if not sandbox_phone_id or not access_token:
+        return JSONResponse(status_code=400, content={"error": "Sandbox no configurado (falta phone_number_id o access_token)"})
+
+    url = f"https://graph.facebook.com/v21.0/{sandbox_phone_id}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to_phone,
+        "type": "template",
+        "template": {"name": "hello_world", "language": {"code": "en_US"}},
+    }
+    try:
+        async with _httpx.AsyncClient(timeout=15) as client:
+            r = await client.post(url, json=payload, headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            })
+        if r.status_code == 200:
+            logger.info(f"[sandbox] Invitación enviada a {to_phone} desde sandbox {sandbox_phone_id}")
+            return JSONResponse(content={"ok": True})
+        else:
+            err = r.json().get("error", {}).get("message", r.text)
+            logger.warning(f"[sandbox] Error Meta API al invitar {to_phone}: {err}")
+            return JSONResponse(status_code=400, content={"error": err})
+    except Exception as e:
+        logger.error(f"[sandbox] Excepción al enviar invitación: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.get("/inbox/api/agents/{agent_id_param}/stats")
 async def inbox_stats_agente(
     agent_id_param: int,
