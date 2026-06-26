@@ -1962,8 +1962,8 @@ async def webhook_handler(request: Request):
                 continue  # ignorar silenciosamente
 
             # ── Sandbox: marcar leído + routing por código de agente ──────────
-            _sandbox_phone_id_env = os.getenv("META_SANDBOX_PHONE_NUMBER_ID", "")
-            _is_sandbox_msg = bool(_sandbox_phone_id_env and _phone_id == _sandbox_phone_id_env)
+            # Detección por slug del agente (no requiere env var en Railway)
+            _is_sandbox_msg = "-sandbox" in (_agente_actual.get("slug", ""))
             if _is_sandbox_msg:
                 # Marcar leído inmediatamente (doble tick azul — simula "escribiendo")
                 if msg.mensaje_id and hasattr(_proveedor_agente, "marcar_leido"):
