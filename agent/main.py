@@ -111,6 +111,14 @@ PORT = int(os.getenv("PORT", 8000))
 # ── Cache de agentes por phone_number_id ─────────────────────────────────────
 # Evita consultar la BD en cada mensaje entrante para resolver el agente
 _phone_agent_cache: dict[str, dict] = {}
+# Sandbox: phones que ya validaron su código (in-memory, se resetea al reiniciar)
+_sandbox_sessions: set[str] = set()
+
+
+def _sandbox_code_para_agente(slug: str, agent_id: int) -> str:
+    """EQU-001 style code from source agent slug+id."""
+    prefix = slug.replace("-sandbox", "").replace("-", "").replace("_", "")[:3].upper() or "AGT"
+    return f"{prefix}-{agent_id:03d}"
 
 
 async def _resolver_agente(phone_number_id: str) -> dict:
@@ -1953,6 +1961,44 @@ async def webhook_handler(request: Request):
             if _es_respuesta_automatica(msg.texto):
                 continue  # ignorar silenciosamente
 
+            # ── Sandbox: marcar leído + routing por código de agente ──────────
+            _sandbox_phone_id_env = os.getenv("META_SANDBOX_PHONE_NUMBER_ID", "")
+            _is_sandbox_msg = bool(_sandbox_phone_id_env and _phone_id == _sandbox_phone_id_env)
+            if _is_sandbox_msg:
+                # Marcar leído inmediatamente (doble tick azul — simula "escribiendo")
+                if msg.mensaje_id and hasattr(_proveedor_agente, "marcar_leido"):
+                    asyncio.create_task(_proveedor_agente.marcar_leido(msg.mensaje_id))
+
+                if msg.telefono not in _sandbox_sessions:
+                    # Determinar código esperado desde el sandbox agent
+                    _sb_slug = _agente_actual.get("slug", "")
+                    _src_slug = _sb_slug.replace("-sandbox", "")
+                    from agent.memory import obtener_agente_por_slug
+                    _src_agent = await obtener_agente_por_slug(_src_slug)
+                    if _src_agent:
+                        _expected_code = _sandbox_code_para_agente(_src_slug, _src_agent["id"])
+                    else:
+                        # Sandbox es el único agente; generar desde su propio ID
+                        _expected_code = _sandbox_code_para_agente(_sb_slug, _agent_id)
+
+                    _codigo_recibido = msg.texto.strip().upper().replace(" ", "")
+                    if _codigo_recibido == _expected_code:
+                        _sandbox_sessions.add(msg.telefono)
+                        _nombre_agente = _agente_actual.get("agent_name", "el agente")
+                        await _proveedor_agente.enviar_mensaje(msg.telefono,
+                            f"✅ Código correcto. Ahora estás conectado con *{_nombre_agente}*.\n\n"
+                            f"Escribe tu primer mensaje para empezar la prueba."
+                        )
+                        continue
+                    else:
+                        await _proveedor_agente.enviar_mensaje(msg.telefono,
+                            f"¡Hola! 👋 Soy el sandbox de Voco.\n\n"
+                            f"Para probar el agente, escanea el QR en el panel "
+                            f"o envía el código de prueba:\n\n"
+                            f"*{_expected_code}*"
+                        )
+                        continue
+
             # ── Acción de botón interno (act_*) ───────────────────────────────
             # El cliente tocó un botón de reply con ID act_* (Voco lo procesó
             # en parsear_webhook y lo serializó como __ACCION_BTN__:act_xxx).
@@ -2812,6 +2858,10 @@ async def webhook_handler(request: Request):
                 logger.warning(
                     f"[campaña❌] Sin campaña reciente en difusion_mensajes para {msg.telefono}"
                 )
+
+            # Delay natural en sandbox: hace que el agente parezca que está escribiendo
+            if _is_sandbox_msg:
+                await asyncio.sleep(1.5)
 
             respuesta = await generar_respuesta(
                 msg.texto, historial, msg.telefono, contexto_campana, agent_id=_agent_id
@@ -4136,12 +4186,18 @@ async def inbox_sandbox_info(
             except Exception as e:
                 logger.error(f"[sandbox] Error auto-creando sandbox para agent_id={agent_id_param}: {e}")
 
+    # Generar código tipo EQU-001 desde el agente fuente (agent_id_param)
+    _src_agent = await obtener_agente(agent_id_param)
+    _src_slug = _src_agent.get("slug", "agente") if _src_agent else "agente"
+    _sandbox_code = _sandbox_code_para_agente(_src_slug, agent_id_param)
+
     return JSONResponse(content={
         "configured": True,
         "phone_number": sandbox_phone_number,
         "phone_number_id": sandbox_phone_id,
         "agent": sandbox_agent,
         "active": bool(sandbox_agent),
+        "code": _sandbox_code,
     })
 
 

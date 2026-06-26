@@ -4653,11 +4653,11 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   </div>
                   <div id="sandbox-invite-result" style="display:none;margin-top:8px;font-size:.8rem;padding:6px 10px;border-radius:7px"></div>
                   <p style="margin:10px 0 0;font-size:.73rem;color:var(--voco-text-muted)">
-                    Recibirás un mensaje de WhatsApp desde el número de prueba. Respóndelo y el agente contestará.
+                    Recibirás un mensaje desde el número sandbox. Respóndelo con el <strong>código de prueba</strong> que aparece a la derecha y el agente iniciará la conversación.
                   </p>
                 </div>
 
-                <!-- Columna derecha: QR + número -->
+                <!-- Columna derecha: QR + número + código -->
                 <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0">
                   <div class="sandbox-wa-real-qr">
                     <img id="sandbox-qr-img" src="" alt="QR WhatsApp" style="width:136px;height:136px;display:block">
@@ -4670,6 +4670,18 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     style="font-size:.75rem;color:#25d366;text-decoration:none;display:flex;align-items:center;gap:4px">
                     <i data-lucide="external-link" style="width:11px;height:11px"></i> Abrir WhatsApp
                   </a>
+                  <!-- Código de proyecto -->
+                  <div style="margin-top:4px;text-align:center">
+                    <div style="font-size:.68rem;color:var(--voco-text-muted);margin-bottom:3px">Código de prueba</div>
+                    <div id="sandbox-code-chip" onclick="copiarCodigoSandbox(this)"
+                      style="display:inline-flex;align-items:center;gap:5px;background:var(--voco-bg-alt,#f3f4f6);
+                             border:1px solid var(--voco-border);border-radius:6px;
+                             padding:4px 10px;font-size:.8rem;font-weight:700;letter-spacing:.08em;
+                             color:var(--voco-text);cursor:pointer;font-family:monospace">
+                      <span id="sandbox-code-text">---</span>
+                      <i data-lucide="copy" style="width:10px;height:10px;opacity:.45"></i>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -9805,9 +9817,14 @@ function _renderSandboxWAUI(d) {
   if (d && d.configured && d.phone_number) {
     // Configurado: mostrar QR directamente, sin pasos extra
     var numLink = d.phone_number.replace(/[^\d]/g,'');
-    var waLink = 'https://wa.me/' + numLink + '?text=Hola%2C+quiero+probar+el+agente';
+    var code = d.code || '';
+    // QR y enlace pre-rellenan el código para que el usuario solo pulse Enviar
+    var waText = code || 'Hola, quiero probar el agente';
+    var waLink = 'https://wa.me/' + numLink + '?text=' + encodeURIComponent(waText);
     document.getElementById('sandbox-phone-number-text').textContent = d.phone_number;
     document.getElementById('sandbox-wa-link').href = waLink;
+    var codeEl = document.getElementById('sandbox-code-text');
+    if (codeEl) codeEl.textContent = code || '---';
     if (typeof QRCode !== 'undefined') {
       QRCode.toDataURL(waLink, {width:136,margin:1,color:{dark:'#111827',light:'#ffffff'}}, function(err, url){
         if (!err) document.getElementById('sandbox-qr-img').src = url;
@@ -9909,6 +9926,16 @@ function copiarNumeroSandbox(el) {
   navigator.clipboard.writeText(num).then(function() {
     var orig = el.innerHTML;
     el.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Copiado';
+    setTimeout(function(){ el.innerHTML = orig; if(window.lucide) lucide.createIcons(); }, 1500);
+  });
+}
+
+function copiarCodigoSandbox(el) {
+  var code = document.getElementById('sandbox-code-text').textContent;
+  if (!code || code === '---') return;
+  navigator.clipboard.writeText(code).then(function() {
+    var orig = el.innerHTML;
+    el.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Copiado';
     setTimeout(function(){ el.innerHTML = orig; if(window.lucide) lucide.createIcons(); }, 1500);
   });
 }

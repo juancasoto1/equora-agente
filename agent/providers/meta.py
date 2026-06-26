@@ -738,6 +738,20 @@ class ProveedorMeta(ProveedorWhatsApp):
             self._capturar_wamid(r)
             return True
 
+    async def marcar_leido(self, message_id: str) -> None:
+        """Marca el mensaje entrante como leído → doble tick azul al remitente."""
+        if not self.access_token or not self.phone_number_id or not message_id:
+            return
+        url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                await client.post(url,
+                    json={"messaging_product": "whatsapp", "status": "read", "message_id": message_id},
+                    headers={"Authorization": f"Bearer {self.access_token}", "Content-Type": "application/json"},
+                )
+        except Exception:
+            pass
+
     async def enviar_producto(
         self, telefono: str, retailer_id: str, cuerpo: str = ""
     ) -> dict:
