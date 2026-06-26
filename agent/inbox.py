@@ -18,6 +18,7 @@ _DESIGN_SYSTEM_HEAD = """
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
   /* Tema persistente — leer antes de pintar para evitar flash.
      Default = light si no hay preferencia guardada. */
@@ -1794,6 +1795,60 @@ html.dark .sandbox-inp{color:#e9edef}
   content:'';width:90px;height:4px;background:rgba(255,255,255,.25);
   border-radius:2px;
 }
+/* ── Sandbox WhatsApp real ───────────────────────────────────── */
+.sandbox-wa-real-card{
+  background:var(--voco-card-bg);border:1px solid var(--voco-border);
+  border-radius:14px;padding:20px;margin-bottom:20px;
+  display:flex;align-items:flex-start;gap:20px;
+}
+@media(max-width:600px){.sandbox-wa-real-card{flex-direction:column;align-items:center;text-align:center}}
+.sandbox-wa-real-qr{
+  width:140px;height:140px;flex-shrink:0;border-radius:10px;
+  overflow:hidden;background:#fff;display:flex;align-items:center;
+  justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.12);
+}
+.sandbox-wa-real-qr canvas{width:140px!important;height:140px!important}
+.sandbox-wa-badge-active{
+  display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:600;
+  background:rgba(34,197,94,.1);color:#16a34a;border:1px solid rgba(34,197,94,.25);
+  border-radius:20px;padding:2px 8px;
+}
+.sandbox-wa-badge-inactive{
+  display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:600;
+  background:rgba(245,158,11,.1);color:#d97706;border:1px solid rgba(245,158,11,.25);
+  border-radius:20px;padding:2px 8px;
+}
+.sandbox-phone-chip{
+  display:inline-flex;align-items:center;gap:7px;
+  background:var(--voco-nav-bg-active);border:1px solid var(--voco-border);
+  border-radius:8px;padding:6px 12px;font-size:.85rem;font-weight:600;
+  color:var(--voco-text);margin:10px 0;cursor:pointer;transition:.15s;
+  user-select:none;
+}
+.sandbox-phone-chip:hover{background:var(--voco-nav-bg-hover)}
+.sandbox-wa-open-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  background:#25d366;color:#fff;border:none;border-radius:8px;
+  padding:8px 16px;font-size:.83rem;font-weight:600;cursor:pointer;
+  text-decoration:none;transition:.15s;
+}
+.sandbox-wa-open-btn:hover{background:#1da851}
+.sandbox-wa-config-form{
+  display:flex;flex-direction:column;gap:10px;margin-top:12px;
+}
+.sandbox-wa-input{
+  border:1px solid var(--voco-border);border-radius:8px;
+  padding:8px 12px;font-size:.84rem;color:var(--voco-text);
+  background:var(--voco-content-bg);outline:none;width:100%;box-sizing:border-box;
+}
+.sandbox-wa-input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+.sandbox-activar-btn{
+  background:#6366f1;color:#fff;border:none;border-radius:8px;
+  padding:9px 18px;font-size:.84rem;font-weight:600;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;transition:.15s;
+}
+.sandbox-activar-btn:hover{background:#4f46e5}
+.sandbox-activar-btn:disabled{opacity:.5;cursor:not-allowed}
 /* ── Skeleton loaders (Voco design system) ───────────────────── */
 @keyframes voco-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 .skel{display:inline-block;background:linear-gradient(90deg,
@@ -4523,17 +4578,94 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <!-- ── Pane: Probar (Fase C) ── -->
           <div class="cfg-pane" id="cfg-pane-probar">
 
-            <!-- Banner info -->
-            <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:.83rem;color:var(--voco-text);line-height:1.5;display:flex;align-items:flex-start;gap:8px">
-              <i data-lucide="flask-conical" style="width:16px;height:16px;color:#059669;flex-shrink:0;margin-top:2px"></i>
-              <div><b>Sandbox de prueba</b> — Simula una conversación de WhatsApp sin enviar mensajes reales. El historial es independiente de las conversaciones activas.</div>
-            </div>
+            <!-- ── Sección: Sandbox WhatsApp real ─────────────────── -->
+            <div id="sandbox-wa-real-wrap">
+              <!-- estado cargando -->
+              <div id="sandbox-wa-loading" style="font-size:.82rem;color:var(--voco-text-muted);padding:12px 0">
+                <i data-lucide="loader" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"></i>Cargando sandbox…
+              </div>
 
-            <!-- Controles -->
+              <!-- sandbox inactivo → formulario de configuración -->
+              <div id="sandbox-wa-inactive" style="display:none" class="sandbox-wa-real-card">
+                <div style="flex:1">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                    <span class="sandbox-wa-badge-inactive">
+                      <i data-lucide="circle" style="width:8px;height:8px"></i> Sin configurar
+                    </span>
+                    <span style="font-weight:600;font-size:.9rem;color:var(--voco-text)">Sandbox WhatsApp real</span>
+                  </div>
+                  <p style="margin:0 0 14px;font-size:.82rem;color:var(--voco-text-muted);line-height:1.5">
+                    Conecta el número de prueba de Meta para que tus clientes puedan probar el agente desde WhatsApp real, antes de conectar tu número de producción.
+                  </p>
+                  <div class="sandbox-wa-config-form">
+                    <div>
+                      <label style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Número de teléfono de prueba (ej: +1 555 659 2271)</label>
+                      <input id="sandbox-inp-phone" class="sandbox-wa-input" type="text" placeholder="+1 555 659 2271">
+                    </div>
+                    <div>
+                      <label style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Phone Number ID (de Meta Developer Console)</label>
+                      <input id="sandbox-inp-phone-id" class="sandbox-wa-input" type="text" placeholder="1094769687062416">
+                    </div>
+                    <div>
+                      <button class="sandbox-activar-btn" onclick="activarSandboxWA()" id="sandbox-activar-btn">
+                        <i data-lucide="zap" style="width:14px;height:14px"></i> Activar sandbox
+                      </button>
+                      <span id="sandbox-activar-err" style="display:none;font-size:.78rem;color:#ef4444;margin-left:10px"></span>
+                    </div>
+                  </div>
+                  <p style="margin:12px 0 0;font-size:.73rem;color:var(--voco-text-muted);line-height:1.5">
+                    <i data-lucide="info" style="width:11px;height:11px;vertical-align:-1px"></i>
+                    Encuentra el <b>Phone Number ID</b> en <b>Meta Developer Console → WhatsApp → API Setup</b>.<br>
+                    El número de prueba de Meta es gratuito los primeros 90 días y soporta hasta 5 contactos de prueba.
+                  </p>
+                </div>
+              </div>
+
+              <!-- sandbox activo → QR + instrucciones -->
+              <div id="sandbox-wa-active" style="display:none" class="sandbox-wa-real-card">
+                <div class="sandbox-wa-real-qr">
+                  <canvas id="sandbox-qr-canvas"></canvas>
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+                    <span class="sandbox-wa-badge-active">
+                      <i data-lucide="check-circle" style="width:10px;height:10px"></i> Sandbox activo
+                    </span>
+                    <span style="font-weight:600;font-size:.9rem;color:var(--voco-text)">WhatsApp real</span>
+                  </div>
+                  <p style="margin:0 0 4px;font-size:.82rem;color:var(--voco-text-muted)">Escanea el QR o toca el número para abrir WhatsApp:</p>
+                  <div class="sandbox-phone-chip" onclick="copiarNumeroSandbox(this)" id="sandbox-phone-display">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#25d366" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span id="sandbox-phone-number-text">+1 555 659 2271</span>
+                    <i data-lucide="copy" style="width:12px;height:12px;opacity:.5"></i>
+                  </div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+                    <a id="sandbox-wa-link" href="#" target="_blank" rel="noopener" class="sandbox-wa-open-btn">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.138.563 4.144 1.545 5.878L0 24l6.32-1.51A11.93 11.93 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.787 9.787 0 0 1-5.16-1.47l-.368-.22-3.754.896.942-3.656-.24-.376A9.783 9.783 0 0 1 2.182 12c0-5.423 4.395-9.818 9.818-9.818 5.423 0 9.818 4.395 9.818 9.818 0 5.423-4.395 9.818-9.818 9.818z"/></svg>
+                      Abrir WhatsApp
+                    </a>
+                    <button class="btn-secondary" style="font-size:.78rem;padding:7px 13px" onclick="resetearSandboxWA()">
+                      <i data-lucide="settings" style="width:13px;height:13px"></i> Reconfigurar
+                    </button>
+                  </div>
+                  <p style="margin:10px 0 0;font-size:.73rem;color:var(--voco-text-muted);line-height:1.55">
+                    <i data-lucide="users" style="width:11px;height:11px;vertical-align:-1px"></i>
+                    Agrega hasta <b>5 contactos de prueba</b> en Meta Developer Console → WhatsApp → API Setup → <em>Para</em>.<br>
+                    <i data-lucide="clock" style="width:11px;height:11px;vertical-align:-1px"></i>
+                    Número de prueba de Meta: <b>gratuito los primeros 90 días</b>.
+                  </p>
+                </div>
+              </div>
+            </div><!-- /sandbox-wa-real-wrap -->
+
+            <!-- Separador -->
+            <div style="border-top:1px solid var(--voco-border);margin:4px 0 20px"></div>
+
+            <!-- Controles simulador -->
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
               <div style="font-size:.83rem;color:var(--voco-text-muted)">
-                <i data-lucide="smartphone" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px"></i>
-                Escribe como si fueras el cliente
+                <i data-lucide="cpu" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px"></i>
+                Simulador de IA — sin WhatsApp real
               </div>
               <button class="btn-secondary" style="font-size:.77rem;padding:5px 13px;white-space:nowrap;display:flex;align-items:center;gap:5px" onclick="limpiarChatTest()" type="button">
                 <i data-lucide="trash-2" style="width:13px;height:13px"></i> Limpiar
@@ -9630,6 +9762,116 @@ function cerrarDiff() {
    CHAT DE PRUEBA  (Fase C)
    ══════════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════════════════
+   SANDBOX WhatsApp real
+   ══════════════════════════════════════════════════════════════ */
+var _sandboxWAData = null;
+
+async function cargarSandboxWA() {
+  var aid = window._agentId || 1;
+  try {
+    var r = await fetch('/inbox/api/agents/' + aid + '/sandbox', {credentials:'include'});
+    var d = await r.json();
+    _sandboxWAData = d;
+    _renderSandboxWAUI(d);
+  } catch(e) {
+    console.error('Error cargando sandbox WA:', e);
+    document.getElementById('sandbox-wa-loading').style.display = 'none';
+  }
+}
+
+function _renderSandboxWAUI(d) {
+  document.getElementById('sandbox-wa-loading').style.display = 'none';
+  if (d && d.active && d.phone_number) {
+    // Activo: mostrar QR
+    var num = d.phone_number.replace(/[^\d+]/g,'');
+    var numDisplay = d.phone_number;
+    var numLink = num.replace('+','');
+    var waLink = 'https://wa.me/' + numLink + '?text=Hola%2C+quiero+probar+el+agente';
+    document.getElementById('sandbox-phone-number-text').textContent = numDisplay;
+    document.getElementById('sandbox-wa-link').href = waLink;
+    // QR code
+    if (typeof QRCode !== 'undefined') {
+      var canvas = document.getElementById('sandbox-qr-canvas');
+      QRCode.toCanvas(canvas, waLink, {width:140,margin:1,color:{dark:'#111827',light:'#ffffff'}}, function(err){
+        if (err) console.warn('QR error:', err);
+      });
+    }
+    document.getElementById('sandbox-wa-inactive').style.display = 'none';
+    document.getElementById('sandbox-wa-active').style.display = '';
+    if (window.lucide) lucide.createIcons();
+  } else {
+    // Inactivo: pre-popular form si tenemos datos (env vars o config previa)
+    if (d && d.phone_number_id) {
+      var el = document.getElementById('sandbox-inp-phone-id');
+      if (el && !el.value) el.value = d.phone_number_id;
+    }
+    if (d && d.phone_number) {
+      var el2 = document.getElementById('sandbox-inp-phone');
+      if (el2 && !el2.value) el2.value = d.phone_number;
+    }
+    document.getElementById('sandbox-wa-inactive').style.display = '';
+    document.getElementById('sandbox-wa-active').style.display = 'none';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+async function activarSandboxWA() {
+  var aid = window._agentId || 1;
+  var phoneId = (document.getElementById('sandbox-inp-phone-id').value || '').trim();
+  var phone   = (document.getElementById('sandbox-inp-phone').value || '').trim();
+  var errEl   = document.getElementById('sandbox-activar-err');
+  var btn     = document.getElementById('sandbox-activar-btn');
+  if (!phoneId) { errEl.textContent = 'Ingresa el Phone Number ID'; errEl.style.display='inline'; return; }
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader" style="width:13px;height:13px"></i> Activando…';
+  if (window.lucide) lucide.createIcons();
+  try {
+    var r = await fetch('/inbox/api/agents/' + aid + '/sandbox/activar', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({phone_number_id: phoneId, phone_number: phone}),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      // recargar info del sandbox
+      await cargarSandboxWA();
+    } else {
+      errEl.textContent = d.error || 'Error al activar';
+      errEl.style.display = 'inline';
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="zap" style="width:14px;height:14px"></i> Activar sandbox';
+      if (window.lucide) lucide.createIcons();
+    }
+  } catch(e) {
+    errEl.textContent = 'Error de red';
+    errEl.style.display = 'inline';
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="zap" style="width:14px;height:14px"></i> Activar sandbox';
+    if (window.lucide) lucide.createIcons();
+  }
+}
+
+function copiarNumeroSandbox(el) {
+  var num = document.getElementById('sandbox-phone-number-text').textContent;
+  navigator.clipboard.writeText(num).then(function() {
+    var orig = el.innerHTML;
+    el.innerHTML = el.innerHTML.replace('Copiar','').replace(/<i[^>]*><\/i>/,'') +
+      '<span style="color:#16a34a;font-size:.75rem">¡Copiado!</span>';
+    setTimeout(function(){ el.innerHTML = orig; if(window.lucide) lucide.createIcons(); }, 1500);
+  });
+}
+
+function resetearSandboxWA() {
+  document.getElementById('sandbox-wa-active').style.display = 'none';
+  document.getElementById('sandbox-wa-inactive').style.display = '';
+  document.getElementById('sandbox-inp-phone-id').value = (_sandboxWAData && _sandboxWAData.phone_number_id) || '';
+  document.getElementById('sandbox-inp-phone').value = (_sandboxWAData && _sandboxWAData.phone_number) || '';
+}
+
+/* ══════════════════════════════════════════════════════════════ */
+
 var _chatTestIniciado = false;
 var _sandboxClockInterval = null;
 
@@ -9642,6 +9884,9 @@ function _sandboxActualizarReloj() {
 
 /* ── iniciarChatTest: llamado al abrir la pestaña Probar ── */
 async function iniciarChatTest() {
+  // Siempre cargar sandbox WA info (puede cambiar si el usuario configuró)
+  cargarSandboxWA();
+
   if (_chatTestIniciado) return;
   _chatTestIniciado = true;
 

@@ -4071,6 +4071,115 @@ async def inbox_clonar_agente(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@app.get("/inbox/api/agents/{agent_id_param}/sandbox")
+async def inbox_sandbox_info(
+    agent_id_param: int,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Retorna la configuración del sandbox de WhatsApp para este agente."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_agente_por_phone_id, get_config_value
+
+    # Prioridad: env var global → config guardada por agente
+    sandbox_phone_id = (
+        os.getenv("META_SANDBOX_PHONE_NUMBER_ID")
+        or await get_config_value("SANDBOX_PHONE_NUMBER_ID", agent_id_param)
+        or ""
+    )
+    sandbox_phone_number = (
+        os.getenv("META_SANDBOX_PHONE_NUMBER")
+        or await get_config_value("SANDBOX_PHONE_NUMBER", agent_id_param)
+        or ""
+    )
+    sandbox_agent = None
+    if sandbox_phone_id:
+        sandbox_agent = await obtener_agente_por_phone_id(sandbox_phone_id)
+
+    return JSONResponse(content={
+        "phone_number": sandbox_phone_number,
+        "phone_number_id": sandbox_phone_id,
+        "agent": sandbox_agent,
+        "active": bool(sandbox_agent),
+    })
+
+
+@app.post("/inbox/api/agents/{agent_id_param}/sandbox/activar")
+async def inbox_sandbox_activar(
+    agent_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Crea el agente sandbox copiando credenciales del agente origen."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import (
+        obtener_agente, crear_agente, obtener_agente_por_phone_id,
+        get_config_value, set_config_value,
+    )
+
+    body = await request.json()
+    sandbox_phone_id = (body.get("phone_number_id") or os.getenv("META_SANDBOX_PHONE_NUMBER_ID", "")).strip()
+    sandbox_phone_number = (body.get("phone_number") or os.getenv("META_SANDBOX_PHONE_NUMBER", "")).strip()
+
+    if not sandbox_phone_id:
+        return JSONResponse(status_code=400, content={"error": "phone_number_id requerido"})
+
+    # Si ya existe un agente con ese phone_number_id no crear duplicado
+    existing = await obtener_agente_por_phone_id(sandbox_phone_id)
+    if existing:
+        return JSONResponse(content={"ok": True, "sandbox": existing, "created": False})
+
+    original = await obtener_agente(agent_id_param)
+    if not original:
+        return JSONResponse(status_code=404, content={"error": "Agente origen no encontrado"})
+
+    access_token   = await get_config_value("META_ACCESS_TOKEN",  agent_id_param) or os.getenv("META_ACCESS_TOKEN", "")
+    verify_token   = await get_config_value("META_VERIFY_TOKEN",  agent_id_param) or os.getenv("META_VERIFY_TOKEN", "")
+    system_prompt  = await get_config_value("SYSTEM_PROMPT",      agent_id_param) or ""
+    active_modules = await get_config_value("ACTIVE_MODULES",     agent_id_param) or ""
+    business_vars  = await get_config_value("BUSINESS_VARS",      agent_id_param) or ""
+
+    try:
+        sandbox = await crear_agente(
+            name=f"{original.get('name', 'Agente')} (Sandbox)",
+            slug=f"{original.get('slug', 'agente')}-sandbox",
+            agent_name=original.get("agent_name", "Agente"),
+            business_type=original.get("business_type", "productos"),
+            phone_number_id=sandbox_phone_id,
+            waba_id="",
+            color=original.get("color", "#6366f1"),
+            emoji="🧪",
+        )
+        sid = sandbox["id"]
+        await set_config_value("META_ACCESS_TOKEN",  access_token,   sid)
+        await set_config_value("META_PHONE_NUMBER_ID", sandbox_phone_id, sid)
+        await set_config_value("META_VERIFY_TOKEN",  verify_token,   sid)
+        if system_prompt:
+            await set_config_value("SYSTEM_PROMPT",  system_prompt,  sid)
+        if active_modules:
+            await set_config_value("ACTIVE_MODULES", active_modules, sid)
+        if business_vars:
+            await set_config_value("BUSINESS_VARS",  business_vars,  sid)
+
+        # Guardar referencia en el agente origen para que la UI la encuentre
+        await set_config_value("SANDBOX_PHONE_NUMBER_ID", sandbox_phone_id,   agent_id_param)
+        await set_config_value("SANDBOX_PHONE_NUMBER",    sandbox_phone_number, agent_id_param)
+
+        # Limpiar caché de routing para que el webhook reconozca el nuevo número
+        _phone_agent_cache.pop(sandbox_phone_id, None)
+
+        logger.info(f"[sandbox] Agente sandbox creado (id={sid}) para agent_id={agent_id_param}")
+        return JSONResponse(content={"ok": True, "sandbox": sandbox, "created": True})
+    except Exception as e:
+        logger.error(f"[sandbox] Error activando sandbox para agente {agent_id_param}: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @app.get("/inbox/api/agents/{agent_id_param}/stats")
 async def inbox_stats_agente(
     agent_id_param: int,
