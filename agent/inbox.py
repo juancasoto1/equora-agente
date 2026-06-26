@@ -18,7 +18,6 @@ _DESIGN_SYSTEM_HEAD = """
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <script>
   /* Tema persistente — leer antes de pintar para evitar flash.
      Default = light si no hay preferencia guardada. */
@@ -4622,68 +4621,59 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </div>
               </div>
 
-              <!-- sandbox activo → enviar mensaje de inicio + QR -->
+              <!-- sandbox activo → QR + código (sin input de teléfono) -->
               <div id="sandbox-wa-active" style="display:none" class="sandbox-wa-real-card">
-
-                <!-- Columna izquierda: acción principal -->
-                <div style="flex:1;min-width:0">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+                <div style="width:100%">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
                     <span class="sandbox-wa-badge-active">
                       <span style="width:6px;height:6px;background:#16a34a;border-radius:50%;display:inline-block"></span>
                       Activo
                     </span>
                     <span style="font-weight:600;font-size:.9rem;color:var(--voco-text)">Sandbox WhatsApp</span>
-                    <button onclick="resetearSandboxWA()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--voco-text-muted);padding:2px 6px" title="Cambiar número">
-                      <i data-lucide="settings-2" style="width:14px;height:14px"></i>
-                    </button>
                   </div>
+                  <div style="display:flex;gap:32px;align-items:flex-start;flex-wrap:wrap">
 
-                  <!-- Input + botón para enviar invitación -->
-                  <label style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:6px">
-                    Tu número de WhatsApp para probar
-                  </label>
-                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                    <input id="sandbox-invite-phone" class="sandbox-wa-input"
-                      type="tel" placeholder="+57 316 538 4484"
-                      style="max-width:210px"
-                      onkeydown="if(event.key==='Enter') enviarInvitacionSandbox()">
-                    <button id="sandbox-invite-btn" class="sandbox-wa-open-btn" onclick="enviarInvitacionSandbox()" style="white-space:nowrap">
-                      <i data-lucide="send" style="width:14px;height:14px"></i> Enviar mensaje
-                    </button>
-                  </div>
-                  <div id="sandbox-invite-result" style="display:none;margin-top:8px;font-size:.8rem;padding:6px 10px;border-radius:7px"></div>
-                  <p style="margin:10px 0 0;font-size:.73rem;color:var(--voco-text-muted)">
-                    Recibirás un mensaje desde el número sandbox. Respóndelo con el <strong>código de prueba</strong> que aparece a la derecha y el agente iniciará la conversación.
-                  </p>
-                </div>
-
-                <!-- Columna derecha: QR + número + código -->
-                <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0">
-                  <div class="sandbox-wa-real-qr">
-                    <img id="sandbox-qr-img" src="" alt="QR WhatsApp" style="width:136px;height:136px;display:block">
-                  </div>
-                  <div class="sandbox-phone-chip" onclick="copiarNumeroSandbox(this)" style="margin:0;font-size:.78rem">
-                    <span id="sandbox-phone-number-text">+1 555 659 2271</span>
-                    <i data-lucide="copy" style="width:10px;height:10px;opacity:.45"></i>
-                  </div>
-                  <a id="sandbox-wa-link" href="#" target="_blank" rel="noopener"
-                    style="font-size:.75rem;color:#25d366;text-decoration:none;display:flex;align-items:center;gap:4px">
-                    <i data-lucide="external-link" style="width:11px;height:11px"></i> Abrir WhatsApp
-                  </a>
-                  <!-- Código de proyecto -->
-                  <div style="margin-top:4px;text-align:center">
-                    <div style="font-size:.68rem;color:var(--voco-text-muted);margin-bottom:3px">Código de prueba</div>
-                    <div id="sandbox-code-chip" onclick="copiarCodigoSandbox(this)"
-                      style="display:inline-flex;align-items:center;gap:5px;background:var(--voco-bg-alt,#f3f4f6);
-                             border:1px solid var(--voco-border);border-radius:6px;
-                             padding:4px 10px;font-size:.8rem;font-weight:700;letter-spacing:.08em;
-                             color:var(--voco-text);cursor:pointer;font-family:monospace">
-                      <span id="sandbox-code-text">---</span>
-                      <i data-lucide="copy" style="width:10px;height:10px;opacity:.45"></i>
+                    <!-- QR -->
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+                      <div class="sandbox-wa-real-qr">
+                        <img id="sandbox-qr-img" src="" alt="QR" style="width:136px;height:136px;display:block">
+                      </div>
+                      <div class="sandbox-phone-chip" onclick="copiarNumeroSandbox(this)" style="margin:0;font-size:.78rem">
+                        <span id="sandbox-phone-number-text">+1 555 659 2271</span>
+                        <i data-lucide="copy" style="width:10px;height:10px;opacity:.45"></i>
+                      </div>
+                      <a id="sandbox-wa-link" href="#" target="_blank" rel="noopener"
+                        style="font-size:.75rem;color:#25d366;text-decoration:none;display:flex;align-items:center;gap:4px">
+                        <i data-lucide="external-link" style="width:11px;height:11px"></i> Abrir WhatsApp
+                      </a>
                     </div>
+
+                    <!-- Instrucciones + código -->
+                    <div style="flex:1;min-width:180px">
+                      <p style="font-size:.82rem;font-weight:600;color:var(--voco-text);margin-bottom:8px">Cómo probarlo</p>
+                      <ol style="font-size:.78rem;color:var(--voco-text-muted);padding-left:16px;line-height:1.9">
+                        <li>Escanea el QR con tu celular</li>
+                        <li>Envía el mensaje que aparece pre-escrito</li>
+                        <li>El agente iniciará la conversación</li>
+                      </ol>
+                      <div style="margin-top:14px">
+                        <div style="font-size:.7rem;color:var(--voco-text-muted);margin-bottom:5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Código de prueba</div>
+                        <div id="sandbox-code-chip" onclick="copiarCodigoSandbox(this)"
+                          style="display:inline-flex;align-items:center;gap:6px;background:var(--voco-bg-alt,#f3f4f6);
+                                 border:1px solid var(--voco-border);border-radius:7px;
+                                 padding:6px 12px;font-size:.88rem;font-weight:700;letter-spacing:.06em;
+                                 color:var(--voco-text);cursor:pointer;font-family:monospace">
+                          <span id="sandbox-code-text">---</span>
+                          <i data-lucide="copy" style="width:11px;height:11px;opacity:.45"></i>
+                        </div>
+                        <p style="font-size:.71rem;color:var(--voco-text-muted);margin-top:6px">
+                          O escribe este código en WhatsApp al número de prueba.
+                        </p>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
-
               </div>
 
             </div><!-- /sandbox-wa-real-wrap -->
@@ -9815,21 +9805,16 @@ async function cargarSandboxWA() {
 function _renderSandboxWAUI(d) {
   document.getElementById('sandbox-wa-loading').style.display = 'none';
   if (d && d.configured && d.phone_number) {
-    // Configurado: mostrar QR directamente, sin pasos extra
     var numLink = d.phone_number.replace(/[^\d]/g,'');
     var code = d.code || '';
-    // QR y enlace pre-rellenan el código para que el usuario solo pulse Enviar
-    var waText = code || 'Hola, quiero probar el agente';
+    var waText = code || 'Hola';
     var waLink = 'https://wa.me/' + numLink + '?text=' + encodeURIComponent(waText);
     document.getElementById('sandbox-phone-number-text').textContent = d.phone_number;
     document.getElementById('sandbox-wa-link').href = waLink;
     var codeEl = document.getElementById('sandbox-code-text');
     if (codeEl) codeEl.textContent = code || '---';
-    if (typeof QRCode !== 'undefined') {
-      QRCode.toDataURL(waLink, {width:136,margin:1,color:{dark:'#111827',light:'#ffffff'}}, function(err, url){
-        if (!err) document.getElementById('sandbox-qr-img').src = url;
-      });
-    }
+    // QR generado desde el backend (sin dependencia de CDN)
+    document.getElementById('sandbox-qr-img').src = '/inbox/api/qr?data=' + encodeURIComponent(waLink);
     document.getElementById('sandbox-wa-inactive').style.display = 'none';
     document.getElementById('sandbox-wa-active').style.display = '';
   } else {

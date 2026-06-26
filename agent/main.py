@@ -116,9 +116,9 @@ _sandbox_sessions: set[str] = set()
 
 
 def _sandbox_code_para_agente(slug: str, agent_id: int) -> str:
-    """EQU-001 style code from source agent slug+id."""
-    prefix = slug.replace("-sandbox", "").replace("-", "").replace("_", "")[:3].upper() or "AGT"
-    return f"{prefix}-{agent_id:03d}"
+    """VOCO-EQ001 style code from source agent slug+id."""
+    prefix = slug.replace("-sandbox", "").replace("-", "").replace("_", "")[:2].upper() or "AG"
+    return f"VOCO-{prefix}{agent_id:03d}"
 
 
 async def _resolver_agente(phone_number_id: str) -> dict:
@@ -4199,6 +4199,33 @@ async def inbox_sandbox_info(
         "active": bool(sandbox_agent),
         "code": _sandbox_code,
     })
+
+
+@app.get("/inbox/api/qr")
+async def generar_qr(data: str = ""):
+    """Genera un QR code como SVG a partir del parámetro ?data= ."""
+    if not data:
+        return Response(content="<svg/>", media_type="image/svg+xml")
+    try:
+        import qrcode
+        import qrcode.image.svg as _svg
+        from io import BytesIO
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=4,
+            border=2,
+        )
+        qr.add_data(data)
+        qr.make(fit=True)
+        img = qr.make_image(image_factory=_svg.SvgPathImage)
+        buf = BytesIO()
+        img.save(buf)
+        buf.seek(0)
+        return Response(content=buf.read(), media_type="image/svg+xml")
+    except Exception as e:
+        logger.error(f"[qr] Error generando QR: {e}")
+        return Response(content="<svg/>", media_type="image/svg+xml")
 
 
 @app.post("/inbox/api/agents/{agent_id_param}/sandbox/activar")
