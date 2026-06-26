@@ -111,14 +111,21 @@ PORT = int(os.getenv("PORT", 8000))
 # ── Cache de agentes por phone_number_id ─────────────────────────────────────
 # Evita consultar la BD en cada mensaje entrante para resolver el agente
 _phone_agent_cache: dict[str, dict] = {}
-# Sandbox: phones que ya validaron su código (in-memory, se resetea al reiniciar)
-_sandbox_sessions: set[str] = set()
+# Sandbox hub: teléfono → agent_id del agente que validó (in-memory, se resetea al reiniciar)
+_sandbox_sessions: dict[str, int] = {}
 
 
 def _sandbox_code_para_agente(slug: str, agent_id: int) -> str:
     """VOCO-EQ001 style code from source agent slug+id."""
     prefix = slug.replace("-sandbox", "").replace("-", "").replace("_", "")[:2].upper() or "AG"
     return f"VOCO-{prefix}{agent_id:03d}"
+
+
+def _sandbox_codigo_a_agent_id(code: str) -> int | None:
+    """'VOCO-EQ001' → 1 (agent_id). Retorna None si el formato no coincide."""
+    import re
+    m = re.match(r"^VOCO-[A-Z]{2}(\d{3})$", code.strip().upper().replace(" ", ""))
+    return int(m.group(1)) if m else None
 
 
 async def _resolver_agente(phone_number_id: str) -> dict:
@@ -1961,43 +1968,62 @@ async def webhook_handler(request: Request):
             if _es_respuesta_automatica(msg.texto):
                 continue  # ignorar silenciosamente
 
-            # ── Sandbox: marcar leído + routing por código de agente ──────────
-            # Detección por slug del agente (no requiere env var en Railway)
-            _is_sandbox_msg = "-sandbox" in (_agente_actual.get("slug", ""))
+            # ── Sandbox hub de Voco: número central compartido entre tenants ────
+            # El sandbox usa el WABA propio de Voco (VOCO_SANDBOX_*), independiente
+            # del WABA de cada cliente. El código VOCO-EQ001 enruta al agente correcto.
+            _voco_sb_pid = os.getenv("VOCO_SANDBOX_PHONE_NUMBER_ID", "")
+            _is_sandbox_msg = bool(_voco_sb_pid and _phone_id == _voco_sb_pid)
             if _is_sandbox_msg:
-                # Marcar leído inmediatamente (doble tick azul — simula "escribiendo")
-                if msg.mensaje_id and hasattr(_proveedor_agente, "marcar_leido"):
-                    asyncio.create_task(_proveedor_agente.marcar_leido(msg.mensaje_id))
+                from agent.providers.meta import ProveedorMeta as _MetaProv
+                _voco_sb_prov = _MetaProv(
+                    access_token=os.getenv("VOCO_SANDBOX_ACCESS_TOKEN", ""),
+                    phone_number_id=_voco_sb_pid,
+                    verify_token=os.getenv("META_VERIFY_TOKEN", ""),
+                    catalog_id="",
+                )
+                if msg.mensaje_id:
+                    asyncio.create_task(_voco_sb_prov.marcar_leido(msg.mensaje_id))
 
-                if msg.telefono not in _sandbox_sessions:
-                    # Determinar código esperado desde el sandbox agent
-                    _sb_slug = _agente_actual.get("slug", "")
-                    _src_slug = _sb_slug.replace("-sandbox", "")
-                    from agent.memory import obtener_agente_por_slug
-                    _src_agent = await obtener_agente_por_slug(_src_slug)
-                    if _src_agent:
-                        _expected_code = _sandbox_code_para_agente(_src_slug, _src_agent["id"])
-                    else:
-                        # Sandbox es el único agente; generar desde su propio ID
-                        _expected_code = _sandbox_code_para_agente(_sb_slug, _agent_id)
+                _sb_target_id = _sandbox_sessions.get(msg.telefono)
 
-                    _codigo_recibido = msg.texto.strip().upper().replace(" ", "")
-                    if _codigo_recibido == _expected_code:
-                        _sandbox_sessions.add(msg.telefono)
-                        _nombre_agente = _agente_actual.get("agent_name", "el agente")
-                        await _proveedor_agente.enviar_mensaje(msg.telefono,
-                            f"✅ Código correcto. Ahora estás conectado con *{_nombre_agente}*.\n\n"
-                            f"Escribe tu primer mensaje para empezar la prueba."
-                        )
-                        continue
+                # Comando SALIR: resetea la sesión para probar otro agente
+                if msg.texto.strip().upper() in ("SALIR", "RESET", "CAMBIAR"):
+                    _sandbox_sessions.pop(msg.telefono, None)
+                    await _voco_sb_prov.enviar_mensaje(msg.telefono,
+                        "🔄 Sesión reseteada. Envía un código de proyecto para conectarte a otro agente."
+                    )
+                    continue
+
+                if _sb_target_id is None:
+                    # Validar código de proyecto
+                    _code_recv = msg.texto.strip().upper().replace(" ", "")
+                    _parsed_id = _sandbox_codigo_a_agent_id(_code_recv)
+                    if _parsed_id:
+                        from agent.memory import obtener_agente as _get_ag_sb
+                        _target_ag = await _get_ag_sb(_parsed_id)
+                        if _target_ag:
+                            _sandbox_sessions[msg.telefono] = _parsed_id
+                            _nombre_ag = _target_ag.get("agent_name", "el agente")
+                            await _voco_sb_prov.enviar_mensaje(msg.telefono,
+                                f"✅ Código correcto. Ahora estás conectado con *{_nombre_ag}*.\n\n"
+                                f"Escribe tu primer mensaje para empezar la prueba.\n"
+                                f"_Escribe SALIR para probar otro agente._"
+                            )
+                        else:
+                            await _voco_sb_prov.enviar_mensaje(msg.telefono,
+                                f"⚠️ Código no reconocido. Verifica el código en el panel de Voco."
+                            )
                     else:
-                        await _proveedor_agente.enviar_mensaje(msg.telefono,
+                        await _voco_sb_prov.enviar_mensaje(msg.telefono,
                             f"¡Hola! 👋 Soy el sandbox de Voco.\n\n"
-                            f"Para probar el agente, escanea el QR en el panel "
-                            f"o envía el código de prueba:\n\n"
-                            f"*{_expected_code}*"
+                            f"Envía el código de tu proyecto para comenzar la prueba.\n\n"
+                            f"Ejemplo: *VOCO-EQ001*"
                         )
-                        continue
+                    continue
+
+                # Código ya validado: sobreescribir agente y proveedor para el flujo normal
+                _agent_id = _sb_target_id
+                _proveedor_agente = _voco_sb_prov
 
             # ── Acción de botón interno (act_*) ───────────────────────────────
             # El cliente tocó un botón de reply con ID act_* (Voco lo procesó
@@ -4128,75 +4154,28 @@ async def inbox_sandbox_info(
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
-    """Retorna la configuración del sandbox y lo crea automáticamente si no existe."""
+    """Retorna la configuración del sandbox hub de Voco para este agente."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    from agent.memory import (
-        obtener_agente, crear_agente, obtener_agente_por_phone_id,
-        get_config_value, set_config_value,
-    )
+    from agent.memory import obtener_agente
 
-    sandbox_phone_id = (
-        os.getenv("META_SANDBOX_PHONE_NUMBER_ID")
-        or await get_config_value("SANDBOX_PHONE_NUMBER_ID", agent_id_param)
-        or ""
-    )
-    sandbox_phone_number = (
-        os.getenv("META_SANDBOX_PHONE_NUMBER")
-        or await get_config_value("SANDBOX_PHONE_NUMBER", agent_id_param)
-        or ""
-    )
+    # El sandbox usa el WABA propio de Voco — credenciales a nivel de plataforma
+    voco_sb_phone_id = os.getenv("VOCO_SANDBOX_PHONE_NUMBER_ID", "")
+    voco_sb_phone    = os.getenv("VOCO_SANDBOX_PHONE_NUMBER", "")
 
-    if not sandbox_phone_id:
+    if not voco_sb_phone_id or not voco_sb_phone:
         return JSONResponse(content={"configured": False, "phone_number": "", "phone_number_id": ""})
 
-    # Auto-crear el agente sandbox si aún no existe
-    sandbox_agent = await obtener_agente_por_phone_id(sandbox_phone_id)
-    if not sandbox_agent:
-        original = await obtener_agente(agent_id_param)
-        if original:
-            try:
-                access_token   = await get_config_value("META_ACCESS_TOKEN",  agent_id_param) or os.getenv("META_ACCESS_TOKEN", "")
-                verify_token   = await get_config_value("META_VERIFY_TOKEN",  agent_id_param) or os.getenv("META_VERIFY_TOKEN", "")
-                system_prompt  = await get_config_value("SYSTEM_PROMPT",      agent_id_param) or ""
-                active_modules = await get_config_value("ACTIVE_MODULES",     agent_id_param) or ""
-                business_vars  = await get_config_value("BUSINESS_VARS",      agent_id_param) or ""
-                sandbox_agent_new = await crear_agente(
-                    name=f"{original.get('name', 'Agente')} (Sandbox)",
-                    slug=f"{original.get('slug', 'agente')}-sandbox",
-                    agent_name=original.get("agent_name", "Agente"),
-                    business_type=original.get("business_type", "productos"),
-                    phone_number_id=sandbox_phone_id,
-                    waba_id="",
-                    color=original.get("color", "#6366f1"),
-                    emoji="🧪",
-                )
-                sid = sandbox_agent_new["id"]
-                await set_config_value("META_ACCESS_TOKEN",    access_token,        sid)
-                await set_config_value("META_PHONE_NUMBER_ID", sandbox_phone_id,    sid)
-                await set_config_value("META_VERIFY_TOKEN",    verify_token,        sid)
-                if system_prompt:  await set_config_value("SYSTEM_PROMPT",  system_prompt,  sid)
-                if active_modules: await set_config_value("ACTIVE_MODULES", active_modules, sid)
-                if business_vars:  await set_config_value("BUSINESS_VARS",  business_vars,  sid)
-                await set_config_value("SANDBOX_PHONE_NUMBER_ID", sandbox_phone_id,    agent_id_param)
-                await set_config_value("SANDBOX_PHONE_NUMBER",    sandbox_phone_number, agent_id_param)
-                _phone_agent_cache.pop(sandbox_phone_id, None)
-                sandbox_agent = sandbox_agent_new
-                logger.info(f"[sandbox] Agente sandbox auto-creado (id={sid}) para agent_id={agent_id_param}")
-            except Exception as e:
-                logger.error(f"[sandbox] Error auto-creando sandbox para agent_id={agent_id_param}: {e}")
-
-    # Generar código tipo EQU-001 desde el agente fuente (agent_id_param)
+    # Código de proyecto específico para este agente (VOCO-EQ001)
     _src_agent = await obtener_agente(agent_id_param)
-    _src_slug = _src_agent.get("slug", "agente") if _src_agent else "agente"
+    _src_slug  = _src_agent.get("slug", "agente") if _src_agent else "agente"
     _sandbox_code = _sandbox_code_para_agente(_src_slug, agent_id_param)
 
     return JSONResponse(content={
         "configured": True,
-        "phone_number": sandbox_phone_number,
-        "phone_number_id": sandbox_phone_id,
-        "agent": sandbox_agent,
-        "active": bool(sandbox_agent),
+        "phone_number": voco_sb_phone,
+        "phone_number_id": voco_sb_phone_id,
+        "active": True,
         "code": _sandbox_code,
     })
 
