@@ -4078,12 +4078,14 @@ async def inbox_sandbox_info(
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
-    """Retorna la configuración del sandbox de WhatsApp para este agente."""
+    """Retorna la configuración del sandbox y lo crea automáticamente si no existe."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    from agent.memory import obtener_agente_por_phone_id, get_config_value
+    from agent.memory import (
+        obtener_agente, crear_agente, obtener_agente_por_phone_id,
+        get_config_value, set_config_value,
+    )
 
-    # Prioridad: env var global → config guardada por agente
     sandbox_phone_id = (
         os.getenv("META_SANDBOX_PHONE_NUMBER_ID")
         or await get_config_value("SANDBOX_PHONE_NUMBER_ID", agent_id_param)
@@ -4094,11 +4096,48 @@ async def inbox_sandbox_info(
         or await get_config_value("SANDBOX_PHONE_NUMBER", agent_id_param)
         or ""
     )
-    sandbox_agent = None
-    if sandbox_phone_id:
-        sandbox_agent = await obtener_agente_por_phone_id(sandbox_phone_id)
+
+    if not sandbox_phone_id:
+        return JSONResponse(content={"configured": False, "phone_number": "", "phone_number_id": ""})
+
+    # Auto-crear el agente sandbox si aún no existe
+    sandbox_agent = await obtener_agente_por_phone_id(sandbox_phone_id)
+    if not sandbox_agent:
+        original = await obtener_agente(agent_id_param)
+        if original:
+            try:
+                access_token   = await get_config_value("META_ACCESS_TOKEN",  agent_id_param) or os.getenv("META_ACCESS_TOKEN", "")
+                verify_token   = await get_config_value("META_VERIFY_TOKEN",  agent_id_param) or os.getenv("META_VERIFY_TOKEN", "")
+                system_prompt  = await get_config_value("SYSTEM_PROMPT",      agent_id_param) or ""
+                active_modules = await get_config_value("ACTIVE_MODULES",     agent_id_param) or ""
+                business_vars  = await get_config_value("BUSINESS_VARS",      agent_id_param) or ""
+                sandbox_agent_new = await crear_agente(
+                    name=f"{original.get('name', 'Agente')} (Sandbox)",
+                    slug=f"{original.get('slug', 'agente')}-sandbox",
+                    agent_name=original.get("agent_name", "Agente"),
+                    business_type=original.get("business_type", "productos"),
+                    phone_number_id=sandbox_phone_id,
+                    waba_id="",
+                    color=original.get("color", "#6366f1"),
+                    emoji="🧪",
+                )
+                sid = sandbox_agent_new["id"]
+                await set_config_value("META_ACCESS_TOKEN",    access_token,        sid)
+                await set_config_value("META_PHONE_NUMBER_ID", sandbox_phone_id,    sid)
+                await set_config_value("META_VERIFY_TOKEN",    verify_token,        sid)
+                if system_prompt:  await set_config_value("SYSTEM_PROMPT",  system_prompt,  sid)
+                if active_modules: await set_config_value("ACTIVE_MODULES", active_modules, sid)
+                if business_vars:  await set_config_value("BUSINESS_VARS",  business_vars,  sid)
+                await set_config_value("SANDBOX_PHONE_NUMBER_ID", sandbox_phone_id,    agent_id_param)
+                await set_config_value("SANDBOX_PHONE_NUMBER",    sandbox_phone_number, agent_id_param)
+                _phone_agent_cache.pop(sandbox_phone_id, None)
+                sandbox_agent = sandbox_agent_new
+                logger.info(f"[sandbox] Agente sandbox auto-creado (id={sid}) para agent_id={agent_id_param}")
+            except Exception as e:
+                logger.error(f"[sandbox] Error auto-creando sandbox para agent_id={agent_id_param}: {e}")
 
     return JSONResponse(content={
+        "configured": True,
         "phone_number": sandbox_phone_number,
         "phone_number_id": sandbox_phone_id,
         "agent": sandbox_agent,

@@ -4580,44 +4580,45 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
             <!-- ── Sección: Sandbox WhatsApp real ─────────────────── -->
             <div id="sandbox-wa-real-wrap">
-              <!-- estado cargando -->
-              <div id="sandbox-wa-loading" style="font-size:.82rem;color:var(--voco-text-muted);padding:12px 0">
-                <i data-lucide="loader" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px"></i>Cargando sandbox…
+
+              <!-- skeleton mientras carga -->
+              <div id="sandbox-wa-loading" class="sandbox-wa-real-card" style="gap:16px">
+                <div style="width:140px;height:140px;flex-shrink:0;border-radius:10px;background:var(--voco-nav-bg-hover)"></div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding-top:4px">
+                  <div class="skel" style="width:120px;height:14px"></div>
+                  <div class="skel" style="width:180px;height:24px"></div>
+                  <div class="skel" style="width:140px;height:36px;border-radius:8px"></div>
+                  <div class="skel" style="width:100%;height:11px"></div>
+                </div>
               </div>
 
-              <!-- sandbox inactivo → formulario de configuración -->
+              <!-- sandbox sin configurar -->
               <div id="sandbox-wa-inactive" style="display:none" class="sandbox-wa-real-card">
                 <div style="flex:1">
                   <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                    <span class="sandbox-wa-badge-inactive">
-                      <i data-lucide="circle" style="width:8px;height:8px"></i> Sin configurar
-                    </span>
+                    <span class="sandbox-wa-badge-inactive">Sin configurar</span>
                     <span style="font-weight:600;font-size:.9rem;color:var(--voco-text)">Sandbox WhatsApp real</span>
                   </div>
                   <p style="margin:0 0 14px;font-size:.82rem;color:var(--voco-text-muted);line-height:1.5">
-                    Conecta el número de prueba de Meta para que tus clientes puedan probar el agente desde WhatsApp real, antes de conectar tu número de producción.
+                    Ingresa el número de prueba de Meta para que tus clientes puedan probar el agente desde WhatsApp real.
                   </p>
                   <div class="sandbox-wa-config-form">
                     <div>
-                      <label style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Número de teléfono de prueba (ej: +1 555 659 2271)</label>
+                      <label style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Número de teléfono de prueba</label>
                       <input id="sandbox-inp-phone" class="sandbox-wa-input" type="text" placeholder="+1 555 659 2271">
                     </div>
                     <div>
-                      <label style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Phone Number ID (de Meta Developer Console)</label>
-                      <input id="sandbox-inp-phone-id" class="sandbox-wa-input" type="text" placeholder="1094769687062416">
+                      <label style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">Phone Number ID (Meta Developer Console → WhatsApp → API Setup)</label>
+                      <input id="sandbox-inp-phone-id" class="sandbox-wa-input" type="text" placeholder="1094769687062416"
+                        onkeydown="if(event.key==='Enter') guardarConfigSandbox()">
                     </div>
-                    <div>
-                      <button class="sandbox-activar-btn" onclick="activarSandboxWA()" id="sandbox-activar-btn">
-                        <i data-lucide="zap" style="width:14px;height:14px"></i> Activar sandbox
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <button class="sandbox-activar-btn" onclick="guardarConfigSandbox()" id="sandbox-guardar-btn">
+                        <i data-lucide="save" style="width:14px;height:14px"></i> Guardar y conectar
                       </button>
-                      <span id="sandbox-activar-err" style="display:none;font-size:.78rem;color:#ef4444;margin-left:10px"></span>
+                      <span id="sandbox-activar-err" style="display:none;font-size:.78rem;color:#ef4444"></span>
                     </div>
                   </div>
-                  <p style="margin:12px 0 0;font-size:.73rem;color:var(--voco-text-muted);line-height:1.5">
-                    <i data-lucide="info" style="width:11px;height:11px;vertical-align:-1px"></i>
-                    Encuentra el <b>Phone Number ID</b> en <b>Meta Developer Console → WhatsApp → API Setup</b>.<br>
-                    El número de prueba de Meta es gratuito los primeros 90 días y soporta hasta 5 contactos de prueba.
-                  </p>
                 </div>
               </div>
 
@@ -4627,35 +4628,33 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   <canvas id="sandbox-qr-canvas"></canvas>
                 </div>
                 <div style="flex:1;min-width:0">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
                     <span class="sandbox-wa-badge-active">
-                      <i data-lucide="check-circle" style="width:10px;height:10px"></i> Sandbox activo
+                      <span style="width:6px;height:6px;background:#16a34a;border-radius:50%;display:inline-block"></span>
+                      Activo
                     </span>
-                    <span style="font-weight:600;font-size:.9rem;color:var(--voco-text)">WhatsApp real</span>
-                  </div>
-                  <p style="margin:0 0 4px;font-size:.82rem;color:var(--voco-text-muted)">Escanea el QR o toca el número para abrir WhatsApp:</p>
-                  <div class="sandbox-phone-chip" onclick="copiarNumeroSandbox(this)" id="sandbox-phone-display">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#25d366" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <span id="sandbox-phone-number-text">+1 555 659 2271</span>
-                    <i data-lucide="copy" style="width:12px;height:12px;opacity:.5"></i>
-                  </div>
-                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
-                    <a id="sandbox-wa-link" href="#" target="_blank" rel="noopener" class="sandbox-wa-open-btn">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.138.563 4.144 1.545 5.878L0 24l6.32-1.51A11.93 11.93 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.787 9.787 0 0 1-5.16-1.47l-.368-.22-3.754.896.942-3.656-.24-.376A9.783 9.783 0 0 1 2.182 12c0-5.423 4.395-9.818 9.818-9.818 5.423 0 9.818 4.395 9.818 9.818 0 5.423-4.395 9.818-9.818 9.818z"/></svg>
-                      Abrir WhatsApp
-                    </a>
-                    <button class="btn-secondary" style="font-size:.78rem;padding:7px 13px" onclick="resetearSandboxWA()">
-                      <i data-lucide="settings" style="width:13px;height:13px"></i> Reconfigurar
+                    <span style="font-weight:600;font-size:.9rem;color:var(--voco-text)">Sandbox WhatsApp</span>
+                    <button onclick="resetearSandboxWA()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--voco-text-muted);padding:2px 4px" title="Cambiar número">
+                      <i data-lucide="settings-2" style="width:14px;height:14px"></i>
                     </button>
                   </div>
-                  <p style="margin:10px 0 0;font-size:.73rem;color:var(--voco-text-muted);line-height:1.55">
-                    <i data-lucide="users" style="width:11px;height:11px;vertical-align:-1px"></i>
+                  <p style="margin:0 0 6px;font-size:.81rem;color:var(--voco-text-muted)">Escanea el QR desde tu celular o toca el número:</p>
+                  <div class="sandbox-phone-chip" onclick="copiarNumeroSandbox(this)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.138.563 4.144 1.545 5.878L0 24l6.32-1.51A11.93 11.93 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.787 9.787 0 0 1-5.16-1.47l-.368-.22-3.754.896.942-3.656-.24-.376A9.783 9.783 0 0 1 2.182 12c0-5.423 4.395-9.818 9.818-9.818 5.423 0 9.818 4.395 9.818 9.818 0 5.423-4.395 9.818-9.818 9.818z"/></svg>
+                    <span id="sandbox-phone-number-text">+1 555 659 2271</span>
+                    <i data-lucide="copy" style="width:11px;height:11px;opacity:.45"></i>
+                  </div>
+                  <a id="sandbox-wa-link" href="#" target="_blank" rel="noopener" class="sandbox-wa-open-btn" style="display:inline-flex;margin-top:8px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.138.563 4.144 1.545 5.878L0 24l6.32-1.51A11.93 11.93 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.787 9.787 0 0 1-5.16-1.47l-.368-.22-3.754.896.942-3.656-.24-.376A9.783 9.783 0 0 1 2.182 12c0-5.423 4.395-9.818 9.818-9.818 5.423 0 9.818 4.395 9.818 9.818 0 5.423-4.395 9.818-9.818 9.818z"/></svg>
+                    Abrir WhatsApp
+                  </a>
+                  <p style="margin:10px 0 0;font-size:.73rem;color:var(--voco-text-muted);line-height:1.6">
                     Agrega hasta <b>5 contactos de prueba</b> en Meta Developer Console → WhatsApp → API Setup → <em>Para</em>.<br>
-                    <i data-lucide="clock" style="width:11px;height:11px;vertical-align:-1px"></i>
-                    Número de prueba de Meta: <b>gratuito los primeros 90 días</b>.
+                    Número de prueba Meta: <b>gratuito los primeros 90 días</b>.
                   </p>
                 </div>
               </div>
+
             </div><!-- /sandbox-wa-real-wrap -->
 
             <!-- Separador -->
@@ -9777,20 +9776,19 @@ async function cargarSandboxWA() {
   } catch(e) {
     console.error('Error cargando sandbox WA:', e);
     document.getElementById('sandbox-wa-loading').style.display = 'none';
+    document.getElementById('sandbox-wa-inactive').style.display = '';
+    if (window.lucide) lucide.createIcons();
   }
 }
 
 function _renderSandboxWAUI(d) {
   document.getElementById('sandbox-wa-loading').style.display = 'none';
-  if (d && d.active && d.phone_number) {
-    // Activo: mostrar QR
-    var num = d.phone_number.replace(/[^\d+]/g,'');
-    var numDisplay = d.phone_number;
-    var numLink = num.replace('+','');
+  if (d && d.configured && d.phone_number) {
+    // Configurado: mostrar QR directamente, sin pasos extra
+    var numLink = d.phone_number.replace(/[^\d]/g,'');
     var waLink = 'https://wa.me/' + numLink + '?text=Hola%2C+quiero+probar+el+agente';
-    document.getElementById('sandbox-phone-number-text').textContent = numDisplay;
+    document.getElementById('sandbox-phone-number-text').textContent = d.phone_number;
     document.getElementById('sandbox-wa-link').href = waLink;
-    // QR code
     if (typeof QRCode !== 'undefined') {
       var canvas = document.getElementById('sandbox-qr-canvas');
       QRCode.toCanvas(canvas, waLink, {width:140,margin:1,color:{dark:'#111827',light:'#ffffff'}}, function(err){
@@ -9799,9 +9797,8 @@ function _renderSandboxWAUI(d) {
     }
     document.getElementById('sandbox-wa-inactive').style.display = 'none';
     document.getElementById('sandbox-wa-active').style.display = '';
-    if (window.lucide) lucide.createIcons();
   } else {
-    // Inactivo: pre-popular form si tenemos datos (env vars o config previa)
+    // Sin configurar: form, pre-popular si hay datos del env
     if (d && d.phone_number_id) {
       var el = document.getElementById('sandbox-inp-phone-id');
       if (el && !el.value) el.value = d.phone_number_id;
@@ -9812,21 +9809,21 @@ function _renderSandboxWAUI(d) {
     }
     document.getElementById('sandbox-wa-inactive').style.display = '';
     document.getElementById('sandbox-wa-active').style.display = 'none';
-    if (window.lucide) lucide.createIcons();
   }
+  if (window.lucide) lucide.createIcons();
 }
 
-async function activarSandboxWA() {
+async function guardarConfigSandbox() {
   var aid = window._agentId || 1;
   var phoneId = (document.getElementById('sandbox-inp-phone-id').value || '').trim();
   var phone   = (document.getElementById('sandbox-inp-phone').value || '').trim();
   var errEl   = document.getElementById('sandbox-activar-err');
-  var btn     = document.getElementById('sandbox-activar-btn');
+  var btn     = document.getElementById('sandbox-guardar-btn');
   if (!phoneId) { errEl.textContent = 'Ingresa el Phone Number ID'; errEl.style.display='inline'; return; }
+  if (!phone)   { errEl.textContent = 'Ingresa el numero de telefono'; errEl.style.display='inline'; return; }
   errEl.style.display = 'none';
   btn.disabled = true;
-  btn.innerHTML = '<i data-lucide="loader" style="width:13px;height:13px"></i> Activando…';
-  if (window.lucide) lucide.createIcons();
+  btn.textContent = 'Conectando...';
   try {
     var r = await fetch('/inbox/api/agents/' + aid + '/sandbox/activar', {
       method:'POST', credentials:'include',
@@ -9835,20 +9832,19 @@ async function activarSandboxWA() {
     });
     var d = await r.json();
     if (d.ok) {
-      // recargar info del sandbox
       await cargarSandboxWA();
     } else {
-      errEl.textContent = d.error || 'Error al activar';
+      errEl.textContent = d.error || 'Error al conectar';
       errEl.style.display = 'inline';
       btn.disabled = false;
-      btn.innerHTML = '<i data-lucide="zap" style="width:14px;height:14px"></i> Activar sandbox';
+      btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px"></i> Guardar y conectar';
       if (window.lucide) lucide.createIcons();
     }
   } catch(e) {
     errEl.textContent = 'Error de red';
     errEl.style.display = 'inline';
     btn.disabled = false;
-    btn.innerHTML = '<i data-lucide="zap" style="width:14px;height:14px"></i> Activar sandbox';
+    btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px"></i> Guardar y conectar';
     if (window.lucide) lucide.createIcons();
   }
 }
@@ -9857,8 +9853,7 @@ function copiarNumeroSandbox(el) {
   var num = document.getElementById('sandbox-phone-number-text').textContent;
   navigator.clipboard.writeText(num).then(function() {
     var orig = el.innerHTML;
-    el.innerHTML = el.innerHTML.replace('Copiar','').replace(/<i[^>]*><\/i>/,'') +
-      '<span style="color:#16a34a;font-size:.75rem">¡Copiado!</span>';
+    el.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Copiado';
     setTimeout(function(){ el.innerHTML = orig; if(window.lucide) lucide.createIcons(); }, 1500);
   });
 }
@@ -9866,8 +9861,11 @@ function copiarNumeroSandbox(el) {
 function resetearSandboxWA() {
   document.getElementById('sandbox-wa-active').style.display = 'none';
   document.getElementById('sandbox-wa-inactive').style.display = '';
-  document.getElementById('sandbox-inp-phone-id').value = (_sandboxWAData && _sandboxWAData.phone_number_id) || '';
-  document.getElementById('sandbox-inp-phone').value = (_sandboxWAData && _sandboxWAData.phone_number) || '';
+  var el = document.getElementById('sandbox-inp-phone-id');
+  var el2 = document.getElementById('sandbox-inp-phone');
+  if (el) el.value = (_sandboxWAData && _sandboxWAData.phone_number_id) || '';
+  if (el2) el2.value = (_sandboxWAData && _sandboxWAData.phone_number) || '';
+  if (window.lucide) lucide.createIcons();
 }
 
 /* ══════════════════════════════════════════════════════════════ */

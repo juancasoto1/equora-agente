@@ -2641,6 +2641,16 @@ async def crear_agente(
 ) -> dict:
     """Crea un nuevo agente en la plataforma Voco. Retorna el dict del agente creado."""
     async with async_session() as session:
+        # En Postgres la secuencia puede quedar desfasada si se insertó con id explícito.
+        # Resincronizamos antes de cada INSERT para evitar UniqueViolation.
+        if DATABASE_URL and "postgresql" in DATABASE_URL:
+            try:
+                await session.execute(
+                    text("SELECT setval(pg_get_serial_sequence('agents', 'id'), "
+                         "(SELECT COALESCE(MAX(id), 1) FROM agents))")
+                )
+            except Exception:
+                pass
         agente = Agent(
             slug=slug,
             name=name,
