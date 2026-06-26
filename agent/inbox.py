@@ -4650,7 +4650,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   </a>
                   <p style="margin:10px 0 0;font-size:.73rem;color:var(--voco-text-muted);line-height:1.6">
                     Agrega hasta <b>5 contactos de prueba</b> en Meta Developer Console → WhatsApp → API Setup → <em>Para</em>.<br>
-                    Número de prueba Meta: <b>gratuito los primeros 90 días</b>.
+                    Sin costo dentro del cupo gratuito mensual de Meta. Sin fecha de vencimiento.
                   </p>
                 </div>
               </div>
