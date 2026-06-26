@@ -4577,8 +4577,11 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <!-- ── Pane: Probar (Fase C) ── -->
           <div class="cfg-pane" id="cfg-pane-probar">
 
-            <!-- ── Sección: Sandbox WhatsApp real ─────────────────── -->
-            <div id="sandbox-wa-real-wrap">
+            <!-- ── Layout: Sandbox (izq) + Simulador (der) ────────── -->
+            <div style="display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap">
+
+            <!-- Columna izquierda: Sandbox WhatsApp real -->
+            <div id="sandbox-wa-real-wrap" style="flex:0 0 auto;width:400px;min-width:300px">
 
               <!-- skeleton mientras carga -->
               <div id="sandbox-wa-loading" class="sandbox-wa-real-card" style="gap:16px">
@@ -4676,24 +4679,20 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </div>
               </div>
 
-            </div><!-- /sandbox-wa-real-wrap -->
+            </div><!-- /sandbox-wa-real-wrap (columna izq) -->
 
-            <!-- Separador -->
-            <div style="border-top:1px solid var(--voco-border);margin:4px 0 20px"></div>
-
-            <!-- Controles simulador -->
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-              <div style="font-size:.83rem;color:var(--voco-text-muted)">
-                <i data-lucide="cpu" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px"></i>
-                Simulador de IA — sin WhatsApp real
+            <!-- Columna derecha: Simulador de IA -->
+            <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                <div style="font-size:.83rem;color:var(--voco-text-muted)">
+                  <i data-lucide="cpu" style="width:13px;height:13px;vertical-align:-1px;margin-right:4px"></i>
+                  Simulador de IA — sin WhatsApp real
+                </div>
+                <button class="btn-secondary" style="font-size:.77rem;padding:5px 13px;white-space:nowrap;display:flex;align-items:center;gap:5px" onclick="limpiarChatTest()" type="button">
+                  <i data-lucide="trash-2" style="width:13px;height:13px"></i> Limpiar
+                </button>
               </div>
-              <button class="btn-secondary" style="font-size:.77rem;padding:5px 13px;white-space:nowrap;display:flex;align-items:center;gap:5px" onclick="limpiarChatTest()" type="button">
-                <i data-lucide="trash-2" style="width:13px;height:13px"></i> Limpiar
-              </button>
-            </div>
-
-            <!-- Teléfono mockup centrado -->
-            <div style="display:flex;justify-content:center">
+              <div style="display:flex;justify-content:center">
               <div class="sandbox-phone">
 
                 <!-- Marco del teléfono -->
@@ -4758,9 +4757,11 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
                 </div><!-- /frame -->
               </div><!-- /phone -->
-            </div>
+              </div><!-- /center-wrapper -->
+              <div id="chat-test-error" style="display:none;margin-top:12px;text-align:center;font-size:.82rem;color:#ef4444"></div>
+            </div><!-- /columna derecha simulador -->
 
-            <div id="chat-test-error" style="display:none;margin-top:16px;text-align:center;font-size:.82rem;color:#ef4444"></div>
+            </div><!-- /layout flex row -->
 
           </div><!-- /pane probar -->
 
@@ -9813,8 +9814,9 @@ function _renderSandboxWAUI(d) {
     document.getElementById('sandbox-wa-link').href = waLink;
     var codeEl = document.getElementById('sandbox-code-text');
     if (codeEl) codeEl.textContent = code || '---';
-    // QR generado desde el backend (sin dependencia de CDN)
-    document.getElementById('sandbox-qr-img').src = '/inbox/api/qr?data=' + encodeURIComponent(waLink);
+    // QR via quickchart.io — sin dependencia de librería ni CDN
+    document.getElementById('sandbox-qr-img').src =
+      'https://quickchart.io/qr?text=' + encodeURIComponent(waLink) + '&size=140&margin=2&dark=111827&light=ffffff';
     document.getElementById('sandbox-wa-inactive').style.display = 'none';
     document.getElementById('sandbox-wa-active').style.display = '';
   } else {
