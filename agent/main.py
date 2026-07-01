@@ -1934,11 +1934,28 @@ async def webhook_handler(request: Request):
         _phone_id = _body_raw["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"]
     except Exception:
         pass
+    _phone_id = (_phone_id or "").strip()
+
+    # ── Sandbox hub de Voco: el número de la plataforma se intercepta ANTES ────
+    # de resolver el tenant. Ese número es propio de Voco (VOCO_SANDBOX_*), no
+    # pertenece a ningún cliente; debe entrar SIEMPRE al flujo de sandbox aunque
+    # exista un agente en BD reclamando ese phone_number_id (diseño viejo) o esté
+    # en borrador. Antes esto vivía dentro del loop y el early-return de draft
+    # más abajo mataba el mensaje antes de llegar acá.
+    _voco_sb_pid = os.getenv("VOCO_SANDBOX_PHONE_NUMBER_ID", "").strip()
+    _is_sandbox_msg = bool(_voco_sb_pid and _phone_id == _voco_sb_pid)
+    logger.info(
+        f"[sandbox] phone_id={repr(_phone_id)} sb_pid={repr(_voco_sb_pid)} "
+        f"match={_is_sandbox_msg}"
+    )
+
     _agente_actual = await _resolver_agente(_phone_id)
     _agent_id = _agente_actual.get("id", 1)
 
-    # Si el agente está pausado o en draft, ignorar el webhook
-    if _agente_actual.get("status") in ("paused", "draft"):
+    # Si el agente está pausado o en draft, ignorar el webhook — SALVO que sea
+    # un mensaje al número sandbox (ese flujo lo maneja el hub más abajo, y el
+    # agente sandbox viejo suele quedar en borrador).
+    if not _is_sandbox_msg and _agente_actual.get("status") in ("paused", "draft"):
         return {"status": "ok", "agente": "inactivo"}
 
     # Proveedor Meta específico para este agente (credenciales desde BD o env)
@@ -1971,10 +1988,6 @@ async def webhook_handler(request: Request):
             # ── Sandbox hub de Voco: número central compartido entre tenants ────
             # El sandbox usa el WABA propio de Voco (VOCO_SANDBOX_*), independiente
             # del WABA de cada cliente. El código VOCO-EQ001 enruta al agente correcto.
-            _voco_sb_pid = os.getenv("VOCO_SANDBOX_PHONE_NUMBER_ID", "").strip()
-            _is_sandbox_msg = bool(_voco_sb_pid and _phone_id.strip() == _voco_sb_pid)
-            if _voco_sb_pid:
-                logger.info(f"[sandbox] phone_id={repr(_phone_id)} sb_pid={repr(_voco_sb_pid)} match={_is_sandbox_msg}")
             if _is_sandbox_msg:
                 from agent.providers.meta import ProveedorMeta as _MetaProv
                 _voco_sb_prov = _MetaProv(
