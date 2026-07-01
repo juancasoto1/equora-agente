@@ -5092,6 +5092,7 @@ async def api_eventos_ticket(
 
 @app.get("/inbox/api/sistema/capi-status")
 async def api_capi_status(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -5102,9 +5103,13 @@ async def api_capi_status(
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
-    pixel_id    = os.getenv("META_PIXEL_ID", "").strip()
-    capi_token  = os.getenv("META_CAPI_TOKEN", "").strip()
-    test_code   = os.getenv("META_CAPI_TEST_CODE", "").strip()
+    pixel_id   = await get_config_value("META_PIXEL_ID", agent_id=agent_id) or ""
+    capi_token = await get_config_value("META_CAPI_TOKEN", agent_id=agent_id) or ""
+    test_code  = await get_config_value("META_CAPI_TEST_CODE", agent_id=agent_id) or ""
+    if agent_id == 1:  # solo para el agente primario, caer a env vars como fallback
+        pixel_id   = pixel_id or os.getenv("META_PIXEL_ID", "").strip()
+        capi_token = capi_token or os.getenv("META_CAPI_TOKEN", "").strip()
+        test_code  = test_code or os.getenv("META_CAPI_TEST_CODE", "").strip()
     api_ver     = "v21.0"
 
     resultado = {
@@ -5233,6 +5238,7 @@ async def api_capi_status(
 
 @app.get("/inbox/api/sistema/webhook-suscripcion")
 async def api_webhook_suscripcion_status(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -5243,8 +5249,8 @@ async def api_webhook_suscripcion_status(
     recibe nada). Pasa después de re-activar números o cambios en la WABA."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    waba_id = await get_config_value("META_WABA_ID", 1) or os.getenv("META_WABA_ID", "")
-    tok     = await get_config_value("META_ACCESS_TOKEN", 1) or os.getenv("META_ACCESS_TOKEN", "")
+    waba_id = await get_config_value("META_WABA_ID", agent_id=agent_id) or (os.getenv("META_WABA_ID", "") if agent_id == 1 else "")
+    tok     = await get_config_value("META_ACCESS_TOKEN", agent_id=agent_id) or (os.getenv("META_ACCESS_TOKEN", "") if agent_id == 1 else "")
     if not waba_id or not tok:
         return JSONResponse({"ok": False, "error": "Falta META_WABA_ID o META_ACCESS_TOKEN"})
     try:
@@ -5269,6 +5275,7 @@ async def api_webhook_suscripcion_status(
 
 @app.post("/inbox/api/sistema/webhook-suscribir")
 async def api_webhook_suscribir(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -5277,8 +5284,8 @@ async def api_webhook_suscribir(
     que antes había que hacer en developers.facebook.com → WhatsApp → Configuration."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    waba_id = await get_config_value("META_WABA_ID", 1) or os.getenv("META_WABA_ID", "")
-    tok     = await get_config_value("META_ACCESS_TOKEN", 1) or os.getenv("META_ACCESS_TOKEN", "")
+    waba_id = await get_config_value("META_WABA_ID", agent_id=agent_id) or (os.getenv("META_WABA_ID", "") if agent_id == 1 else "")
+    tok     = await get_config_value("META_ACCESS_TOKEN", agent_id=agent_id) or (os.getenv("META_ACCESS_TOKEN", "") if agent_id == 1 else "")
     if not waba_id or not tok:
         return JSONResponse({"ok": False, "error": "Falta META_WABA_ID o META_ACCESS_TOKEN"})
     try:
@@ -7428,6 +7435,7 @@ async def inbox_restore_config(
 async def inbox_test_config(
     service: str,
     request: Request,
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -7438,8 +7446,12 @@ async def inbox_test_config(
 
     body = await request.json()
 
-    def _val(clave: str) -> str:
-        v = (body.get(clave) or "").strip() or os.getenv(clave, "")
+    async def _val(clave: str) -> str:
+        v = (body.get(clave) or "").strip()
+        if not v:
+            v = await get_config_value(clave, agent_id=agent_id) or ""
+        if not v and agent_id == 1:
+            v = os.getenv(clave, "")
         # Sanitización para tokens (mismo motivo que en /config/save): caracteres
         # invisibles que se copian de Meta Business rompen httpx en headers.
         if clave in {"META_ACCESS_TOKEN", "META_CAPI_TOKEN", "SHOPIFY_ADMIN_TOKEN",
@@ -7460,9 +7472,9 @@ async def inbox_test_config(
             # fallaban con 400. Ahora validamos los 3 endpoints reales que
             # Voco usa: /me (auth), /{phone_id}? (lectura phone),
             # /{waba_id}/message_templates (scope mgmt).
-            access_token = _val("META_ACCESS_TOKEN")
-            phone_id     = _val("META_PHONE_NUMBER_ID")
-            waba_id      = _val("META_WABA_ID")
+            access_token = await _val("META_ACCESS_TOKEN")
+            phone_id     = await _val("META_PHONE_NUMBER_ID")
+            waba_id      = await _val("META_WABA_ID")
             if not access_token:
                 return JSONResponse(content={"ok": False, "error": "Token de acceso no configurado"})
             warnings: list[str] = []
@@ -7508,10 +7520,10 @@ async def inbox_test_config(
 
         elif service == "shopify":
             # Test Admin API únicamente (#62 retiró Storefront).
-            domain = _val("SHOPIFY_STORE").replace("https://", "").replace("http://", "").rstrip("/")
+            domain = (await _val("SHOPIFY_STORE")).replace("https://", "").replace("http://", "").rstrip("/")
             if not domain:
                 return JSONResponse(content={"ok": False, "error": "Dominio Shopify no configurado"})
-            admin_token = _val("SHOPIFY_ADMIN_TOKEN")
+            admin_token = await _val("SHOPIFY_ADMIN_TOKEN")
             if not admin_token:
                 return JSONResponse(content={"ok": False, "error": "Sin Admin token — completa OAuth con 'Instalar'"})
             from agent.shopify_admin import verificar_admin_token
@@ -7524,7 +7536,7 @@ async def inbox_test_config(
             return JSONResponse(content={"ok": False, "error": resultado.get("error", "Error con Admin API")})
 
         elif service == "anthropic":
-            api_key = _val("ANTHROPIC_API_KEY")
+            api_key = await _val("ANTHROPIC_API_KEY")
             if not api_key:
                 return JSONResponse(content={"ok": False, "error": "API Key no configurada"})
             async with httpx.AsyncClient(timeout=20) as cli:
@@ -8072,12 +8084,14 @@ async def inbox_improve_prompt(
 # CHAT DE PRUEBA — simula conversación con el agente desde el panel
 # ══════════════════════════════════════════════════════════════════════════════
 
-_TEST_PHONE = "__test_inbox__"   # número ficticio para la sesión de prueba
+def _test_phone(agent_id: int) -> str:
+    return f"__test_inbox_{agent_id}__"
 
 
 @app.post("/inbox/api/chat/test")
 async def inbox_chat_test(
     request: Request,
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -8091,21 +8105,23 @@ async def inbox_chat_test(
     if not mensaje:
         return JSONResponse(status_code=400, content={"error": "Mensaje vacío"})
 
-    historial = await obtener_historial(_TEST_PHONE)
+    tel = _test_phone(agent_id)
+    historial = await obtener_historial(tel)
     try:
-        respuesta = await generar_respuesta(mensaje, historial, telefono=None, contexto_campana=None)
+        respuesta = await generar_respuesta(mensaje, historial, telefono=None, contexto_campana=None, agent_id=agent_id)
     except Exception as e:
         logger.error(f"Error en chat de prueba: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
 
-    await guardar_mensaje(_TEST_PHONE, "user", mensaje)
-    await guardar_mensaje(_TEST_PHONE, "assistant", respuesta)
+    await guardar_mensaje(tel, "user", mensaje, agent_id=agent_id)
+    await guardar_mensaje(tel, "assistant", respuesta, agent_id=agent_id)
 
     return JSONResponse(content={"ok": True, "respuesta": respuesta})
 
 
 @app.get("/inbox/api/chat/test/history")
 async def inbox_chat_test_history(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -8114,12 +8130,13 @@ async def inbox_chat_test_history(
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
-    mensajes = await obtener_historial_con_timestamps(_TEST_PHONE, 100)
+    mensajes = await obtener_historial_con_timestamps(_test_phone(agent_id), 100, agent_id=agent_id)
     return JSONResponse(content={"mensajes": mensajes})
 
 
 @app.delete("/inbox/api/chat/test/clear")
 async def inbox_chat_test_clear(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -8128,7 +8145,7 @@ async def inbox_chat_test_clear(
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
 
-    await limpiar_historial(_TEST_PHONE)
+    await limpiar_historial(_test_phone(agent_id))
     return JSONResponse(content={"ok": True})
 
 

@@ -4383,17 +4383,6 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               </div>
             </div><!-- /card-sistema -->
 
-            <!-- Próximas integraciones -->
-            <div class="cfg-card" style="border-style:dashed;background:var(--voco-content-bg-alt)">
-              <div class="cfg-card-title" style="color:var(--voco-text-muted);margin-bottom:12px">🚀 Próximas integraciones</div>
-              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;font-size:.83rem;color:var(--voco-text-muted)">
-                <div>🛒 <b style="color:var(--voco-text-muted)">Shopify OAuth</b><br><span style="font-size:.76rem">Conectar con un clic cuando Andrea sea app de Shopify</span></div>
-                <div>📧 Email (SendGrid / Resend)</div>
-                <div>📅 Calendly / Google Calendar</div>
-                <div>🗃️ CRM (HubSpot / Pipedrive)</div>
-                <div>💳 Pagos (Stripe / PSE)</div>
-              </div>
-            </div>
 
           </div><!-- /pane integraciones -->
 
@@ -8595,7 +8584,7 @@ function _setSistemaEstado(servicio, estado, mensaje, detalle, sugerencia) {
 async function _verificarCAPI() {
   _setSistemaEstado('capi', 'loading', 'Verificando…', '');
   try {
-    var r = await fetch('/inbox/api/sistema/capi-status', {credentials:'include'});
+    var r = await fetch('/inbox/api/sistema/capi-status?agent_id=' + (_escAgentId||1), {credentials:'include'});
     var d = await r.json();
     if (d.estado === 'ok_activo' || d.estado === 'ok') {
       var detalle_capi = 'Pixel ID: ' + he(d.pixel_id_partial || '—');
@@ -8636,7 +8625,7 @@ async function _verificarCAPI() {
 async function _verificarWhatsApp() {
   _setSistemaEstado('whatsapp', 'loading', 'Verificando…', '');
   try {
-    var r = await fetch('/inbox/api/config/test/meta', {
+    var r = await fetch('/inbox/api/config/test/meta?agent_id=' + (_escAgentId||1), {
       method:'POST', credentials:'include',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({})
@@ -8702,7 +8691,7 @@ async function _verificarCatalogo() {
 async function _verificarShopify() {
   _setSistemaEstado('shopify', 'loading', 'Verificando…', '');
   try {
-    var r = await fetch('/inbox/api/config/test/shopify', {
+    var r = await fetch('/inbox/api/config/test/shopify?agent_id=' + (_escAgentId||1), {
       method:'POST', credentials:'include',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({})
@@ -8728,7 +8717,7 @@ async function _verificarShopify() {
 async function _verificarWebhook() {
   _setSistemaEstado('webhook', 'loading', 'Verificando…', '');
   try {
-    var r = await fetch('/inbox/api/sistema/webhook-suscripcion', {credentials:'include'});
+    var r = await fetch('/inbox/api/sistema/webhook-suscripcion?agent_id=' + (_escAgentId||1), {credentials:'include'});
     var d = await r.json();
     if (!d.ok) {
       _setSistemaEstado('webhook', 'warn', '⚠ ' + (d.error || 'No verificable'), '');
@@ -8754,7 +8743,7 @@ async function _verificarWebhook() {
 async function reSuscribirWebhook() {
   _setSistemaEstado('webhook', 'loading', 'Suscribiendo…', '');
   try {
-    var r = await fetch('/inbox/api/sistema/webhook-suscribir', {method:'POST', credentials:'include'});
+    var r = await fetch('/inbox/api/sistema/webhook-suscribir?agent_id=' + (_escAgentId||1), {method:'POST', credentials:'include'});
     var d = await r.json();
     if (d.ok) {
       await _verificarWebhook();  // reverificar para confirmar el cambio
@@ -9412,7 +9401,7 @@ async function testConexion(service) {
   if (btnTest) { btnTest.disabled = true; btnTest.textContent = '🔄 Probando…'; }
 
   try {
-    var r = await fetch('/inbox/api/config/test/' + service, {
+    var r = await fetch('/inbox/api/config/test/' + service + '?agent_id=' + (_escAgentId||1), {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
@@ -9486,7 +9475,7 @@ function _getModules() {
 /* ── cargarPrompt: llamado cuando el usuario abre la pestaña Prompt ── */
 async function cargarPrompt() {
   try {
-    var r = await fetch('/inbox/api/prompt', {credentials:'include'});
+    var r = await fetch('/inbox/api/prompt?agent_id=' + (_escAgentId||1), {credentials:'include'});
     var d = await r.json();
 
     // Rellenar textarea con el prompt actual
@@ -9575,7 +9564,7 @@ async function guardarPrompt() {
   if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
 
   try {
-    var r = await fetch('/inbox/api/prompt/save', {
+    var r = await fetch('/inbox/api/prompt/save?agent_id=' + (_escAgentId||1), {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -9985,7 +9974,7 @@ async function iniciarChatTest() {
 
 async function _cargarHistorialChat() {
   try {
-    var r = await fetch('/inbox/api/chat/test/history', {credentials:'include'});
+    var r = await fetch('/inbox/api/chat/test/history?agent_id=' + (_escAgentId||1), {credentials:'include'});
     var d = await r.json();
     var msgs = d.mensajes || [];
     var box = document.getElementById('chat-messages');
@@ -10063,7 +10052,7 @@ async function enviarMsgTest() {
   if (errEl) errEl.style.display = 'none';
 
   try {
-    var r = await fetch('/inbox/api/chat/test', {
+    var r = await fetch('/inbox/api/chat/test?agent_id=' + (_escAgentId||1), {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({mensaje: texto})
@@ -10096,7 +10085,7 @@ async function enviarMsgTest() {
 async function limpiarChatTest() {
   if (!confirm('¿Borrar el historial del chat de prueba?')) return;
   try {
-    await fetch('/inbox/api/chat/test/clear', {method:'DELETE', credentials:'include'});
+    await fetch('/inbox/api/chat/test/clear?agent_id=' + (_escAgentId||1), {method:'DELETE', credentials:'include'});
     var box = document.getElementById('chat-messages');
     if (box) {
       while (box.children.length > 1) box.removeChild(box.lastChild);
