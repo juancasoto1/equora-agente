@@ -2053,7 +2053,6 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
       </div>
       <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="catalogo"
-           style="display:none"
            onclick="showSec('catalogo')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('catalogo')">
         <span class="ni" aria-hidden="true"><i data-lucide="package" style="width:16px;height:16px;vertical-align:-3px"></i></span> Catálogo
       </div>
@@ -4661,6 +4660,16 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                     <div class="toggle-card-desc">Inyecta el catálogo de productos en el contexto del agente</div>
                   </div>
                 </div>
+                <div class="toggle-card" id="togcard-voco_catalog">
+                  <label class="tog-sw">
+                    <input type="checkbox" id="tog-voco_catalog" onchange="onTogModule('voco_catalog',this)">
+                    <span class="tog-slider"></span>
+                  </label>
+                  <div class="toggle-card-text">
+                    <div class="toggle-card-label" style="display:flex;align-items:center;gap:6px"><i data-lucide="package" style="width:14px;height:14px;color:var(--voco-brand)"></i> Catálogo Voco</div>
+                    <div class="toggle-card-desc">Catálogo propio sin Shopify — carga y edita productos desde el panel</div>
+                  </div>
+                </div>
                 <div class="toggle-card" id="togcard-cart_orders">
                   <label class="tog-sw">
                     <input type="checkbox" id="tog-cart_orders" checked onchange="onTogModule('cart_orders',this)">
@@ -5871,9 +5880,6 @@ function aplicarVisibilidadModulos() {
     var activo = !!_modulosActivos[mod];
     el.style.display = activo ? '' : 'none';
   });
-  // Catálogo Voco: mostrar/ocultar nav item según módulo voco_catalog
-  var navCat = document.querySelector('.nav-item[data-sec="catalogo"]');
-  if (navCat) navCat.style.display = _modulosActivos['voco_catalog'] ? '' : 'none';
 }
 
 /* ══════════════════════════════════════════════════════
@@ -9686,9 +9692,10 @@ function onTogModule(key, chk) {
 }
 
 function _setModules(mods) {
-  var keys = ['shopify_catalog', 'cart_orders', 'client_memory', 'campaign_context'];
+  var keys = ['shopify_catalog', 'voco_catalog', 'cart_orders', 'client_memory', 'campaign_context'];
+  var defaults = {voco_catalog: false};  // nuevos módulos: OFF por defecto
   keys.forEach(function(k) {
-    var val = (k in mods) ? mods[k] : true;  // default true
+    var val = (k in mods) ? mods[k] : (k in defaults ? defaults[k] : true);  // legacy default true
     _activeModules[k] = val;
     var chk  = document.getElementById('tog-' + k);
     var card = document.getElementById('togcard-' + k);

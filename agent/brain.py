@@ -188,12 +188,12 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
 
     # ── Catálogo Shopify (toggle: shopify_catalog) ────────────────────────────
     if _mod(modules, "shopify_catalog"):
-        catalogo = await obtener_catalogo_shopify()
+        catalogo = await obtener_catalogo_shopify(agent_id)
         if catalogo:
             system_prompt = system_prompt + "\n\n" + catalogo
 
     # ── Catálogo nativo Voco (toggle: voco_catalog) ───────────────────────────
-    if _mod(modules, "voco_catalog"):
+    if modules.get("voco_catalog", False):
         from agent.tools import obtener_catalogo_voco_texto
         cat_voco = await obtener_catalogo_voco_texto(agent_id)
         if cat_voco:

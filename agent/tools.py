@@ -10,21 +10,19 @@ from datetime import datetime, timedelta
 logger = logging.getLogger("agentkit")
 
 # ── Cache del catálogo ────────────────────────────────────────────────────────
-_catalog_cache: str = ""
-_catalog_cache_at: datetime | None = None
+_catalog_cache: dict[int, str] = {}
+_catalog_cache_at: dict[int, datetime] = {}
 CATALOG_TTL_SEG: int = int(os.getenv("CATALOG_TTL_SEG", 300))  # 5 min por defecto
 
 SHOPIFY_STORE = os.getenv("SHOPIFY_STORE", "")
 SHOPIFY_ADMIN_TOKEN = os.getenv("SHOPIFY_ADMIN_TOKEN", "")
 
 
-async def _resolver_admin_token() -> str:
-    """Lee el Admin token preferentemente de config_value (agent_id=1) y
-    fallback a env var. Permite que el OAuth en panel surta efecto sin
-    reiniciar el server."""
+async def _resolver_admin_token(agent_id: int = 1) -> str:
+    """Lee el Admin token del agente indicado (config_value) con fallback a env var."""
     try:
         from agent.memory import get_config_value
-        val = await get_config_value("SHOPIFY_ADMIN_TOKEN", 1)
+        val = await get_config_value("SHOPIFY_ADMIN_TOKEN", agent_id)
         if val:
             return val
     except Exception:
@@ -32,11 +30,11 @@ async def _resolver_admin_token() -> str:
     return SHOPIFY_ADMIN_TOKEN
 
 
-async def _resolver_store() -> str:
-    """Idem para SHOPIFY_STORE."""
+async def _resolver_store(agent_id: int = 1) -> str:
+    """Idem para SHOPIFY_STORE, scoped por agent_id."""
     try:
         from agent.memory import get_config_value
-        val = await get_config_value("SHOPIFY_STORE", 1)
+        val = await get_config_value("SHOPIFY_STORE", agent_id)
         if val:
             return val.replace("https://", "").replace("http://", "").rstrip("/")
     except Exception:
@@ -212,21 +210,21 @@ def _categoria_desde_shopify(node: dict) -> str:
 # Valor: dict con "id" (variant GID) y "stock" (int o None si Storefront no expone inventario)
 _variant_map: dict[str, dict] = {}
 
-# Mapa por retailer_id (SKU o ID numérico) para procesar órdenes del catálogo nativo WhatsApp
-# Clave: retailer_id (SKU del producto en Facebook/Meta Catalog)
-# Valor: dict con producto, presentacion, precio_unitario, variant_id
-_sku_map: dict[str, dict] = {}
+# Mapa por retailer_id — ahora indexado por agent_id para aislamiento multi-tenant
+# Estructura: { agent_id: { retailer_id: {producto, presentacion, precio_unitario, variant_id} } }
+_sku_map: dict[int, dict[str, dict]] = {}
 
 # Categorías estructuradas (se llenan al cargar el catálogo) para armar secciones del catálogo nativo
 # Clave: nombre de categoría → Lista de (titulo_producto, lista_variantes)
+# NOTA: sigue siendo global porque solo se usa en el flujo nativo WhatsApp (single-tenant por WABA)
 _categorias_cache: dict[str, list] = {}
 
 # Items reales del catálogo de Facebook: [{retailer_id, name, precio, categoria}]
 # Se carga consultando la Graph API — son los IDs que WhatsApp acepta en product_list
 _fb_items: list[dict] = []
 
-# Catálogo en formato JSON para la mini-tienda web
-_catalog_json: list[dict] = []
+# Catálogo en formato JSON para la mini-tienda web — indexado por agent_id
+_catalog_json: dict[int, list[dict]] = {}
 
 # Mapa de handle Shopify por nombre de producto normalizado
 # Clave: título normalizado → Valor: handle (ej. "lavaloza-antibacterial-biotu")
@@ -348,41 +346,40 @@ def _normalizar(texto: str) -> str:
     return texto
 
 
-async def obtener_catalogo_shopify() -> str:
-    """Obtiene el catálogo desde Shopify. Cachea en memoria por CATALOG_TTL_SEG segundos
-    para evitar una llamada HTTP en cada mensaje (mejora velocidad de respuesta ~1-2 s)."""
+async def obtener_catalogo_shopify(agent_id: int = 1) -> str:
+    """Obtiene el catálogo de Shopify del agente indicado. Cachea en memoria por CATALOG_TTL_SEG seg."""
     global _catalog_cache, _catalog_cache_at
     ahora = datetime.utcnow()
+    cached_ts = _catalog_cache_at.get(agent_id)
     if (
-        _catalog_cache
-        and _catalog_cache_at
-        and (ahora - _catalog_cache_at).total_seconds() < CATALOG_TTL_SEG
+        agent_id in _catalog_cache
+        and cached_ts
+        and (ahora - cached_ts).total_seconds() < CATALOG_TTL_SEG
     ):
-        return _catalog_cache  # Respuesta instantánea desde cache
+        return _catalog_cache[agent_id]  # Respuesta instantánea desde cache
 
     try:
-        # Catálogo se obtiene EXCLUSIVAMENTE desde Admin GraphQL (post-OAuth).
-        # El fallback Storefront fue retirado en #62 — todo cliente Voco debe
-        # completar OAuth antes de operar (UX Jelou).
-        admin_tok = await _resolver_admin_token()
-        store_dom = await _resolver_store()
+        admin_tok = await _resolver_admin_token(agent_id)
+        store_dom = await _resolver_store(agent_id)
         if not (admin_tok and store_dom):
-            logger.warning("[catalogo] sin SHOPIFY_ADMIN_TOKEN — completa OAuth en Configuración")
+            logger.warning(f"[catalogo] agent_id={agent_id} sin SHOPIFY_ADMIN_TOKEN — completa OAuth en Configuración")
             return "## Catálogo de productos\n\nNo hay tienda Shopify conectada. Conecta tu tienda en Configuración → Shopify."
         from agent.shopify_admin import obtener_productos_admin
         data = await obtener_productos_admin(store_dom, admin_tok)
-        logger.info(f"[catalogo] fuente=Admin GraphQL (store={store_dom})")
+        logger.info(f"[catalogo] agent_id={agent_id} fuente=Admin GraphQL (store={store_dom})")
 
         products = data.get("data", {}).get("products", {}).get("edges", [])
         if not products:
-            logger.warning("Shopify no devolvió productos")
+            logger.warning(f"Shopify agent_id={agent_id} no devolvió productos")
             return "## Catálogo de productos actualizado (Shopify)\n\nNo hay productos disponibles en este momento."
 
         _variant_map.clear()
-        _sku_map.clear()
+        _sku_map[agent_id] = {}
         _categorias_cache.clear()
-        _catalog_json.clear()
+        _catalog_json[agent_id] = []
         _handle_map.clear()
+        sku_map_ag = _sku_map[agent_id]
+        catalog_json_ag = _catalog_json[agent_id]
         categorias: dict[str, list[tuple[str, list[dict], str]]] = {}
         total = 0
 
@@ -432,17 +429,17 @@ async def obtener_catalogo_shopify() -> str:
                 # Shopify sincroniza con Facebook usando el SKU como retailer_id.
                 # Si no hay SKU, usa el ID numérico de la variante.
                 for rid in filter(None, [sku, numeric_id]):
-                    if rid not in _sku_map:
-                        _sku_map[rid] = {
+                    if rid not in sku_map_ag:
+                        sku_map_ag[rid] = {
                             "producto": node["title"],
                             "presentacion": v["title"],
                             "precio_unitario": precio,
-                            "categoria": categoria,  # Sprint A: para fallback Shopify→_fb_items
+                            "categoria": categoria,
                             "variant_id": gid,
                         }
 
                 # JSON para mini-tienda web (imagen específica por variante)
-                _catalog_json.append({
+                catalog_json_ag.append({
                     "producto": node["title"],
                     "presentacion": v["title"],
                     "precio": int(float(v["price"]["amount"])),
@@ -496,27 +493,26 @@ async def obtener_catalogo_shopify() -> str:
                 lineas.append("")
             lineas.append("")
 
-        logger.info(f"Catálogo Shopify: {len(products)} productos, {total} variantes disponibles")
+        logger.info(f"Catálogo Shopify agent_id={agent_id}: {len(products)} productos, {total} variantes disponibles")
 
         if total == 0:
             resultado = "## Catálogo de productos actualizado (Shopify)\n\nNo hay productos con stock disponible en este momento."
         else:
             resultado = "\n".join(lineas)
 
-        # Guardar en cache ANTES de lanzar tareas secundarias
-        # (así la tienda responde de inmediato sin esperar a Facebook o logo)
-        _catalog_cache = resultado
-        _catalog_cache_at = ahora
+        # Guardar en cache por agent_id ANTES de lanzar tareas secundarias
+        _catalog_cache[agent_id] = resultado
+        _catalog_cache_at[agent_id] = ahora
 
         # Cargar logo y catálogo de Facebook en background (no bloquean)
         asyncio.create_task(_cargar_logo_shopify())
-        asyncio.create_task(_cargar_fb_catalog())
+        asyncio.create_task(_cargar_fb_catalog(agent_id))
 
         return resultado
 
     except Exception as e:
-        logger.error(f"Error obteniendo catálogo Shopify: {e}")
-        return _catalog_cache  # Si falla, devuelve el último cache disponible
+        logger.error(f"Error obteniendo catálogo Shopify agent_id={agent_id}: {e}")
+        return _catalog_cache.get(agent_id, "")  # Último cache del agente o vacío
 
 
 async def _cargar_logo_shopify():
@@ -538,10 +534,10 @@ async def _cargar_logo_shopify():
         logger.debug(f"No se pudo obtener logo Shopify: {e}")
 
 
-async def _cargar_fb_catalog():
-    """Consulta la Graph API de Meta para obtener los retailer_ids reales del catálogo.
-    Estos IDs son los únicos válidos para mensajes product_list de WhatsApp."""
+async def _cargar_fb_catalog(agent_id: int = 1):
+    """Consulta la Graph API de Meta para obtener los retailer_ids reales del catálogo."""
     global _fb_items, _sku_map
+    sku_map_ag = _sku_map.setdefault(agent_id, {})
     # Leer dinámicamente desde config_value (panel) para que cambios surtan
     # efecto sin reiniciar — útil cuando el merchant reconecta el catálogo
     # Shopify↔Meta y obtiene un META_CATALOG_ID nuevo.
@@ -605,16 +601,16 @@ async def _cargar_fb_catalog():
                 prod_n, pres_n = clave.split("|", 1)
                 # Coincidencia: el nombre de FB contiene el nombre del producto
                 if prod_n in name_n or name_n in prod_n:
-                    existing = _sku_map.get(rid)
+                    existing = sku_map_ag.get(rid)
                     if not existing:
-                        # Buscar en _sku_map existente por variant_id para obtener la presentación
-                        for existing_rid, existing_info in list(_sku_map.items()):
+                        # Buscar en sku_map_ag existente por variant_id para obtener la presentación
+                        for existing_rid, existing_info in list(sku_map_ag.items()):
                             if existing_info.get("variant_id") == v_info["id"]:
-                                _sku_map[rid] = {**existing_info}
+                                sku_map_ag[rid] = {**existing_info}
                                 break
                         else:
                             # No se encontró — crear entrada básica
-                            _sku_map[rid] = {
+                            sku_map_ag[rid] = {
                                 "producto": name,
                                 "presentacion": "",
                                 "precio_unitario": precio,
@@ -622,31 +618,26 @@ async def _cargar_fb_catalog():
                             }
                     break
 
-        logger.info(f"_sku_map actualizado con {len(_fb_items)} items de Facebook")
+        logger.info(f"_sku_map[{agent_id}] actualizado con {len(_fb_items)} items de Facebook")
 
     except Exception as e:
-        logger.error(f"Error cargando catálogo Facebook: {e}")
+        logger.error(f"Error cargando catálogo Facebook agent_id={agent_id}: {e}")
 
     # ──────────────────────────────────────────────────────────────────────
-    # FALLBACK Shopify-only: si Graph API no devolvió items (token sin
-    # permiso catalog_management, error de red, app sin App Review, etc.)
-    # construimos _fb_items desde _sku_map que YA está poblado desde Shopify.
-    #
-    # Esto funciona porque Shopify Sales Channel sincroniza con Meta Catalog
-    # usando el variant_id como retailer_id. Los IDs que pegamos al payload
-    # de product_list son reconocidos por Meta sin necesitar Graph API.
+    # FALLBACK Shopify-only: si Graph API no devolvió items, construimos
+    # _fb_items desde sku_map_ag que YA está poblado desde Shopify.
     # ──────────────────────────────────────────────────────────────────────
-    if not _fb_items and _sku_map:
+    if not _fb_items and sku_map_ag:
         logger.info(
-            f"_fb_items vacío de Graph API — construyendo desde _sku_map "
-            f"(Shopify, {len(_sku_map)} entradas)"
+            f"_fb_items vacío de Graph API — construyendo desde _sku_map[{agent_id}] "
+            f"(Shopify, {len(sku_map_ag)} entradas)"
         )
         # Paso 1: agrupar por variant_id (cada variante única tiene hasta
-        # 2 entradas en _sku_map: una con SKU alfanumérico y otra con el
+        # 2 entradas en sku_map_ag: una con SKU alfanumérico y otra con el
         # variant_id numérico de Shopify). Necesitamos ambas para elegir
         # el retailer_id que Meta reconoce.
         variantes_unicas: dict[str, dict] = {}
-        for rid, info in _sku_map.items():
+        for rid, info in sku_map_ag.items():
             if not rid:
                 continue
             vid = info.get("variant_id", "")
@@ -796,16 +787,14 @@ def obtener_secciones_catalogo(categoria: str | None = None) -> list[dict]:
     return secciones
 
 
-def obtener_producto_por_retailer_id(retailer_id: str) -> dict | None:
-    """Busca un producto en el mapa de SKUs para procesar órdenes del catálogo nativo."""
-    return _sku_map.get(retailer_id)
+def obtener_producto_por_retailer_id(retailer_id: str, agent_id: int = 1) -> dict | None:
+    """Busca un producto en el mapa de SKUs del agente para procesar órdenes del catálogo nativo."""
+    return _sku_map.get(agent_id, {}).get(retailer_id)
 
 
-def obtener_catalogo_json() -> list[dict]:
-    """Retorna el catálogo completo como lista de dicts para la mini-tienda web.
-    Formato: [{producto, presentacion, precio, stock, imagen, categoria}, ...]
-    Se llena cuando se carga el catálogo de Shopify."""
-    return list(_catalog_json)
+def obtener_catalogo_json(agent_id: int = 1) -> list[dict]:
+    """Retorna el catálogo del agente como lista de dicts para la mini-tienda web."""
+    return list(_catalog_json.get(agent_id, []))
 
 
 def obtener_url_producto(nombre: str) -> str | None:

@@ -385,7 +385,7 @@ async def lifespan(app: FastAPI):
     # Pre-calentar catálogo Shopify al arrancar para que _variant_map esté listo
     # antes de que llegue cualquier petición a /tienda/confirmar
     try:
-        await obtener_catalogo_shopify()
+        await obtener_catalogo_shopify(1)  # agent_id=1 (Equora) al arrancar
         logger.info("Catálogo Shopify pre-cargado al arrancar ✅")
     except Exception as e:
         logger.warning(f"No se pudo pre-cargar catálogo Shopify al arrancar: {e}")
@@ -394,7 +394,7 @@ async def lifespan(app: FastAPI):
     # background task y la primera petición podía llegar con _fb_items vacío.
     try:
         from agent.tools import _cargar_fb_catalog, _fb_items
-        await _cargar_fb_catalog()
+        await _cargar_fb_catalog(1)  # agent_id=1 (Equora) al arrancar
         logger.info(f"Catálogo Facebook pre-cargado: {len(_fb_items)} items ✅")
     except Exception as e:
         logger.warning(f"No se pudo pre-cargar catálogo Facebook al arrancar: {e}")
@@ -477,11 +477,9 @@ def _calcular_total_carrito(items: list[dict]) -> int:
     return total
 
 
-def _sugerir_productos(nombres_en_carrito: set[str], max_items: int = 3) -> list[str]:
-    """Devuelve hasta max_items productos aleatorios que no estén en el carrito.
-    Las categorías y los productos dentro de cada categoría se mezclan en cada llamada
-    para evitar sugerir siempre los mismos artículos."""
-    catalogo = obtener_catalogo_json()
+def _sugerir_productos(nombres_en_carrito: set[str], agent_id: int = 1, max_items: int = 3) -> list[str]:
+    """Devuelve hasta max_items productos aleatorios del catálogo del agente que no estén en el carrito."""
+    catalogo = obtener_catalogo_json(agent_id)
     sugeridos: list[str] = []
     vistos: set[str] = set()
     # Mezclar categorías para variar el orden en cada mensaje
@@ -652,7 +650,8 @@ async def _procesar_carrito_unificado():
         # Usarlo enviaría el seguimiento desde el número de WhatsApp
         # equivocado para cualquier otro agente (Meta acepta el envío,
         # pero el cliente nunca lo recibe en su chat real).
-        proveedor = await _get_meta_para_agente({"id": await _resolver_agent_id_principal(telefono)})
+        _aid_seguimiento = await _resolver_agent_id_principal(telefono)
+        proveedor = await _get_meta_para_agente({"id": _aid_seguimiento})
 
         async def _crear_checkout_para_seguimiento() -> str | None:
             """Crea un checkout de Shopify a partir de los items del carrito
@@ -689,7 +688,7 @@ async def _procesar_carrito_unificado():
                 # nada — el cliente no es interrumpido.
                 falta = pedido_minimo_local - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
-                sugeridos = _sugerir_productos(nombres_en_carrito)
+                sugeridos = _sugerir_productos(nombres_en_carrito, _aid_seguimiento)
                 lineas = "\n".join(f"✅ {s}" for s in sugeridos)
                 from agent.mensajes import format_seguro as _fmt_est3
                 _aid_est3 = await _resolver_agent_id_principal(telefono)
@@ -754,7 +753,7 @@ async def _procesar_carrito_unificado():
                 # equivalente al caso "sin ciudad confirmada" del código previo.
                 falta = umbral_gratis - total
                 falta_fmt = f"{falta:,}".replace(",", ".")
-                sugeridos = _sugerir_productos(nombres_en_carrito)
+                sugeridos = _sugerir_productos(nombres_en_carrito, _aid_seguimiento)
                 lineas = "\n".join(f"✅ {s}" for s in sugeridos)
                 from agent.mensajes import format_seguro as _fmt_est4t
                 _aid_est4t = await _resolver_agent_id_principal(telefono)
@@ -2534,11 +2533,11 @@ async def webhook_handler(request: Request):
                         qty = int(item.get("quantity", 1))
                         if not rid:
                             continue
-                        info = obtener_producto_por_retailer_id(rid)
+                        info = obtener_producto_por_retailer_id(rid, _agent_id)
                         if not info:
-                            logger.warning(f"[orden-catalogo] rid '{rid}' no en _sku_map — recargando catálogo")
-                            await obtener_catalogo_shopify()
-                            info = obtener_producto_por_retailer_id(rid)
+                            logger.warning(f"[orden-catalogo] rid '{rid}' no en _sku_map[{_agent_id}] — recargando catálogo")
+                            await obtener_catalogo_shopify(_agent_id)
+                            info = obtener_producto_por_retailer_id(rid, _agent_id)
                         if info:
                             precio = info["precio_unitario"]
                             item_full = {
@@ -2547,16 +2546,16 @@ async def webhook_handler(request: Request):
                                 "cantidad": qty,
                                 "precio_unitario": precio,
                                 "subtotal": precio * qty,
-                                "retailer_id": rid,   # ← clave para persistir y futuros merges
+                                "retailer_id": rid,
                             }
                             productos.append(item_full)
                             ya_agregados[rid] = item_full
                             logger.info(f"[orden-catalogo-nuevo] rid={rid} → {info['producto']} · {info['presentacion']} × {qty}")
                         else:
                             no_encontrados.append(rid)
-                            from agent.tools import _sku_map
+                            from agent.tools import _sku_map as _sku_map_all
                             logger.error(
-                                f"[orden-catalogo] rid '{rid}' NO existe en _sku_map (entradas: {len(_sku_map)})"
+                                f"[orden-catalogo] rid '{rid}' NO existe en _sku_map[{_agent_id}] (entradas: {len(_sku_map_all.get(_agent_id, {}))})"
                             )
 
                     # Paso 2: carrito_previo (items del pedido anterior, info ya completa
@@ -2588,7 +2587,7 @@ async def webhook_handler(request: Request):
                                 precio_prev = prev.get("precio_unitario", 0) or 0
                                 subt_prev = prev.get("subtotal") or (precio_prev * qty_prev)
                                 if not prod_prev:
-                                    info_prev = obtener_producto_por_retailer_id(rid)
+                                    info_prev = obtener_producto_por_retailer_id(rid, _agent_id)
                                     if info_prev:
                                         prod_prev = info_prev["producto"]
                                         pres_prev = info_prev["presentacion"]
@@ -4813,24 +4812,21 @@ async def inbox_responder_producto(
 @app.get("/inbox/api/catalogo/buscar")
 async def inbox_buscar_catalogo(
     q: str = "",
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
-    """Busca productos en el catálogo de Shopify por nombre (para enviar desde el inbox)."""
+    """Busca productos en el catálogo de Shopify del agente por nombre (para enviar desde el inbox)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     try:
-        # Asegurar que el catálogo esté cargado en cache
-        await obtener_catalogo_shopify()
-        catalogo = obtener_catalogo_json() or []
-        # _sku_map mapea: retailer_id → {producto, presentacion, precio_unitario, variant_id}
-        # Construimos el reverso: (producto_norm, presentacion_norm) → retailer_id
-        # PRIORIZAR el variant_id largo (numeric_id de Shopify) sobre SKUs cortos,
-        # porque Facebook Catalog usa el variant_id como retailer_id real al sincronizar.
-        from agent.tools import _sku_map, _normalizar
+        await obtener_catalogo_shopify(agent_id)
+        catalogo = obtener_catalogo_json(agent_id) or []
+        from agent.tools import _sku_map as _sku_map_all, _normalizar
+        _sku_map_ag = _sku_map_all.get(agent_id, {})
         rev_sku = {}
-        for rid, info in _sku_map.items():
+        for rid, info in _sku_map_ag.items():
             clave = (_normalizar(info.get("producto", "")), _normalizar(info.get("presentacion", "")))
             existente = rev_sku.get(clave, "")
             # Un rid es "variant_id" si es numérico y largo (>=10 dígitos)
@@ -4842,7 +4838,7 @@ async def inbox_buscar_catalogo(
 
         # Construir mapa de SKU "humano" para mostrar en la UI (cuando exista)
         sku_humano = {}
-        for rid, info in _sku_map.items():
+        for rid, info in _sku_map_ag.items():
             clave = (_normalizar(info.get("producto", "")), _normalizar(info.get("presentacion", "")))
             # SKU humano = el corto, no-numérico o numérico corto (<10 dígitos)
             if not (rid.isdigit() and len(rid) >= 10):
@@ -7361,14 +7357,13 @@ async def inbox_save_config(
     if "META_CATALOG_ID" in saved or "META_ACCESS_TOKEN" in saved:
         try:
             from agent import tools as _tools
-            _tools._catalog_cache = ""
-            _tools._catalog_cache_at = None
+            _tools._catalog_cache.pop(agent_id, None)
+            _tools._catalog_cache_at.pop(agent_id, None)
             _tools._fb_items.clear()
-            _tools._sku_map.clear()
-            asyncio.create_task(_tools._cargar_fb_catalog())
-            # También recargar catálogo Shopify para reconstruir _sku_map
-            asyncio.create_task(_tools.obtener_catalogo_shopify())
-            logger.info(f"[config] {saved} actualizado(s) — cache invalidado, catálogo recargando")
+            _tools._sku_map.pop(agent_id, None)
+            asyncio.create_task(_tools._cargar_fb_catalog(agent_id))
+            asyncio.create_task(_tools.obtener_catalogo_shopify(agent_id))
+            logger.info(f"[config] {saved} actualizado(s) — cache agent_id={agent_id} invalidado, catálogo recargando")
         except Exception as e:
             logger.error(f"[config] error invalidando cache: {e}")
 
@@ -7460,11 +7455,11 @@ async def inbox_restore_config(
     if clave in ("META_CATALOG_ID", "META_ACCESS_TOKEN"):
         try:
             from agent import tools as _tools
-            _tools._catalog_cache = ""
-            _tools._catalog_cache_at = None
+            _tools._catalog_cache.pop(agent_id, None)
+            _tools._catalog_cache_at.pop(agent_id, None)
             _tools._fb_items.clear()
-            _tools._sku_map.clear()
-            asyncio.create_task(_tools._cargar_fb_catalog())
+            _tools._sku_map.pop(agent_id, None)
+            asyncio.create_task(_tools._cargar_fb_catalog(agent_id))
         except Exception as e:
             logger.error(f"[config-restore] error invalidando cache: {e}")
     logger.info(f"[config-restore] {clave} restaurado por {user.get('email')} (historial_id={historial_id})")
