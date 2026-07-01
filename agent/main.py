@@ -165,6 +165,39 @@ async def _get_meta_para_agente(agent: dict) -> "ProveedorMeta":
     )
 
 
+async def _get_proveedor_panel(agent_id: int) -> "ProveedorMeta":
+    """Proveedor para envíos manuales desde el panel (Conversaciones / Escalaciones).
+
+    Si el agente tiene META_PHONE_NUMBER_ID propio en BD → usa sus credenciales.
+    Si NO tiene (agente demo, tenant sin WABA propia) → usa el WABA sandbox de
+    Voco (VOCO_SANDBOX_PHONE_NUMBER_ID / VOCO_SANDBOX_ACCESS_TOKEN) para que
+    la respuesta llegue desde el mismo número con que el cliente inició la
+    conversación de prueba.
+    """
+    from agent.memory import get_config_value, obtener_agente
+    from agent.providers.meta import ProveedorMeta
+
+    db_phone = await get_config_value("META_PHONE_NUMBER_ID", agent_id)
+    db_token = await get_config_value("META_ACCESS_TOKEN",    agent_id)
+
+    if db_phone and db_token:
+        verify = await get_config_value("META_VERIFY_TOKEN", agent_id) or os.getenv("META_VERIFY_TOKEN", "")
+        cat    = await get_config_value("META_CATALOG_ID",   agent_id) or ""
+        return ProveedorMeta(access_token=db_token, phone_number_id=db_phone,
+                             verify_token=verify, catalog_id=cat)
+
+    # Sin WABA propia → intentar sandbox de Voco
+    sb_phone = os.getenv("VOCO_SANDBOX_PHONE_NUMBER_ID", "").strip()
+    sb_token = os.getenv("VOCO_SANDBOX_ACCESS_TOKEN",    "").strip()
+    if sb_phone and sb_token:
+        return ProveedorMeta(access_token=sb_token, phone_number_id=sb_phone,
+                             verify_token=os.getenv("META_VERIFY_TOKEN", ""), catalog_id="")
+
+    # Fallback final: comportamiento anterior (env vars genéricas)
+    _agente = await obtener_agente(agent_id) or {"id": agent_id}
+    return await _get_meta_para_agente(_agente)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # #79 — Chulitos de confirmación WhatsApp (✓ enviado / ✓✓ entregado / ✓✓ leído)
 #
@@ -4519,8 +4552,7 @@ async def inbox_responder(
     try:
         # Usar el proveedor del agente correcto
         from agent.memory import obtener_agente
-        _agente = await obtener_agente(agent_id) or {"id": 1}
-        _prov = await _get_meta_para_agente(_agente)
+        _prov = await _get_proveedor_panel(agent_id)
         # DIAGNÓSTICO: loguear qué credenciales se están usando (sin exponer
         # token completo). Útil para detectar config_value en BD que difiere
         # de env vars de Railway tras cambios recientes.
@@ -4618,9 +4650,7 @@ async def inbox_responder_media(
         }, status_code=400)
 
     try:
-        from agent.memory import obtener_agente
-        _agente = await obtener_agente(agent_id) or {"id": 1}
-        _prov = await _get_meta_para_agente(_agente)
+        _prov = await _get_proveedor_panel(agent_id)
 
         # 1. Subir el archivo a Meta
         media_id = await _prov.subir_media(contenido, file.filename or "archivo", mime_type)
@@ -4717,9 +4747,7 @@ async def inbox_responder_ubicacion(
     if not telefono or latitud is None or longitud is None:
         return JSONResponse(content={"ok": False, "error": "Faltan datos"}, status_code=400)
     try:
-        from agent.memory import obtener_agente
-        _agente = await obtener_agente(agent_id) or {"id": 1}
-        _prov = await _get_meta_para_agente(_agente)
+        _prov = await _get_proveedor_panel(agent_id)
         ok = await _prov.enviar_ubicacion(telefono, float(latitud), float(longitud), nombre, direccion)
         if not ok:
             return JSONResponse(content={"ok": False, "error": "Meta rechazó la ubicación"}, status_code=500)
@@ -4756,9 +4784,7 @@ async def inbox_responder_producto(
     if not telefono or not retailer_id:
         return JSONResponse(content={"ok": False, "error": "Faltan datos"}, status_code=400)
     try:
-        from agent.memory import obtener_agente
-        _agente = await obtener_agente(agent_id) or {"id": 1}
-        _prov = await _get_meta_para_agente(_agente)
+        _prov = await _get_proveedor_panel(agent_id)
         resultado = await _prov.enviar_producto(telefono, retailer_id, cuerpo)
         if not resultado.get("ok"):
             err_msg = resultado.get("error", "Meta rechazó el producto")
