@@ -2023,7 +2023,14 @@ async def webhook_handler(request: Request):
 
                 # Comando SALIR: resetea la sesión para probar otro agente
                 if msg.texto.strip().upper() in ("SALIR", "RESET", "CAMBIAR"):
-                    _sandbox_sessions.pop(msg.telefono, None)
+                    _prev_id = _sandbox_sessions.pop(msg.telefono, None)
+                    # También desactiva modo_humano del agente previo para que
+                    # el próximo test empiece limpio (sin ir al panel)
+                    if _prev_id:
+                        try:
+                            await set_modo_humano(msg.telefono, False, agent_id=_prev_id)
+                        except Exception:
+                            pass
                     await _voco_sb_prov.enviar_mensaje(msg.telefono,
                         "🔄 Sesión reseteada. Envía un código de proyecto para conectarte a otro agente."
                     )

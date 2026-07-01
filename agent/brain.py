@@ -148,6 +148,20 @@ async def generar_respuesta(
     system_prompt = await cargar_system_prompt(agent_id)
     modules       = await _cargar_modulos(agent_id)
 
+    # ── Escalación a humano — garantizada para todos los agentes ─────────────
+    # Si el prompt del agente no incluye instrucciones de [[ESCALAR:...]]
+    # (p.ej. agentes demo / nuevos con prompt personalizado), las inyectamos
+    # aquí para que la funcionalidad esté siempre disponible.
+    if "[[ESCALAR" not in system_prompt:
+        system_prompt += """
+
+## Transferir a equipo humano
+Cuando el cliente pida hablar con una persona, haya un reclamo, devolución, pregunta técnica que no puedes responder, o cualquier situación que requiera atención humana: escribe tu respuesta normal y añade AL FINAL (en línea aparte, NUNCA lo menciones al cliente) este marcador:
+
+[[ESCALAR:{"motivo":"<describe en 1 línea>","urgencia":"alta|media|normal","nombre_cliente":"<nombre si lo sabes, vacío si no>","contexto":"<2-4 líneas con todos los detalles para el equipo>"}]]
+
+REGLA CRÍTICA: el contenido entre [[ESCALAR: y ]] DEBE ser JSON válido con comillas dobles. Nunca texto plano. Usa exactamente los campos: motivo, urgencia, nombre_cliente, contexto."""
+
     # ── Contexto de campaña de difusión ───────────────────────────────────────
     if contexto_campana and _mod(modules, "campaign_context"):
         nombre        = contexto_campana.get("campaign_name", "")
