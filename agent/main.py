@@ -8618,6 +8618,207 @@ async def inbox_plantillas_editar(
         return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# CATÁLOGO NATIVO VOCO
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/inbox/api/catalogo")
+async def api_catalogo_listar(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_catalogo_voco
+    productos = await obtener_catalogo_voco(agent_id)
+    return JSONResponse(content={"ok": True, "productos": productos})
+
+
+@app.post("/inbox/api/catalogo")
+async def api_catalogo_crear(
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import crear_producto_voco
+    data = await request.json()
+    if not str(data.get("nombre", "")).strip():
+        return JSONResponse(status_code=400, content={"ok": False, "error": "nombre es obligatorio"})
+    if not data.get("precio") and data.get("precio") != 0:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "precio es obligatorio"})
+    producto = await crear_producto_voco(agent_id, data)
+    return JSONResponse(content={"ok": True, "producto": producto})
+
+
+@app.put("/inbox/api/catalogo/{producto_id}")
+async def api_catalogo_actualizar(
+    producto_id: int,
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import actualizar_producto_voco
+    data = await request.json()
+    producto = await actualizar_producto_voco(producto_id, agent_id, data)
+    if not producto:
+        return JSONResponse(status_code=404, content={"ok": False, "error": "Producto no encontrado"})
+    return JSONResponse(content={"ok": True, "producto": producto})
+
+
+@app.delete("/inbox/api/catalogo/{producto_id}")
+async def api_catalogo_eliminar(
+    producto_id: int,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import eliminar_producto_voco
+    ok = await eliminar_producto_voco(producto_id, agent_id)
+    if not ok:
+        return JSONResponse(status_code=404, content={"ok": False, "error": "Producto no encontrado"})
+    return JSONResponse(content={"ok": True})
+
+
+@app.get("/inbox/api/catalogo/template")
+async def api_catalogo_template(
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Descarga el template Excel para importación masiva."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from io import BytesIO
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Catalogo"
+        cols = ["nombre", "categoria", "presentacion", "precio", "precio_tachado",
+                "descripcion", "imagen_url", "sku", "stock", "disponible"]
+        header_fill = PatternFill("solid", fgColor="16A34A")
+        header_font = Font(bold=True, color="FFFFFF")
+        for ci, col in enumerate(cols, 1):
+            cell = ws.cell(row=1, column=ci, value=col)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+        # Fila de ejemplo
+        ejemplo = ["Lavaloza Biotú", "Limpieza", "500ml", 12900, 15900,
+                   "Fórmula biodegradable", "https://tudominio.com/imagen.jpg",
+                   "LAV-500", 50, 1]
+        for ci, val in enumerate(ejemplo, 1):
+            ws.cell(row=2, column=ci, value=val)
+        # Instrucciones en hoja 2
+        ws2 = wb.create_sheet("Instrucciones")
+        instrucciones = [
+            ("Campo", "Descripción", "Obligatorio"),
+            ("nombre", "Nombre del producto", "SÍ"),
+            ("categoria", "Categoría (ej: Limpieza, Bebidas)", "SÍ"),
+            ("presentacion", "Variante: 500ml, 1L, Pack x3, etc.", "No"),
+            ("precio", "Precio en COP (sin puntos ni comas)", "SÍ"),
+            ("precio_tachado", "Precio anterior para mostrar descuento", "No"),
+            ("descripcion", "Descripción corta del producto", "No"),
+            ("imagen_url", "URL pública directa de la imagen (JPEG/PNG/WebP, max 5MB, mín 500×500px)", "No"),
+            ("sku", "Código único del producto (para catálogo nativo WhatsApp)", "No"),
+            ("stock", "Cantidad disponible (dejar vacío = sin control de stock)", "No"),
+            ("disponible", "1 = disponible, 0 = no disponible", "No"),
+            ("", "", ""),
+            ("RESTRICCIONES IMAGEN", "", ""),
+            ("Formato", "JPEG, PNG o WebP únicamente", ""),
+            ("Tamaño máximo", "5 MB", ""),
+            ("Dimensiones mínimas", "500 × 500 px (relación 1:1 recomendada)", ""),
+            ("URL válida", "Debe ser un enlace directo y público", ""),
+            ("NO usar", "Google Drive, Instagram, Facebook (URLs expiradas o con auth)", ""),
+            ("SÍ usar", "Tu propio sitio web, imgbb.com, imgur.com, Cloudinary", ""),
+        ]
+        for ri, fila in enumerate(instrucciones, 1):
+            for ci, val in enumerate(fila, 1):
+                cell = ws2.cell(row=ri, column=ci, value=val)
+                if ri == 1 or fila[0] in ("RESTRICCIONES IMAGEN",):
+                    cell.font = Font(bold=True)
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=catalogo_voco_template.xlsx"},
+        )
+    except Exception as e:
+        logger.error(f"Error generando template Excel: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
+
+
+@app.post("/inbox/api/catalogo/importar")
+async def api_catalogo_importar(
+    file: UploadFile = File(...),
+    agent_id: int = Form(1),
+    modo: str = Form("append"),
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Importa un archivo Excel (.xlsx) o CSV con productos al catálogo Voco.
+    modo='append'  → agrega sin borrar existentes.
+    modo='replace' → reemplaza todo el catálogo."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    contenido = await file.read()
+    nombre_archivo = (file.filename or "").lower()
+    productos: list[dict] = []
+
+    try:
+        if nombre_archivo.endswith(".csv"):
+            import csv, io
+            texto = contenido.decode("utf-8-sig")
+            reader = csv.DictReader(io.StringIO(texto))
+            for fila in reader:
+                productos.append({k.strip(): v.strip() for k, v in fila.items()})
+        elif nombre_archivo.endswith(".xlsx") or nombre_archivo.endswith(".xls"):
+            import openpyxl
+            from io import BytesIO
+            wb = openpyxl.load_workbook(BytesIO(contenido), data_only=True)
+            ws = wb.active
+            headers = [str(cell.value or "").strip().lower() for cell in ws[1]]
+            for row in ws.iter_rows(min_row=2, values_only=True):
+                if all(v is None for v in row):
+                    continue
+                fila = {headers[i]: str(row[i] if row[i] is not None else "").strip()
+                        for i in range(min(len(headers), len(row)))}
+                productos.append(fila)
+        else:
+            return JSONResponse(status_code=400,
+                content={"ok": False, "error": "Formato no soportado. Usa .xlsx o .csv"})
+    except Exception as e:
+        return JSONResponse(status_code=400,
+            content={"ok": False, "error": f"Error leyendo archivo: {e}"})
+
+    if not productos:
+        return JSONResponse(status_code=400,
+            content={"ok": False, "error": "El archivo está vacío o no tiene filas de datos"})
+
+    from agent.memory import importar_productos_voco
+    resultado = await importar_productos_voco(agent_id, productos, modo=modo)
+    return JSONResponse(content={"ok": True, **resultado})
+
+
 # ── Panel por slug (ruta comodín — DEBE ser la última ruta de /inbox/*) ────
 # FastAPI evalúa rutas en orden de definición: al estar aquí al final, las rutas
 # específicas (/inbox/api/*, /inbox/broadcast/*, etc.) ya fueron registradas primero.

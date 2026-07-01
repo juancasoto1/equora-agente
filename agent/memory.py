@@ -350,6 +350,26 @@ class Ticket(Base):
     actualizado_at:    Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class CatalogoVoco(Base):
+    """Catálogo de productos nativo de Voco — para agentes sin Shopify."""
+    __tablename__ = "catalogo_voco"
+
+    id:             Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:       Mapped[int]      = mapped_column(Integer, index=True)
+    nombre:         Mapped[str]      = mapped_column(String(300), nullable=False)
+    categoria:      Mapped[str]      = mapped_column(String(200), default="")
+    presentacion:   Mapped[str]      = mapped_column(String(200), default="")  # variante: 500ml, 1L…
+    precio:         Mapped[int]      = mapped_column(Integer, default=0)        # COP entero
+    precio_tachado: Mapped[int|None] = mapped_column(Integer, nullable=True)   # precio anterior
+    descripcion:    Mapped[str]      = mapped_column(Text, default="")
+    imagen_url:     Mapped[str]      = mapped_column(Text, default="")
+    sku:            Mapped[str]      = mapped_column(String(200), default="")
+    stock:          Mapped[int|None] = mapped_column(Integer, nullable=True)   # None = sin control
+    disponible:     Mapped[bool]     = mapped_column(Boolean, default=True)
+    orden:          Mapped[int]      = mapped_column(Integer, default=0)
+    created_at:     Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 async def inicializar_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -446,6 +466,8 @@ async def inicializar_db():
             "CREATE INDEX IF NOT EXISTS ix_appt_fecha_inicio     ON appointments        (fecha_inicio)",
             # Pipeline Fase 3 — HubSpot sync
             "ALTER TABLE deals ADD COLUMN IF NOT EXISTS hs_deal_id TEXT DEFAULT ''",
+            # Catálogo nativo Voco
+            "CREATE INDEX IF NOT EXISTS ix_catalogo_voco_agent ON catalogo_voco (agent_id)",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -4567,3 +4589,156 @@ async def listar_appointments(agent_id: int = 1, cliente_telefono: str | None = 
         query = query.order_by(Appointment.fecha_inicio.desc())
         result = await session.execute(query)
         return [_appointment_a_dict(r) for r in result.scalars().all()]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CATÁLOGO NATIVO VOCO — para agentes sin Shopify
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _catalogo_voco_a_dict(row: CatalogoVoco) -> dict:
+    return {
+        "id":             row.id,
+        "agent_id":       row.agent_id,
+        "nombre":         row.nombre,
+        "categoria":      row.categoria or "",
+        "presentacion":   row.presentacion or "",
+        "precio":         row.precio,
+        "precio_tachado": row.precio_tachado,
+        "descripcion":    row.descripcion or "",
+        "imagen_url":     row.imagen_url or "",
+        "sku":            row.sku or "",
+        "stock":          row.stock,
+        "disponible":     row.disponible,
+        "orden":          row.orden,
+        "created_at":     row.created_at.isoformat() if row.created_at else "",
+    }
+
+
+async def obtener_catalogo_voco(agent_id: int) -> list[dict]:
+    """Retorna todos los productos del catálogo Voco de un agente, ordenados."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(CatalogoVoco)
+            .where(CatalogoVoco.agent_id == agent_id)
+            .order_by(CatalogoVoco.orden, CatalogoVoco.categoria, CatalogoVoco.nombre)
+        )
+        return [_catalogo_voco_a_dict(r) for r in result.scalars().all()]
+
+
+async def crear_producto_voco(agent_id: int, data: dict) -> dict:
+    async with async_session() as session:
+        p = CatalogoVoco(
+            agent_id=agent_id,
+            nombre=str(data.get("nombre", "")).strip(),
+            categoria=str(data.get("categoria", "")).strip(),
+            presentacion=str(data.get("presentacion", "")).strip(),
+            precio=int(data.get("precio") or 0),
+            precio_tachado=int(data["precio_tachado"]) if data.get("precio_tachado") else None,
+            descripcion=str(data.get("descripcion", "")).strip(),
+            imagen_url=str(data.get("imagen_url", "")).strip(),
+            sku=str(data.get("sku", "")).strip(),
+            stock=int(data["stock"]) if data.get("stock") is not None and str(data.get("stock", "")).strip() != "" else None,
+            disponible=bool(data.get("disponible", True)),
+            orden=int(data.get("orden") or 0),
+        )
+        session.add(p)
+        await session.commit()
+        await session.refresh(p)
+        return _catalogo_voco_a_dict(p)
+
+
+async def actualizar_producto_voco(producto_id: int, agent_id: int, data: dict) -> dict | None:
+    async with async_session() as session:
+        result = await session.execute(
+            select(CatalogoVoco).where(CatalogoVoco.id == producto_id, CatalogoVoco.agent_id == agent_id)
+        )
+        p = result.scalar_one_or_none()
+        if not p:
+            return None
+        if "nombre"         in data: p.nombre         = str(data["nombre"]).strip()
+        if "categoria"      in data: p.categoria      = str(data["categoria"]).strip()
+        if "presentacion"   in data: p.presentacion   = str(data["presentacion"]).strip()
+        if "precio"         in data: p.precio         = int(data["precio"] or 0)
+        if "precio_tachado" in data: p.precio_tachado = int(data["precio_tachado"]) if data["precio_tachado"] else None
+        if "descripcion"    in data: p.descripcion    = str(data["descripcion"]).strip()
+        if "imagen_url"     in data: p.imagen_url     = str(data["imagen_url"]).strip()
+        if "sku"            in data: p.sku            = str(data["sku"]).strip()
+        if "stock"          in data: p.stock          = int(data["stock"]) if data.get("stock") is not None and str(data.get("stock","")).strip() != "" else None
+        if "disponible"     in data: p.disponible     = bool(data["disponible"])
+        if "orden"          in data: p.orden          = int(data["orden"] or 0)
+        await session.commit()
+        await session.refresh(p)
+        return _catalogo_voco_a_dict(p)
+
+
+async def eliminar_producto_voco(producto_id: int, agent_id: int) -> bool:
+    async with async_session() as session:
+        result = await session.execute(
+            select(CatalogoVoco).where(CatalogoVoco.id == producto_id, CatalogoVoco.agent_id == agent_id)
+        )
+        p = result.scalar_one_or_none()
+        if not p:
+            return False
+        await session.delete(p)
+        await session.commit()
+        return True
+
+
+async def importar_productos_voco(agent_id: int, productos: list[dict],
+                                   modo: str = "append") -> dict:
+    """Importa una lista de productos.
+    modo='append'  → agrega sin borrar los existentes.
+    modo='replace' → borra todo el catálogo del agente y reemplaza.
+    Retorna {"creados": N, "errores": [...]}
+    """
+    creados = 0
+    errores: list[str] = []
+
+    async with async_session() as session:
+        if modo == "replace":
+            await session.execute(
+                delete(CatalogoVoco).where(CatalogoVoco.agent_id == agent_id)
+            )
+            await session.commit()
+
+        for i, fila in enumerate(productos, 1):
+            nombre = str(fila.get("nombre", "")).strip()
+            if not nombre:
+                errores.append(f"Fila {i}: 'nombre' es obligatorio")
+                continue
+            precio_raw = str(fila.get("precio", "0")).replace(".", "").replace(",", "").strip()
+            try:
+                precio = int(float(precio_raw)) if precio_raw else 0
+            except ValueError:
+                errores.append(f"Fila {i} ({nombre}): precio inválido '{fila.get('precio')}'")
+                continue
+
+            pt_raw = str(fila.get("precio_tachado", "")).replace(".", "").replace(",", "").strip()
+            precio_tachado = int(float(pt_raw)) if pt_raw else None
+
+            st_raw = str(fila.get("stock", "")).strip()
+            stock = int(st_raw) if st_raw else None
+
+            disp_raw = str(fila.get("disponible", "1")).strip().lower()
+            disponible = disp_raw not in ("0", "no", "false", "falso", "n")
+
+            p = CatalogoVoco(
+                agent_id=agent_id,
+                nombre=nombre,
+                categoria=str(fila.get("categoria", "")).strip(),
+                presentacion=str(fila.get("presentacion", "")).strip(),
+                precio=precio,
+                precio_tachado=precio_tachado,
+                descripcion=str(fila.get("descripcion", "")).strip(),
+                imagen_url=str(fila.get("imagen_url", "")).strip(),
+                sku=str(fila.get("sku", "")).strip(),
+                stock=stock,
+                disponible=disponible,
+                orden=int(fila.get("orden") or creados),
+            )
+            session.add(p)
+            creados += 1
+
+        await session.commit()
+
+    return {"creados": creados, "errores": errores}

@@ -2052,6 +2052,11 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         <span id="esc-badge" style="display:none;margin-left:auto;background:#ef4444;color:#fff;
           border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
       </div>
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="catalogo"
+           style="display:none"
+           onclick="showSec('catalogo')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('catalogo')">
+        <span class="ni" aria-hidden="true"><i data-lucide="package" style="width:16px;height:16px;vertical-align:-3px"></i></span> Catálogo
+      </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="configuracion"
            onclick="showSec('configuracion')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('configuracion')">
@@ -3563,6 +3568,218 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           </div>
         </div>
       </div><!-- /sec-escalaciones -->
+
+      <!-- ═══════════════════════════════════════════════════════════
+           SECCIÓN: CATÁLOGO NATIVO VOCO
+           ═══════════════════════════════════════════════════════════ -->
+      <div class="sec sec-light" id="sec-catalogo" style="display:none">
+        <div class="sec-hdr">
+          <div>
+            <div class="sec-title">Catálogo de productos</div>
+            <div class="sec-subtitle">Gestiona tus productos directamente en Voco, sin necesidad de Shopify</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <a id="cat-btn-template" href="#" onclick="catDescargarTemplate(event)"
+               style="font-size:.8rem;color:var(--voco-text-muted);text-decoration:underline">
+              Descargar template Excel
+            </a>
+            <button onclick="catAbrirImportar()"
+              style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;
+              border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:600;cursor:pointer">
+              ↑ Importar Excel / CSV
+            </button>
+            <button onclick="catAbrirModal()"
+              style="background:var(--voco-accent);border:none;color:#fff;
+              border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:700;cursor:pointer">
+              + Agregar producto
+            </button>
+          </div>
+        </div>
+
+        <!-- Aviso restricciones imagen -->
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;
+             padding:10px 16px;margin:0 0 16px;font-size:.8rem;color:#92400e;line-height:1.5">
+          <strong>Imágenes:</strong> URL pública directa · JPEG, PNG o WebP · Máx 5 MB · Mín 500×500 px · Relación 1:1 recomendada.<br>
+          No usar Google Drive ni Instagram. Sí usar: tu sitio web, <a href="https://imgbb.com" target="_blank" style="color:#92400e">imgbb.com</a>, <a href="https://imgur.com" target="_blank" style="color:#92400e">imgur.com</a> o Cloudinary.
+        </div>
+
+        <!-- Filtros rápidos -->
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+          <input id="cat-buscar" type="text" placeholder="Buscar producto…"
+            oninput="catFiltrar()"
+            style="border:1px solid #d1d5db;border-radius:8px;padding:6px 12px;font-size:.84rem;
+            flex:1;min-width:180px;color:var(--voco-text);background:var(--voco-bg)">
+          <select id="cat-filtro-cat" onchange="catFiltrar()"
+            style="border:1px solid #d1d5db;border-radius:8px;padding:6px 10px;
+            font-size:.84rem;color:var(--voco-text);background:var(--voco-bg)">
+            <option value="">Todas las categorías</option>
+          </select>
+          <label style="font-size:.82rem;color:var(--voco-text-muted);display:flex;align-items:center;gap:5px">
+            <input type="checkbox" id="cat-solo-disponible" onchange="catFiltrar()"> Solo disponibles
+          </label>
+        </div>
+
+        <!-- Tabla de productos -->
+        <div style="overflow-x:auto">
+          <table id="cat-tabla" style="width:100%;border-collapse:collapse;font-size:.84rem">
+            <thead>
+              <tr style="background:var(--voco-surface);border-bottom:2px solid var(--voco-border)">
+                <th style="padding:8px 10px;text-align:left;font-weight:600">Imagen</th>
+                <th style="padding:8px 10px;text-align:left;font-weight:600">Producto</th>
+                <th style="padding:8px 10px;text-align:left;font-weight:600">Categoría</th>
+                <th style="padding:8px 10px;text-align:left;font-weight:600">Presentación</th>
+                <th style="padding:8px 10px;text-align:right;font-weight:600">Precio</th>
+                <th style="padding:8px 10px;text-align:center;font-weight:600">Stock</th>
+                <th style="padding:8px 10px;text-align:center;font-weight:600">Disponible</th>
+                <th style="padding:8px 10px;text-align:center;font-weight:600">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="cat-tbody">
+              <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--voco-text-muted)">
+                Cargando catálogo…
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="cat-total" style="font-size:.78rem;color:var(--voco-text-muted);margin-top:8px;text-align:right"></div>
+      </div><!-- /sec-catalogo -->
+
+      <!-- Modal añadir/editar producto -->
+      <div id="cat-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;
+           align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--voco-bg);border-radius:16px;padding:28px;max-width:560px;
+             width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h3 id="cat-modal-titulo" style="margin:0;font-size:1.05rem;font-weight:700">Agregar producto</h3>
+            <button onclick="catCerrarModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted)">×</button>
+          </div>
+          <div style="display:grid;gap:14px">
+            <input type="hidden" id="cat-id">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Nombre *</label>
+                <input id="cat-nombre" type="text" placeholder="Lavaloza Biotú"
+                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Categoría *</label>
+                <input id="cat-categoria" type="text" placeholder="Limpieza"
+                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Presentación</label>
+                <input id="cat-presentacion" type="text" placeholder="500ml, 1L, Pack x3…"
+                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">SKU</label>
+                <input id="cat-sku" type="text" placeholder="LAV-500"
+                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+              </div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Precio COP *</label>
+                <input id="cat-precio" type="number" min="0" placeholder="12900"
+                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Precio tachado</label>
+                <input id="cat-precio-tachado" type="number" min="0" placeholder="15900"
+                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Stock</label>
+                <input id="cat-stock" type="number" min="0" placeholder="50 (vacío=sin control)"
+                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Descripción corta</label>
+              <textarea id="cat-descripcion" rows="2" placeholder="Fórmula biodegradable, ideal para cocina…"
+                style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                resize:vertical;color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box"></textarea>
+            </div>
+            <div>
+              <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">URL de imagen</label>
+              <input id="cat-imagen-url" type="url" placeholder="https://tudominio.com/producto.jpg"
+                oninput="catPreviaImagen(this.value)"
+                style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
+                color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+              <div id="cat-img-preview" style="margin-top:8px;display:none">
+                <img id="cat-img-tag" src="" alt="Preview"
+                  style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid #d1d5db;object-fit:cover"
+                  onerror="document.getElementById('cat-img-preview').style.display='none'">
+              </div>
+              <div style="font-size:.74rem;color:#92400e;margin-top:4px">
+                JPEG, PNG o WebP · Máx 5MB · Mín 500×500px · URL pública directa
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:.88rem;cursor:pointer">
+              <input type="checkbox" id="cat-disponible" checked> Disponible para vender
+            </label>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end">
+            <button onclick="catCerrarModal()"
+              style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:9px 20px;
+              font-size:.88rem;cursor:pointer;color:#374151">Cancelar</button>
+            <button id="cat-btn-guardar" onclick="catGuardar()"
+              style="background:var(--voco-accent);border:none;color:#fff;border-radius:8px;
+              padding:9px 22px;font-size:.88rem;font-weight:700;cursor:pointer">Guardar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal importar Excel/CSV -->
+      <div id="cat-modal-importar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;
+           align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--voco-bg);border-radius:16px;padding:28px;max-width:520px;
+             width:100%;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h3 style="margin:0;font-size:1.05rem;font-weight:700">Importar catálogo</h3>
+            <button onclick="catCerrarImportar()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted)">×</button>
+          </div>
+          <div style="margin-bottom:16px;font-size:.84rem;color:var(--voco-text-muted);line-height:1.6">
+            Sube un archivo <strong>.xlsx</strong> o <strong>.csv</strong> con tus productos.<br>
+            <a href="#" onclick="catDescargarTemplate(event)" style="color:var(--voco-accent)">Descarga el template</a> para ver el formato correcto.
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:6px">Archivo</label>
+            <input id="cat-import-file" type="file" accept=".xlsx,.csv"
+              style="font-size:.84rem;width:100%">
+          </div>
+          <div style="margin-bottom:20px">
+            <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:6px">Modo de importación</label>
+            <div style="display:flex;gap:16px">
+              <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;cursor:pointer">
+                <input type="radio" name="cat-import-modo" value="append" checked> Agregar a los existentes
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;cursor:pointer">
+                <input type="radio" name="cat-import-modo" value="replace"> Reemplazar todo el catálogo
+              </label>
+            </div>
+          </div>
+          <div id="cat-import-resultado" style="display:none;margin-bottom:16px;font-size:.84rem;
+               border-radius:8px;padding:10px 14px"></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end">
+            <button onclick="catCerrarImportar()"
+              style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:9px 20px;
+              font-size:.88rem;cursor:pointer;color:#374151">Cancelar</button>
+            <button id="cat-btn-importar" onclick="catImportar()"
+              style="background:var(--voco-accent);border:none;color:#fff;border-radius:8px;
+              padding:9px 22px;font-size:.88rem;font-weight:700;cursor:pointer">Importar</button>
+          </div>
+        </div>
+      </div>
 
       <!-- ═══════════════════════════════════════
            SECCIÓN: EQUIPO (administración de usuarios internos)
@@ -5414,6 +5631,7 @@ function showSec(id) {
     if (id === 'configuracion') { cargarConfiguracion(); cargarEstadoSistema(); }
     if (id === 'escalaciones')  { escCargarLista(); }
     if (id === 'pipeline')      { cargarPipeline(); }
+    if (id === 'catalogo')      { catCargar(); }
   }
   // En móvil al entrar a Escalaciones, forzar vista de LISTA (no detalle).
   // Sin esto el #esc-detalle (position:fixed z-index:200) tapaba la lista
@@ -5653,6 +5871,9 @@ function aplicarVisibilidadModulos() {
     var activo = !!_modulosActivos[mod];
     el.style.display = activo ? '' : 'none';
   });
+  // Catálogo Voco: mostrar/ocultar nav item según módulo voco_catalog
+  var navCat = document.querySelector('.nav-item[data-sec="catalogo"]');
+  if (navCat) navCat.style.display = _modulosActivos['voco_catalog'] ? '' : 'none';
 }
 
 /* ══════════════════════════════════════════════════════
@@ -12598,6 +12819,214 @@ _escRenderLista = function(tickets) {
     lista.appendChild(card);
   });
 };
+
+/* ══════════════════════════════════════════════════════════════════════
+   CATÁLOGO NATIVO VOCO
+   ══════════════════════════════════════════════════════════════════════ */
+var _catProductos = [];   // cache local de productos cargados
+
+async function catCargar() {
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/catalogo?agent_id=' + ag, {credentials:'include'});
+    var d = await r.json();
+    _catProductos = d.productos || [];
+    catActualizarFiltrosCat();
+    catFiltrar();
+  } catch(e) {
+    document.getElementById('cat-tbody').innerHTML =
+      '<tr><td colspan="8" style="text-align:center;padding:32px;color:#ef4444">Error cargando catálogo</td></tr>';
+  }
+}
+
+function catActualizarFiltrosCat() {
+  var sel = document.getElementById('cat-filtro-cat');
+  if (!sel) return;
+  var cats = [...new Set(_catProductos.map(function(p){ return p.categoria||'General'; }))].sort();
+  var actual = sel.value;
+  sel.innerHTML = '<option value="">Todas las categorías</option>';
+  cats.forEach(function(c){
+    var o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    if (c === actual) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+
+function catFiltrar() {
+  var buscar   = (document.getElementById('cat-buscar').value || '').toLowerCase();
+  var catFilt  = (document.getElementById('cat-filtro-cat').value || '');
+  var soloDisp = document.getElementById('cat-solo-disponible').checked;
+  var tbody = document.getElementById('cat-tbody');
+  var filtrados = _catProductos.filter(function(p){
+    if (buscar && !(p.nombre + ' ' + p.presentacion + ' ' + p.sku).toLowerCase().includes(buscar)) return false;
+    if (catFilt && (p.categoria||'General') !== catFilt) return false;
+    if (soloDisp && !p.disponible) return false;
+    return true;
+  });
+  if (!filtrados.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Sin productos que coincidan</td></tr>';
+    document.getElementById('cat-total').textContent = '';
+    return;
+  }
+  tbody.innerHTML = filtrados.map(function(p){
+    var precio = '$' + p.precio.toLocaleString('es-CO');
+    var tachado = p.precio_tachado ? '<span style="text-decoration:line-through;color:#9ca3af;font-size:.8rem;margin-right:4px">$' + p.precio_tachado.toLocaleString('es-CO') + '</span>' : '';
+    var img = p.imagen_url
+      ? '<img src="' + p.imagen_url + '" style="width:40px;height:40px;border-radius:6px;object-fit:cover;border:1px solid #e5e7eb" onerror="this.style.display=\'none\'">'
+      : '<div style="width:40px;height:40px;border-radius:6px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:1.2rem">📦</div>';
+    var disp = p.disponible
+      ? '<span style="color:#16a34a;font-weight:700">✓</span>'
+      : '<span style="color:#ef4444">✗</span>';
+    var stockStr = p.stock !== null && p.stock !== undefined ? p.stock : '—';
+    return '<tr style="border-bottom:1px solid var(--voco-border)">' +
+      '<td style="padding:8px 10px">' + img + '</td>' +
+      '<td style="padding:8px 10px"><strong>' + _escEsc(p.nombre) + '</strong>' +
+        (p.descripcion ? '<br><span style="font-size:.75rem;color:var(--voco-text-muted)">' + _escEsc(p.descripcion.substring(0,60)) + '…</span>' : '') + '</td>' +
+      '<td style="padding:8px 10px">' + _escEsc(p.categoria||'—') + '</td>' +
+      '<td style="padding:8px 10px">' + _escEsc(p.presentacion||'—') + '</td>' +
+      '<td style="padding:8px 10px;text-align:right">' + tachado + precio + '</td>' +
+      '<td style="padding:8px 10px;text-align:center">' + stockStr + '</td>' +
+      '<td style="padding:8px 10px;text-align:center">' + disp + '</td>' +
+      '<td style="padding:8px 10px;text-align:center;white-space:nowrap">' +
+        '<button onclick="catEditar(' + p.id + ')" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.78rem;margin-right:4px">Editar</button>' +
+        '<button onclick="catEliminar(' + p.id + ',\'' + _escEsc(p.nombre) + '\')" style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.78rem;color:#b91c1c">Eliminar</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  document.getElementById('cat-total').textContent = filtrados.length + ' producto(s)';
+}
+
+function catAbrirModal(producto) {
+  document.getElementById('cat-id').value            = producto ? producto.id : '';
+  document.getElementById('cat-nombre').value        = producto ? producto.nombre : '';
+  document.getElementById('cat-categoria').value     = producto ? producto.categoria : '';
+  document.getElementById('cat-presentacion').value  = producto ? producto.presentacion : '';
+  document.getElementById('cat-precio').value        = producto ? producto.precio : '';
+  document.getElementById('cat-precio-tachado').value= producto ? (producto.precio_tachado||'') : '';
+  document.getElementById('cat-stock').value         = producto ? (producto.stock!==null&&producto.stock!==undefined ? producto.stock : '') : '';
+  document.getElementById('cat-descripcion').value   = producto ? producto.descripcion : '';
+  document.getElementById('cat-imagen-url').value    = producto ? producto.imagen_url : '';
+  document.getElementById('cat-sku').value           = producto ? producto.sku : '';
+  document.getElementById('cat-disponible').checked  = producto ? !!producto.disponible : true;
+  document.getElementById('cat-modal-titulo').textContent = producto ? 'Editar producto' : 'Agregar producto';
+  catPreviaImagen(producto ? producto.imagen_url : '');
+  document.getElementById('cat-modal').style.display = 'flex';
+}
+
+function catCerrarModal() {
+  document.getElementById('cat-modal').style.display = 'none';
+}
+
+function catEditar(id) {
+  var p = _catProductos.find(function(x){ return x.id === id; });
+  if (p) catAbrirModal(p);
+}
+
+function catPreviaImagen(url) {
+  var prev = document.getElementById('cat-img-preview');
+  var tag  = document.getElementById('cat-img-tag');
+  if (url && url.startsWith('http')) {
+    tag.src = url;
+    prev.style.display = '';
+  } else {
+    prev.style.display = 'none';
+  }
+}
+
+async function catGuardar() {
+  var id  = document.getElementById('cat-id').value;
+  var nombre = document.getElementById('cat-nombre').value.trim();
+  var precio = document.getElementById('cat-precio').value;
+  if (!nombre) { alert('El nombre es obligatorio'); return; }
+  if (!precio && precio !== '0') { alert('El precio es obligatorio'); return; }
+  var data = {
+    nombre:         nombre,
+    categoria:      document.getElementById('cat-categoria').value.trim(),
+    presentacion:   document.getElementById('cat-presentacion').value.trim(),
+    precio:         parseInt(precio) || 0,
+    precio_tachado: document.getElementById('cat-precio-tachado').value ? parseInt(document.getElementById('cat-precio-tachado').value) : null,
+    stock:          document.getElementById('cat-stock').value !== '' ? parseInt(document.getElementById('cat-stock').value) : null,
+    descripcion:    document.getElementById('cat-descripcion').value.trim(),
+    imagen_url:     document.getElementById('cat-imagen-url').value.trim(),
+    sku:            document.getElementById('cat-sku').value.trim(),
+    disponible:     document.getElementById('cat-disponible').checked,
+  };
+  var ag = _escAgentId || 1;
+  var btn = document.getElementById('cat-btn-guardar');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    var url = id ? '/inbox/api/catalogo/' + id + '?agent_id=' + ag : '/inbox/api/catalogo?agent_id=' + ag;
+    var method = id ? 'PUT' : 'POST';
+    var r = await fetch(url, {method:method, credentials:'include',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
+    var d = await r.json();
+    if (d.ok) { catCerrarModal(); catCargar(); }
+    else { alert('Error: ' + (d.error||'desconocido')); }
+  } catch(e) { alert('Error de red'); }
+  btn.disabled = false; btn.textContent = 'Guardar';
+}
+
+async function catEliminar(id, nombre) {
+  if (!confirm('¿Eliminar "' + nombre + '"? Esta acción no se puede deshacer.')) return;
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/catalogo/' + id + '?agent_id=' + ag,
+      {method:'DELETE', credentials:'include'});
+    var d = await r.json();
+    if (d.ok) catCargar();
+    else alert('Error: ' + (d.error||'desconocido'));
+  } catch(e) { alert('Error de red'); }
+}
+
+function catDescargarTemplate(e) {
+  e.preventDefault();
+  window.location.href = '/inbox/api/catalogo/template';
+}
+
+function catAbrirImportar() {
+  document.getElementById('cat-modal-importar').style.display = 'flex';
+  document.getElementById('cat-import-resultado').style.display = 'none';
+  document.getElementById('cat-import-file').value = '';
+  document.querySelector('input[name="cat-import-modo"][value="append"]').checked = true;
+}
+
+function catCerrarImportar() {
+  document.getElementById('cat-modal-importar').style.display = 'none';
+}
+
+async function catImportar() {
+  var fileInput = document.getElementById('cat-import-file');
+  if (!fileInput.files.length) { alert('Selecciona un archivo .xlsx o .csv'); return; }
+  var modo = document.querySelector('input[name="cat-import-modo"]:checked').value;
+  var ag   = _escAgentId || 1;
+  var fd   = new FormData();
+  fd.append('file', fileInput.files[0]);
+  fd.append('agent_id', ag);
+  fd.append('modo', modo);
+  var btn = document.getElementById('cat-btn-importar');
+  btn.disabled = true; btn.textContent = 'Importando…';
+  var res = document.getElementById('cat-import-resultado');
+  try {
+    var r = await fetch('/inbox/api/catalogo/importar', {method:'POST', credentials:'include', body:fd});
+    var d = await r.json();
+    res.style.display = '';
+    if (d.ok) {
+      var msg = '✅ ' + d.creados + ' producto(s) importado(s).';
+      if (d.errores && d.errores.length) msg += '<br>⚠️ ' + d.errores.join('<br>');
+      res.style.background = '#f0fdf4'; res.style.border = '1px solid #86efac'; res.style.color = '#166534';
+      res.innerHTML = msg;
+      setTimeout(function(){ catCerrarImportar(); catCargar(); }, 2000);
+    } else {
+      res.style.background = '#fef2f2'; res.style.border = '1px solid #fca5a5'; res.style.color = '#991b1b';
+      res.textContent = '❌ ' + (d.error || 'Error desconocido');
+    }
+  } catch(e) {
+    res.style.display = ''; res.style.background = '#fef2f2'; res.style.border = '1px solid #fca5a5'; res.style.color = '#991b1b';
+    res.textContent = '❌ Error de red';
+  }
+  btn.disabled = false; btn.textContent = 'Importar';
+}
 </script>
 </body>
 </html>"""

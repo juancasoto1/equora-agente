@@ -1176,3 +1176,49 @@ def escalar_a_equipo(telefono: str, contexto: str) -> str:
         "Entiendo, déjame conectarte con alguien de nuestro equipo que te pueda ayudar mejor. "
         "En breve te contactamos. ¡Gracias por tu paciencia! 😊"
     )
+
+
+# ── Catálogo nativo Voco ──────────────────────────────────────────────────────
+
+async def obtener_catalogo_voco_texto(agent_id: int) -> str:
+    """Genera el texto del catálogo Voco para inyectarlo en el system prompt.
+    Formato idéntico al de obtener_catalogo_shopify() para que el bot lo procese igual."""
+    from agent.memory import obtener_catalogo_voco
+    productos = await obtener_catalogo_voco(agent_id)
+    disponibles = [p for p in productos if p["disponible"]]
+    if not disponibles:
+        return ""
+
+    categorias: dict[str, list[dict]] = {}
+    for p in disponibles:
+        cat = p["categoria"] or "General"
+        categorias.setdefault(cat, []).append(p)
+
+    lineas = ["## Catálogo de productos\n"]
+    lineas.append("IMPORTANTE: TODOS los productos listados a continuación están "
+                  "disponibles para vender. NUNCA digas que un producto 'no está "
+                  "disponible' si aparece en esta lista.\n")
+
+    for cat, items in categorias.items():
+        lineas.append(f"### {cat}")
+        # Agrupar por nombre de producto (pueden tener varias presentaciones)
+        por_nombre: dict[str, list[dict]] = {}
+        for p in items:
+            por_nombre.setdefault(p["nombre"], []).append(p)
+
+        for nombre, variantes in por_nombre.items():
+            lineas.append(f"*{nombre}*")
+            for v in variantes:
+                precio_fmt = f"${v['precio']:,}".replace(",", ".")
+                tachado_fmt = f"~~${v['precio_tachado']:,}~~".replace(",", ".") if v.get("precio_tachado") else ""
+                presentacion = f" {v['presentacion']}" if v["presentacion"] else ""
+                precio_str = f"{tachado_fmt} {precio_fmt}".strip() if tachado_fmt else precio_fmt
+                stock_str = f"  ({v['stock']} disponibles)" if isinstance(v.get("stock"), int) and v["stock"] > 0 else ""
+                lineas.append(f"  {presentacion} → {precio_str}{stock_str}".strip(" →").strip())
+                if v.get("descripcion"):
+                    lineas.append(f"  _{v['descripcion']}_")
+            lineas.append("")
+        lineas.append("")
+
+    logger.info(f"[catalogo-voco] agent_id={agent_id}: {len(disponibles)} productos en texto")
+    return "\n".join(lineas)

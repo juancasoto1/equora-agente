@@ -192,6 +192,13 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
         if catalogo:
             system_prompt = system_prompt + "\n\n" + catalogo
 
+    # ── Catálogo nativo Voco (toggle: voco_catalog) ───────────────────────────
+    if _mod(modules, "voco_catalog"):
+        from agent.tools import obtener_catalogo_voco_texto
+        cat_voco = await obtener_catalogo_voco_texto(agent_id)
+        if cat_voco:
+            system_prompt = system_prompt + "\n\n" + cat_voco
+
     if telefono:
         # ── Perfil enriquecido del cliente (#65) ──────────────────────────────
         # Señales compactas que más cambian la estrategia de respuesta:
