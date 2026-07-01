@@ -10132,9 +10132,10 @@ function _escActualizarBadges() {
       });
     }).catch(function(){});
 }
-// Iniciar polling al cargar
+// Solo registrar el intervalo periódico — la primera llamada la hace el IIFE
+// de inicializarSelectorAgente() una vez que _escAgentId está resuelto,
+// evitando así el flash que mostraba las escalaciones de otro agente.
 document.addEventListener('DOMContentLoaded', function() {
-  _escActualizarBadges();
   setInterval(_escActualizarBadges, 15000);
 });
 

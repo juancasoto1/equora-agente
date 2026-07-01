@@ -8115,15 +8115,29 @@ async def inbox_chat_test(
     tel = _test_phone(agent_id)
     historial = await obtener_historial(tel)
     try:
-        respuesta = await generar_respuesta(mensaje, historial, telefono=None, contexto_campana=None, agent_id=agent_id)
+        respuesta_raw = await generar_respuesta(mensaje, historial, telefono=None, contexto_campana=None, agent_id=agent_id)
     except Exception as e:
         logger.error(f"Error en chat de prueba: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)[:200]})
 
+    # Procesar marcadores para extraer [[ESCALAR:...]] y otros antes de guardar
+    ctx = MarkerContext(respuesta=respuesta_raw, telefono=tel, agent_id=agent_id)
+    ctx = await aplicar_marcadores(ctx)
+    respuesta = ctx.respuesta
+
     await guardar_mensaje(tel, "user", mensaje, agent_id=agent_id)
     await guardar_mensaje(tel, "assistant", respuesta, agent_id=agent_id)
 
-    return JSONResponse(content={"ok": True, "respuesta": respuesta})
+    # Crear ticket de escalación si el agente lo solicitó
+    escalacion = False
+    if ctx.datos_escalacion:
+        try:
+            await _notificar_escalacion(tel, ctx.datos_escalacion, agent_id=agent_id)
+            escalacion = True
+        except Exception as e:
+            logger.error(f"Error creando escalación de chat de prueba: {e}")
+
+    return JSONResponse(content={"ok": True, "respuesta": respuesta, "escalacion": escalacion})
 
 
 @app.get("/inbox/api/chat/test/history")
