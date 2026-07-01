@@ -359,7 +359,8 @@ class Pedido(Base):
     numero:           Mapped[str]      = mapped_column(String(30), nullable=False, index=True)   # VCO-0001
     telefono_cliente: Mapped[str]      = mapped_column(String(50), index=True)
     nombre_cliente:   Mapped[str]      = mapped_column(String(300), default="")
-    estado:           Mapped[str]      = mapped_column(String(30), default="pendiente")  # pendiente/confirmado/preparando/enviado/entregado/cancelado
+    estado:           Mapped[str]      = mapped_column(String(30), default="creado")    # creado/alistado/despachado/entregado/cancelado
+    estado_pago:      Mapped[str]      = mapped_column(String(20), default="pendiente") # pendiente/pagado/cod
     productos_json:   Mapped[str]      = mapped_column(Text, default="[]")               # snapshot inmutable del carrito
     subtotal:         Mapped[int]      = mapped_column(Integer, default=0)               # COP enteros
     descuento:        Mapped[int]      = mapped_column(Integer, default=0)
@@ -498,6 +499,12 @@ async def inicializar_db():
             "CREATE INDEX IF NOT EXISTS ix_pedidos_telefono ON pedidos (agent_id, telefono_cliente)",
             "CREATE INDEX IF NOT EXISTS ix_pedidos_estado   ON pedidos (agent_id, estado)",
             "CREATE INDEX IF NOT EXISTS ix_pedidos_numero   ON pedidos (agent_id, numero)",
+            # Pedidos v2 — nuevos campos + migración de estados legacy
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS estado_pago TEXT DEFAULT 'pendiente'",
+            # Migrar estados legacy → nuevos valores
+            "UPDATE pedidos SET estado='creado'    WHERE estado IN ('pendiente','confirmado')",
+            "UPDATE pedidos SET estado='alistado'  WHERE estado='preparando'",
+            "UPDATE pedidos SET estado='despachado' WHERE estado='enviado'",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -4780,7 +4787,8 @@ async def importar_productos_voco(agent_id: int, productos: list[dict],
 # PEDIDOS NATIVOS VOCO
 # ══════════════════════════════════════════════════════════════════════════════
 
-ESTADOS_PEDIDO = ("pendiente", "confirmado", "preparando", "enviado", "entregado", "cancelado")
+ESTADOS_PEDIDO = ("creado", "alistado", "despachado", "entregado", "cancelado")
+ESTADOS_PAGO   = ("pendiente", "pagado", "cod")
 
 
 async def _siguiente_numero_pedido(session: AsyncSession, agent_id: int) -> str:
@@ -4804,6 +4812,7 @@ def _pedido_a_dict(p: Pedido) -> dict:
         "telefono_cliente": p.telefono_cliente,
         "nombre_cliente":   p.nombre_cliente,
         "estado":           p.estado,
+        "estado_pago":      getattr(p, "estado_pago", "pendiente") or "pendiente",
         "productos":        productos,
         "subtotal":         p.subtotal,
         "descuento":        p.descuento,
@@ -4845,7 +4854,8 @@ async def crear_pedido_desde_carrito(
             numero=numero,
             telefono_cliente=telefono,
             nombre_cliente=nombre_cliente[:300],
-            estado="pendiente",
+            estado="creado",
+            estado_pago="pendiente",
             productos_json=json.dumps(carrito, ensure_ascii=False),
             subtotal=subtotal,
             descuento=descuento,
@@ -4879,7 +4889,8 @@ async def crear_pedido_manual(agent_id: int, data: dict) -> dict:
             numero=numero,
             telefono_cliente=str(data.get("telefono_cliente", ""))[:50],
             nombre_cliente=str(data.get("nombre_cliente", ""))[:300],
-            estado=data.get("estado", "pendiente"),
+            estado=data.get("estado", "creado"),
+            estado_pago=data.get("estado_pago", "pendiente"),
             productos_json=json.dumps(productos, ensure_ascii=False),
             subtotal=subtotal,
             descuento=descuento,
@@ -4935,6 +4946,8 @@ async def actualizar_pedido(pedido_id: int, agent_id: int, data: dict) -> dict |
             return None
         if "estado" in data and data["estado"] in ESTADOS_PEDIDO:
             p.estado = data["estado"]
+        if "estado_pago" in data and data["estado_pago"] in ESTADOS_PAGO:
+            p.estado_pago = data["estado_pago"]
         if "notas_internas" in data:
             p.notas_internas = str(data["notas_internas"])[:2000]
         if "notas_cliente" in data:
@@ -4969,9 +4982,9 @@ async def eliminar_pedido(pedido_id: int, agent_id: int) -> bool:
 
 
 async def obtener_stats_pedidos(agent_id: int) -> dict:
-    """Contadores rápidos por estado para el panel."""
+    """Contadores rápidos por estado y pago para el panel."""
     async with async_session() as session:
-        stats: dict[str, int] = {}
+        stats: dict = {}
         for estado in ESTADOS_PEDIDO:
             r = await session.execute(
                 select(func.count()).where(
@@ -4980,6 +4993,14 @@ async def obtener_stats_pedidos(agent_id: int) -> dict:
                 )
             )
             stats[estado] = r.scalar() or 0
+        for ep in ESTADOS_PAGO:
+            r = await session.execute(
+                select(func.count()).where(
+                    Pedido.agent_id == agent_id,
+                    Pedido.estado_pago == ep,
+                )
+            )
+            stats[f"pago_{ep}"] = r.scalar() or 0
         # Total y valor total
         r_total = await session.execute(
             select(func.count(), func.sum(Pedido.total)).where(Pedido.agent_id == agent_id)
@@ -4987,7 +5008,6 @@ async def obtener_stats_pedidos(agent_id: int) -> dict:
         row = r_total.one()
         stats["total"] = row[0] or 0
         stats["valor_total"] = row[1] or 0
-        # Valor promedio
         stats["valor_promedio"] = (
             round(stats["valor_total"] / stats["total"]) if stats["total"] else 0
         )

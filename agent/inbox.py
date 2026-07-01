@@ -4073,23 +4073,20 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           </div>
         </div>
         <div class="sec-body">
-          <!-- Tarjetas de stats -->
-          <div id="ped-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:20px">
-            <div class="kpi-card" id="ped-stat-pendiente">
-              <div class="kpi-label">Pendiente</div>
-              <div class="kpi-val" id="ped-n-pendiente">—</div>
+          <!-- Tarjetas de stats — estado de despacho -->
+          <div style="font-size:.72rem;font-weight:700;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Estado del pedido</div>
+          <div id="ped-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:10px;margin-bottom:16px">
+            <div class="kpi-card" id="ped-stat-creado">
+              <div class="kpi-label">Creado</div>
+              <div class="kpi-val" id="ped-n-creado">—</div>
             </div>
-            <div class="kpi-card" id="ped-stat-confirmado">
-              <div class="kpi-label">Confirmado</div>
-              <div class="kpi-val" id="ped-n-confirmado">—</div>
+            <div class="kpi-card" id="ped-stat-alistado">
+              <div class="kpi-label">Alistado</div>
+              <div class="kpi-val" id="ped-n-alistado">—</div>
             </div>
-            <div class="kpi-card" id="ped-stat-preparando">
-              <div class="kpi-label">Preparando</div>
-              <div class="kpi-val" id="ped-n-preparando">—</div>
-            </div>
-            <div class="kpi-card" id="ped-stat-enviado">
-              <div class="kpi-label">Enviado</div>
-              <div class="kpi-val" id="ped-n-enviado">—</div>
+            <div class="kpi-card" id="ped-stat-despachado">
+              <div class="kpi-label">Despachado</div>
+              <div class="kpi-val" id="ped-n-despachado">—</div>
             </div>
             <div class="kpi-card" id="ped-stat-entregado">
               <div class="kpi-label">Entregado</div>
@@ -4101,7 +4098,23 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             </div>
             <div class="kpi-card">
               <div class="kpi-label">Valor total</div>
-              <div class="kpi-val" id="ped-valor-total" style="font-size:.95rem">—</div>
+              <div class="kpi-val" id="ped-valor-total" style="font-size:.9rem">—</div>
+            </div>
+          </div>
+          <!-- Tarjetas de stats — estado de pago -->
+          <div style="font-size:.72rem;font-weight:700;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Estado de pago</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:10px;margin-bottom:20px">
+            <div class="kpi-card">
+              <div class="kpi-label">Por cobrar</div>
+              <div class="kpi-val" id="ped-n-pago-pendiente">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Pagado</div>
+              <div class="kpi-val" id="ped-n-pago-pagado" style="color:var(--voco-success)">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Contra entrega</div>
+              <div class="kpi-val" id="ped-n-pago-cod">—</div>
             </div>
           </div>
 
@@ -4116,10 +4129,9 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                      background:var(--voco-card-bg);color:var(--voco-text);font-size:.85rem"
               onchange="pedCargar()">
               <option value="">Todos los estados</option>
-              <option value="pendiente">Pendiente</option>
-              <option value="confirmado">Confirmado</option>
-              <option value="preparando">Preparando</option>
-              <option value="enviado">Enviado</option>
+              <option value="creado">Creado</option>
+              <option value="alistado">Alistado</option>
+              <option value="despachado">Despachado</option>
               <option value="entregado">Entregado</option>
               <option value="cancelado">Cancelado</option>
             </select>
@@ -4127,19 +4139,20 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
           <!-- Tabla -->
           <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;min-width:600px">
+            <table style="width:100%;border-collapse:collapse;min-width:680px">
               <thead>
                 <tr style="background:var(--voco-content-bg-alt);font-size:.78rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.04em">
                   <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Nro.</th>
                   <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Cliente</th>
                   <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Estado</th>
+                  <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Pago</th>
                   <th style="padding:10px 12px;text-align:right;border-bottom:1px solid var(--voco-border)">Total</th>
                   <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Fecha</th>
                   <th style="padding:10px 12px;text-align:center;border-bottom:1px solid var(--voco-border)">Acciones</th>
                 </tr>
               </thead>
               <tbody id="ped-tbody">
-                <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Cargando pedidos…</td></tr>
+                <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Cargando pedidos…</td></tr>
               </tbody>
             </table>
           </div>
@@ -4172,18 +4185,29 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                          background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
               </div>
             </div>
-            <div>
-              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">ESTADO</label>
-              <select id="ped-estado"
-                style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
-                       background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem">
-                <option value="pendiente">Pendiente</option>
-                <option value="confirmado">Confirmado</option>
-                <option value="preparando">Preparando</option>
-                <option value="enviado">Enviado</option>
-                <option value="entregado">Entregado</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">ESTADO DEL PEDIDO</label>
+                <select id="ped-estado"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem">
+                  <option value="creado">Creado</option>
+                  <option value="alistado">Alistado</option>
+                  <option value="despachado">Despachado</option>
+                  <option value="entregado">Entregado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">ESTADO DE PAGO</label>
+                <select id="ped-estado-pago"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem">
+                  <option value="pendiente">Por cobrar</option>
+                  <option value="pagado">Pagado</option>
+                  <option value="cod">Contra entrega (COD)</option>
+                </select>
+              </div>
             </div>
             <div>
               <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">DIRECCIÓN DE ENTREGA</label>
@@ -4231,6 +4255,24 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             </div>
             <div id="ped-modal-error" style="display:none;color:#ef4444;font-size:.83rem;padding:8px 12px;
                  background:rgba(239,68,68,.08);border-radius:8px"></div>
+            <!-- Botones remisión — solo visibles para pedidos existentes -->
+            <div id="ped-remision-btns" style="display:none;border-top:1px solid var(--voco-border);padding-top:12px;margin-top:4px">
+              <div style="font-size:.75rem;font-weight:600;color:var(--voco-text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Remisión de entrega</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button onclick="pedRemisionImprimir()"
+                  style="padding:8px 16px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:transparent;color:var(--voco-text);cursor:pointer;font-size:.83rem;
+                         display:flex;align-items:center;gap:6px">
+                  <i data-lucide="printer" style="width:14px;height:14px"></i> Imprimir / PDF
+                </button>
+                <button id="ped-btn-wa-pdf" onclick="pedRemisionWhatsapp()"
+                  style="padding:8px 16px;border-radius:8px;border:1px solid #25d366;
+                         background:transparent;color:#25d366;cursor:pointer;font-size:.83rem;
+                         display:flex;align-items:center;gap:6px">
+                  <i data-lucide="send" style="width:14px;height:14px"></i> Enviar por WhatsApp
+                </button>
+              </div>
+            </div>
             <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px">
               <button onclick="pedCerrarModal()"
                 style="padding:9px 20px;border-radius:8px;border:1px solid var(--voco-border);
@@ -13281,16 +13323,26 @@ async function catImportar() {
 // ─────────────────────────────────────────────────────────────────
 // Pedidos
 // ─────────────────────────────────────────────────────────────────
-var _pedOffset = 0;
-var _pedLimit  = 30;
+var _pedOffset  = 0;
+var _pedLimit   = 30;
+var _pedIdActual = null;  // id del pedido abierto en el modal
 
 var _PED_ESTADO_COLOR = {
-  pendiente:  '#f97316',
-  confirmado: '#3b82f6',
-  preparando: '#8b5cf6',
-  enviado:    '#06b6d4',
+  creado:     '#f97316',
+  alistado:   '#8b5cf6',
+  despachado: '#06b6d4',
   entregado:  '#22c55e',
   cancelado:  '#ef4444',
+};
+var _PED_PAGO_COLOR = {
+  pendiente: '#f97316',
+  pagado:    '#22c55e',
+  cod:       '#3b82f6',
+};
+var _PED_PAGO_LABEL = {
+  pendiente: 'Por cobrar',
+  pagado:    'Pagado',
+  cod:       'COD',
 };
 
 async function pedCargarStats() {
@@ -13298,19 +13350,25 @@ async function pedCargarStats() {
   try {
     var r = await fetch('/inbox/api/pedidos/stats?agent_id=' + ag, {credentials:'include'});
     var d = await r.json();
-    var estados = ['pendiente','confirmado','preparando','enviado','entregado','cancelado'];
-    estados.forEach(function(e) {
+    ['creado','alistado','despachado','entregado','cancelado'].forEach(function(e) {
       var el = document.getElementById('ped-n-' + e);
       if (el) el.textContent = d[e] || 0;
     });
     var vt = document.getElementById('ped-valor-total');
     if (vt) vt.textContent = '$' + ((d.valor_total || 0) / 1000000).toFixed(1) + 'M';
-    // Badge sidebar: pedidos pendientes
+    // Stats de pago
+    var ep = document.getElementById('ped-n-pago-pendiente');
+    if (ep) ep.textContent = d['pago_pendiente'] || 0;
+    var ep2 = document.getElementById('ped-n-pago-pagado');
+    if (ep2) ep2.textContent = d['pago_pagado'] || 0;
+    var ep3 = document.getElementById('ped-n-pago-cod');
+    if (ep3) ep3.textContent = d['pago_cod'] || 0;
+    // Badge sidebar: pedidos creados (pendientes de atender)
     var badge = document.getElementById('ped-badge');
     if (badge) {
-      var nPend = d['pendiente'] || 0;
-      badge.textContent = nPend;
-      badge.style.display = nPend > 0 ? '' : 'none';
+      var nCreados = d['creado'] || 0;
+      badge.textContent = nCreados;
+      badge.style.display = nCreados > 0 ? '' : 'none';
     }
   } catch(e) { console.error('pedCargarStats', e); }
 }
@@ -13329,28 +13387,32 @@ async function _pedCargarPagina() {
   if (buscar) url += '&telefono=' + encodeURIComponent(buscar);
 
   var tbody = document.getElementById('ped-tbody');
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Cargando…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Cargando…</td></tr>';
 
   try {
     var r = await fetch(url, {credentials:'include'});
     var d = await r.json();
     var pedidos = d.pedidos || [];
     if (!pedidos.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Sin pedidos</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Sin pedidos</td></tr>';
       return;
     }
     tbody.innerHTML = pedidos.map(function(p) {
-      var col = _PED_ESTADO_COLOR[p.estado] || '#94a3b8';
+      var colE  = _PED_ESTADO_COLOR[p.estado]     || '#94a3b8';
+      var colP  = _PED_PAGO_COLOR[p.estado_pago]  || '#94a3b8';
+      var labP  = _PED_PAGO_LABEL[p.estado_pago]  || p.estado_pago || '—';
       var fecha = p.created_at ? p.created_at.slice(0,10) : '—';
       return '<tr style="border-bottom:1px solid var(--voco-border);font-size:.84rem">' +
         '<td style="padding:10px 12px;font-weight:600;color:var(--voco-accent)">' + (p.numero||'—') + '</td>' +
         '<td style="padding:10px 12px"><div style="font-weight:500">' + _esc(p.nombre_cliente||'—') + '</div>' +
           '<div style="font-size:.75rem;color:var(--voco-text-muted)">' + _esc(p.telefono_cliente||'') + '</div></td>' +
         '<td style="padding:10px 12px"><span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:.73rem;font-weight:600;' +
-          'background:' + col + '22;color:' + col + '">' + p.estado + '</span></td>' +
+          'background:' + colE + '22;color:' + colE + '">' + (p.estado||'—') + '</span></td>' +
+        '<td style="padding:10px 12px"><span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:.73rem;font-weight:600;' +
+          'background:' + colP + '22;color:' + colP + '">' + labP + '</span></td>' +
         '<td style="padding:10px 12px;text-align:right;font-weight:600">$' + ((p.total||0)).toLocaleString('es-CO') + '</td>' +
         '<td style="padding:10px 12px;color:var(--voco-text-muted)">' + fecha + '</td>' +
-        '<td style="padding:10px 12px;text-align:center">' +
+        '<td style="padding:10px 12px;text-align:center;white-space:nowrap">' +
           '<button onclick="pedAbrirEditar(' + p.id + ')" style="background:none;border:1px solid var(--voco-border);' +
             'border-radius:6px;padding:4px 10px;font-size:.78rem;cursor:pointer;color:var(--voco-text)">Editar</button>' +
           ' <button onclick="pedEliminar(' + p.id + ')" style="background:none;border:1px solid #fca5a5;' +
@@ -13382,10 +13444,12 @@ async function _pedCargarPagina() {
 }
 
 function pedAbrirNuevo() {
+  _pedIdActual = null;
   document.getElementById('ped-id').value = '';
   document.getElementById('ped-telefono').value = '';
   document.getElementById('ped-nombre').value = '';
-  document.getElementById('ped-estado').value = 'pendiente';
+  document.getElementById('ped-estado').value = 'creado';
+  document.getElementById('ped-estado-pago').value = 'pendiente';
   document.getElementById('ped-direccion').value = '';
   document.getElementById('ped-descuento').value = '';
   document.getElementById('ped-envio').value = '';
@@ -13393,11 +13457,12 @@ function pedAbrirNuevo() {
   document.getElementById('ped-total-display').textContent = '—';
   document.getElementById('ped-prods-wrap').style.display = 'none';
   document.getElementById('ped-prods-manual-wrap').style.display = '';
+  document.getElementById('ped-remision-btns').style.display = 'none';
   document.getElementById('ped-modal-error').style.display = 'none';
   document.getElementById('ped-modal-titulo').textContent = 'Nuevo pedido';
   document.getElementById('ped-telefono').readOnly = false;
-  var m = document.getElementById('ped-modal');
-  m.style.display = 'flex';
+  if (window.lucide) window.lucide.createIcons();
+  document.getElementById('ped-modal').style.display = 'flex';
 }
 
 async function pedAbrirEditar(id) {
@@ -13406,18 +13471,20 @@ async function pedAbrirEditar(id) {
     var r = await fetch('/inbox/api/pedidos/' + id + '?agent_id=' + ag, {credentials:'include'});
     if (!r.ok) { alert('Pedido no encontrado'); return; }
     var p = await r.json();
+    _pedIdActual = p.id;
     document.getElementById('ped-id').value = p.id;
-    document.getElementById('ped-telefono').value = p.telefono_cliente || '';
-    document.getElementById('ped-nombre').value   = p.nombre_cliente   || '';
-    document.getElementById('ped-estado').value   = p.estado           || 'pendiente';
-    document.getElementById('ped-direccion').value= p.direccion_entrega|| '';
-    document.getElementById('ped-descuento').value= p.descuento        || 0;
-    document.getElementById('ped-envio').value    = p.costo_envio      || 0;
-    document.getElementById('ped-notas').value    = p.notas_internas   || '';
+    document.getElementById('ped-telefono').value    = p.telefono_cliente || '';
+    document.getElementById('ped-nombre').value      = p.nombre_cliente   || '';
+    document.getElementById('ped-estado').value      = p.estado           || 'creado';
+    document.getElementById('ped-estado-pago').value = p.estado_pago      || 'pendiente';
+    document.getElementById('ped-direccion').value   = p.direccion_entrega|| '';
+    document.getElementById('ped-descuento').value   = p.descuento        || 0;
+    document.getElementById('ped-envio').value       = p.costo_envio      || 0;
+    document.getElementById('ped-notas').value       = p.notas_internas   || '';
     document.getElementById('ped-total-display').textContent = '$' + (p.total||0).toLocaleString('es-CO');
     document.getElementById('ped-modal-titulo').textContent = p.numero || ('Pedido #' + p.id);
     document.getElementById('ped-telefono').readOnly = true;
-    // Mostrar productos (solo lectura)
+    // Productos (solo lectura)
     var prods = p.productos || [];
     var listaHtml = prods.length
       ? prods.map(function(pr) {
@@ -13430,7 +13497,9 @@ async function pedAbrirEditar(id) {
     document.getElementById('ped-prods-lista').innerHTML = listaHtml;
     document.getElementById('ped-prods-wrap').style.display = '';
     document.getElementById('ped-prods-manual-wrap').style.display = 'none';
+    document.getElementById('ped-remision-btns').style.display = '';
     document.getElementById('ped-modal-error').style.display = 'none';
+    if (window.lucide) window.lucide.createIcons();
     document.getElementById('ped-modal').style.display = 'flex';
   } catch(e) { alert('Error cargando pedido'); console.error(e); }
 }
@@ -13460,15 +13529,16 @@ async function pedGuardar() {
         }
       }
       data = {
-        agent_id:        ag,
-        telefono_cliente:document.getElementById('ped-telefono').value.trim(),
-        nombre_cliente:  document.getElementById('ped-nombre').value.trim(),
-        estado:          document.getElementById('ped-estado').value,
+        agent_id:         ag,
+        telefono_cliente: document.getElementById('ped-telefono').value.trim(),
+        nombre_cliente:   document.getElementById('ped-nombre').value.trim(),
+        estado:           document.getElementById('ped-estado').value,
+        estado_pago:      document.getElementById('ped-estado-pago').value,
         direccion_entrega:document.getElementById('ped-direccion').value.trim(),
-        descuento:       parseInt(document.getElementById('ped-descuento').value)||0,
-        costo_envio:     parseInt(document.getElementById('ped-envio').value)||0,
-        notas_internas:  document.getElementById('ped-notas').value.trim(),
-        productos:       prods,
+        descuento:        parseInt(document.getElementById('ped-descuento').value)||0,
+        costo_envio:      parseInt(document.getElementById('ped-envio').value)||0,
+        notas_internas:   document.getElementById('ped-notas').value.trim(),
+        productos:        prods,
       };
       var r = await fetch('/inbox/api/pedidos', {
         method:'POST', credentials:'include',
@@ -13480,11 +13550,12 @@ async function pedGuardar() {
     } else {
       // Editar pedido existente
       data = {
-        estado:           document.getElementById('ped-estado').value,
-        direccion_entrega:document.getElementById('ped-direccion').value.trim(),
-        descuento:        parseInt(document.getElementById('ped-descuento').value)||0,
-        costo_envio:      parseInt(document.getElementById('ped-envio').value)||0,
-        notas_internas:   document.getElementById('ped-notas').value.trim(),
+        estado:            document.getElementById('ped-estado').value,
+        estado_pago:       document.getElementById('ped-estado-pago').value,
+        direccion_entrega: document.getElementById('ped-direccion').value.trim(),
+        descuento:         parseInt(document.getElementById('ped-descuento').value)||0,
+        costo_envio:       parseInt(document.getElementById('ped-envio').value)||0,
+        notas_internas:    document.getElementById('ped-notas').value.trim(),
       };
       var r = await fetch('/inbox/api/pedidos/' + id + '?agent_id=' + ag, {
         method:'PUT', credentials:'include',
@@ -13515,6 +13586,41 @@ async function pedEliminar(id) {
     pedCargar();
     pedCargarStats();
   } catch(e) { alert('Error de red'); console.error(e); }
+}
+
+function pedRemisionImprimir() {
+  var id = _pedIdActual;
+  if (!id) return;
+  var ag  = _escAgentId || 1;
+  var url = '/inbox/api/pedidos/' + id + '/remision?agent_id=' + ag;
+  window.open(url, '_blank');
+}
+
+async function pedRemisionWhatsapp() {
+  var id = _pedIdActual;
+  if (!id) return;
+  var ag  = _escAgentId || 1;
+  var btn = document.getElementById('ped-btn-wa-pdf');
+  btn.disabled = true;
+  var origText = btn.innerHTML;
+  btn.innerHTML = '<i data-lucide="loader-2" style="width:14px;height:14px"></i> Enviando…';
+  try {
+    var r = await fetch('/inbox/api/pedidos/' + id + '/remision/whatsapp?agent_id=' + ag, {
+      method:'POST', credentials:'include',
+    });
+    var d = await r.json();
+    if (d.ok) {
+      btn.innerHTML = '<i data-lucide="check" style="width:14px;height:14px"></i> ¡Enviado!';
+      btn.style.color = '#22c55e';
+      btn.style.borderColor = '#22c55e';
+      setTimeout(function(){ btn.innerHTML = origText; btn.style.color=''; btn.style.borderColor=''; btn.disabled=false; if(window.lucide)window.lucide.createIcons(); }, 3000);
+      return;
+    } else {
+      alert('No se pudo enviar: ' + (d.error || 'Error desconocido'));
+    }
+  } catch(e) { alert('Error de red'); }
+  btn.disabled = false; btn.innerHTML = origText;
+  if (window.lucide) window.lucide.createIcons();
 }
 
 function _esc(s) {

@@ -9013,6 +9013,233 @@ async def api_pedidos_eliminar(
     return JSONResponse(content={"ok": True})
 
 
+@app.get("/inbox/api/pedidos/{pedido_id}/remision")
+async def api_pedidos_remision_pdf(
+    pedido_id: int,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Genera la remisión de entrega como PDF descargable."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_pedido
+    pedido = await obtener_pedido(pedido_id, agent_id)
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    pdf_bytes = await _generar_remision_pdf(pedido, agent_id)
+    from fastapi.responses import Response
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="remision_{pedido["numero"]}.pdf"',
+        },
+    )
+
+
+@app.post("/inbox/api/pedidos/{pedido_id}/remision/whatsapp")
+async def api_pedidos_remision_whatsapp(
+    pedido_id: int,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Genera la remisión PDF y la envía por WhatsApp al número del cliente."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_pedido
+    pedido = await obtener_pedido(pedido_id, agent_id)
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    telefono = pedido.get("telefono_cliente", "")
+    if not telefono:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "Pedido sin número de cliente"})
+
+    pdf_bytes = await _generar_remision_pdf(pedido, agent_id)
+    filename  = f"remision_{pedido['numero']}.pdf"
+
+    try:
+        proveedor = await _get_proveedor_panel(agent_id)
+        media_id  = await proveedor.subir_media(pdf_bytes, filename, "application/pdf")
+        if not media_id:
+            return JSONResponse(status_code=502, content={"ok": False, "error": "No se pudo subir el PDF a Meta"})
+        ok = await proveedor.enviar_documento(
+            telefono,
+            media_id=media_id,
+            caption=f"📦 Remisión {pedido['numero']} — gracias por tu pedido.",
+            filename=filename,
+        )
+        if not ok:
+            return JSONResponse(status_code=502, content={"ok": False, "error": "No se pudo enviar el documento"})
+        return JSONResponse(content={"ok": True, "media_id": media_id})
+    except Exception as e:
+        logger.error(f"Error enviando remisión WA pedido {pedido_id}: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "error": str(e)[:200]})
+
+
+async def _generar_remision_pdf(pedido: dict, agent_id: int) -> bytes:
+    """Genera un PDF de remisión de entrega para el pedido dado."""
+    from fpdf import FPDF
+    from io import BytesIO
+    from agent.memory import obtener_configuracion
+
+    # Nombre del negocio desde configuración del agente
+    try:
+        biz_name = await obtener_configuracion("BUSINESS_NAME", agent_id=agent_id) or "Voco"
+        biz_phone = await obtener_configuracion("BUSINESS_PHONE", agent_id=agent_id) or ""
+        biz_address = await obtener_configuracion("BUSINESS_ADDRESS", agent_id=agent_id) or ""
+    except Exception:
+        biz_name, biz_phone, biz_address = "Voco", "", ""
+
+    LABEL_PAGO = {"pendiente": "Por cobrar", "pagado": "Pagado", "cod": "Contra entrega (COD)"}
+    LABEL_ESTADO = {
+        "creado": "Creado", "alistado": "Alistado", "despachado": "Despachado",
+        "entregado": "Entregado", "cancelado": "Cancelado",
+    }
+
+    pdf = FPDF(format="A4")
+    pdf.set_auto_page_break(auto=True, margin=20)
+    pdf.add_page()
+    pdf.set_margins(20, 20, 20)
+
+    W = 170  # ancho útil
+
+    # ── Encabezado ──
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_text_color(22, 163, 74)  # verde
+    pdf.cell(W, 8, biz_name, ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(100, 100, 100)
+    if biz_phone:
+        pdf.cell(W, 5, f"Tel: {biz_phone}", ln=True)
+    if biz_address:
+        pdf.cell(W, 5, biz_address, ln=True)
+    pdf.ln(4)
+
+    # ── Título ──
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(W, 8, "REMISION DE ENTREGA", ln=False)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 8, pedido["numero"], align="R", ln=True)
+
+    pdf.set_draw_color(229, 231, 235)
+    pdf.set_line_width(0.4)
+    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
+    pdf.ln(5)
+
+    # ── Datos del pedido ──
+    fecha = (pedido.get("created_at") or "")[:10] or "—"
+    estado_label   = LABEL_ESTADO.get(pedido.get("estado", ""), pedido.get("estado", ""))
+    pago_label     = LABEL_PAGO.get(pedido.get("estado_pago", ""), pedido.get("estado_pago", ""))
+
+    def campo(label: str, valor: str, col2: bool = False):
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(30, 6, label.upper() + ":", ln=False)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(30, 41, 59)
+        if col2:
+            pdf.cell(55, 6, valor, ln=False)
+        else:
+            pdf.cell(W - 30, 6, valor, ln=True)
+
+    campo("Fecha", fecha)
+    campo("Estado", estado_label)
+    campo("Pago", pago_label)
+    pdf.ln(3)
+
+    # ── Info cliente ──
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(22, 163, 74)
+    pdf.cell(W, 7, "DATOS DEL CLIENTE", ln=True)
+    pdf.set_line_width(0.3)
+    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
+    pdf.ln(3)
+    campo("Nombre", pedido.get("nombre_cliente", "") or "—")
+    campo("Telefono", pedido.get("telefono_cliente", "") or "—")
+    campo("Direccion", pedido.get("direccion_entrega", "") or "—")
+    if pedido.get("notas_cliente"):
+        campo("Notas", pedido["notas_cliente"])
+    pdf.ln(5)
+
+    # ── Tabla productos ──
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(22, 163, 74)
+    pdf.cell(W, 7, "PRODUCTOS", ln=True)
+    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
+    pdf.ln(3)
+
+    # Cabecera tabla
+    col_w = [85, 20, 30, 35]
+    pdf.set_fill_color(241, 245, 249)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(100, 100, 100)
+    for txt, w in zip(["PRODUCTO", "CANT.", "PRECIO UNIT.", "SUBTOTAL"], col_w):
+        pdf.cell(w, 7, txt, border=0, fill=True, ln=False, align="C" if txt != "PRODUCTO" else "L")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(30, 41, 59)
+    for p in pedido.get("productos", []):
+        nombre = str(p.get("nombre", ""))[:50]
+        cant   = str(p.get("cantidad", 1))
+        precio = f"${int(p.get('precio_unitario', 0)):,}".replace(",", ".")
+        sub    = f"${int(p.get('subtotal', int(p.get('precio_unitario', 0)) * int(p.get('cantidad', 1)))):,}".replace(",", ".")
+        row_h  = 6
+        pdf.cell(col_w[0], row_h, nombre, ln=False)
+        pdf.cell(col_w[1], row_h, cant,   ln=False, align="C")
+        pdf.cell(col_w[2], row_h, precio, ln=False, align="R")
+        pdf.cell(col_w[3], row_h, sub,    ln=False, align="R")
+        pdf.ln()
+
+    pdf.line(20, pdf.get_y(), 190, pdf.get_y())
+    pdf.ln(3)
+
+    # ── Totales ──
+    def fila_total(label: str, valor: int, bold: bool = False, color=(30, 41, 59)):
+        pdf.set_font("Helvetica", "B" if bold else "", 9)
+        pdf.set_text_color(*color)
+        pdf.cell(W - 40, 6, label, align="R", ln=False)
+        pdf.cell(40, 6, f"${valor:,}".replace(",", "."), align="R", ln=True)
+
+    fila_total("Subtotal:", pedido.get("subtotal", 0))
+    if pedido.get("descuento", 0):
+        fila_total("Descuento:", -pedido["descuento"])
+    if pedido.get("costo_envio", 0):
+        fila_total("Costo de envio:", pedido["costo_envio"])
+    fila_total("TOTAL:", pedido.get("total", 0), bold=True, color=(22, 163, 74))
+    pdf.ln(8)
+
+    # ── Firmas ──
+    pdf.set_draw_color(200, 200, 200)
+    pdf.set_line_width(0.3)
+    sig_y = pdf.get_y() + 15
+    pdf.line(25, sig_y, 85, sig_y)
+    pdf.line(105, sig_y, 165, sig_y)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.set_y(sig_y + 2)
+    pdf.set_x(25)
+    pdf.cell(60, 5, "Firma Entregado por", align="C", ln=False)
+    pdf.set_x(105)
+    pdf.cell(60, 5, "Firma Recibido por", align="C", ln=True)
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "", 7)
+    pdf.set_text_color(150, 150, 150)
+    pdf.cell(W, 5, f"Generado por Voco | {pedido['numero']} | {fecha}", align="C", ln=True)
+
+    buf = BytesIO()
+    pdf_out = pdf.output(dest="S")
+    if isinstance(pdf_out, str):
+        pdf_out = pdf_out.encode("latin-1")
+    return bytes(pdf_out)
+
+
 # ── Panel por slug (ruta comodín — DEBE ser la última ruta de /inbox/*) ────
 # FastAPI evalúa rutas en orden de definición: al estar aquí al final, las rutas
 # específicas (/inbox/api/*, /inbox/broadcast/*, etc.) ya fueron registradas primero.
