@@ -10106,7 +10106,12 @@ async function limpiarChatTest() {
    ══════════════════════════════════════════════════════════════ */
 var _escEstadoActual = 'sin_asignar';
 var _escTicketActual = null;   // ticket seleccionado
-var _escAgentId      = 1;      // agent_id activo (SaaS multi-tenant)
+// Leer agent_id desde localStorage de inmediato (antes de DOMContentLoaded)
+// para que el primer _escActualizarBadges() ya use el agente correcto y no
+// muestre un flash con las escalaciones de Equora (agent_id=1 legacy).
+var _escAgentId = (function() {
+  try { var v = parseInt(localStorage.getItem('voco-agent-id') || '', 10); return (v > 0) ? v : 1; } catch(e) { return 1; }
+})();
 var _escUsuarioId    = 0;      // usuario_interno_id del agente logueado (si aplica)
 
 /* ── Polling de badges (cada 15s) ────────────────────────── */
