@@ -116,15 +116,20 @@ _sandbox_sessions: dict[str, int] = {}
 
 
 def _sandbox_code_para_agente(slug: str, agent_id: int) -> str:
-    """VOCO-EQ001 style code from source agent slug+id."""
-    prefix = slug.replace("-sandbox", "").replace("-", "").replace("_", "")[:2].upper() or "AG"
-    return f"VOCO-{prefix}{agent_id:03d}"
+    """VOCO-001 style sequential code — solo usa el agent_id como consecutivo."""
+    return f"VOCO-{agent_id:03d}"
 
 
 def _sandbox_codigo_a_agent_id(code: str) -> int | None:
-    """'VOCO-EQ001' → 1 (agent_id). Retorna None si el formato no coincide."""
+    """'VOCO-001' → 1 (agent_id). Acepta también formato legado 'VOCO-EQ001'."""
     import re
-    m = re.match(r"^VOCO-[A-Z]{2}(\d{3})$", code.strip().upper().replace(" ", ""))
+    s = code.strip().upper().replace(" ", "")
+    # Formato nuevo: VOCO-001
+    m = re.match(r"^VOCO-(\d{3})$", s)
+    if m:
+        return int(m.group(1))
+    # Formato legado: VOCO-EQ001
+    m = re.match(r"^VOCO-[A-Z]{2}(\d{3})$", s)
     return int(m.group(1)) if m else None
 
 
@@ -2047,7 +2052,7 @@ async def webhook_handler(request: Request):
                         await _voco_sb_prov.enviar_mensaje(msg.telefono,
                             f"¡Hola! 👋 Soy el sandbox de Voco.\n\n"
                             f"Envía el código de tu proyecto para comenzar la prueba.\n\n"
-                            f"Ejemplo: *VOCO-EQ001*"
+                            f"Ejemplo: *VOCO-001*"
                         )
                     continue
 
@@ -5302,6 +5307,7 @@ async def api_webhook_suscribir(
 
 @app.get("/inbox/api/sistema/fallas-catalogo")
 async def api_fallas_catalogo(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -5320,10 +5326,11 @@ async def api_fallas_catalogo(
     por_tipo: dict[str, int] = {}
     for f in recientes:
         por_tipo[f["tipo"]] = por_tipo.get(f["tipo"], 0) + 1
-    # Flag de "configurado" — sin esto el panel mostraba "Catálogo funcionando"
-    # para agentes nuevos que NO tienen META_CATALOG_ID, dando una sensación
-    # falsa de salud verde cuando en realidad no hay nada montado.
-    meta_cat_id = await get_config_value("META_CATALOG_ID", 1) or os.getenv("META_CATALOG_ID", "")
+    # Flag de "configurado" por agente — sin esto el panel mostraba "Catálogo funcionando"
+    # para agentes nuevos que NO tienen META_CATALOG_ID, usando el catalog de otro agente.
+    meta_cat_id = await get_config_value("META_CATALOG_ID", agent_id=agent_id) or ""
+    if not meta_cat_id and agent_id == 1:
+        meta_cat_id = os.getenv("META_CATALOG_ID", "")
     configurado = bool(meta_cat_id.strip())
     return JSONResponse(content={
         "configurado": configurado,

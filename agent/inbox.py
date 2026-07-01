@@ -8654,7 +8654,7 @@ async function _verificarWhatsApp() {
 async function _verificarCatalogo() {
   _setSistemaEstado('catalogo', 'loading', 'Verificando…', '');
   try {
-    var r = await fetch('/inbox/api/sistema/fallas-catalogo', {credentials:'include'});
+    var r = await fetch('/inbox/api/sistema/fallas-catalogo?agent_id=' + (_escAgentId||1), {credentials:'include'});
     var d = await r.json();
     // Si el agente NO tiene catálogo configurado, no asumas que está sano
     // solo porque no hay fallas — no hay nada montado todavía.
