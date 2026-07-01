@@ -3575,17 +3575,19 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         <div class="sec-hdr">
           <div>
             <div class="sec-title">Catálogo de productos</div>
-            <div class="sec-subtitle">Gestiona tus productos directamente en Voco, sin necesidad de Shopify</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <a id="cat-btn-template" href="#" onclick="catDescargarTemplate(event)"
-               style="font-size:.8rem;color:var(--voco-text-muted);text-decoration:underline">
-              Descargar template Excel
-            </a>
+            <button onclick="catExportarExcel()"
+              style="background:var(--voco-card-bg);border:1.5px solid var(--voco-border);color:var(--voco-text);
+              border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:600;cursor:pointer;
+              display:inline-flex;align-items:center;gap:6px">
+              <i data-lucide="download" style="width:14px;height:14px"></i> Exportar Excel
+            </button>
             <button onclick="catAbrirImportar()"
-              style="background:#f3f4f6;border:1px solid #d1d5db;color:#374151;
-              border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:600;cursor:pointer">
-              ↑ Importar Excel / CSV
+              style="background:var(--voco-card-bg);border:1.5px solid var(--voco-border);color:var(--voco-text);
+              border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:600;cursor:pointer;
+              display:inline-flex;align-items:center;gap:6px">
+              <i data-lucide="upload" style="width:14px;height:14px"></i> Importar
             </button>
             <button onclick="catAbrirModal()"
               style="background:var(--voco-accent);border:none;color:#fff;
@@ -3595,22 +3597,29 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           </div>
         </div>
 
-        <!-- Aviso restricciones imagen -->
-        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;
-             padding:10px 16px;margin:0 0 16px;font-size:.8rem;color:#92400e;line-height:1.5">
-          <strong>Imágenes:</strong> URL pública directa · JPEG, PNG o WebP · Máx 5 MB · Mín 500×500 px · Relación 1:1 recomendada.<br>
-          No usar Google Drive ni Instagram. Sí usar: tu sitio web, <a href="https://imgbb.com" target="_blank" style="color:#92400e">imgbb.com</a>, <a href="https://imgur.com" target="_blank" style="color:#92400e">imgur.com</a> o Cloudinary.
+        <!-- Plataformas de eCommerce conectadas -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted)">Tiendas:</span>
+          <button id="cat-btn-shopify" onclick="catAbrirShopify()"
+            style="display:inline-flex;align-items:center;gap:8px;background:var(--voco-card-bg);
+            border:1.5px solid var(--voco-border);border-radius:10px;padding:7px 14px;
+            font-size:.84rem;font-weight:600;cursor:pointer;color:var(--voco-text);transition:border-color .15s">
+            <i data-lucide="shopping-bag" style="width:15px;height:15px;color:#008060"></i>
+            Shopify
+            <span id="cat-shopify-badge" style="font-size:.72rem;background:var(--voco-content-bg-alt);
+              color:var(--voco-text-muted);border-radius:20px;padding:1px 8px;font-weight:600">Conectar</span>
+          </button>
         </div>
 
         <!-- Filtros rápidos -->
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
           <input id="cat-buscar" type="text" placeholder="Buscar producto…"
             oninput="catFiltrar()"
-            style="border:1px solid #d1d5db;border-radius:8px;padding:6px 12px;font-size:.84rem;
-            flex:1;min-width:180px;color:var(--voco-text);background:var(--voco-bg)">
+            style="border:1px solid var(--voco-border);border-radius:8px;padding:6px 12px;font-size:.84rem;
+            flex:1;min-width:180px;color:var(--voco-text);background:var(--voco-card-bg)">
           <select id="cat-filtro-cat" onchange="catFiltrar()"
-            style="border:1px solid #d1d5db;border-radius:8px;padding:6px 10px;
-            font-size:.84rem;color:var(--voco-text);background:var(--voco-bg)">
+            style="border:1px solid var(--voco-border);border-radius:8px;padding:6px 10px;
+            font-size:.84rem;color:var(--voco-text);background:var(--voco-card-bg)">
             <option value="">Todas las categorías</option>
           </select>
           <label style="font-size:.82rem;color:var(--voco-text-muted);display:flex;align-items:center;gap:5px">
@@ -3619,10 +3628,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         </div>
 
         <!-- Tabla de productos -->
-        <div style="overflow-x:auto">
+        <div style="overflow-x:auto;min-width:0">
           <table id="cat-tabla" style="width:100%;border-collapse:collapse;font-size:.84rem">
             <thead>
-              <tr style="background:var(--voco-surface);border-bottom:2px solid var(--voco-border)">
+              <tr style="background:var(--voco-content-bg-alt);border-bottom:2px solid var(--voco-border)">
                 <th style="padding:8px 10px;text-align:left;font-weight:600">Imagen</th>
                 <th style="padding:8px 10px;text-align:left;font-weight:600">Producto</th>
                 <th style="padding:8px 10px;text-align:left;font-weight:600">Categoría</th>
@@ -3646,91 +3655,97 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       <!-- Modal añadir/editar producto -->
       <div id="cat-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;
            align-items:center;justify-content:center;padding:16px">
-        <div style="background:var(--voco-bg);border-radius:16px;padding:28px;max-width:560px;
-             width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+        <div style="background:var(--voco-card-bg);border-radius:16px;padding:28px;max-width:560px;
+             width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);border:1px solid var(--voco-border)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-            <h3 id="cat-modal-titulo" style="margin:0;font-size:1.05rem;font-weight:700">Agregar producto</h3>
-            <button onclick="catCerrarModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted)">×</button>
+            <h3 id="cat-modal-titulo" style="margin:0;font-size:1.05rem;font-weight:700;color:var(--voco-text)">Agregar producto</h3>
+            <div style="display:flex;align-items:center;gap:12px">
+              <a href="#" onclick="catDescargarTemplate(event)"
+                style="font-size:.74rem;color:var(--voco-text-muted);text-decoration:underline;white-space:nowrap">
+                ↓ Template Excel
+              </a>
+              <button onclick="catCerrarModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted);line-height:1">×</button>
+            </div>
           </div>
           <div style="display:grid;gap:14px">
             <input type="hidden" id="cat-id">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div>
-                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Nombre *</label>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">Nombre *</label>
                 <input id="cat-nombre" type="text" placeholder="Lavaloza Biotú"
-                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none">
               </div>
               <div>
-                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Categoría *</label>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">Categoría *</label>
                 <input id="cat-categoria" type="text" placeholder="Limpieza"
-                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none">
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div>
-                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Presentación</label>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">Presentación</label>
                 <input id="cat-presentacion" type="text" placeholder="500ml, 1L, Pack x3…"
-                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none">
               </div>
               <div>
-                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">SKU</label>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">SKU</label>
                 <input id="cat-sku" type="text" placeholder="LAV-500"
-                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none">
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
               <div>
-                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Precio COP *</label>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">Precio COP *</label>
                 <input id="cat-precio" type="number" min="0" placeholder="12900"
-                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none">
               </div>
               <div>
-                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Precio tachado</label>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">Precio tachado</label>
                 <input id="cat-precio-tachado" type="number" min="0" placeholder="15900"
-                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none">
               </div>
               <div>
-                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Stock</label>
+                <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">Stock</label>
                 <input id="cat-stock" type="number" min="0" placeholder="50 (vacío=sin control)"
-                  style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                  color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+                  style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                  color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none">
               </div>
             </div>
             <div>
-              <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">Descripción corta</label>
+              <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">Descripción corta</label>
               <textarea id="cat-descripcion" rows="2" placeholder="Fórmula biodegradable, ideal para cocina…"
-                style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                resize:vertical;color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box"></textarea>
+                style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                resize:vertical;color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none"></textarea>
             </div>
             <div>
-              <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px">URL de imagen</label>
+              <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:4px;color:var(--voco-text)">URL de imagen</label>
               <input id="cat-imagen-url" type="url" placeholder="https://tudominio.com/producto.jpg"
                 oninput="catPreviaImagen(this.value)"
-                style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:.9rem;
-                color:var(--voco-text);background:var(--voco-bg);box-sizing:border-box">
+                style="width:100%;border:1px solid var(--voco-border);border-radius:8px;padding:8px 10px;font-size:.9rem;
+                color:var(--voco-text);background:var(--voco-card-bg);box-sizing:border-box;outline:none">
               <div id="cat-img-preview" style="margin-top:8px;display:none">
                 <img id="cat-img-tag" src="" alt="Preview"
-                  style="max-width:120px;max-height:120px;border-radius:8px;border:1px solid #d1d5db;object-fit:cover"
+                  style="max-width:100px;max-height:100px;border-radius:8px;border:1px solid var(--voco-border);object-fit:cover"
                   onerror="document.getElementById('cat-img-preview').style.display='none'">
               </div>
-              <div style="font-size:.74rem;color:#92400e;margin-top:4px">
-                JPEG, PNG o WebP · Máx 5MB · Mín 500×500px · URL pública directa
+              <div style="font-size:.74rem;color:var(--voco-text-muted);margin-top:5px">
+                JPEG, PNG o WebP · Máx 5 MB · Mín 500×500 px · Relación 1:1 recomendada · URL pública directa
               </div>
             </div>
-            <label style="display:flex;align-items:center;gap:8px;font-size:.88rem;cursor:pointer">
+            <label style="display:flex;align-items:center;gap:8px;font-size:.88rem;cursor:pointer;color:var(--voco-text)">
               <input type="checkbox" id="cat-disponible" checked> Disponible para vender
             </label>
           </div>
           <div style="display:flex;gap:10px;margin-top:22px;justify-content:flex-end">
             <button onclick="catCerrarModal()"
-              style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;padding:9px 20px;
-              font-size:.88rem;cursor:pointer;color:#374151">Cancelar</button>
+              style="background:var(--voco-content-bg-alt);border:1px solid var(--voco-border);border-radius:8px;padding:9px 20px;
+              font-size:.88rem;cursor:pointer;color:var(--voco-text)">Cancelar</button>
             <button id="cat-btn-guardar" onclick="catGuardar()"
               style="background:var(--voco-accent);border:none;color:#fff;border-radius:8px;
               padding:9px 22px;font-size:.88rem;font-weight:700;cursor:pointer">Guardar</button>
@@ -3741,8 +3756,8 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       <!-- Modal importar Excel/CSV -->
       <div id="cat-modal-importar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;
            align-items:center;justify-content:center;padding:16px">
-        <div style="background:var(--voco-bg);border-radius:16px;padding:28px;max-width:520px;
-             width:100%;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+        <div style="background:var(--voco-card-bg);border-radius:16px;padding:28px;max-width:520px;
+             width:100%;box-shadow:0 8px 40px rgba(0,0,0,.2);border:1px solid var(--voco-border)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
             <h3 style="margin:0;font-size:1.05rem;font-weight:700">Importar catálogo</h3>
             <button onclick="catCerrarImportar()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted)">×</button>
@@ -3776,6 +3791,100 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <button id="cat-btn-importar" onclick="catImportar()"
               style="background:var(--voco-accent);border:none;color:#fff;border-radius:8px;
               padding:9px 22px;font-size:.88rem;font-weight:700;cursor:pointer">Importar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Shopify — integración tienda (movido desde Configuración) -->
+      <div id="cat-shopify-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;
+           align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--voco-card-bg);border-radius:16px;padding:28px;max-width:600px;
+             width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);border:1px solid var(--voco-border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <i data-lucide="shopping-bag" style="width:20px;height:20px;color:#008060"></i>
+              <h3 style="margin:0;font-size:1.05rem;font-weight:700;color:var(--voco-text)">Shopify — Tienda en línea</h3>
+              <span class="cfg-status-pill cfg-pill-pending" id="pill-shopify">Verificando…</span>
+            </div>
+            <button onclick="catCerrarShopify()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted);line-height:1">×</button>
+          </div>
+
+          <!-- Instrucciones -->
+          <div class="cfg-step">
+            <div class="cfg-step-num">1</div>
+            <div class="cfg-step-body">
+              <div class="cfg-field-lbl">
+                Cómo conectar tu tienda
+                <button class="cfg-help-btn" onclick="toggleHelp('help-sh-howto')" type="button" aria-label="Ayuda">?</button>
+              </div>
+              <div class="cfg-help-box" id="help-sh-howto" style="display:block">
+                <b>1.</b> En tu Shopify Admin: <b>Configuración → Apps y canales de venta → Desarrollar apps</b><br>
+                <b>2.</b> Click en <b>"Desarrollar apps en Dev Dashboard"</b> (botón negro)<br>
+                <b>3.</b> <b>Crear app</b> → Nombre: <code>Voco</code><br>
+                <b>4.</b> En la app creada → <b>Configuración → URLs</b>:<br>
+                &nbsp;&nbsp;<b>URL de la app:</b>
+                &nbsp;<code id="oauth-app-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">cargando…</code>
+                <button type="button" onclick="_copiarUrlOAuth(this, 'app')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br>
+                &nbsp;&nbsp;<b>URL de redirección:</b>
+                &nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">cargando…</code>
+                <button type="button" onclick="_copiarUrlOAuth(this, 'callback')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br>
+                <b>5. Alcances:</b> <code>write_inventory, read_inventory, read_orders, read_products, write_products, write_draft_orders</code><br>
+                <b>6.</b> <b>Publica</b> la app<br>
+                <b>7.</b> Pestaña <b>Credenciales API</b> → copia <b>Client ID</b>, <b>Client Secret</b> y pégalos abajo<br>
+                <small style="color:var(--voco-text-muted)">⚠️ El Client Secret solo se muestra UNA vez. Guárdalo bien.</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dominio -->
+          <div class="cfg-step">
+            <div class="cfg-step-num">2</div>
+            <div class="cfg-step-body">
+              <div class="cfg-field-lbl">Dominio de tu tienda <span class="req">*</span></div>
+              <div class="cfg-field-row">
+                <input type="text" id="cfg-sh-domain" class="f-inp" placeholder="mitienda.myshopify.com" autocomplete="off" style="flex:1">
+                <span class="cfg-field-status" id="st-SHOPIFY_STORE"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Client ID -->
+          <div class="cfg-step">
+            <div class="cfg-step-num">3</div>
+            <div class="cfg-step-body">
+              <div class="cfg-field-lbl">Client ID <span class="req">*</span></div>
+              <div class="cfg-field-row">
+                <input type="text" id="cfg-sh-cid" class="f-inp" placeholder="Client ID de Shopify" autocomplete="off" style="flex:1">
+                <span class="cfg-field-status" id="st-SHOPIFY_CLIENT_ID"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Client Secret -->
+          <div class="cfg-step">
+            <div class="cfg-step-num">4</div>
+            <div class="cfg-step-body">
+              <div class="cfg-field-lbl">Client Secret <span class="req">*</span></div>
+              <div class="cfg-field-row">
+                <div class="cfg-input-wrap" style="flex:1">
+                  <input type="password" id="cfg-sh-csec" class="f-inp" placeholder="Client Secret de Shopify" autocomplete="off">
+                  <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-csec',this)" type="button">👁</button>
+                </div>
+                <span class="cfg-field-status" id="st-SHOPIFY_CLIENT_SECRET"></span>
+              </div>
+              <div id="cfg-oauth-status" style="margin-top:14px;padding:12px 14px;background:var(--voco-content-bg-alt);border-radius:8px;font-size:.82rem;line-height:1.5">
+                <span style="color:var(--voco-text-muted)">Estado: <i>cargando…</i></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="cfg-actions" style="margin-top:20px">
+            <div id="cfg-shopify-result" class="cfg-test-result" style="display:none;flex-basis:100%"></div>
+            <button class="btn-primary" onclick="instalarShopify()" type="button"
+              style="background:#008060;border-color:#008060"
+              title="Guarda credenciales e inicia la instalación en tu tienda Shopify.">
+              <i data-lucide="link" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Instalar
+            </button>
           </div>
         </div>
       </div>
@@ -4250,103 +4359,6 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 <button class="btn-primary" onclick="guardarConfig('anthropic')" type="button">💾 Guardar</button>
               </div>
             </div><!-- /card-anthropic -->
-
-            <!-- ── Card: Shopify ── -->
-            <div class="cfg-card" id="card-shopify">
-              <div class="cfg-card-hdr">
-                <div class="cfg-card-title" style="display:flex;align-items:center;gap:8px"><i data-lucide="shopping-bag" style="width:18px;height:18px;color:var(--voco-brand)"></i> Shopify — Tienda en línea</div>
-                <span class="cfg-status-pill cfg-pill-pending" id="pill-shopify">Verificando…</span>
-              </div>
-
-              <!-- Instrucciones cómo obtener las credenciales -->
-              <div class="cfg-step">
-                <div class="cfg-step-num">1</div>
-                <div class="cfg-step-body">
-                  <div class="cfg-field-lbl">
-                    Cómo conectar tu tienda
-                    <button class="cfg-help-btn" onclick="toggleHelp('help-sh-howto')" type="button" aria-label="Ayuda">?</button>
-                  </div>
-                  <div class="cfg-help-box" id="help-sh-howto" style="display:block">
-                    <b>1.</b> En tu Shopify Admin: <b>Configuración → Apps y canales de venta → Desarrollar apps</b><br>
-                    <b>2.</b> Click en <b>"Desarrollar apps en Dev Dashboard"</b> (botón negro)<br>
-                    <b>3.</b> <b>Crear app</b> → Nombre: <code>Voco</code><br>
-                    <b>4.</b> En la app creada → <b>Configuración → URLs</b>:<br>
-                    &nbsp;&nbsp;<b>URL de la app:</b>
-                    &nbsp;<code id="oauth-app-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">cargando…</code>
-                    <button type="button" onclick="_copiarUrlOAuth(this, 'app')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br>
-                    &nbsp;&nbsp;<b>URL de redirección:</b>
-                    &nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">cargando…</code>
-                    <button type="button" onclick="_copiarUrlOAuth(this, 'callback')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br>
-                    <b>5. Alcances:</b> <code>write_inventory, read_inventory, read_orders, read_products, write_products, write_draft_orders</code><br>
-                    <b>6.</b> <b>Publica</b> la app<br>
-                    <b>7.</b> Pestaña <b>Credenciales API</b> → copia <b>Client ID</b>, <b>Client Secret</b> y pégalos abajo<br>
-                    <small style="color:var(--voco-text-muted)">⚠️ El Client Secret solo se muestra UNA vez. Guárdalo bien.</small>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Dominio -->
-              <div class="cfg-step">
-                <div class="cfg-step-num">2</div>
-                <div class="cfg-step-body">
-                  <div class="cfg-field-lbl">
-                    Dominio de tu tienda
-                    <span class="req">*</span>
-                  </div>
-                  <div class="cfg-field-row">
-                    <input type="text" id="cfg-sh-domain" class="f-inp" placeholder="mitienda.myshopify.com" autocomplete="off" style="flex:1">
-                    <span class="cfg-field-status" id="st-SHOPIFY_STORE"></span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Client ID -->
-              <div class="cfg-step">
-                <div class="cfg-step-num">3</div>
-                <div class="cfg-step-body">
-                  <div class="cfg-field-lbl">
-                    Client ID
-                    <span class="req">*</span>
-                  </div>
-                  <div class="cfg-field-row">
-                    <input type="text" id="cfg-sh-cid" class="f-inp" placeholder="Client ID de Shopify" autocomplete="off" style="flex:1">
-                    <span class="cfg-field-status" id="st-SHOPIFY_CLIENT_ID"></span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Client Secret -->
-              <div class="cfg-step">
-                <div class="cfg-step-num">4</div>
-                <div class="cfg-step-body">
-                  <div class="cfg-field-lbl">
-                    Client Secret
-                    <span class="req">*</span>
-                  </div>
-                  <div class="cfg-field-row">
-                    <div class="cfg-input-wrap" style="flex:1">
-                      <input type="password" id="cfg-sh-csec" class="f-inp" placeholder="Client Secret de Shopify" autocomplete="off">
-                      <button class="cfg-eye-btn" onclick="togglePwd('cfg-sh-csec',this)" type="button">👁</button>
-                    </div>
-                    <span class="cfg-field-status" id="st-SHOPIFY_CLIENT_SECRET"></span>
-                  </div>
-
-                  <!-- Estado de conexión -->
-                  <div id="cfg-oauth-status" style="margin-top:14px;padding:12px 14px;background:var(--voco-content-bg-alt);border-radius:8px;font-size:.82rem;line-height:1.5">
-                    <span style="color:var(--voco-text-muted)">Estado: <i>cargando…</i></span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="cfg-actions">
-                <div id="cfg-shopify-result" class="cfg-test-result" style="display:none;flex-basis:100%"></div>
-                <button class="btn-primary" onclick="instalarShopify()" type="button"
-                  style="background:#008060;border-color:#008060"
-                  title="Guarda credenciales e inicia la instalación en tu tienda Shopify.">
-                  <i data-lucide="link" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Instalar
-                </button>
-              </div>
-            </div><!-- /card-shopify -->
 
             <!-- ── Card: Calendly (Pipeline Fase 2) ── -->
             <div class="cfg-card" id="card-calendly">
@@ -9152,6 +9164,15 @@ async function cargarConfiguracion() {
     _setCfgOvStatus('ov-meta-status',    metaOk ? 'ok' : 'error');
     _setCfgOvStatus('ov-ai-status',      aiOk   ? 'ok' : 'error');
     _setCfgOvStatus('ov-shopify-status', shopOk ? 'ok' : 'error');
+    // Actualizar badge del botón Shopify en sección Catálogo
+    var _shBadge = document.getElementById('cat-shopify-badge');
+    var _shBtn   = document.getElementById('cat-btn-shopify');
+    if (_shBadge) {
+      _shBadge.textContent  = shopOk ? '✓ Conectado' : 'Conectar';
+      _shBadge.style.background = shopOk ? '#dcfce7' : 'var(--voco-content-bg-alt)';
+      _shBadge.style.color      = shopOk ? '#166534' : 'var(--voco-text-muted)';
+    }
+    if (_shBtn) _shBtn.style.borderColor = shopOk ? '#86efac' : '';
 
     // #55 — Estado de OAuth Shopify (conectado o no según ADMIN_TOKEN)
     if (typeof _actualizarEstadoOAuthShopify === 'function') {
@@ -12831,6 +12852,19 @@ _escRenderLista = function(tickets) {
    CATÁLOGO NATIVO VOCO
    ══════════════════════════════════════════════════════════════════════ */
 var _catProductos = [];   // cache local de productos cargados
+
+function catAbrirShopify() {
+  document.getElementById('cat-shopify-modal').style.display = 'flex';
+  if (typeof cargarConfiguracion === 'function') cargarConfiguracion();
+}
+function catCerrarShopify() {
+  document.getElementById('cat-shopify-modal').style.display = 'none';
+}
+
+function catExportarExcel() {
+  var ag = _escAgentId || 1;
+  window.location.href = '/inbox/api/catalogo/exportar?agent_id=' + ag;
+}
 
 async function catCargar() {
   var ag = _escAgentId || 1;

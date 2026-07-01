@@ -8760,6 +8760,60 @@ async def api_catalogo_template(
         return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
 
 
+@app.get("/inbox/api/catalogo/exportar")
+async def api_catalogo_exportar(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Exporta el catálogo actual como archivo Excel."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    try:
+        from agent.memory import obtener_catalogo_voco
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment
+        from io import BytesIO
+        productos = await obtener_catalogo_voco(agent_id)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Catalogo"
+        cols = ["nombre", "categoria", "presentacion", "precio", "precio_tachado",
+                "descripcion", "imagen_url", "sku", "stock", "disponible"]
+        header_fill = PatternFill("solid", fgColor="16A34A")
+        header_font = Font(bold=True, color="FFFFFF")
+        for ci, col in enumerate(cols, 1):
+            cell = ws.cell(row=1, column=ci, value=col)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+            ws.column_dimensions[ws.cell(row=1, column=ci).column_letter].width = max(12, len(col) + 4)
+        for ri, p in enumerate(productos, 2):
+            ws.cell(row=ri, column=1, value=p.get("nombre", ""))
+            ws.cell(row=ri, column=2, value=p.get("categoria", ""))
+            ws.cell(row=ri, column=3, value=p.get("presentacion", "") or "")
+            ws.cell(row=ri, column=4, value=p.get("precio", 0))
+            ws.cell(row=ri, column=5, value=p.get("precio_tachado") or "")
+            ws.cell(row=ri, column=6, value=p.get("descripcion", "") or "")
+            ws.cell(row=ri, column=7, value=p.get("imagen_url", "") or "")
+            ws.cell(row=ri, column=8, value=p.get("sku", "") or "")
+            ws.cell(row=ri, column=9, value=p.get("stock") if p.get("stock") is not None else "")
+            ws.cell(row=ri, column=10, value=1 if p.get("disponible") else 0)
+        buf = BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        from fastapi.responses import StreamingResponse
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=catalogo_voco.xlsx"},
+        )
+    except Exception as e:
+        logger.error(f"Error exportando catálogo: {e}")
+        return JSONResponse(status_code=500, content={"ok": False, "error": str(e)})
+
+
 @app.post("/inbox/api/catalogo/importar")
 async def api_catalogo_importar(
     file: UploadFile = File(...),
