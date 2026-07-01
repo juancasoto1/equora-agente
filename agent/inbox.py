@@ -5914,7 +5914,7 @@ function sendMsg() {
   api('/inbox/api/responder', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({telefono: TEL, mensaje: msg})
+    body: JSON.stringify({telefono: TEL, mensaje: msg, agent_id: _escAgentId || 1})
   }).then(function(d) {
     if (d && d.ok) {
       ti.value = '';
@@ -10378,7 +10378,7 @@ async function escEnviarRespuesta() {
     var r = await fetch('/inbox/api/responder', {
       method:'POST', credentials:'include',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({telefono: _escTicketActual.telefono_cliente, mensaje: texto})
+      body: JSON.stringify({telefono: _escTicketActual.telefono_cliente, mensaje: texto, agent_id: (_escTicketActual.agent_id || _escAgentId || 1)})
     });
     var d = await r.json();
     if (d.ok) {
@@ -11089,6 +11089,7 @@ async function confirmarEnvioMedia() {
   fd.append('file',     _mediaFile);
   fd.append('telefono', targetTel);
   fd.append('caption',  document.getElementById('cap-texto').value || '');
+  fd.append('agent_id', String((_escTicketActual && _escTicketActual.agent_id) || _escAgentId || 1));
 
   try {
     var r = await fetch('/inbox/api/responder/media', {
@@ -11151,7 +11152,7 @@ async function enviarUbicacion() {
     var r = await fetch('/inbox/api/responder/ubicacion', {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({telefono: TEL, latitud: lat, longitud: lng, nombre: nombre, direccion: dir})
+      body: JSON.stringify({telefono: TEL, latitud: lat, longitud: lng, nombre: nombre, direccion: dir, agent_id: _escAgentId || 1})
     });
     var d = await r.json();
     if (d.ok) {
@@ -11221,7 +11222,7 @@ async function enviarProducto(retailerId) {
     var r = await fetch('/inbox/api/responder/producto', {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({telefono: TEL, retailer_id: retailerId})
+      body: JSON.stringify({telefono: TEL, retailer_id: retailerId, agent_id: _escAgentId || 1})
     });
     var d = await r.json();
     if (d.ok) {
