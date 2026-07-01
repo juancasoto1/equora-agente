@@ -1971,8 +1971,10 @@ async def webhook_handler(request: Request):
             # ── Sandbox hub de Voco: número central compartido entre tenants ────
             # El sandbox usa el WABA propio de Voco (VOCO_SANDBOX_*), independiente
             # del WABA de cada cliente. El código VOCO-EQ001 enruta al agente correcto.
-            _voco_sb_pid = os.getenv("VOCO_SANDBOX_PHONE_NUMBER_ID", "")
-            _is_sandbox_msg = bool(_voco_sb_pid and _phone_id == _voco_sb_pid)
+            _voco_sb_pid = os.getenv("VOCO_SANDBOX_PHONE_NUMBER_ID", "").strip()
+            _is_sandbox_msg = bool(_voco_sb_pid and _phone_id.strip() == _voco_sb_pid)
+            if _voco_sb_pid:
+                logger.info(f"[sandbox] phone_id={repr(_phone_id)} sb_pid={repr(_voco_sb_pid)} match={_is_sandbox_msg}")
             if _is_sandbox_msg:
                 from agent.providers.meta import ProveedorMeta as _MetaProv
                 _voco_sb_prov = _MetaProv(
