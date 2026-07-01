@@ -8904,6 +8904,11 @@ async function cargarConfiguracion() {
       }
     });
 
+    // ── La tarjeta Anthropic es infraestructura de Voco (no del cliente) ──
+    // Solo el agente administrador (agent_id=1) puede verla y editarla.
+    var antCard = document.getElementById('card-anthropic');
+    if (antCard) antCard.style.display = (_escAgentId === 1) ? '' : 'none';
+
     // ── Calcular estado por servicio ──
     var ok = function(k) { return d[k] && d[k].configurado; };
     var metaOk  = ok('META_ACCESS_TOKEN') && ok('META_PHONE_NUMBER_ID');
@@ -9787,7 +9792,7 @@ function cerrarDiff() {
 var _sandboxWAData = null;
 
 async function cargarSandboxWA() {
-  var aid = window._agentId || 1;
+  var aid = _escAgentId || 1;
   try {
     var r = await fetch('/inbox/api/agents/' + aid + '/sandbox', {credentials:'include'});
     var d = await r.json();
@@ -9834,7 +9839,7 @@ function _renderSandboxWAUI(d) {
 }
 
 async function guardarConfigSandbox() {
-  var aid = window._agentId || 1;
+  var aid = _escAgentId || 1;
   var phoneId = (document.getElementById('sandbox-inp-phone-id').value || '').trim();
   var phone   = (document.getElementById('sandbox-inp-phone').value || '').trim();
   var errEl   = document.getElementById('sandbox-activar-err');
@@ -9870,7 +9875,7 @@ async function guardarConfigSandbox() {
 }
 
 async function enviarInvitacionSandbox() {
-  var aid = window._agentId || 1;
+  var aid = _escAgentId || 1;
   var phone = (document.getElementById('sandbox-invite-phone').value || '').trim();
   var res   = document.getElementById('sandbox-invite-result');
   var btn   = document.getElementById('sandbox-invite-btn');
