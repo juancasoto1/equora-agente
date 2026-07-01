@@ -3667,13 +3667,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
              width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);border:1px solid var(--voco-border)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
             <h3 id="cat-modal-titulo" style="margin:0;font-size:1.05rem;font-weight:700;color:var(--voco-text)">Agregar producto</h3>
-            <div style="display:flex;align-items:center;gap:12px">
-              <a href="#" onclick="catDescargarTemplate(event)"
-                style="font-size:.74rem;color:var(--voco-text-muted);text-decoration:underline;white-space:nowrap">
-                ↓ Template Excel
-              </a>
-              <button onclick="catCerrarModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted);line-height:1">×</button>
-            </div>
+            <button onclick="catCerrarModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted);line-height:1">×</button>
           </div>
           <div style="display:grid;gap:14px">
             <input type="hidden" id="cat-id">
@@ -3768,7 +3762,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
              width:100%;box-shadow:0 8px 40px rgba(0,0,0,.2);border:1px solid var(--voco-border)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
             <h3 style="margin:0;font-size:1.05rem;font-weight:700">Importar catálogo</h3>
-            <button onclick="catCerrarImportar()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted)">×</button>
+            <div style="display:flex;align-items:center;gap:12px">
+              <a href="#" onclick="catDescargarTemplate(event)"
+                style="font-size:.74rem;color:var(--voco-text-muted);text-decoration:underline;white-space:nowrap">
+                ↓ Template Excel
+              </a>
+              <button onclick="catCerrarImportar()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted);line-height:1">×</button>
+            </div>
           </div>
           <div style="margin-bottom:16px;font-size:.84rem;color:var(--voco-text-muted);line-height:1.6">
             Sube un archivo <strong>.xlsx</strong> o <strong>.csv</strong> con tus productos.<br>
