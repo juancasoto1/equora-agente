@@ -5614,6 +5614,8 @@ async function cambiarAgenteActivo(nuevoId) {
     // como entrada propia del sidebar y se carga al hacer showSec('mensajes')).
     if (typeof cargarPromocion === 'function') cargarPromocion();
   }
+  // Reconectar SSE al nuevo agente para recibir eventos de tickets en tiempo real
+  if (typeof escConectarSSE === 'function') escConectarSSE();
   console.info('[agent-selector] cambiado a agent_id=' + nuevoId + ' (' + nuevo.name + ')');
 }
 
@@ -6475,7 +6477,8 @@ _convTimer = setInterval(loadConvs, 8000);
    cargarModulosAgente() porque _escAgentId debe estar resuelto primero. */
 (async function() {
   await inicializarSelectorAgente();
-  _escActualizarBadges();   // refrescar badge con el agent_id real (no el 1 del DOMContentLoaded)
+  _escActualizarBadges();   // primer badge con agent_id real
+  escConectarSSE();          // SSE con agent_id correcto (no el 1 del DOMContentLoaded)
   await cargarModulosAgente();
 })();
 
@@ -11606,10 +11609,21 @@ async function toggleAutoAsignar(activo) {
 /* ══════════════════════════════════════════════════════════════
    SPRINT 2 — SSE: notificaciones en tiempo real
    ══════════════════════════════════════════════════════════════ */
-var _sseSource = null;
+var _sseSource       = null;
+var _sseAgentId      = null;  // agent_id al que está suscrito el stream actual
+var _sseCloseIntent  = false; // true cuando cerramos a propósito (cambio de agente)
 
 function escConectarSSE() {
-  if (_sseSource) return;
+  // No abrir si ya hay una conexión para el agente correcto
+  if (_sseSource && _sseAgentId === _escAgentId) return;
+  // Cerrar conexión anterior si cambió el agente
+  if (_sseSource) {
+    _sseCloseIntent = true;
+    _sseSource.close();
+    _sseSource = null;
+  }
+  _sseCloseIntent = false;
+  _sseAgentId = _escAgentId;
   var url = '/inbox/api/eventos?agent_id=' + _escAgentId;
   _sseSource = new EventSource(url, {withCredentials: true});
 
@@ -11622,9 +11636,10 @@ function escConectarSSE() {
   };
 
   _sseSource.onerror = function() {
-    // Reconectar automáticamente tras 5s
+    if (_sseCloseIntent) return;  // cierre intencional — no reconectar
     _sseSource.close();
     _sseSource = null;
+    _sseAgentId = null;
     setTimeout(escConectarSSE, 5000);
   };
 }
@@ -11666,8 +11681,9 @@ function _escToast(msg, color) {
   }, 4000);
 }
 
-// Iniciar SSE al cargar la página
-document.addEventListener('DOMContentLoaded', escConectarSSE);
+// SSE se inicia desde el IIFE de inicializarSelectorAgente()
+// para garantizar que _escAgentId ya tiene el valor correcto.
+// DOMContentLoaded ya no lo llama para evitar conectarse a agent_id=1.
 
 /* ══════════════════════════════════════════════════════════════
    SPRINT 2 — SLA: timer visual en tarjetas de tickets
