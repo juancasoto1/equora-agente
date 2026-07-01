@@ -44,6 +44,7 @@ from agent.memory import (
     actualizar_deal,
     obtener_cliente,
     obtener_carrito_activo,
+    crear_pedido_desde_carrito,
 )
 from agent.tools import crear_checkout_shopify
 
@@ -64,6 +65,7 @@ class MarkerContext:
 
     Outputs acumulados (los llenan los handlers, los consume main.py al final):
       - checkout_url / checkout_fallo: del marcador [[PEDIDO:...]].
+      - pedido_creado: dict del pedido nativo Voco creado por [[PEDIDO_CONFIRMAR]].
       - datos_escalacion: del marcador [[ESCALAR:...]].
       - abrir_tienda / tienda_query: del marcador [[TIENDA:...]].
       - productos_mencionados: del marcador [[PRODUCTO:...]].
@@ -81,6 +83,7 @@ class MarkerContext:
     # Outputs acumulados (consumidos por main.py al final del webhook)
     checkout_url: str | None = None
     checkout_fallo: bool = False
+    pedido_creado: dict | None = None          # pedido nativo Voco
     datos_escalacion: dict | None = None
     mostrar_carrito_pendiente: bool = False
     abrir_tienda: bool = False
@@ -520,6 +523,63 @@ async def handle_deal_stage(ctx: MarkerContext) -> MarkerContext:
             _hs_sync_if_enabled(modules, ctx.agent_id, nuevo["id"], ctx.telefono)
     except Exception as e:
         logger.error(f"[DEAL_STAGE] Error procesando para {ctx.telefono}: {e}")
+    return ctx
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# [[PEDIDO_CONFIRMAR]] — crear pedido nativo Voco desde el carrito activo
+# ──────────────────────────────────────────────────────────────────────────────
+# Se usa cuando el agente NO tiene Shopify. El LLM lo emite al confirmar
+# una venta conversacional. Extrae el carrito de BD, crea el Pedido y expone
+# el dict en ctx.pedido_creado para que main.py envíe la confirmación.
+#
+# Payload opcional: [[PEDIDO_CONFIRMAR:{"direccion":"...","notas":"..."}]]
+# Si no hay payload, se usan valores vacíos.
+@register_marker("PEDIDO_CONFIRMAR")
+async def handle_pedido_confirmar(ctx: MarkerContext) -> MarkerContext:
+    match = re.search(r"\[\[PEDIDO_CONFIRMAR(?::({.*?}))?\]\]", ctx.respuesta, re.DOTALL)
+    if not match:
+        return ctx
+    ctx.respuesta = re.sub(
+        r"\s*\[\[PEDIDO_CONFIRMAR(?::{.*?})?\]\]", "", ctx.respuesta, flags=re.DOTALL
+    ).strip()
+
+    payload: dict = {}
+    if match.group(1):
+        try:
+            payload = json.loads(match.group(1))
+        except Exception:
+            pass
+
+    try:
+        carrito = await obtener_carrito_activo(ctx.telefono, agent_id=ctx.agent_id)
+        if not carrito:
+            logger.warning(f"[PEDIDO_CONFIRMAR] carrito vacío para {ctx.telefono} — se ignora")
+            return ctx
+
+        cliente = await obtener_cliente(ctx.telefono, ctx.agent_id) or {}
+        nombre = " ".join(filter(None, [
+            cliente.get("nombres", ""), cliente.get("apellidos", ""),
+        ])).strip() or ctx.telefono
+
+        pedido = await crear_pedido_desde_carrito(
+            telefono=ctx.telefono,
+            agent_id=ctx.agent_id,
+            carrito=carrito,
+            nombre_cliente=nombre,
+            direccion=str(payload.get("direccion", ""))[:1000],
+            notas_cliente=str(payload.get("notas", ""))[:2000],
+            costo_envio=int(payload.get("costo_envio", 0)),
+            descuento=int(payload.get("descuento", 0)),
+        )
+        ctx.pedido_creado = pedido
+        await limpiar_carrito_activo(ctx.telefono, agent_id=ctx.agent_id)
+        logger.info(
+            f"[PEDIDO_CONFIRMAR] Pedido {pedido['numero']} creado para {ctx.telefono} "
+            f"— total ${pedido['total']:,}"
+        )
+    except Exception as e:
+        logger.error(f"[PEDIDO_CONFIRMAR] Error para {ctx.telefono}: {e}")
     return ctx
 
 

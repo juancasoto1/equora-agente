@@ -2056,6 +2056,13 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
            onclick="showSec('catalogo')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('catalogo')">
         <span class="ni" aria-hidden="true"><i data-lucide="package" style="width:16px;height:16px;vertical-align:-3px"></i></span> Catálogo
       </div>
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="pedidos" data-module="pedidos_voco"
+           onclick="showSec('pedidos')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('pedidos')"
+           style="display:none">
+        <span class="ni" aria-hidden="true"><i data-lucide="shopping-bag" style="width:16px;height:16px;vertical-align:-3px"></i></span> Pedidos
+        <span id="ped-badge" style="display:none;margin-left:auto;background:#f97316;color:#fff;
+          border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
+      </div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="configuracion"
            onclick="showSec('configuracion')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('configuracion')">
@@ -4053,6 +4060,188 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       </div><!-- /sec-pipeline -->
 
       <!-- ═══════════════════════════════════════
+           SECCIÓN: PEDIDOS
+           ═══════════════════════════════════════ -->
+      <div class="sec sec-light" id="sec-pedidos">
+        <div class="sec-hdr">
+          <div>
+            <h1 style="display:flex;align-items:center;gap:10px"><i data-lucide="shopping-bag" style="width:22px;height:22px"></i> Pedidos</h1>
+            <p style="margin:4px 0 0;font-size:.82rem;color:var(--voco-text-muted)">Gestiona los pedidos recibidos por WhatsApp</p>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn-pri" onclick="pedAbrirNuevo()">+ Nuevo pedido</button>
+          </div>
+        </div>
+        <div class="sec-body">
+          <!-- Tarjetas de stats -->
+          <div id="ped-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin-bottom:20px">
+            <div class="kpi-card" id="ped-stat-pendiente">
+              <div class="kpi-label">Pendiente</div>
+              <div class="kpi-val" id="ped-n-pendiente">—</div>
+            </div>
+            <div class="kpi-card" id="ped-stat-confirmado">
+              <div class="kpi-label">Confirmado</div>
+              <div class="kpi-val" id="ped-n-confirmado">—</div>
+            </div>
+            <div class="kpi-card" id="ped-stat-preparando">
+              <div class="kpi-label">Preparando</div>
+              <div class="kpi-val" id="ped-n-preparando">—</div>
+            </div>
+            <div class="kpi-card" id="ped-stat-enviado">
+              <div class="kpi-label">Enviado</div>
+              <div class="kpi-val" id="ped-n-enviado">—</div>
+            </div>
+            <div class="kpi-card" id="ped-stat-entregado">
+              <div class="kpi-label">Entregado</div>
+              <div class="kpi-val" id="ped-n-entregado">—</div>
+            </div>
+            <div class="kpi-card" id="ped-stat-cancelado">
+              <div class="kpi-label">Cancelado</div>
+              <div class="kpi-val" id="ped-n-cancelado">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Valor total</div>
+              <div class="kpi-val" id="ped-valor-total" style="font-size:.95rem">—</div>
+            </div>
+          </div>
+
+          <!-- Filtros -->
+          <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+            <input id="ped-buscar" type="text" placeholder="Buscar por teléfono o nombre…"
+              style="flex:1;min-width:180px;padding:8px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                     background:var(--voco-card-bg);color:var(--voco-text);font-size:.85rem"
+              oninput="pedCargar()">
+            <select id="ped-filtro-estado"
+              style="padding:8px 10px;border-radius:8px;border:1px solid var(--voco-border);
+                     background:var(--voco-card-bg);color:var(--voco-text);font-size:.85rem"
+              onchange="pedCargar()">
+              <option value="">Todos los estados</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="confirmado">Confirmado</option>
+              <option value="preparando">Preparando</option>
+              <option value="enviado">Enviado</option>
+              <option value="entregado">Entregado</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+
+          <!-- Tabla -->
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;min-width:600px">
+              <thead>
+                <tr style="background:var(--voco-content-bg-alt);font-size:.78rem;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.04em">
+                  <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Nro.</th>
+                  <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Cliente</th>
+                  <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Estado</th>
+                  <th style="padding:10px 12px;text-align:right;border-bottom:1px solid var(--voco-border)">Total</th>
+                  <th style="padding:10px 12px;text-align:left;border-bottom:1px solid var(--voco-border)">Fecha</th>
+                  <th style="padding:10px 12px;text-align:center;border-bottom:1px solid var(--voco-border)">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="ped-tbody">
+                <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Cargando pedidos…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="ped-paginacion" style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end"></div>
+        </div><!-- /sec-body -->
+      </div><!-- /sec-pedidos -->
+
+      <!-- Modal detalle / editar pedido -->
+      <div id="ped-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;
+           align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--voco-card-bg);border-radius:16px;padding:28px;max-width:600px;
+             width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);border:1px solid var(--voco-border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+            <h3 id="ped-modal-titulo" style="margin:0;font-size:1.05rem;font-weight:700;color:var(--voco-text)">Pedido</h3>
+            <button onclick="pedCerrarModal()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--voco-text-muted);line-height:1">×</button>
+          </div>
+          <div style="display:grid;gap:14px">
+            <input type="hidden" id="ped-id">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">TELÉFONO</label>
+                <input id="ped-telefono" type="text" placeholder="+573001234567"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">NOMBRE CLIENTE</label>
+                <input id="ped-nombre" type="text" placeholder="Nombre completo"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
+              </div>
+            </div>
+            <div>
+              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">ESTADO</label>
+              <select id="ped-estado"
+                style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                       background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem">
+                <option value="pendiente">Pendiente</option>
+                <option value="confirmado">Confirmado</option>
+                <option value="preparando">Preparando</option>
+                <option value="enviado">Enviado</option>
+                <option value="entregado">Entregado</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">DIRECCIÓN DE ENTREGA</label>
+              <input id="ped-direccion" type="text" placeholder="Calle 123 # 45-67, Bogotá"
+                style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                       background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
+            </div>
+            <!-- Productos del pedido (solo lectura en pedidos existentes) -->
+            <div id="ped-prods-wrap">
+              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:6px">PRODUCTOS</label>
+              <div id="ped-prods-lista" style="background:var(--voco-content-bg-alt);border-radius:8px;padding:12px;font-size:.85rem;color:var(--voco-text)"></div>
+            </div>
+            <!-- Productos manual (solo pedido nuevo) -->
+            <div id="ped-prods-manual-wrap" style="display:none">
+              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:6px">PRODUCTOS (JSON)</label>
+              <textarea id="ped-prods-manual" rows="4" placeholder='[{"nombre":"Producto","cantidad":1,"precio_unitario":10000}]'
+                style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                       background:var(--voco-card-bg);color:var(--voco-text);font-size:.82rem;
+                       font-family:monospace;resize:vertical;box-sizing:border-box"></textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">DESCUENTO ($)</label>
+                <input id="ped-descuento" type="number" min="0" placeholder="0"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">COSTO ENVÍO ($)</label>
+                <input id="ped-envio" type="number" min="0" placeholder="0"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">TOTAL ($)</label>
+                <div id="ped-total-display" style="padding:9px 12px;font-weight:700;color:var(--voco-accent);font-size:.95rem">—</div>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">NOTAS INTERNAS</label>
+              <textarea id="ped-notas" rows="2" placeholder="Notas para el equipo…"
+                style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                       background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;
+                       resize:vertical;box-sizing:border-box"></textarea>
+            </div>
+            <div id="ped-modal-error" style="display:none;color:#ef4444;font-size:.83rem;padding:8px 12px;
+                 background:rgba(239,68,68,.08);border-radius:8px"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px">
+              <button onclick="pedCerrarModal()"
+                style="padding:9px 20px;border-radius:8px;border:1px solid var(--voco-border);
+                       background:transparent;color:var(--voco-text);cursor:pointer;font-size:.88rem">Cancelar</button>
+              <button class="btn-pri" id="ped-btn-guardar" onclick="pedGuardar()">Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div><!-- /ped-modal -->
+
+      <!-- ═══════════════════════════════════════
            SECCIÓN: CONFIGURACIÓN
            ═══════════════════════════════════════ -->
       <div class="sec sec-light" id="sec-configuracion">
@@ -5096,6 +5285,17 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   </label>
                 </div>
 
+                <div class="cfg-card" style="padding:16px 20px;display:flex;align-items:center;gap:16px;margin:0">
+                  <div style="flex:1">
+                    <div style="font-size:.88rem;font-weight:600;margin-bottom:2px">Pedidos Voco</div>
+                    <div style="font-size:.78rem;color:var(--voco-text-muted)">Gestión de pedidos nativos sin Shopify — el agente confirma ventas conversacionales con [[PEDIDO_CONFIRMAR]] y crea el pedido en el panel de Voco.</div>
+                  </div>
+                  <label class="mod-toggle-wrap">
+                    <input type="checkbox" id="mod-toggle-pedidos_voco" onchange="toggleModulo('pedidos_voco',this.checked)">
+                    <span class="mod-toggle-slider"></span>
+                  </label>
+                </div>
+
               </div>
               <div id="modulos-status" style="margin-top:14px;font-size:.78rem;color:var(--voco-success);display:none">✓ Guardado</div>
             </div>
@@ -5661,6 +5861,7 @@ function showSec(id) {
     if (id === 'escalaciones')  { escCargarLista(); }
     if (id === 'pipeline')      { cargarPipeline(); }
     if (id === 'catalogo')      { catCargar(); }
+    if (id === 'pedidos')       { pedCargarStats(); pedCargar(); }
   }
   // En móvil al entrar a Escalaciones, forzar vista de LISTA (no detalle).
   // Sin esto el #esc-detalle (position:fixed z-index:200) tapaba la lista
@@ -9324,7 +9525,7 @@ async function cargarModulos() {
     var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/modules', {credentials:'include'});
     var d = await r.json();
     _modulesState = d.modules || {};
-    ['pipeline','calendly','hubspot'].forEach(function(key) {
+    ['pipeline','calendly','hubspot','pedidos_voco'].forEach(function(key) {
       var el = document.getElementById('mod-toggle-' + key);
       if (el) el.checked = !!_modulesState[key];
     });
@@ -13076,6 +13277,249 @@ async function catImportar() {
   }
   btn.disabled = false; btn.textContent = 'Importar';
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Pedidos
+// ─────────────────────────────────────────────────────────────────
+var _pedOffset = 0;
+var _pedLimit  = 30;
+
+var _PED_ESTADO_COLOR = {
+  pendiente:  '#f97316',
+  confirmado: '#3b82f6',
+  preparando: '#8b5cf6',
+  enviado:    '#06b6d4',
+  entregado:  '#22c55e',
+  cancelado:  '#ef4444',
+};
+
+async function pedCargarStats() {
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/pedidos/stats?agent_id=' + ag, {credentials:'include'});
+    var d = await r.json();
+    var estados = ['pendiente','confirmado','preparando','enviado','entregado','cancelado'];
+    estados.forEach(function(e) {
+      var el = document.getElementById('ped-n-' + e);
+      if (el) el.textContent = d[e] || 0;
+    });
+    var vt = document.getElementById('ped-valor-total');
+    if (vt) vt.textContent = '$' + ((d.valor_total || 0) / 1000000).toFixed(1) + 'M';
+    // Badge sidebar: pedidos pendientes
+    var badge = document.getElementById('ped-badge');
+    if (badge) {
+      var nPend = d['pendiente'] || 0;
+      badge.textContent = nPend;
+      badge.style.display = nPend > 0 ? '' : 'none';
+    }
+  } catch(e) { console.error('pedCargarStats', e); }
+}
+
+async function pedCargar() {
+  _pedOffset = 0;
+  await _pedCargarPagina();
+}
+
+async function _pedCargarPagina() {
+  var ag     = _escAgentId || 1;
+  var estado = document.getElementById('ped-filtro-estado').value;
+  var buscar = (document.getElementById('ped-buscar').value || '').trim();
+  var url    = '/inbox/api/pedidos?agent_id=' + ag + '&limite=' + _pedLimit + '&offset=' + _pedOffset;
+  if (estado) url += '&estado=' + encodeURIComponent(estado);
+  if (buscar) url += '&telefono=' + encodeURIComponent(buscar);
+
+  var tbody = document.getElementById('ped-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Cargando…</td></tr>';
+
+  try {
+    var r = await fetch(url, {credentials:'include'});
+    var d = await r.json();
+    var pedidos = d.pedidos || [];
+    if (!pedidos.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--voco-text-muted)">Sin pedidos</td></tr>';
+      return;
+    }
+    tbody.innerHTML = pedidos.map(function(p) {
+      var col = _PED_ESTADO_COLOR[p.estado] || '#94a3b8';
+      var fecha = p.created_at ? p.created_at.slice(0,10) : '—';
+      return '<tr style="border-bottom:1px solid var(--voco-border);font-size:.84rem">' +
+        '<td style="padding:10px 12px;font-weight:600;color:var(--voco-accent)">' + (p.numero||'—') + '</td>' +
+        '<td style="padding:10px 12px"><div style="font-weight:500">' + _esc(p.nombre_cliente||'—') + '</div>' +
+          '<div style="font-size:.75rem;color:var(--voco-text-muted)">' + _esc(p.telefono_cliente||'') + '</div></td>' +
+        '<td style="padding:10px 12px"><span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:.73rem;font-weight:600;' +
+          'background:' + col + '22;color:' + col + '">' + p.estado + '</span></td>' +
+        '<td style="padding:10px 12px;text-align:right;font-weight:600">$' + ((p.total||0)).toLocaleString('es-CO') + '</td>' +
+        '<td style="padding:10px 12px;color:var(--voco-text-muted)">' + fecha + '</td>' +
+        '<td style="padding:10px 12px;text-align:center">' +
+          '<button onclick="pedAbrirEditar(' + p.id + ')" style="background:none;border:1px solid var(--voco-border);' +
+            'border-radius:6px;padding:4px 10px;font-size:.78rem;cursor:pointer;color:var(--voco-text)">Editar</button>' +
+          ' <button onclick="pedEliminar(' + p.id + ')" style="background:none;border:1px solid #fca5a5;' +
+            'border-radius:6px;padding:4px 10px;font-size:.78rem;cursor:pointer;color:#ef4444">Borrar</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+    // Paginación simple
+    var pg = document.getElementById('ped-paginacion');
+    pg.innerHTML = '';
+    if (_pedOffset > 0) {
+      var bPrev = document.createElement('button');
+      bPrev.textContent = '← Anterior';
+      bPrev.style.cssText = 'padding:6px 14px;border-radius:8px;border:1px solid var(--voco-border);background:transparent;cursor:pointer;color:var(--voco-text);font-size:.82rem';
+      bPrev.onclick = function(){ _pedOffset = Math.max(0, _pedOffset - _pedLimit); _pedCargarPagina(); };
+      pg.appendChild(bPrev);
+    }
+    if (pedidos.length === _pedLimit) {
+      var bNext = document.createElement('button');
+      bNext.textContent = 'Siguiente →';
+      bNext.style.cssText = 'padding:6px 14px;border-radius:8px;border:1px solid var(--voco-border);background:transparent;cursor:pointer;color:var(--voco-text);font-size:.82rem';
+      bNext.onclick = function(){ _pedOffset += _pedLimit; _pedCargarPagina(); };
+      pg.appendChild(bNext);
+    }
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:#ef4444">Error cargando pedidos</td></tr>';
+    console.error('pedCargar', e);
+  }
+}
+
+function pedAbrirNuevo() {
+  document.getElementById('ped-id').value = '';
+  document.getElementById('ped-telefono').value = '';
+  document.getElementById('ped-nombre').value = '';
+  document.getElementById('ped-estado').value = 'pendiente';
+  document.getElementById('ped-direccion').value = '';
+  document.getElementById('ped-descuento').value = '';
+  document.getElementById('ped-envio').value = '';
+  document.getElementById('ped-notas').value = '';
+  document.getElementById('ped-total-display').textContent = '—';
+  document.getElementById('ped-prods-wrap').style.display = 'none';
+  document.getElementById('ped-prods-manual-wrap').style.display = '';
+  document.getElementById('ped-modal-error').style.display = 'none';
+  document.getElementById('ped-modal-titulo').textContent = 'Nuevo pedido';
+  document.getElementById('ped-telefono').readOnly = false;
+  var m = document.getElementById('ped-modal');
+  m.style.display = 'flex';
+}
+
+async function pedAbrirEditar(id) {
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/pedidos/' + id + '?agent_id=' + ag, {credentials:'include'});
+    if (!r.ok) { alert('Pedido no encontrado'); return; }
+    var p = await r.json();
+    document.getElementById('ped-id').value = p.id;
+    document.getElementById('ped-telefono').value = p.telefono_cliente || '';
+    document.getElementById('ped-nombre').value   = p.nombre_cliente   || '';
+    document.getElementById('ped-estado').value   = p.estado           || 'pendiente';
+    document.getElementById('ped-direccion').value= p.direccion_entrega|| '';
+    document.getElementById('ped-descuento').value= p.descuento        || 0;
+    document.getElementById('ped-envio').value    = p.costo_envio      || 0;
+    document.getElementById('ped-notas').value    = p.notas_internas   || '';
+    document.getElementById('ped-total-display').textContent = '$' + (p.total||0).toLocaleString('es-CO');
+    document.getElementById('ped-modal-titulo').textContent = p.numero || ('Pedido #' + p.id);
+    document.getElementById('ped-telefono').readOnly = true;
+    // Mostrar productos (solo lectura)
+    var prods = p.productos || [];
+    var listaHtml = prods.length
+      ? prods.map(function(pr) {
+          return '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+            '<span>' + _esc(pr.nombre||'') + ' ×' + (pr.cantidad||1) + '</span>' +
+            '<span>$' + (pr.precio_unitario||0).toLocaleString('es-CO') + '</span>' +
+          '</div>';
+        }).join('')
+      : '<span style="color:var(--voco-text-muted)">Sin productos registrados</span>';
+    document.getElementById('ped-prods-lista').innerHTML = listaHtml;
+    document.getElementById('ped-prods-wrap').style.display = '';
+    document.getElementById('ped-prods-manual-wrap').style.display = 'none';
+    document.getElementById('ped-modal-error').style.display = 'none';
+    document.getElementById('ped-modal').style.display = 'flex';
+  } catch(e) { alert('Error cargando pedido'); console.error(e); }
+}
+
+function pedCerrarModal() {
+  document.getElementById('ped-modal').style.display = 'none';
+}
+
+async function pedGuardar() {
+  var id  = document.getElementById('ped-id').value;
+  var ag  = _escAgentId || 1;
+  var err = document.getElementById('ped-modal-error');
+  err.style.display = 'none';
+  var btn = document.getElementById('ped-btn-guardar');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+
+  try {
+    var data;
+    if (!id) {
+      // Nuevo pedido manual
+      var prodsRaw = document.getElementById('ped-prods-manual').value.trim();
+      var prods = [];
+      if (prodsRaw) {
+        try { prods = JSON.parse(prodsRaw); } catch(e) {
+          err.textContent = 'JSON de productos inválido: ' + e.message;
+          err.style.display = ''; btn.disabled = false; btn.textContent = 'Guardar'; return;
+        }
+      }
+      data = {
+        agent_id:        ag,
+        telefono_cliente:document.getElementById('ped-telefono').value.trim(),
+        nombre_cliente:  document.getElementById('ped-nombre').value.trim(),
+        estado:          document.getElementById('ped-estado').value,
+        direccion_entrega:document.getElementById('ped-direccion').value.trim(),
+        descuento:       parseInt(document.getElementById('ped-descuento').value)||0,
+        costo_envio:     parseInt(document.getElementById('ped-envio').value)||0,
+        notas_internas:  document.getElementById('ped-notas').value.trim(),
+        productos:       prods,
+      };
+      var r = await fetch('/inbox/api/pedidos', {
+        method:'POST', credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(data),
+      });
+      var d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Error desconocido');
+    } else {
+      // Editar pedido existente
+      data = {
+        estado:           document.getElementById('ped-estado').value,
+        direccion_entrega:document.getElementById('ped-direccion').value.trim(),
+        descuento:        parseInt(document.getElementById('ped-descuento').value)||0,
+        costo_envio:      parseInt(document.getElementById('ped-envio').value)||0,
+        notas_internas:   document.getElementById('ped-notas').value.trim(),
+      };
+      var r = await fetch('/inbox/api/pedidos/' + id + '?agent_id=' + ag, {
+        method:'PUT', credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(data),
+      });
+      var d = await r.json();
+      if (!d.ok) throw new Error(d.error || 'Error desconocido');
+    }
+    pedCerrarModal();
+    pedCargar();
+    pedCargarStats();
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = '';
+  }
+  btn.disabled = false; btn.textContent = 'Guardar';
+}
+
+async function pedEliminar(id) {
+  if (!confirm('¿Eliminar este pedido? Esta acción no se puede deshacer.')) return;
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/pedidos/' + id + '?agent_id=' + ag, {
+      method:'DELETE', credentials:'include',
+    });
+    if (!r.ok) { alert('No se pudo eliminar el pedido'); return; }
+    pedCargar();
+    pedCargarStats();
+  } catch(e) { alert('Error de red'); console.error(e); }
+}
+
+function _esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 </script>
 </body>
 </html>"""
@@ -13871,7 +14315,8 @@ function renderWizStep() {{
       calendlySubBlock()+
       togRow('sendgrid','<i data-lucide=\"mail\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>SendGrid email','Envío de correos transaccionales y follow-ups desde el agente','new')+
       togRow('knowledge_base','<i data-lucide=\"book-open\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Knowledge Base','Base de conocimiento consultable para agentes de soporte','new')+
-      togRow('order_status','<i data-lucide=\"package\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Estado de pedidos','Consulta tracking y estado de órdenes Shopify','new');
+      togRow('order_status','<i data-lucide=\"package\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Estado de pedidos','Consulta tracking y estado de órdenes Shopify','new')+
+      togRow('pedidos_voco','<i data-lucide=\"shopping-bag\" style=\"width:14px;height:14px;vertical-align:-2px;margin-right:6px;color:var(--voco-brand)\"></i>Pedidos Voco','Gestión de pedidos nativos sin Shopify — confirma ventas conversacionales desde WhatsApp','new');
   }} else if (_wizStep === 6) {{
     var name = _wizData.name || '—';
     var aname = _wizData.agent_name || '—';
@@ -14039,6 +14484,7 @@ async function wizNext() {{
       sendgrid:       document.getElementById('wtogn-sendgrid').checked,
       knowledge_base: document.getElementById('wtogn-knowledge_base').checked,
       order_status:   document.getElementById('wtogn-order_status').checked,
+      pedidos_voco:   document.getElementById('wtogn-pedidos_voco').checked,
     }};
   }} else if(_wizStep===6) {{
     // Crear el agente

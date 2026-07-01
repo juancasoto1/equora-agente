@@ -350,6 +350,31 @@ class Ticket(Base):
     actualizado_at:    Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class Pedido(Base):
+    """Pedido nativo Voco — independiente de Shopify."""
+    __tablename__ = "pedidos"
+
+    id:               Mapped[int]      = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id:         Mapped[int]      = mapped_column(Integer, index=True)
+    numero:           Mapped[str]      = mapped_column(String(30), nullable=False, index=True)   # VCO-0001
+    telefono_cliente: Mapped[str]      = mapped_column(String(50), index=True)
+    nombre_cliente:   Mapped[str]      = mapped_column(String(300), default="")
+    estado:           Mapped[str]      = mapped_column(String(30), default="pendiente")  # pendiente/confirmado/preparando/enviado/entregado/cancelado
+    productos_json:   Mapped[str]      = mapped_column(Text, default="[]")               # snapshot inmutable del carrito
+    subtotal:         Mapped[int]      = mapped_column(Integer, default=0)               # COP enteros
+    descuento:        Mapped[int]      = mapped_column(Integer, default=0)
+    costo_envio:      Mapped[int]      = mapped_column(Integer, default=0)
+    total:            Mapped[int]      = mapped_column(Integer, default=0)
+    direccion_entrega: Mapped[str]     = mapped_column(Text, default="")
+    notas_cliente:    Mapped[str]      = mapped_column(Text, default="")
+    notas_internas:   Mapped[str]      = mapped_column(Text, default="")
+    canal:            Mapped[str]      = mapped_column(String(20), default="whatsapp")   # whatsapp/manual
+    fuente:           Mapped[str]      = mapped_column(String(20), default="bot")        # bot/manual/shopify
+    agente_asignado_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at:       Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at:       Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class CatalogoVoco(Base):
     """Catálogo de productos nativo de Voco — para agentes sin Shopify."""
     __tablename__ = "catalogo_voco"
@@ -468,6 +493,11 @@ async def inicializar_db():
             "ALTER TABLE deals ADD COLUMN IF NOT EXISTS hs_deal_id TEXT DEFAULT ''",
             # Catálogo nativo Voco
             "CREATE INDEX IF NOT EXISTS ix_catalogo_voco_agent ON catalogo_voco (agent_id)",
+            # Pedidos nativos Voco
+            "CREATE INDEX IF NOT EXISTS ix_pedidos_agent    ON pedidos (agent_id)",
+            "CREATE INDEX IF NOT EXISTS ix_pedidos_telefono ON pedidos (agent_id, telefono_cliente)",
+            "CREATE INDEX IF NOT EXISTS ix_pedidos_estado   ON pedidos (agent_id, estado)",
+            "CREATE INDEX IF NOT EXISTS ix_pedidos_numero   ON pedidos (agent_id, numero)",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -4117,6 +4147,8 @@ DEFAULT_MODULES: dict[str, bool] = {
     "sendgrid":       False,
     "knowledge_base": False,
     "order_status":   False,
+    # Módulo de pedidos nativos Voco (sin Shopify)
+    "pedidos_voco":   False,
 }
 
 
@@ -4742,3 +4774,221 @@ async def importar_productos_voco(agent_id: int, productos: list[dict],
         await session.commit()
 
     return {"creados": creados, "errores": errores}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PEDIDOS NATIVOS VOCO
+# ══════════════════════════════════════════════════════════════════════════════
+
+ESTADOS_PEDIDO = ("pendiente", "confirmado", "preparando", "enviado", "entregado", "cancelado")
+
+
+async def _siguiente_numero_pedido(session: AsyncSession, agent_id: int) -> str:
+    """Genera el próximo número de pedido para el agente: VCO-0001, VCO-0002…"""
+    result = await session.execute(
+        select(func.count()).where(Pedido.agent_id == agent_id)
+    )
+    count = result.scalar() or 0
+    return f"VCO-{count + 1:04d}"
+
+
+def _pedido_a_dict(p: Pedido) -> dict:
+    try:
+        productos = json.loads(p.productos_json or "[]")
+    except Exception:
+        productos = []
+    return {
+        "id":               p.id,
+        "agent_id":         p.agent_id,
+        "numero":           p.numero,
+        "telefono_cliente": p.telefono_cliente,
+        "nombre_cliente":   p.nombre_cliente,
+        "estado":           p.estado,
+        "productos":        productos,
+        "subtotal":         p.subtotal,
+        "descuento":        p.descuento,
+        "costo_envio":      p.costo_envio,
+        "total":            p.total,
+        "direccion_entrega": p.direccion_entrega,
+        "notas_cliente":    p.notas_cliente,
+        "notas_internas":   p.notas_internas,
+        "canal":            p.canal,
+        "fuente":           p.fuente,
+        "agente_asignado_id": p.agente_asignado_id,
+        "created_at":       p.created_at.isoformat() if p.created_at else None,
+        "updated_at":       p.updated_at.isoformat() if p.updated_at else None,
+    }
+
+
+async def crear_pedido_desde_carrito(
+    telefono: str,
+    agent_id: int,
+    carrito: list[dict],
+    nombre_cliente: str = "",
+    direccion: str = "",
+    notas_cliente: str = "",
+    costo_envio: int = 0,
+    descuento: int = 0,
+) -> dict:
+    """Crea un Pedido a partir del carrito activo.
+
+    Calcula subtotal y total, genera número correlativo por agente.
+    Devuelve el dict del pedido creado.
+    """
+    subtotal = sum(int(item.get("subtotal", 0) or item.get("precio", 0)) for item in carrito)
+    total = max(0, subtotal - descuento + costo_envio)
+
+    async with async_session() as session:
+        numero = await _siguiente_numero_pedido(session, agent_id)
+        pedido = Pedido(
+            agent_id=agent_id,
+            numero=numero,
+            telefono_cliente=telefono,
+            nombre_cliente=nombre_cliente[:300],
+            estado="pendiente",
+            productos_json=json.dumps(carrito, ensure_ascii=False),
+            subtotal=subtotal,
+            descuento=descuento,
+            costo_envio=costo_envio,
+            total=total,
+            direccion_entrega=direccion[:1000],
+            notas_cliente=notas_cliente[:2000],
+            canal="whatsapp",
+            fuente="bot",
+        )
+        session.add(pedido)
+        await session.commit()
+        await session.refresh(pedido)
+        return _pedido_a_dict(pedido)
+
+
+async def crear_pedido_manual(agent_id: int, data: dict) -> dict:
+    """Crea un pedido desde el panel (forma manual)."""
+    productos = data.get("productos", [])
+    subtotal  = int(data.get("subtotal", 0)) or sum(
+        int(p.get("subtotal", 0)) for p in productos
+    )
+    descuento   = int(data.get("descuento", 0))
+    costo_envio = int(data.get("costo_envio", 0))
+    total = max(0, subtotal - descuento + costo_envio)
+
+    async with async_session() as session:
+        numero = await _siguiente_numero_pedido(session, agent_id)
+        pedido = Pedido(
+            agent_id=agent_id,
+            numero=numero,
+            telefono_cliente=str(data.get("telefono_cliente", ""))[:50],
+            nombre_cliente=str(data.get("nombre_cliente", ""))[:300],
+            estado=data.get("estado", "pendiente"),
+            productos_json=json.dumps(productos, ensure_ascii=False),
+            subtotal=subtotal,
+            descuento=descuento,
+            costo_envio=costo_envio,
+            total=total,
+            direccion_entrega=str(data.get("direccion_entrega", ""))[:1000],
+            notas_cliente=str(data.get("notas_cliente", ""))[:2000],
+            notas_internas=str(data.get("notas_internas", ""))[:2000],
+            canal=data.get("canal", "manual"),
+            fuente=data.get("fuente", "manual"),
+        )
+        session.add(pedido)
+        await session.commit()
+        await session.refresh(pedido)
+        return _pedido_a_dict(pedido)
+
+
+async def obtener_pedidos(
+    agent_id: int,
+    estado: str | None = None,
+    telefono: str | None = None,
+    limite: int = 200,
+    offset: int = 0,
+) -> list[dict]:
+    async with async_session() as session:
+        q = select(Pedido).where(Pedido.agent_id == agent_id)
+        if estado and estado in ESTADOS_PEDIDO:
+            q = q.where(Pedido.estado == estado)
+        if telefono:
+            q = q.where(Pedido.telefono_cliente == telefono)
+        q = q.order_by(Pedido.created_at.desc()).limit(limite).offset(offset)
+        result = await session.execute(q)
+        return [_pedido_a_dict(p) for p in result.scalars().all()]
+
+
+async def obtener_pedido(pedido_id: int, agent_id: int) -> dict | None:
+    async with async_session() as session:
+        result = await session.execute(
+            select(Pedido).where(Pedido.id == pedido_id, Pedido.agent_id == agent_id)
+        )
+        p = result.scalar_one_or_none()
+        return _pedido_a_dict(p) if p else None
+
+
+async def actualizar_pedido(pedido_id: int, agent_id: int, data: dict) -> dict | None:
+    """Actualiza estado, notas, dirección u otros campos editables."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Pedido).where(Pedido.id == pedido_id, Pedido.agent_id == agent_id)
+        )
+        p = result.scalar_one_or_none()
+        if not p:
+            return None
+        if "estado" in data and data["estado"] in ESTADOS_PEDIDO:
+            p.estado = data["estado"]
+        if "notas_internas" in data:
+            p.notas_internas = str(data["notas_internas"])[:2000]
+        if "notas_cliente" in data:
+            p.notas_cliente = str(data["notas_cliente"])[:2000]
+        if "direccion_entrega" in data:
+            p.direccion_entrega = str(data["direccion_entrega"])[:1000]
+        if "descuento" in data:
+            p.descuento = int(data["descuento"])
+            p.total = max(0, p.subtotal - p.descuento + p.costo_envio)
+        if "costo_envio" in data:
+            p.costo_envio = int(data["costo_envio"])
+            p.total = max(0, p.subtotal - p.descuento + p.costo_envio)
+        if "agente_asignado_id" in data:
+            p.agente_asignado_id = data["agente_asignado_id"]
+        p.updated_at = datetime.utcnow()
+        await session.commit()
+        await session.refresh(p)
+        return _pedido_a_dict(p)
+
+
+async def eliminar_pedido(pedido_id: int, agent_id: int) -> bool:
+    async with async_session() as session:
+        result = await session.execute(
+            select(Pedido).where(Pedido.id == pedido_id, Pedido.agent_id == agent_id)
+        )
+        p = result.scalar_one_or_none()
+        if not p:
+            return False
+        await session.delete(p)
+        await session.commit()
+        return True
+
+
+async def obtener_stats_pedidos(agent_id: int) -> dict:
+    """Contadores rápidos por estado para el panel."""
+    async with async_session() as session:
+        stats: dict[str, int] = {}
+        for estado in ESTADOS_PEDIDO:
+            r = await session.execute(
+                select(func.count()).where(
+                    Pedido.agent_id == agent_id,
+                    Pedido.estado == estado,
+                )
+            )
+            stats[estado] = r.scalar() or 0
+        # Total y valor total
+        r_total = await session.execute(
+            select(func.count(), func.sum(Pedido.total)).where(Pedido.agent_id == agent_id)
+        )
+        row = r_total.one()
+        stats["total"] = row[0] or 0
+        stats["valor_total"] = row[1] or 0
+        # Valor promedio
+        stats["valor_promedio"] = (
+            round(stats["valor_total"] / stats["total"]) if stats["total"] else 0
+        )
+    return stats

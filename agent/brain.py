@@ -376,6 +376,42 @@ REGLAS ABSOLUTAS — NO las ignores bajo ninguna circunstancia:
                 )
                 system_prompt += "\n".join(bloque_pl)
 
+        # ── Pedidos nativos Voco — módulo "pedidos_voco" ──────────────────────
+        # Solo se activa si el agente habilitó el módulo Y el cliente tiene
+        # carrito activo armado conversacionalmente (sin retailer_id de WA).
+        if (await get_agent_modules(agent_id)).get("pedidos_voco", False):
+            _carrito_voco = await obtener_carrito_activo(telefono, agent_id)
+            _tiene_carrito_voco = _carrito_voco and not any(
+                item.get("retailer_id") for item in _carrito_voco
+            )
+            bloque_pv = ["\n\n## Pedidos nativos Voco — revisa esto antes de terminar tu respuesta"]
+            bloque_pv.append(
+                "Esta empresa NO usa Shopify. Los pedidos se gestionan directamente en Voco.\n\n"
+                "FLUJO DE VENTA (síguelo en orden):\n"
+                "1. Arma el carrito con [[CARRITO:[...]]] mientras el cliente elige productos.\n"
+                "2. Cuando el cliente confirme que quiere proceder, muestra el resumen del carrito.\n"
+                "3. Pide la dirección de entrega y cualquier nota especial.\n"
+                "4. Con la confirmación del cliente, cierra el pedido con el marcador:\n"
+                "   [[PEDIDO_CONFIRMAR:{\"direccion\":\"<dirección>\",\"notas\":\"<notas>\"}]]\n"
+                "   El marcador crea el pedido en el sistema y le envía automáticamente\n"
+                "   una confirmación al cliente con número de pedido y total.\n\n"
+                "REGLAS:\n"
+                "- NO uses [[PEDIDO:]] (ese es para Shopify) ni [[TIENDA:]] en este flujo.\n"
+                "- El marcador [[PEDIDO_CONFIRMAR:]] solo debe ir cuando el cliente confirma\n"
+                "  explícitamente que quiere hacer el pedido (no antes, no por tu iniciativa).\n"
+                "- Si el cliente no da dirección, usa una cadena vacía y avísale que la\n"
+                "  coordinarán luego con el equipo de ventas.\n"
+                "- Después del marcador, el sistema borra el carrito automáticamente; no lo\n"
+                "  menciones como si siguiera activo.\n"
+                "- El marcador es invisible para el cliente — el sistema envía la confirmación."
+            )
+            if _tiene_carrito_voco:
+                bloque_pv.append(
+                    "\n⚡ El cliente tiene un carrito activo. Si expresa intención de confirmar,\n"
+                    "   pide la dirección y luego usa [[PEDIDO_CONFIRMAR:...]]."
+                )
+            system_prompt += "\n".join(bloque_pv)
+
         # ── Calendly (agendamiento) — Pipeline Fase 2, ver BACKLOG.md ─────────
         # Gateado igual que Pipeline: módulo "calendly" de Agent.modules_json +
         # que el agente realmente tenga un token de Calendly conectado (chequeo

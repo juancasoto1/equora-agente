@@ -3028,6 +3028,33 @@ async def webhook_handler(request: Request):
             tienda_query           = _marker_ctx.tienda_query
             productos_mencionados  = _marker_ctx.productos_mencionados
 
+            # [[PEDIDO_CONFIRMAR]] — confirmar pedido nativo Voco y notificar al cliente
+            if _marker_ctx.pedido_creado:
+                try:
+                    _ped = _marker_ctx.pedido_creado
+                    _lineas = "\n".join(
+                        f"  • {p['nombre']} ×{p['cantidad']}  ${p['precio_unitario']:,}"
+                        for p in _ped.get("productos", [])
+                    )
+                    _msg_pedido = (
+                        f"✅ *Pedido confirmado {_ped['numero']}*\n\n"
+                        f"{_lineas}\n\n"
+                        f"📦 Subtotal: ${_ped['subtotal']:,}\n"
+                    )
+                    if _ped.get("descuento", 0):
+                        _msg_pedido += f"🎁 Descuento: -${_ped['descuento']:,}\n"
+                    if _ped.get("costo_envio", 0):
+                        _msg_pedido += f"🚚 Envío: ${_ped['costo_envio']:,}\n"
+                    _msg_pedido += f"💰 *Total: ${_ped['total']:,}*"
+                    if _ped.get("direccion_entrega"):
+                        _msg_pedido += f"\n📍 Dirección: {_ped['direccion_entrega']}"
+                    await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_pedido)
+                    logger.info(
+                        f"[PEDIDO_CONFIRMAR] Resumen {_ped['numero']} enviado a {msg.telefono}"
+                    )
+                except Exception as _e_ped:
+                    logger.error(f"Error enviando confirmación de pedido: {_e_ped}")
+
             # Enviar texto primero
             # Excepción: si hay CTA de catálogo general (sin query), el texto de Andrea
             # se fusiona como cuerpo del CTA para que quede un único mensaje de bienvenida.
@@ -8866,6 +8893,124 @@ async def api_catalogo_importar(
     from agent.memory import importar_productos_voco
     resultado = await importar_productos_voco(agent_id, productos, modo=modo)
     return JSONResponse(content={"ok": True, **resultado})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Módulo Pedidos nativos Voco
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/inbox/api/pedidos/stats")
+async def api_pedidos_stats(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_stats_pedidos
+    stats = await obtener_stats_pedidos(agent_id)
+    return JSONResponse(content=stats)
+
+
+@app.get("/inbox/api/pedidos")
+async def api_pedidos_list(
+    agent_id: int = 1,
+    estado: str = "",
+    telefono: str = "",
+    limite: int = 50,
+    offset: int = 0,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_pedidos
+    pedidos = await obtener_pedidos(
+        agent_id=agent_id,
+        estado=estado or None,
+        telefono=telefono or None,
+        limite=limite,
+        offset=offset,
+    )
+    return JSONResponse(content={"pedidos": pedidos})
+
+
+@app.post("/inbox/api/pedidos")
+async def api_pedidos_crear(
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    data = await request.json()
+    from agent.memory import crear_pedido_manual
+    try:
+        pedido = await crear_pedido_manual(data.get("agent_id", 1), data)
+        return JSONResponse(content={"ok": True, "pedido": pedido})
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+
+
+@app.get("/inbox/api/pedidos/{pedido_id}")
+async def api_pedidos_get(
+    pedido_id: int,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import obtener_pedido
+    pedido = await obtener_pedido(pedido_id, agent_id)
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    return JSONResponse(content=pedido)
+
+
+@app.put("/inbox/api/pedidos/{pedido_id}")
+async def api_pedidos_actualizar(
+    pedido_id: int,
+    request: Request,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    data = await request.json()
+    from agent.memory import actualizar_pedido
+    try:
+        pedido = await actualizar_pedido(pedido_id, agent_id, data)
+        if not pedido:
+            raise HTTPException(status_code=404, detail="Pedido no encontrado")
+        return JSONResponse(content={"ok": True, "pedido": pedido})
+    except HTTPException:
+        raise
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
+
+
+@app.delete("/inbox/api/pedidos/{pedido_id}")
+async def api_pedidos_eliminar(
+    pedido_id: int,
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import eliminar_pedido
+    eliminado = await eliminar_pedido(pedido_id, agent_id)
+    if not eliminado:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    return JSONResponse(content={"ok": True})
 
 
 # ── Panel por slug (ruta comodín — DEBE ser la última ruta de /inbox/*) ────
