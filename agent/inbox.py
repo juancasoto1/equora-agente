@@ -3571,7 +3571,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
       <!-- ═══════════════════════════════════════════════════════════
            SECCIÓN: CATÁLOGO NATIVO VOCO
            ═══════════════════════════════════════════════════════════ -->
-      <div class="sec sec-light" id="sec-catalogo" style="display:none">
+      <div class="sec sec-light" id="sec-catalogo">
         <div class="sec-hdr">
           <div>
             <div class="sec-title">Catálogo de productos</div>
