@@ -1539,6 +1539,21 @@ async def health_check():
     return {"status": "ok", "service": "voco"}
 
 
+@app.get("/privacy", response_class=HTMLResponse)
+async def pagina_privacidad():
+    """Política de privacidad pública — requisito de Meta App Review (Tech
+    Provider). Servida desde myvoco.ai/privacy, no requiere sitio aparte."""
+    from agent.legal import politica_privacidad_html
+    return HTMLResponse(content=politica_privacidad_html())
+
+
+@app.get("/terms", response_class=HTMLResponse)
+async def pagina_terminos():
+    """Términos del servicio públicos — requisito de Meta App Review."""
+    from agent.legal import terminos_html
+    return HTMLResponse(content=terminos_html())
+
+
 @app.get("/health")
 async def health_check_deep():
     """#77 — Healthcheck profundo: verifica conexión a BD y que el loop de
