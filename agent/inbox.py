@@ -3604,7 +3604,11 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             style="display:inline-flex;align-items:center;gap:8px;background:var(--voco-card-bg);
             border:1.5px solid var(--voco-border);border-radius:10px;padding:7px 14px;
             font-size:.84rem;font-weight:600;cursor:pointer;color:var(--voco-text);transition:border-color .15s">
-            <i data-lucide="shopping-bag" style="width:15px;height:15px;color:#008060"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 50" width="14" height="16" style="flex-shrink:0">
+              <path fill="#96BF47" d="M37.8 9.7a.4.4 0 0 0-.4-.4l-4.6-.3-3.2-3.2c-.3-.3-.9-.2-1.1-.1l-1.7.5C26 4 24.3 1.5 21.3 1.5h-.3C20.7.8 20 .7 19.5.7 15 .7 12.9 6.2 12.2 8.9l-5.8 1.8C5 11.1 5 11.1 4.8 12.6L2.7 35.5 24.1 40l12.3-2.6L37.8 9.7z"/>
+              <path fill="#5E8E3E" d="M36.4 9.3l-4.6-.3-3.2-3.2L27 40l12.3-2.6L36.4 9.3z"/>
+              <path fill="#FFF" d="M22.4 19.5l-1.5 4.3s-1.4-.8-3.3-.8c-2.6 0-2.7 1.8-2.7 2.1 0 2.2 5.7 3 5.7 8.1 0 4-2.6 6.6-6 6.6-4.1 0-6.2-2.6-6.2-2.6l1.1-3.6s2.1 1.9 4 1.9c1.1 0 1.7-1 1.7-1.6 0-2.8-4.7-3-4.7-7.7 0-3.9 2.8-7.8 8.6-7.8 2.3 0 3.3.6 3.3.6z"/>
+            </svg>
             Shopify
             <span id="cat-shopify-badge" style="font-size:.72rem;background:var(--voco-content-bg-alt);
               color:var(--voco-text-muted);border-radius:20px;padding:1px 8px;font-weight:600">Conectar</span>
