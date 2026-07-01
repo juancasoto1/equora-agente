@@ -3581,7 +3581,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               style="background:var(--voco-card-bg);border:1.5px solid var(--voco-border);color:var(--voco-text);
               border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:600;cursor:pointer;
               display:inline-flex;align-items:center;gap:6px">
-              <i data-lucide="download" style="width:14px;height:14px"></i> Exportar Excel
+              <i data-lucide="download" style="width:14px;height:14px"></i> Exportar
             </button>
             <button onclick="catAbrirImportar()"
               style="background:var(--voco-card-bg);border:1.5px solid var(--voco-border);color:var(--voco-text);
@@ -3597,63 +3597,67 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           </div>
         </div>
 
-        <!-- Plataformas de eCommerce conectadas -->
-        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-          <span style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted)">Tiendas:</span>
-          <button id="cat-btn-shopify" onclick="catAbrirShopify()"
-            style="display:inline-flex;align-items:center;gap:8px;background:var(--voco-card-bg);
-            border:1.5px solid var(--voco-border);border-radius:10px;padding:7px 14px;
-            font-size:.84rem;font-weight:600;cursor:pointer;color:var(--voco-text);transition:border-color .15s">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 50" width="14" height="16" style="flex-shrink:0">
-              <path fill="#96BF47" d="M37.8 9.7a.4.4 0 0 0-.4-.4l-4.6-.3-3.2-3.2c-.3-.3-.9-.2-1.1-.1l-1.7.5C26 4 24.3 1.5 21.3 1.5h-.3C20.7.8 20 .7 19.5.7 15 .7 12.9 6.2 12.2 8.9l-5.8 1.8C5 11.1 5 11.1 4.8 12.6L2.7 35.5 24.1 40l12.3-2.6L37.8 9.7z"/>
-              <path fill="#5E8E3E" d="M36.4 9.3l-4.6-.3-3.2-3.2L27 40l12.3-2.6L36.4 9.3z"/>
-              <path fill="#FFF" d="M22.4 19.5l-1.5 4.3s-1.4-.8-3.3-.8c-2.6 0-2.7 1.8-2.7 2.1 0 2.2 5.7 3 5.7 8.1 0 4-2.6 6.6-6 6.6-4.1 0-6.2-2.6-6.2-2.6l1.1-3.6s2.1 1.9 4 1.9c1.1 0 1.7-1 1.7-1.6 0-2.8-4.7-3-4.7-7.7 0-3.9 2.8-7.8 8.6-7.8 2.3 0 3.3.6 3.3.6z"/>
-            </svg>
-            Shopify
-            <span id="cat-shopify-badge" style="font-size:.72rem;background:var(--voco-content-bg-alt);
-              color:var(--voco-text-muted);border-radius:20px;padding:1px 8px;font-weight:600">Conectar</span>
-          </button>
-        </div>
+        <div class="sec-body">
 
-        <!-- Filtros rápidos -->
-        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-          <input id="cat-buscar" type="text" placeholder="Buscar producto…"
-            oninput="catFiltrar()"
-            style="border:1px solid var(--voco-border);border-radius:8px;padding:6px 12px;font-size:.84rem;
-            flex:1;min-width:180px;color:var(--voco-text);background:var(--voco-card-bg)">
-          <select id="cat-filtro-cat" onchange="catFiltrar()"
-            style="border:1px solid var(--voco-border);border-radius:8px;padding:6px 10px;
-            font-size:.84rem;color:var(--voco-text);background:var(--voco-card-bg)">
-            <option value="">Todas las categorías</option>
-          </select>
-          <label style="font-size:.82rem;color:var(--voco-text-muted);display:flex;align-items:center;gap:5px">
-            <input type="checkbox" id="cat-solo-disponible" onchange="catFiltrar()"> Solo disponibles
-          </label>
-        </div>
+          <!-- Plataformas de eCommerce conectadas -->
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted)">Tiendas:</span>
+            <button id="cat-btn-shopify" onclick="catAbrirShopify()"
+              style="display:inline-flex;align-items:center;gap:8px;background:var(--voco-card-bg);
+              border:1.5px solid var(--voco-border);border-radius:10px;padding:7px 14px;
+              font-size:.84rem;font-weight:600;cursor:pointer;color:var(--voco-text);transition:border-color .15s">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 50" width="14" height="16" style="flex-shrink:0">
+                <path fill="#96BF47" d="M37.8 9.7a.4.4 0 0 0-.4-.4l-4.6-.3-3.2-3.2c-.3-.3-.9-.2-1.1-.1l-1.7.5C26 4 24.3 1.5 21.3 1.5h-.3C20.7.8 20 .7 19.5.7 15 .7 12.9 6.2 12.2 8.9l-5.8 1.8C5 11.1 5 11.1 4.8 12.6L2.7 35.5 24.1 40l12.3-2.6L37.8 9.7z"/>
+                <path fill="#5E8E3E" d="M36.4 9.3l-4.6-.3-3.2-3.2L27 40l12.3-2.6L36.4 9.3z"/>
+                <path fill="#FFF" d="M22.4 19.5l-1.5 4.3s-1.4-.8-3.3-.8c-2.6 0-2.7 1.8-2.7 2.1 0 2.2 5.7 3 5.7 8.1 0 4-2.6 6.6-6 6.6-4.1 0-6.2-2.6-6.2-2.6l1.1-3.6s2.1 1.9 4 1.9c1.1 0 1.7-1 1.7-1.6 0-2.8-4.7-3-4.7-7.7 0-3.9 2.8-7.8 8.6-7.8 2.3 0 3.3.6 3.3.6z"/>
+              </svg>
+              Shopify
+              <span id="cat-shopify-badge" style="font-size:.72rem;background:var(--voco-content-bg-alt);
+                color:var(--voco-text-muted);border-radius:20px;padding:1px 8px;font-weight:600">Conectar</span>
+            </button>
+          </div>
 
-        <!-- Tabla de productos -->
-        <div style="overflow-x:auto;min-width:0">
-          <table id="cat-tabla" style="width:100%;border-collapse:collapse;font-size:.84rem">
-            <thead>
-              <tr style="background:var(--voco-content-bg-alt);border-bottom:2px solid var(--voco-border)">
-                <th style="padding:8px 10px;text-align:left;font-weight:600">Imagen</th>
-                <th style="padding:8px 10px;text-align:left;font-weight:600">Producto</th>
-                <th style="padding:8px 10px;text-align:left;font-weight:600">Categoría</th>
-                <th style="padding:8px 10px;text-align:left;font-weight:600">Presentación</th>
-                <th style="padding:8px 10px;text-align:right;font-weight:600">Precio</th>
-                <th style="padding:8px 10px;text-align:center;font-weight:600">Stock</th>
-                <th style="padding:8px 10px;text-align:center;font-weight:600">Disponible</th>
-                <th style="padding:8px 10px;text-align:center;font-weight:600">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="cat-tbody">
-              <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--voco-text-muted)">
-                Cargando catálogo…
-              </td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div id="cat-total" style="font-size:.78rem;color:var(--voco-text-muted);margin-top:8px;text-align:right"></div>
+          <!-- Filtros rápidos -->
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+            <input id="cat-buscar" type="text" placeholder="Buscar producto…"
+              oninput="catFiltrar()"
+              style="border:1px solid var(--voco-border);border-radius:8px;padding:6px 12px;font-size:.84rem;
+              flex:1;min-width:160px;color:var(--voco-text);background:var(--voco-card-bg)">
+            <select id="cat-filtro-cat" onchange="catFiltrar()"
+              style="border:1px solid var(--voco-border);border-radius:8px;padding:6px 10px;
+              font-size:.84rem;color:var(--voco-text);background:var(--voco-card-bg)">
+              <option value="">Todas las categorías</option>
+            </select>
+            <label style="font-size:.82rem;color:var(--voco-text-muted);display:flex;align-items:center;gap:5px;white-space:nowrap">
+              <input type="checkbox" id="cat-solo-disponible" onchange="catFiltrar()"> Solo disponibles
+            </label>
+          </div>
+
+          <!-- Tabla de productos -->
+          <div style="overflow-x:auto">
+            <table id="cat-tabla" style="width:100%;border-collapse:collapse;font-size:.84rem;min-width:640px">
+              <thead>
+                <tr style="background:var(--voco-content-bg-alt);border-bottom:2px solid var(--voco-border)">
+                  <th style="padding:8px 10px;text-align:left;font-weight:600">Imagen</th>
+                  <th style="padding:8px 10px;text-align:left;font-weight:600">Producto</th>
+                  <th style="padding:8px 10px;text-align:left;font-weight:600">Categoría</th>
+                  <th style="padding:8px 10px;text-align:left;font-weight:600">Presentación</th>
+                  <th style="padding:8px 10px;text-align:right;font-weight:600">Precio</th>
+                  <th style="padding:8px 10px;text-align:center;font-weight:600">Stock</th>
+                  <th style="padding:8px 10px;text-align:center;font-weight:600">Disponible</th>
+                  <th style="padding:8px 10px;text-align:center;font-weight:600">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="cat-tbody">
+                <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--voco-text-muted)">
+                  Cargando catálogo…
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="cat-total" style="font-size:.78rem;color:var(--voco-text-muted);margin-top:8px;text-align:right"></div>
+
+        </div><!-- /sec-body -->
       </div><!-- /sec-catalogo -->
 
       <!-- Modal añadir/editar producto -->
