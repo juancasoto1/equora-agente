@@ -6834,6 +6834,7 @@ async def inbox_metricas_interno(
     desde: str = "",        # ISO date opcional: "2025-05-01"
     hasta: str = "",        # ISO date opcional: "2025-05-31"
     granularidad: str = "dia",   # dia | semana | mes (para series temporales)
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -6863,7 +6864,7 @@ async def inbox_metricas_interno(
 
         # Métricas agregadas
         data = await obtener_metricas_internas(
-            dias=dias, desde=desde_dt, hasta=hasta_dt
+            dias=dias, desde=desde_dt, hasta=hasta_dt, agent_id=agent_id,
         )
         # Series temporales (usar fechas efectivas calculadas)
         from agent.memory import obtener_series_metricas
@@ -6871,7 +6872,7 @@ async def inbox_metricas_interno(
         hasta_eff = datetime.fromisoformat(data["hasta"])
         series = await obtener_series_metricas(
             desde=desde_eff, hasta=hasta_eff,
-            granularidad=granularidad,
+            granularidad=granularidad, agent_id=agent_id,
         )
         data["series"]       = series
         data["granularidad"] = granularidad
@@ -7246,7 +7247,9 @@ async def inbox_get_config(
     resultado = {}
     for clave, meta in _CONFIG_META.items():
         db_val  = await get_config_value(clave, agent_id=agent_id)
-        env_val = os.getenv(clave, "")
+        # Env vars son globales de la plataforma; solo se muestran para el
+        # agente primario (id=1). Los demás tenants solo ven sus propios valores de BD.
+        env_val = os.getenv(clave, "") if agent_id == 1 else ""
         valor   = db_val if db_val else env_val
         if valor:
             display = "•" * 8 if meta["tipo"] == "secret" else valor

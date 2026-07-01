@@ -6486,6 +6486,7 @@ _convTimer = setInterval(loadConvs, 8000);
    cargarModulosAgente() porque _escAgentId debe estar resuelto primero. */
 (async function() {
   await inicializarSelectorAgente();
+  _escActualizarBadges();   // refrescar badge con el agent_id real (no el 1 del DOMContentLoaded)
   await cargarModulosAgente();
 })();
 
@@ -8233,7 +8234,7 @@ async function cargarMetricas() {
   if (aviso) aviso.style.display = 'none';
 
   // Construir querystring según preset o rango custom
-  var qs = 'granularidad=' + encodeURIComponent(granularidad);
+  var qs = 'granularidad=' + encodeURIComponent(granularidad) + '&agent_id=' + (_escAgentId||1);
   if (periodo === 'custom') {
     var desde = document.getElementById('met-desde').value;
     var hasta = document.getElementById('met-hasta').value;
