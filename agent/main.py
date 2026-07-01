@@ -4463,27 +4463,29 @@ async def admin_actualizar_usuario(
 
 @app.get("/inbox/api/conversaciones")
 async def inbox_conversaciones(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    convs = await obtener_todas_conversaciones()
+    convs = await obtener_todas_conversaciones(agent_id=agent_id)
     return JSONResponse(content=convs)
 
 
 @app.get("/inbox/api/mensajes/{telefono}")
 async def inbox_mensajes(
     telefono: str,
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    mensajes = await obtener_historial_con_timestamps(telefono, 150)
-    modo = await get_modo_humano(telefono)
+    mensajes = await obtener_historial_con_timestamps(telefono, 150, agent_id=agent_id)
+    modo = await get_modo_humano(telefono, agent_id=agent_id)
     return JSONResponse(content={"mensajes": mensajes, "modo_humano": modo})
 
 
@@ -6704,6 +6706,7 @@ async def inbox_onboarding_meta(
 @app.get("/inbox/api/metricas/operacion")
 async def inbox_metricas_operacion(
     dias: int = 7,
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -6715,8 +6718,8 @@ async def inbox_metricas_operacion(
         raise HTTPException(status_code=401, detail="No autorizado")
     from agent.memory import obtener_metricas_operacion, obtener_agente
     dias = max(1, min(int(dias or 7), 90))
-    data = await obtener_metricas_operacion(agent_id=1, dias=dias)
-    ag = await obtener_agente(1) or {}
+    data = await obtener_metricas_operacion(agent_id=agent_id, dias=dias)
+    ag = await obtener_agente(agent_id) or {}
     data["agent_name"]    = ag.get("agent_name") or "Bot"
     data["agent_business"] = ag.get("name") or ""
     return JSONResponse(content=data)
@@ -6880,6 +6883,7 @@ async def inbox_metricas_interno(
 
 @app.get("/inbox/api/opt-outs")
 async def inbox_opt_outs(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -6887,12 +6891,13 @@ async def inbox_opt_outs(
     """Lista de números dados de baja de difusiones masivas."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    rows = await obtener_opt_outs()
+    rows = await obtener_opt_outs(agent_id=agent_id)
     return JSONResponse(content={"opt_outs": rows, "total": len(rows)})
 
 
 @app.get("/inbox/api/clientes")
 async def inbox_clientes(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -6900,7 +6905,7 @@ async def inbox_clientes(
     """Base de clientes con estado de engagement (activo/tibio/frío/baja)."""
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    clientes = await obtener_clientes_con_estado()
+    clientes = await obtener_clientes_con_estado(agent_id=agent_id)
     resumen = {"total": len(clientes), "activo": 0, "tibio": 0, "frio": 0, "baja": 0}
     for c in clientes:
         resumen[c["estado"]] = resumen.get(c["estado"], 0) + 1
@@ -6933,6 +6938,7 @@ async def inbox_editar_cliente(
         "ciudad":   (body.get("ciudad") or "").strip(),
     }
 
+    agent_id = int(body.get("agent_id") or 1)
     telefono_nuevo_raw = (body.get("telefono") or "").strip()
     telefono_nuevo: str | None = None
     if telefono_nuevo_raw:
@@ -6946,7 +6952,7 @@ async def inbox_editar_cliente(
     resultado = await editar_cliente(
         telefono_original=telefono_original,
         datos=datos,
-        agent_id=1,
+        agent_id=agent_id,
         telefono_nuevo=telefono_nuevo,
     )
     status = 200 if resultado["ok"] else 409
@@ -7228,6 +7234,7 @@ _CONFIG_META = {
 
 @app.get("/inbox/api/config")
 async def inbox_get_config(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -7238,7 +7245,7 @@ async def inbox_get_config(
 
     resultado = {}
     for clave, meta in _CONFIG_META.items():
-        db_val  = await get_config_value(clave)
+        db_val  = await get_config_value(clave, agent_id=agent_id)
         env_val = os.getenv(clave, "")
         valor   = db_val if db_val else env_val
         if valor:
@@ -7254,6 +7261,7 @@ async def inbox_get_config(
 @app.post("/inbox/api/config/save")
 async def inbox_save_config(
     request: Request,
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -7290,6 +7298,7 @@ async def inbox_save_config(
                 # Pasamos contexto de usuario para que el historial (#48) sepa quién cambió qué.
                 await set_config_value(
                     clave, valor,
+                    agent_id=agent_id,
                     usuario_id=user.get("id"),
                     usuario_email=user.get("email", ""),
                 )
@@ -7341,6 +7350,7 @@ def _ofuscar_secreto(v: str) -> str:
 async def inbox_historial_config(
     clave: str = "",
     limite: int = 100,
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -7352,7 +7362,7 @@ async def inbox_historial_config(
         raise HTTPException(status_code=401, detail="No autorizado")
     from agent.memory import obtener_historial_config
     entries = await obtener_historial_config(
-        agent_id=1,
+        agent_id=agent_id,
         clave=clave or None,
         limite=max(1, min(limite, 500)),
     )
@@ -7373,6 +7383,7 @@ async def inbox_historial_config(
 @app.post("/inbox/api/config/historial/{historial_id}/restore")
 async def inbox_restore_config(
     historial_id: int,
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -7385,7 +7396,7 @@ async def inbox_restore_config(
     from agent.memory import restaurar_config_desde_historial
     res = await restaurar_config_desde_historial(
         historial_id=historial_id,
-        agent_id=1,
+        agent_id=agent_id,
         usuario_id=user.get("id"),
         usuario_email=user.get("email", ""),
     )
@@ -7394,7 +7405,7 @@ async def inbox_restore_config(
     # Sincronizar os.environ + invalidar cache catálogo si aplica (mismo pattern
     # que /config/save, sin duplicar logica)
     clave = res["clave"]
-    valor_restaurado = await get_config_value(clave, 1) or ""
+    valor_restaurado = await get_config_value(clave, agent_id=agent_id) or ""
     os.environ[clave] = valor_restaurado
     if clave in ("META_CATALOG_ID", "META_ACCESS_TOKEN"):
         try:

@@ -5731,7 +5731,7 @@ function loadConvs() {
     }
     clEl.innerHTML = skel;
   }
-  api('/inbox/api/conversaciones').then(function(data) {
+  api('/inbox/api/conversaciones?agent_id=' + (VOCO_AGENT.id || 1)).then(function(data) {
     CONVS = Array.isArray(data) ? data : [];
     document.getElementById('total').textContent = CONVS.length;
     var badge = document.getElementById('conv-badge');
@@ -5816,7 +5816,7 @@ function volverLista() {
 }
 
 function loadMsgs(scroll) {
-  api('/inbox/api/mensajes/' + encodeURIComponent(TEL)).then(function(data) {
+  api('/inbox/api/mensajes/' + encodeURIComponent(TEL) + '?agent_id=' + (VOCO_AGENT.id || 1)).then(function(data) {
     renderMsgs(data.mensajes || [], scroll);
     var mh = data.modo_humano || false;
     document.getElementById('togInput').checked = mh;
@@ -6073,7 +6073,7 @@ function cargarClientes() {
       '</div></div></td></tr>';
   }
   document.getElementById('cli-tbody').innerHTML = skelHtml;
-  api('/inbox/api/clientes').then(function(data) {
+  api('/inbox/api/clientes?agent_id=' + (_escAgentId||1)).then(function(data) {
     _CLI_DATA = data.clientes || [];
     var r = data.resumen || {};
     document.getElementById('ec-total').textContent  = (r.total  || 0).toLocaleString('es-CO');
@@ -6220,6 +6220,7 @@ async function guardarEditarCliente() {
     apellidos: document.getElementById('edit-cli-apellidos').value.trim(),
     ciudad:    document.getElementById('edit-cli-ciudad').value.trim(),
     telefono:  tel_nuevo,
+    agent_id:  _escAgentId || 1,
   };
 
   btn.disabled = true; btn.textContent = 'Guardando…';
@@ -6765,7 +6766,7 @@ async function abrirSelectorClientes() {
   document.getElementById('sel-cli-lista').innerHTML =
     '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">Cargando…</div>';
   try {
-    var r = await fetch('/inbox/api/clientes', {credentials:'include'});
+    var r = await fetch('/inbox/api/clientes?agent_id=' + (_escAgentId||1), {credentials:'include'});
     var d = await r.json();
     _selCliData = d.clientes || [];
     document.getElementById('sel-cli-sub').textContent = _selCliData.length + ' clientes en tu base';
@@ -8784,7 +8785,7 @@ async function cargarHistorialConfig() {
   if (!cont) return;
   cont.innerHTML = '<div style="padding:32px;text-align:center;color:var(--voco-text-muted);font-size:.85rem">Cargando historial…</div>';
   try {
-    var r = await fetch('/inbox/api/config/historial?limite=200', {credentials:'include'});
+    var r = await fetch('/inbox/api/config/historial?limite=200&agent_id=' + (_escAgentId||1), {credentials:'include'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var d = await r.json();
     _histConfigData = d.historial || [];
@@ -8847,7 +8848,7 @@ function _renderHistorialConfig() {
 async function restaurarValorConfig(historialId, clave) {
   if (!confirm('¿Restaurar el valor anterior de "' + clave + '"?\n\nEsto reescribirá el valor actual con lo que estaba antes de ese cambio.')) return;
   try {
-    var r = await fetch('/inbox/api/config/historial/' + historialId + '/restore', {
+    var r = await fetch('/inbox/api/config/historial/' + historialId + '/restore?agent_id=' + (_escAgentId||1), {
       method: 'POST', credentials: 'include',
     });
     var d = await r.json();
@@ -8885,7 +8886,7 @@ async function cargarConfiguracion() {
   };
 
   try {
-    var r = await fetch('/inbox/api/config', {credentials:'include'});
+    var r = await fetch('/inbox/api/config?agent_id=' + (_escAgentId||1), {credentials:'include'});
     var d = await r.json();
 
     Object.keys(d).forEach(function(key) {
@@ -9203,7 +9204,7 @@ async function guardarConfig(service) {
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Guardando…'; }
 
   try {
-    var r = await fetch('/inbox/api/config/save', {
+    var r = await fetch('/inbox/api/config/save?agent_id=' + (_escAgentId||1), {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(payload)
@@ -9250,7 +9251,7 @@ async function instalarShopify() {
   _showCfgResult(resultId, null, '🔄 Guardando credenciales…');
   try {
     // 1) Guardar credenciales
-    var rg = await fetch('/inbox/api/config/save', {
+    var rg = await fetch('/inbox/api/config/save?agent_id=' + (_escAgentId||1), {
       method: 'POST', credentials: 'include',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -10764,7 +10765,7 @@ async function cargarMetricasOperacion() {
 
   var dias = parseInt(document.getElementById('salud-periodo')?.value || '7', 10) || 7;
   try {
-    var r = await fetch('/inbox/api/metricas/operacion?dias=' + dias, {credentials:'include'});
+    var r = await fetch('/inbox/api/metricas/operacion?dias=' + dias + '&agent_id=' + (_escAgentId||1), {credentials:'include'});
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var d = await r.json();
     _renderMetricasOperacion(d);
