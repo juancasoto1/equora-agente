@@ -275,7 +275,9 @@ __VOCO_DS__
 
       {err_html}
 
-      <!-- Social login -->
+      <!-- Social login: oculto temporalmente durante Meta App Review (login
+      con Facebook/Google aún no funcional) — reactivar cuando esté listo. -->
+      <!--
       <div class="space-y-2.5">
         <a href="/auth/google"
           class="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-voco
@@ -308,6 +310,7 @@ __VOCO_DS__
         <span class="text-xs text-surface-400 dark:text-surface-500">o inicia con email</span>
         <div class="h-px flex-1 bg-surface-200 dark:bg-surface-800"></div>
       </div>
+      -->
 
       <!-- Form -->
       <form method="POST" action="/inbox/login" class="space-y-4">
@@ -449,6 +452,9 @@ __VOCO_DS__
 
       {err_html}
 
+      <!-- Social login: oculto temporalmente durante Meta App Review (login
+      con Facebook/Google aún no funcional) — reactivar cuando esté listo. -->
+      <!--
       <div class="space-y-2.5">
         <a href="/auth/google"
           class="flex items-center justify-center gap-3 w-full px-4 py-2.5 rounded-voco
@@ -480,6 +486,7 @@ __VOCO_DS__
         <span class="text-xs text-surface-400 dark:text-surface-500">o crea cuenta con email</span>
         <div class="h-px flex-1 bg-surface-200 dark:bg-surface-800"></div>
       </div>
+      -->
 
       <form method="POST" action="/auth/register" class="space-y-4">
         <div>
