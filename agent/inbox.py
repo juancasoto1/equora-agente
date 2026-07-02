@@ -599,6 +599,187 @@ function togglePwd(inputId, btnId) {{
     return html.replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
 
 
+# ── Página de verificación de email ──────────────────────────────────────────
+def obtener_verify_email_html(
+    email: str = "",
+    error: str = "",
+    resent: bool = False,
+) -> str:
+    err_html = (
+        f'<div class="mb-4 rounded-voco border border-red-200 bg-red-50 px-4 py-3 '
+        f'text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-300">'
+        f'{error}</div>'
+    ) if error else ''
+    ok_html = (
+        '<div class="mb-4 rounded-voco border border-emerald-200 bg-emerald-50 px-4 py-3 '
+        'text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300">'
+        '✓ Te enviamos un nuevo código. Revisa tu bandeja de entrada.'
+        '</div>'
+    ) if resent else ''
+    email_safe = email.replace('"', '').replace('<', '').replace('>', '')
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voco — Verificar email</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none'><path d='M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z' stroke='%2310b981' stroke-width='10' stroke-linejoin='round' stroke-linecap='round'/></svg>">
+__VOCO_DS__
+</head>
+<body class="min-h-screen bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100 antialiased">
+
+<div class="fixed top-4 right-4 z-10">
+  <button type="button" onclick="vocoToggleTheme()" title="Cambiar tema" aria-label="Cambiar tema"
+    class="inline-flex items-center justify-center w-9 h-9 rounded-voco text-surface-500
+      hover:bg-surface-100 hover:text-surface-900 dark:text-surface-400
+      dark:hover:bg-surface-800 dark:hover:text-surface-100 transition-colors">
+    <i data-lucide="sun"  class="w-4 h-4 hidden dark:inline-block"></i>
+    <i data-lucide="moon" class="w-4 h-4 inline-block dark:hidden"></i>
+  </button>
+</div>
+
+<main class="min-h-screen flex items-center justify-center px-4 py-12">
+  <div class="w-full max-w-sm">
+
+    <!-- Logo -->
+    <div class="flex flex-col items-center mb-8">
+      <div class="mb-3" style="width:64px;height:64px">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none" aria-label="Voco">
+          <path d="M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z"
+                stroke="#10b981" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h1 class="text-2xl font-bold tracking-tight">Verifica tu email</h1>
+      <p class="mt-1 text-sm text-surface-500 dark:text-surface-400 text-center px-2">
+        Enviamos un código de 6 dígitos a<br>
+        <span class="font-medium text-surface-700 dark:text-surface-300">{email_safe}</span>
+      </p>
+    </div>
+
+    <div class="bg-white dark:bg-surface-900 rounded-voco-xl border border-surface-200
+      dark:border-surface-800 shadow-voco p-6 sm:p-8">
+
+      {err_html}{ok_html}
+
+      <form method="POST" action="/auth/verify-email" id="verify-form" class="space-y-5">
+        <input type="hidden" name="email" value="{email_safe}">
+
+        <!-- Inputs de 6 dígitos separados -->
+        <div>
+          <label class="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-3 text-center">
+            Código de verificación
+          </label>
+          <div class="flex items-center justify-center gap-2" id="code-boxes">
+            {''.join(f'''<input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
+              id="d{i}" data-idx="{i}"
+              class="w-11 h-14 text-center text-xl font-bold rounded-voco border border-surface-300
+                dark:border-surface-700 bg-white dark:bg-surface-950 text-surface-900 dark:text-surface-100
+                shadow-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500 focus:outline-none
+                transition-colors caret-transparent"
+              autocomplete="one-time-code">''' for i in range(6))}
+          </div>
+          <input type="hidden" name="codigo" id="codigo-hidden">
+        </div>
+
+        <button type="submit" id="verify-btn"
+          class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-voco
+            bg-brand-600 hover:bg-brand-700 active:bg-brand-800
+            text-white font-semibold text-sm shadow-voco-sm transition-colors
+            focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2
+            dark:focus:ring-offset-surface-900">
+          <i data-lucide="shield-check" class="w-4 h-4"></i>
+          Verificar y entrar
+        </button>
+      </form>
+
+      <!-- Reenviar código -->
+      <div class="mt-5 text-center">
+        <p class="text-sm text-surface-500 dark:text-surface-400">
+          ¿No llegó el código?
+        </p>
+        <form method="POST" action="/auth/resend-verification" class="mt-1">
+          <input type="hidden" name="email" value="{email_safe}">
+          <button type="submit"
+            class="text-sm font-medium text-brand-600 dark:text-brand-400
+              hover:text-brand-700 dark:hover:text-brand-300 transition-colors">
+            Reenviar código
+          </button>
+        </form>
+      </div>
+
+      <p class="mt-4 text-center text-xs text-surface-400 dark:text-surface-600">
+        El código expira en 30 minutos
+      </p>
+    </div>
+
+    <p class="mt-6 text-center text-sm text-surface-500 dark:text-surface-400">
+      <a href="/auth/register" class="font-medium text-brand-600 dark:text-brand-400 hover:underline">
+        ← Volver al registro
+      </a>
+    </p>
+  </div>
+</main>
+
+<script>
+(function () {{
+  // Navegación entre cajas con teclado
+  var boxes = Array.from(document.querySelectorAll('#code-boxes input'));
+  var hidden = document.getElementById('codigo-hidden');
+  var form   = document.getElementById('verify-form');
+
+  function sync() {{
+    hidden.value = boxes.map(function(b) {{ return b.value; }}).join('');
+  }}
+
+  boxes.forEach(function (box, idx) {{
+    box.addEventListener('focus', function () {{ box.select(); }});
+
+    box.addEventListener('keydown', function (e) {{
+      if (e.key === 'Backspace') {{
+        if (!box.value && idx > 0) {{
+          boxes[idx - 1].focus();
+          boxes[idx - 1].value = '';
+          sync();
+        }}
+      }} else if (e.key === 'ArrowLeft' && idx > 0) {{
+        boxes[idx - 1].focus();
+      }} else if (e.key === 'ArrowRight' && idx < boxes.length - 1) {{
+        boxes[idx + 1].focus();
+      }}
+    }});
+
+    box.addEventListener('input', function (e) {{
+      var val = box.value.replace(/[^0-9]/g, '');
+      // Pegar múltiples dígitos de una vez
+      if (val.length > 1) {{
+        val.split('').forEach(function (ch, offset) {{
+          if (idx + offset < boxes.length) {{
+            boxes[idx + offset].value = ch;
+          }}
+        }});
+        var next = Math.min(idx + val.length, boxes.length - 1);
+        boxes[next].focus();
+      }} else {{
+        box.value = val;
+        if (val && idx < boxes.length - 1) boxes[idx + 1].focus();
+      }}
+      sync();
+      // Auto-submit cuando los 6 dígitos estén completos
+      if (hidden.value.length === 6) {{
+        setTimeout(function () {{ form.submit(); }}, 80);
+      }}
+    }});
+  }});
+
+  // Focus automático en la primera caja
+  if (boxes.length) boxes[0].focus();
+}});
+</script>
+</body>
+</html>"""
+    return html.replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
+
+
 # ── Panel principal ──────────────────────────────────────────────────────────
 _HTML = r"""<!DOCTYPE html>
 <html lang="es">

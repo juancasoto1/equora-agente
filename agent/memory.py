@@ -32,8 +32,10 @@ class Usuario(Base):
     nombre: Mapped[str] = mapped_column(String(200), default="")
     rol: Mapped[str] = mapped_column(String(20), default="user")        # "admin" | "user"
     plan: Mapped[str] = mapped_column(String(20), default="trial")      # "trial"|"starter"|"growth"|"pro"
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)     # False hasta verificar email
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    email_verification_token: Mapped[str] = mapped_column(String(10), default="")
+    email_verification_expires: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
 
 class SesionUsuario(Base):
@@ -522,6 +524,9 @@ async def inicializar_db():
             # Multi-canal inbox (WhatsApp, Instagram, Messenger, Facebook)
             "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS canal VARCHAR(20) DEFAULT 'whatsapp'",
             "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS canal VARCHAR(20) DEFAULT 'whatsapp'",
+            # Verificación de email al registrarse
+            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(10) DEFAULT ''",
+            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -3197,14 +3202,48 @@ def _usuario_to_dict(u: Usuario) -> dict:
     }
 
 
+async def guardar_verification_token(user_id: int, token: str) -> None:
+    """Guarda el código de verificación de email (6 dígitos). Expira en 30 min."""
+    expires = datetime.utcnow() + timedelta(minutes=30)
+    async with async_session() as session:
+        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
+        u = result.scalar_one_or_none()
+        if u:
+            u.email_verification_token   = token
+            u.email_verification_expires = expires
+            await session.commit()
+
+
+async def verificar_y_activar_email(email: str, token: str) -> dict | None:
+    """Comprueba el código y, si es válido y no expiró, activa el usuario.
+    Retorna el dict del usuario activado, o None si el código es incorrecto/expiró."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Usuario).where(Usuario.email == email.lower().strip())
+        )
+        u = result.scalar_one_or_none()
+        if not u:
+            return None
+        if not u.email_verification_token or u.email_verification_token != token.strip():
+            return None
+        if not u.email_verification_expires or u.email_verification_expires < datetime.utcnow():
+            return None
+        u.is_active                      = True
+        u.email_verification_token       = ""
+        u.email_verification_expires     = None
+        await session.commit()
+        return _usuario_to_dict(u)
+
+
 async def crear_usuario(
     email: str,
     password_hash: str,
     nombre: str = "",
     rol: str = "user",
     plan: str = "trial",
+    is_active: bool = False,
 ) -> dict:
-    """Crea un nuevo usuario. Retorna el dict del usuario creado."""
+    """Crea un nuevo usuario. Por defecto is_active=False hasta verificar email."""
     async with async_session() as session:
         usuario = Usuario(
             email=email.lower().strip(),
@@ -3212,7 +3251,7 @@ async def crear_usuario(
             nombre=nombre,
             rol=rol,
             plan=plan,
-            is_active=True,
+            is_active=is_active,
             created_at=datetime.utcnow(),
         )
         session.add(usuario)

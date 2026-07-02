@@ -51,6 +51,7 @@ from agent.memory import (
     crear_usuario, obtener_usuario_por_email, obtener_usuario_por_id,
     crear_sesion, verificar_sesion, cerrar_sesion,
     listar_usuarios, actualizar_usuario, obtener_agentes_de_usuario,
+    guardar_verification_token, verificar_y_activar_email,
     # Sprint 1 — escalación multi-agente
     crear_usuario_interno, autenticar_usuario_interno, obtener_usuarios_internos,
     actualizar_usuario_interno, obtener_usuario_interno_por_id, ping_usuario_interno,
@@ -82,7 +83,7 @@ from agent.calendly import (
     crear_cita as calendly_crear_cita,
 )
 from agent.hubspot import obtener_portal_info as hubspot_portal_info
-from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html
+from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html, obtener_verify_email_html
 from agent.providers import obtener_proveedor
 from agent.capi import capi_lead, capi_view_content, capi_add_to_cart, capi_initiate_checkout
 from agent.tools import (
@@ -3911,7 +3912,10 @@ async def inbox_login(request: Request):
     # Intento 1: login con email + contraseña (nuevo sistema)
     if email:
         user_data = await obtener_usuario_por_email(email)
-        if user_data and user_data.get("is_active"):
+        if user_data:
+            # Email registrado pero sin verificar — redirigir a verificación
+            if not user_data.get("is_active"):
+                return RedirectResponse(f"/auth/verify-email?email={email}", status_code=302)
             try:
                 pw_match = bcrypt.checkpw(password.encode(), user_data["password_hash"].encode())
             except Exception:
@@ -3965,13 +3969,14 @@ async def auth_register_page():
 
 @app.post("/auth/register")
 async def auth_register(request: Request):
+    from agent.mailer import enviar_verificacion
     form = await request.form()
     nombre   = str(form.get("nombre", "")).strip()
     email    = str(form.get("email", "")).strip().lower()
     password = str(form.get("password", ""))
     confirm  = str(form.get("confirm_password", ""))
 
-    # Validaciones
+    # Validaciones básicas
     if not nombre or not email or not password:
         return HTMLResponse(content=obtener_register_html(error="Todos los campos son obligatorios"))
     if len(password) < 8:
@@ -3979,25 +3984,94 @@ async def auth_register(request: Request):
     if password != confirm:
         return HTMLResponse(content=obtener_register_html(error="Las contraseñas no coinciden"))
 
-    # Verificar que el email no exista ya
+    # Email ya registrado
     existente = await obtener_usuario_por_email(email)
     if existente:
+        if not existente.get("is_active"):
+            # Cuenta sin verificar: reenviar código en lugar de error
+            codigo = f"{secrets.randbelow(1000000):06d}"
+            await guardar_verification_token(existente["id"], codigo)
+            await enviar_verificacion(email, nombre, codigo)
+            return RedirectResponse(f"/auth/verify-email?email={email}&resent=1", status_code=302)
         return HTMLResponse(content=obtener_register_html(error="Este email ya está registrado"))
 
-    # Crear usuario
+    # Crear usuario con is_active=False (pendiente de verificar email)
     try:
         pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-        user = await crear_usuario(email=email, password_hash=pw_hash, nombre=nombre)
-        token = await crear_sesion(user["id"])
-        response = RedirectResponse("/inbox", status_code=302)
-        response.set_cookie(
-            VOCO_COOKIE, token,
-            httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax"
-        )
-        return response
+        user    = await crear_usuario(email=email, password_hash=pw_hash, nombre=nombre)
+
+        # Generar código de 6 dígitos y guardarlo
+        codigo = f"{secrets.randbelow(1000000):06d}"
+        await guardar_verification_token(user["id"], codigo)
+
+        # Intentar enviar email (fallo silencioso — el usuario puede pedir reenvío)
+        enviado = await enviar_verificacion(email, nombre, codigo)
+        if not enviado:
+            logger.warning(f"[auth/register] No se pudo enviar email de verificación a {email}")
+
+        return RedirectResponse(f"/auth/verify-email?email={email}", status_code=302)
     except Exception as e:
         logger.error(f"[auth/register] Error: {e}")
         return HTMLResponse(content=obtener_register_html(error="Error al crear la cuenta. Intenta de nuevo."))
+
+
+@app.get("/auth/verify-email", response_class=HTMLResponse)
+async def auth_verify_email_page(email: str = "", resent: str = ""):
+    return HTMLResponse(content=obtener_verify_email_html(
+        email=email,
+        resent=resent == "1",
+    ))
+
+
+@app.post("/auth/verify-email")
+async def auth_verify_email(request: Request):
+    form   = await request.form()
+    email  = str(form.get("email", "")).strip().lower()
+    codigo = str(form.get("codigo", "")).strip()
+
+    if not email or not codigo or len(codigo) != 6 or not codigo.isdigit():
+        return HTMLResponse(content=obtener_verify_email_html(
+            email=email,
+            error="Código inválido. Ingresa los 6 dígitos.",
+        ))
+
+    user = await verificar_y_activar_email(email, codigo)
+    if not user:
+        return HTMLResponse(content=obtener_verify_email_html(
+            email=email,
+            error="Código incorrecto o expirado. Solicita uno nuevo.",
+        ))
+
+    # Cuenta verificada — crear sesión y entrar al panel
+    token    = await crear_sesion(user["id"])
+    response = RedirectResponse("/inbox", status_code=302)
+    response.set_cookie(VOCO_COOKIE, token, httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax")
+    return response
+
+
+@app.post("/auth/resend-verification")
+async def auth_resend_verification(request: Request):
+    from agent.mailer import enviar_verificacion
+    form  = await request.form()
+    email = str(form.get("email", "")).strip().lower()
+
+    if not email:
+        return RedirectResponse("/auth/register", status_code=302)
+
+    user = await obtener_usuario_por_email(email)
+    if not user:
+        # No revelar si el email existe o no
+        return RedirectResponse(f"/auth/verify-email?email={email}&resent=1", status_code=302)
+
+    if user.get("is_active"):
+        # Ya verificado — redirigir al login
+        return RedirectResponse("/inbox/login", status_code=302)
+
+    codigo = f"{secrets.randbelow(1000000):06d}"
+    await guardar_verification_token(user["id"], codigo)
+    await enviar_verificacion(email, user.get("nombre", ""), codigo)
+
+    return RedirectResponse(f"/auth/verify-email?email={email}&resent=1", status_code=302)
 
 
 @app.post("/auth/logout")
