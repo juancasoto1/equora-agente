@@ -3852,7 +3852,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 &nbsp;&nbsp;<b>URL de redirección:</b>
                 &nbsp;<code id="oauth-callback-hint" style="background:var(--voco-content-bg-alt);padding:2px 6px;border-radius:4px;word-break:break-all">cargando…</code>
                 <button type="button" onclick="_copiarUrlOAuth(this, 'callback')" style="background:none;border:1px solid var(--voco-border);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;margin-left:4px;color:var(--voco-text-muted)"><i data-lucide="copy" style="width:11px;height:11px;vertical-align:-1px"></i> Copiar</button><br>
-                <b>5. Alcances:</b> <code>write_inventory, read_inventory, read_orders, read_products, write_products, write_draft_orders</code><br>
+                <b>5. Alcances:</b> <code>write_inventory, read_inventory, read_orders, read_products, write_products, write_draft_orders, write_discounts</code><br>
                 <b>6.</b> <b>Publica</b> la app<br>
                 <b>7.</b> Pestaña <b>Credenciales API</b> → copia <b>Client ID</b>, <b>Client Secret</b> y pégalos abajo<br>
                 <small style="color:var(--voco-text-muted)">⚠️ El Client Secret solo se muestra UNA vez. Guárdalo bien.</small>
