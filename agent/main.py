@@ -3112,6 +3112,10 @@ async def webhook_handler(request: Request):
             # Cliente respondió → resetea timers de seguimiento
             await registrar_mensaje_usuario(msg.telefono, agent_id=_agent_id)
 
+            # Marcar como leído → chulos azules en el WhatsApp del cliente
+            if msg.mensaje_id:
+                asyncio.create_task(_proveedor_agente.marcar_leido(msg.mensaje_id))
+
             # Modo humano: guardar mensaje pero no responder con Andrea
             if await get_modo_humano(msg.telefono, agent_id=_agent_id):
                 await guardar_mensaje(msg.telefono, "user", msg.texto, agent_id=_agent_id)
