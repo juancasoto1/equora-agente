@@ -3594,19 +3594,32 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div class="sec-title">Catálogo de productos</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button onclick="catExportarExcel()"
+            <!-- Botón solo visible cuando fuente=shopify -->
+            <a id="cat-btn-shopify-admin" href="#" target="_blank" rel="noopener"
+              style="display:none;align-items:center;gap:6px;background:var(--voco-card-bg);
+              border:1.5px solid #5e8e3e;color:#5e8e3e;border-radius:8px;padding:7px 14px;
+              font-size:.84rem;font-weight:600;cursor:pointer;text-decoration:none">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 50" width="12" height="14" style="flex-shrink:0">
+                <path fill="#96BF47" d="M37.8 9.7a.4.4 0 0 0-.4-.4l-4.6-.3-3.2-3.2c-.3-.3-.9-.2-1.1-.1l-1.7.5C26 4 24.3 1.5 21.3 1.5h-.3C20.7.8 20 .7 19.5.7 15 .7 12.9 6.2 12.2 8.9l-5.8 1.8C5 11.1 5 11.1 4.8 12.6L2.7 35.5 24.1 40l12.3-2.6L37.8 9.7z"/>
+                <path fill="#5E8E3E" d="M36.4 9.3l-4.6-.3-3.2-3.2L27 40l12.3-2.6L36.4 9.3z"/>
+                <path fill="#FFF" d="M22.4 19.5l-1.5 4.3s-1.4-.8-3.3-.8c-2.6 0-2.7 1.8-2.7 2.1 0 2.2 5.7 3 5.7 8.1 0 4-2.6 6.6-6 6.6-4.1 0-6.2-2.6-6.2-2.6l1.1-3.6s2.1 1.9 4 1.9c1.1 0 1.7-1 1.7-1.6 0-2.8-4.7-3-4.7-7.7 0-3.9 2.8-7.8 8.6-7.8 2.3 0 3.3.6 3.3.6z"/>
+              </svg>
+              Administrar en Shopify
+            </a>
+            <!-- Botones solo visibles cuando fuente=voco -->
+            <button id="cat-btn-exportar" onclick="catExportarExcel()"
               style="background:var(--voco-card-bg);border:1.5px solid var(--voco-border);color:var(--voco-text);
               border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:600;cursor:pointer;
               display:inline-flex;align-items:center;gap:6px">
               <i data-lucide="download" style="width:14px;height:14px"></i> Exportar
             </button>
-            <button onclick="catAbrirImportar()"
+            <button id="cat-btn-importar" onclick="catAbrirImportar()"
               style="background:var(--voco-card-bg);border:1.5px solid var(--voco-border);color:var(--voco-text);
               border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:600;cursor:pointer;
               display:inline-flex;align-items:center;gap:6px">
               <i data-lucide="upload" style="width:14px;height:14px"></i> Importar
             </button>
-            <button onclick="catAbrirModal()"
+            <button id="cat-btn-agregar" onclick="catAbrirModal()"
               style="background:var(--voco-accent);border:none;color:#fff;
               border-radius:8px;padding:7px 14px;font-size:.84rem;font-weight:700;cursor:pointer">
               + Agregar producto
@@ -3616,23 +3629,9 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
         <div class="sec-body">
 
-          <!-- Plataformas de eCommerce conectadas -->
-          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-            <span style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted)">Tiendas:</span>
-            <button id="cat-btn-shopify" onclick="catAbrirShopify()"
-              style="display:inline-flex;align-items:center;gap:8px;background:var(--voco-card-bg);
-              border:1.5px solid var(--voco-border);border-radius:10px;padding:7px 14px;
-              font-size:.84rem;font-weight:600;cursor:pointer;color:var(--voco-text);transition:border-color .15s">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 50" width="14" height="16" style="flex-shrink:0">
-                <path fill="#96BF47" d="M37.8 9.7a.4.4 0 0 0-.4-.4l-4.6-.3-3.2-3.2c-.3-.3-.9-.2-1.1-.1l-1.7.5C26 4 24.3 1.5 21.3 1.5h-.3C20.7.8 20 .7 19.5.7 15 .7 12.9 6.2 12.2 8.9l-5.8 1.8C5 11.1 5 11.1 4.8 12.6L2.7 35.5 24.1 40l12.3-2.6L37.8 9.7z"/>
-                <path fill="#5E8E3E" d="M36.4 9.3l-4.6-.3-3.2-3.2L27 40l12.3-2.6L36.4 9.3z"/>
-                <path fill="#FFF" d="M22.4 19.5l-1.5 4.3s-1.4-.8-3.3-.8c-2.6 0-2.7 1.8-2.7 2.1 0 2.2 5.7 3 5.7 8.1 0 4-2.6 6.6-6 6.6-4.1 0-6.2-2.6-6.2-2.6l1.1-3.6s2.1 1.9 4 1.9c1.1 0 1.7-1 1.7-1.6 0-2.8-4.7-3-4.7-7.7 0-3.9 2.8-7.8 8.6-7.8 2.3 0 3.3.6 3.3.6z"/>
-              </svg>
-              Shopify
-              <span id="cat-shopify-badge" style="font-size:.72rem;background:var(--voco-content-bg-alt);
-                color:var(--voco-text-muted);border-radius:20px;padding:1px 8px;font-weight:600">Conectar</span>
-            </button>
-          </div>
+          <!-- Banner de fuente del catálogo (Shopify / Voco nativo) -->
+          <div id="cat-fuente-banner" style="display:none;align-items:center;gap:10px;
+            padding:10px 16px;border-radius:10px;margin-bottom:16px;font-size:.84rem;font-weight:600"></div>
 
           <!-- Filtros rápidos -->
           <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
@@ -13160,6 +13159,8 @@ _escRenderLista = function(tickets) {
    CATÁLOGO NATIVO VOCO
    ══════════════════════════════════════════════════════════════════════ */
 var _catProductos = [];   // cache local de productos cargados
+var _catFuente    = 'voco';  // 'shopify' | 'voco'
+var _catShopifyStore = '';   // dominio shopify del agente
 
 function catAbrirShopify() {
   document.getElementById('cat-shopify-modal').style.display = 'flex';
@@ -13174,12 +13175,56 @@ function catExportarExcel() {
   window.location.href = '/inbox/api/catalogo/exportar?agent_id=' + ag;
 }
 
+function catAdaptarUI() {
+  var esShopify = _catFuente === 'shopify';
+  // Botones de cabecera
+  var btnAdmin   = document.getElementById('cat-btn-shopify-admin');
+  var btnExp     = document.getElementById('cat-btn-exportar');
+  var btnImp     = document.getElementById('cat-btn-importar');
+  var btnAgregar = document.getElementById('cat-btn-agregar');
+  if (btnAdmin)   { btnAdmin.style.display   = esShopify ? 'inline-flex' : 'none';
+                    btnAdmin.href = 'https://' + _catShopifyStore + '/admin/products'; }
+  if (btnExp)     btnExp.style.display     = esShopify ? 'none' : 'inline-flex';
+  if (btnImp)     btnImp.style.display     = esShopify ? 'none' : 'inline-flex';
+  if (btnAgregar) btnAgregar.style.display = esShopify ? 'none' : 'inline-block';
+
+  // Banner de fuente
+  var banner = document.getElementById('cat-fuente-banner');
+  if (banner) {
+    if (esShopify) {
+      banner.style.display = 'flex';
+      banner.style.background = '#f0fdf4';
+      banner.style.border = '1px solid #bbf7d0';
+      banner.style.color = '#166534';
+      banner.innerHTML =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 50" width="16" height="18" style="flex-shrink:0">' +
+        '<path fill="#96BF47" d="M37.8 9.7a.4.4 0 0 0-.4-.4l-4.6-.3-3.2-3.2c-.3-.3-.9-.2-1.1-.1l-1.7.5C26 4 24.3 1.5 21.3 1.5h-.3C20.7.8 20 .7 19.5.7 15 .7 12.9 6.2 12.2 8.9l-5.8 1.8C5 11.1 5 11.1 4.8 12.6L2.7 35.5 24.1 40l12.3-2.6L37.8 9.7z"/>' +
+        '<path fill="#5E8E3E" d="M36.4 9.3l-4.6-.3-3.2-3.2L27 40l12.3-2.6L36.4 9.3z"/>' +
+        '<path fill="#FFF" d="M22.4 19.5l-1.5 4.3s-1.4-.8-3.3-.8c-2.6 0-2.7 1.8-2.7 2.1 0 2.2 5.7 3 5.7 8.1 0 4-2.6 6.6-6 6.6-4.1 0-6.2-2.6-6.2-2.6l1.1-3.6s2.1 1.9 4 1.9c1.1 0 1.7-1 1.7-1.6 0-2.8-4.7-3-4.7-7.7 0-3.9 2.8-7.8 8.6-7.8 2.3 0 3.3.6 3.3.6z"/></svg>' +
+        'Sincronizado desde <strong style="margin:0 2px">Shopify</strong> · Los productos se administran desde Shopify Admin';
+    } else {
+      banner.style.display = 'flex';
+      banner.style.background = 'var(--voco-content-bg-alt)';
+      banner.style.border = '1px solid var(--voco-border)';
+      banner.style.color = 'var(--voco-text-muted)';
+      banner.innerHTML =
+        '<i data-lucide="package" style="width:16px;height:16px;flex-shrink:0"></i>' +
+        'Catálogo nativo de Voco · Puedes <button onclick="catAbrirShopify()" ' +
+        'style="background:none;border:none;color:var(--voco-accent);cursor:pointer;font-weight:600;padding:0;font-size:.84rem">conectar Shopify</button> para sincronizar automáticamente';
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+  }
+}
+
 async function catCargar() {
   var ag = _escAgentId || 1;
   try {
     var r = await fetch('/inbox/api/catalogo?agent_id=' + ag, {credentials:'include'});
     var d = await r.json();
-    _catProductos = d.productos || [];
+    _catFuente       = d.fuente || 'voco';
+    _catShopifyStore = d.shopify_store || '';
+    _catProductos    = d.productos || [];
+    catAdaptarUI();
     catActualizarFiltrosCat();
     catFiltrar();
   } catch(e) {
@@ -13228,6 +13273,13 @@ function catFiltrar() {
       ? '<span style="color:#16a34a;font-weight:700">✓</span>'
       : '<span style="color:#ef4444">✗</span>';
     var stockStr = p.stock !== null && p.stock !== undefined ? p.stock : '—';
+    var acciones = _catFuente === 'shopify'
+      ? '<a href="https://' + _catShopifyStore + '/admin/products" target="_blank" rel="noopener" ' +
+          'style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:4px 10px;' +
+          'cursor:pointer;font-size:.78rem;color:#166534;text-decoration:none;white-space:nowrap">' +
+          'Ver en Shopify ↗</a>'
+      : '<button onclick="catEditar(\'' + p.id + '\')" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.78rem;margin-right:4px">Editar</button>' +
+        '<button onclick="catEliminar(\'' + p.id + '\',\'' + _escEsc(p.nombre) + '\')" style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.78rem;color:#b91c1c">Eliminar</button>';
     return '<tr style="border-bottom:1px solid var(--voco-border)">' +
       '<td style="padding:8px 10px">' + img + '</td>' +
       '<td style="padding:8px 10px"><strong>' + _escEsc(p.nombre) + '</strong>' +
@@ -13237,10 +13289,7 @@ function catFiltrar() {
       '<td style="padding:8px 10px;text-align:right">' + tachado + precio + '</td>' +
       '<td style="padding:8px 10px;text-align:center">' + stockStr + '</td>' +
       '<td style="padding:8px 10px;text-align:center">' + disp + '</td>' +
-      '<td style="padding:8px 10px;text-align:center;white-space:nowrap">' +
-        '<button onclick="catEditar(' + p.id + ')" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.78rem;margin-right:4px">Editar</button>' +
-        '<button onclick="catEliminar(' + p.id + ',\'' + _escEsc(p.nombre) + '\')" style="background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.78rem;color:#b91c1c">Eliminar</button>' +
-      '</td>' +
+      '<td style="padding:8px 10px;text-align:center;white-space:nowrap">' + acciones + '</td>' +
     '</tr>';
   }).join('');
   document.getElementById('cat-total').textContent = filtrados.length + ' producto(s)';

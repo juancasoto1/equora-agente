@@ -8876,9 +8876,45 @@ async def api_catalogo_listar(
 ):
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
-    from agent.memory import obtener_catalogo_voco
-    productos = await obtener_catalogo_voco(agent_id)
-    return JSONResponse(content={"ok": True, "productos": productos})
+
+    from agent.tools import _resolver_admin_token, _resolver_store, obtener_catalogo_shopify, obtener_catalogo_json
+    admin_tok  = await _resolver_admin_token(agent_id)
+    store_dom  = await _resolver_store(agent_id)
+    tiene_shopify = bool(admin_tok and store_dom)
+
+    if tiene_shopify:
+        # Forzar carga si el cache está vacío (primer acceso al panel)
+        items = obtener_catalogo_json(agent_id)
+        if not items:
+            await obtener_catalogo_shopify(agent_id)
+            items = obtener_catalogo_json(agent_id)
+        # Normalizar al mismo esquema que CatalogoVoco para que el panel use un solo formato
+        productos = [
+            {
+                "id": f"sh_{i}",
+                "nombre": it["producto"],
+                "presentacion": it["presentacion"],
+                "precio": it["precio"],
+                "precio_tachado": None,
+                "stock": it.get("stock"),
+                "disponible": True,
+                "imagen_url": it.get("imagen", ""),
+                "categoria": it.get("categoria", "General"),
+                "descripcion": "",
+                "sku": "",
+            }
+            for i, it in enumerate(items)
+        ]
+        return JSONResponse(content={
+            "ok": True,
+            "fuente": "shopify",
+            "shopify_store": store_dom,
+            "productos": productos,
+        })
+    else:
+        from agent.memory import obtener_catalogo_voco
+        productos = await obtener_catalogo_voco(agent_id)
+        return JSONResponse(content={"ok": True, "fuente": "voco", "productos": productos})
 
 
 @app.post("/inbox/api/catalogo")
