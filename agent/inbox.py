@@ -2032,7 +2032,8 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         <span class="ni" aria-hidden="true"><i data-lucide="message-square-text" style="width:16px;height:16px;vertical-align:-3px"></i></span> Mensajes
       </div>
       <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="metricas"
-           onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')">
+           onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')"
+           style="display:none">
         <span class="ni" aria-hidden="true"><i data-lucide="bar-chart-3" style="width:16px;height:16px;vertical-align:-3px"></i></span> Métricas
       </div>
 

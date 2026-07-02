@@ -137,6 +137,64 @@ misma página con su fecha de actualización.</p>
     return _pagina("Política de Privacidad", cuerpo)
 
 
+def eliminacion_datos_html() -> str:
+    cuerpo = f"""
+<h1>Instrucciones para la Eliminación de Datos</h1>
+<p class="updated">Última actualización: {ULTIMA_ACTUALIZACION}</p>
+
+<p>Conforme a las políticas de la Plataforma de WhatsApp Business de Meta,
+los usuarios finales tienen derecho a solicitar la eliminación de sus datos
+personales almacenados por Voco.</p>
+
+<h2>¿Qué datos almacena Voco?</h2>
+<ul>
+  <li>Número de teléfono de WhatsApp y nombre de perfil.</li>
+  <li>Historial de conversaciones con el asistente.</li>
+  <li>Datos de pedidos y carrito (productos, dirección de envío, totales).</li>
+  <li>Preferencias de contacto (opt-out de difusiones).</li>
+</ul>
+
+<h2>Cómo solicitar la eliminación</h2>
+<p>Tienes tres opciones:</p>
+
+<ol>
+  <li>
+    <strong>Por correo electrónico:</strong> envía un mensaje a
+    <a href="mailto:{CONTACTO_EMAIL}">{CONTACTO_EMAIL}</a> con el asunto
+    <em>«Eliminación de datos»</em> e indica el número de WhatsApp asociado
+    a tu cuenta. Procesaremos tu solicitud en un plazo máximo de <strong>30 días</strong>.
+  </li>
+  <li>
+    <strong>Directamente con el negocio:</strong> escribe «<em>BAJA</em>» o
+    «<em>Eliminar mis datos</em>» en el chat de WhatsApp con el negocio que
+    usa Voco. El operador humano podrá gestionar tu solicitud desde el panel.
+  </li>
+  <li>
+    <strong>Opt-out de difusiones:</strong> responde «<em>BAJA</em>» en
+    cualquier momento para dejar de recibir mensajes de marketing. No requiere
+    eliminar toda tu información.
+  </li>
+</ol>
+
+<h2>¿Qué ocurre tras la solicitud?</h2>
+<ul>
+  <li>Eliminamos o anonimizamos tu historial de conversaciones, datos de pedido
+      y datos de perfil en los sistemas de Voco.</li>
+  <li>Los registros que la ley exija conservar (por ejemplo, datos fiscales de
+      pedidos completados) se mantienen el tiempo mínimo requerido y luego se
+      eliminan.</li>
+  <li>Los datos en sistemas de terceros (Meta / WhatsApp) se rigen por sus
+      propias políticas de privacidad.</li>
+</ul>
+
+<h2>Contacto</h2>
+<p>Para cualquier duda sobre el tratamiento de tus datos:
+{RAZON_SOCIAL} — <a href="mailto:{CONTACTO_EMAIL}">{CONTACTO_EMAIL}</a> —
+<a href="https://myvoco.ai">myvoco.ai</a></p>
+"""
+    return _pagina("Eliminación de Datos de Usuario", cuerpo)
+
+
 def terminos_html() -> str:
     cuerpo = f"""
 <h1>Términos del Servicio</h1>

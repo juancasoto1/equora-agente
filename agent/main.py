@@ -1591,6 +1591,22 @@ async def pagina_terminos():
     return HTMLResponse(content=terminos_html())
 
 
+@app.get("/terminos", response_class=HTMLResponse)
+async def pagina_terminos_es():
+    """Alias en español de /terms — URL configurada en Meta App Review."""
+    from agent.legal import terminos_html
+    return HTMLResponse(content=terminos_html())
+
+
+@app.get("/data-deletion", response_class=HTMLResponse)
+async def pagina_eliminacion_datos():
+    """Instrucciones de eliminación de datos — requisito de Meta App Review
+    (Tech Provider). Configurar en Meta: URL de instrucciones para la
+    eliminación de datos → https://myvoco.ai/data-deletion"""
+    from agent.legal import eliminacion_datos_html
+    return HTMLResponse(content=eliminacion_datos_html())
+
+
 @app.get("/health")
 async def health_check_deep():
     """#77 — Healthcheck profundo: verifica conexión a BD y que el loop de
