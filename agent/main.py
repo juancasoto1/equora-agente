@@ -413,13 +413,15 @@ async def lifespan(app: FastAPI):
         f"loop cada: {CHECK_INTERVAL_SEG} seg"
     )
     seguimiento_task = asyncio.create_task(_loop_seguimientos())
-    watchdog_task = asyncio.create_task(_watchdog_seguimientos())
+    watchdog_task    = asyncio.create_task(_watchdog_seguimientos())
+    catalog_task     = asyncio.create_task(_loop_catalog_refresh())
     try:
         yield
     finally:
         seguimiento_task.cancel()
         watchdog_task.cancel()
-        for t in (seguimiento_task, watchdog_task):
+        catalog_task.cancel()
+        for t in (seguimiento_task, watchdog_task, catalog_task):
             try:
                 await t
             except asyncio.CancelledError:
@@ -463,6 +465,29 @@ async def _watchdog_seguimientos():
                 f"(umbral {WATCHDOG_UMBRAL_SEG}s) — forzando reinicio del proceso"
             )
             os._exit(1)
+
+
+async def _loop_catalog_refresh():
+    """Refresca el catálogo Shopify de todos los agentes activos cada 30 min.
+    Garantiza que los productos nuevos/editados en Shopify aparezcan en el panel
+    y en las respuestas de Andrea sin esperar a que llegue un mensaje de cliente."""
+    await asyncio.sleep(120)  # Esperar 2 min tras arranque (catálogo ya pre-cargado)
+    while True:
+        try:
+            from agent.memory import listar_ids_agentes_activos
+            from agent.tools import obtener_catalogo_shopify, _resolver_admin_token, _catalog_cache_at
+            ids = await listar_ids_agentes_activos()
+            for aid in ids:
+                tok = await _resolver_admin_token(aid)
+                if not tok:
+                    continue
+                # Forzar refresh limpiando el timestamp de cache
+                _catalog_cache_at.pop(aid, None)
+                await obtener_catalogo_shopify(aid)
+                logger.info(f"[catalog-refresh] agent_id={aid} catálogo actualizado")
+        except Exception as e:
+            logger.error(f"[catalog-refresh] error: {e}")
+        await asyncio.sleep(1800)  # Cada 30 minutos
 
 
 def _calcular_total_carrito(items: list[dict]) -> int:
@@ -4734,6 +4759,22 @@ async def admin_actualizar_usuario(
 
 # ── API endpoints ──────────────────────────────────────────────────────────
 
+@app.get("/inbox/api/conversaciones/badge")
+async def inbox_conversaciones_badge(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Endpoint ligero para el badge del panel: cuenta conversaciones con
+    mensajes entrantes en los últimos 30 min. Se llama cada 20 s desde el panel."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.memory import contar_msgs_recientes_usuario
+    count = await contar_msgs_recientes_usuario(agent_id, minutos=30)
+    return JSONResponse(content={"count": count})
+
+
 @app.get("/inbox/api/conversaciones")
 async def inbox_conversaciones(
     agent_id: int = 1,
@@ -8872,6 +8913,23 @@ async def inbox_plantillas_editar(
 # ══════════════════════════════════════════════════════════════════════════════
 # CATÁLOGO NATIVO VOCO
 # ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/inbox/api/catalogo/sincronizar")
+async def api_catalogo_sincronizar(
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Fuerza un refresh inmediato del catálogo Shopify limpiando el cache."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    from agent.tools import obtener_catalogo_shopify, _catalog_cache_at, obtener_catalogo_json
+    _catalog_cache_at.pop(agent_id, None)
+    await obtener_catalogo_shopify(agent_id)
+    items = obtener_catalogo_json(agent_id)
+    return JSONResponse(content={"ok": True, "total": len(items)})
+
 
 @app.get("/inbox/api/catalogo")
 async def api_catalogo_listar(

@@ -3536,6 +3536,30 @@ async def obtener_o_crear_admin_interno(
         return _ui_to_dict(nuevo)
 
 
+async def contar_msgs_recientes_usuario(agent_id: int, minutos: int = 30) -> int:
+    """Cuenta conversaciones distintas con al menos un mensaje de 'user' en los últimos N minutos.
+    Usado para el badge de notificaciones del panel."""
+    desde = datetime.utcnow() - timedelta(minutes=minutos)
+    async with async_session() as session:
+        result = await session.execute(
+            select(func.count(func.distinct(Mensaje.telefono))).where(
+                Mensaje.agent_id == agent_id,
+                Mensaje.role == "user",
+                Mensaje.timestamp >= desde,
+            )
+        )
+        return result.scalar() or 0
+
+
+async def listar_ids_agentes_activos() -> list[int]:
+    """Devuelve los IDs de todos los agentes con status='active'."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Agent.id).where(Agent.status == "active")
+        )
+        return [row[0] for row in result.fetchall()]
+
+
 async def contar_agentes_activos(agent_id: int) -> int:
     """Cuenta agentes humanos activos del negocio (para verificar límite por plan)."""
     async with async_session() as session:

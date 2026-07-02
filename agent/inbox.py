@@ -3594,7 +3594,14 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div class="sec-title">Catálogo de productos</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <!-- Botón solo visible cuando fuente=shopify -->
+            <!-- Botones solo visibles cuando fuente=shopify -->
+            <button id="cat-btn-sync" onclick="catSincronizar()"
+              style="display:none;align-items:center;gap:6px;background:var(--voco-card-bg);
+              border:1.5px solid var(--voco-border);color:var(--voco-text);border-radius:8px;
+              padding:7px 14px;font-size:.84rem;font-weight:600;cursor:pointer">
+              <i data-lucide="refresh-cw" style="width:14px;height:14px"></i>
+              <span id="cat-sync-label">Sincronizar</span>
+            </button>
             <a id="cat-btn-shopify-admin" href="#" target="_blank" rel="noopener"
               style="display:none;align-items:center;gap:6px;background:var(--voco-card-bg);
               border:1.5px solid #5e8e3e;color:#5e8e3e;border-radius:8px;padding:7px 14px;
@@ -10687,7 +10694,24 @@ function _escActualizarBadges() {
 // evitando así el flash que mostraba las escalaciones de otro agente.
 document.addEventListener('DOMContentLoaded', function() {
   setInterval(_escActualizarBadges, 15000);
+  setInterval(_convActualizarBadge, 20000);
 });
+
+async function _convActualizarBadge() {
+  // Solo actualiza cuando el usuario NO está viendo Conversaciones
+  // (si está en Conversaciones, _convTimer ya refresca la lista completa)
+  var secActiva = document.querySelector('.sec:not([style*="display: none"]):not([style*="display:none"])');
+  if (secActiva && secActiva.id === 'sec-conversaciones') return;
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/conversaciones/badge?agent_id=' + ag, {credentials:'include'});
+    var d = await r.json();
+    var badge = document.getElementById('conv-badge');
+    if (!badge) return;
+    badge.textContent = d.count || 0;
+    badge.style.display = (d.count > 0) ? 'inline' : 'none';
+  } catch(e) {}
+}
 
 /* ── Cargar lista de tickets ─────────────────────────────── */
 async function escCargarLista() {
@@ -13175,6 +13199,25 @@ function catExportarExcel() {
   window.location.href = '/inbox/api/catalogo/exportar?agent_id=' + ag;
 }
 
+async function catSincronizar() {
+  var ag  = _escAgentId || 1;
+  var lbl = document.getElementById('cat-sync-label');
+  var btn = document.getElementById('cat-btn-sync');
+  if (btn) btn.disabled = true;
+  if (lbl) lbl.textContent = 'Sincronizando…';
+  try {
+    var r = await fetch('/inbox/api/catalogo/sincronizar?agent_id=' + ag,
+      {method:'POST', credentials:'include'});
+    var d = await r.json();
+    if (lbl) lbl.textContent = '✓ ' + (d.total || 0) + ' productos';
+    await catCargar();
+    setTimeout(function(){ if (lbl) lbl.textContent = 'Sincronizar'; if (btn) btn.disabled = false; }, 3000);
+  } catch(e) {
+    if (lbl) lbl.textContent = 'Error';
+    if (btn) btn.disabled = false;
+  }
+}
+
 function catAdaptarUI() {
   var esShopify = _catFuente === 'shopify';
   // Botones de cabecera
@@ -13182,6 +13225,8 @@ function catAdaptarUI() {
   var btnExp     = document.getElementById('cat-btn-exportar');
   var btnImp     = document.getElementById('cat-btn-importar');
   var btnAgregar = document.getElementById('cat-btn-agregar');
+  var btnSync = document.getElementById('cat-btn-sync');
+  if (btnSync)    btnSync.style.display    = esShopify ? 'inline-flex' : 'none';
   if (btnAdmin)   { btnAdmin.style.display   = esShopify ? 'inline-flex' : 'none';
                     btnAdmin.href = 'https://' + _catShopifyStore + '/admin/products'; }
   if (btnExp)     btnExp.style.display     = esShopify ? 'none' : 'inline-flex';
