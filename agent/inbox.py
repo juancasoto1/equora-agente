@@ -2006,28 +2006,26 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
 
     <!-- ── LEFT NAV ── -->
     <nav id="nav">
-      <div class="nav-section">Principal</div>
+      <!-- ── CHATS ─────────────────────────────────────────── -->
+      <div class="nav-section">Chats</div>
       <div class="nav-item active" role="button" tabindex="0" data-sec="conversaciones"
            onclick="showSec('conversaciones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('conversaciones')">
         <span class="ni" aria-hidden="true"><i data-lucide="message-circle" style="width:16px;height:16px;vertical-align:-3px"></i></span> Conversaciones
-        <span class="nb" id="conv-badge" style="display:none" aria-live="polite">0</span>
+        <span class="nb" id="conv-badge" style="display:none" aria-live="polite" title="Activas en la última hora">0</span>
       </div>
       <div class="nav-item" role="button" tabindex="0" data-sec="difusiones"
            onclick="showSec('difusiones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('difusiones')">
         <span class="ni" aria-hidden="true"><i data-lucide="megaphone" style="width:16px;height:16px;vertical-align:-3px"></i></span> Difusiones
       </div>
-      <div class="nav-section">Gestión</div>
-      <div class="nav-item" role="button" tabindex="0" data-sec="clientes"
-           onclick="showSec('clientes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('clientes')">
-        <span class="ni" aria-hidden="true"><i data-lucide="users" style="width:16px;height:16px;vertical-align:-3px"></i></span> Clientes
-      </div>
-      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="equipo"
-           onclick="showSec('equipo')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('equipo')">
-        <span class="ni" aria-hidden="true"><i data-lucide="user-cog" style="width:16px;height:16px;vertical-align:-3px"></i></span> Equipo
-      </div>
       <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="plantillas"
            onclick="showSec('plantillas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('plantillas')">
         <span class="ni" aria-hidden="true"><i data-lucide="file-text" style="width:16px;height:16px;vertical-align:-3px"></i></span> Plantillas
+      </div>
+      <div class="nav-item" role="button" tabindex="0" data-sec="escalaciones"
+           onclick="showSec('escalaciones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('escalaciones')">
+        <span class="ni" aria-hidden="true"><i data-lucide="alert-circle" style="width:16px;height:16px;vertical-align:-3px"></i></span> Escalaciones
+        <span id="esc-badge" style="display:none;margin-left:auto;background:#ef4444;color:#fff;
+          border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
       </div>
       <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="mensajes"
            onclick="showSec('mensajes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('mensajes')">
@@ -2037,36 +2035,39 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
            onclick="showSec('metricas')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('metricas')">
         <span class="ni" aria-hidden="true"><i data-lucide="bar-chart-3" style="width:16px;height:16px;vertical-align:-3px"></i></span> Métricas
       </div>
-      <!-- Entradas condicionales por módulo (#30). Marcadas con data-module="X";
-           el JS aplicarVisibilidadModulos() las muestra/oculta según
-           Agent.modules_json. Por default OFF para no romper UX de agentes
-           que no usan estas features. -->
-      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="pipeline" data-module="pipeline"
-           style="display:none"
-           onclick="showSec('pipeline')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('pipeline')">
-        <span class="ni" aria-hidden="true"><i data-lucide="trending-up" style="width:16px;height:16px;vertical-align:-3px"></i></span> Pipeline
-      </div>
-      <div class="nav-item" role="button" tabindex="0" data-sec="escalaciones"
-           onclick="showSec('escalaciones')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('escalaciones')">
-        <span class="ni" aria-hidden="true"><i data-lucide="alert-circle" style="width:16px;height:16px;vertical-align:-3px"></i></span> Escalaciones
-        <span id="esc-badge" style="display:none;margin-left:auto;background:#ef4444;color:#fff;
+
+      <!-- ── TIENDA ─────────────────────────────────────────── -->
+      <div class="nav-section">Tienda</div>
+      <div class="nav-item" role="button" tabindex="0" data-sec="pedidos"
+           onclick="showSec('pedidos')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('pedidos')">
+        <span class="ni" aria-hidden="true"><i data-lucide="shopping-bag" style="width:16px;height:16px;vertical-align:-3px"></i></span> Pedidos
+        <span id="ped-badge" style="display:none;margin-left:auto;background:#f97316;color:#fff;
           border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
+      </div>
+      <div class="nav-item" role="button" tabindex="0" data-sec="clientes"
+           onclick="showSec('clientes')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('clientes')">
+        <span class="ni" aria-hidden="true"><i data-lucide="users" style="width:16px;height:16px;vertical-align:-3px"></i></span> Clientes
       </div>
       <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="catalogo"
            onclick="showSec('catalogo')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('catalogo')">
         <span class="ni" aria-hidden="true"><i data-lucide="package" style="width:16px;height:16px;vertical-align:-3px"></i></span> Catálogo
       </div>
-      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="pedidos" data-module="pedidos_voco"
-           onclick="showSec('pedidos')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('pedidos')"
-           style="display:none">
-        <span class="ni" aria-hidden="true"><i data-lucide="shopping-bag" style="width:16px;height:16px;vertical-align:-3px"></i></span> Pedidos
-        <span id="ped-badge" style="display:none;margin-left:auto;background:#f97316;color:#fff;
-          border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:700"></span>
+      <!-- Pipeline — visible solo cuando el módulo está ON -->
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="pipeline" data-module="pipeline"
+           style="display:none"
+           onclick="showSec('pipeline')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('pipeline')">
+        <span class="ni" aria-hidden="true"><i data-lucide="trending-up" style="width:16px;height:16px;vertical-align:-3px"></i></span> Pipeline
       </div>
+
+      <!-- ── SISTEMA ────────────────────────────────────────── -->
       <div class="nav-section">Sistema</div>
       <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="configuracion"
            onclick="showSec('configuracion')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('configuracion')">
         <span class="ni" aria-hidden="true"><i data-lucide="settings" style="width:16px;height:16px;vertical-align:-3px"></i></span> Configuración
+      </div>
+      <div class="nav-item nav-secondary" role="button" tabindex="0" data-sec="equipo"
+           onclick="showSec('equipo')" onkeydown="if(event.key==='Enter'||event.key===' ')showSec('equipo')">
+        <span class="ni" aria-hidden="true"><i data-lucide="user-cog" style="width:16px;height:16px;vertical-align:-3px"></i></span> Equipo
       </div>
       <!-- "Más" — solo móvil (#41 fase 2). Agrupa los items .nav-secondary
            (Equipo, Plantillas, Mensajes, Métricas, Pipeline, Configuración)
@@ -2104,7 +2105,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
         <aside id="sidebar">
           <div id="sh">
             <h2>💬 Conversaciones</h2>
-            <span class="cnt" id="total">0</span>
+            <span class="cnt" id="total" title="Total de conversaciones">0</span>
           </div>
           <div id="srch">
             <label for="srinput" style="display:none">Buscar conversaciones</label>
@@ -6215,9 +6216,16 @@ function loadConvs() {
   api('/inbox/api/conversaciones?agent_id=' + (VOCO_AGENT.id || 1)).then(function(data) {
     CONVS = Array.isArray(data) ? data : [];
     document.getElementById('total').textContent = CONVS.length;
+    // Badge = conversaciones con actividad en la última hora
+    var _ahoraMs = Date.now();
+    var _activasHora = CONVS.filter(function(c) {
+      if (!c.timestamp) return false;
+      var ts = new Date(c.timestamp.endsWith('Z') ? c.timestamp : c.timestamp + 'Z');
+      return (_ahoraMs - ts.getTime()) < 3600000;
+    }).length;
     var badge = document.getElementById('conv-badge');
-    badge.textContent = CONVS.length;
-    badge.style.display = CONVS.length ? 'inline' : 'none';
+    badge.textContent = _activasHora;
+    badge.style.display = _activasHora ? 'inline' : 'none';
     renderLista();
     if (TEL) {
       var c = CONVS.find(function(x) { return x.telefono === TEL; });
