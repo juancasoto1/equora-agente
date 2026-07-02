@@ -2195,6 +2195,21 @@ async def webhook_handler(request: Request):
             if msg.es_propio or not msg.texto:
                 continue
 
+            # ── Deduplicación por mensaje_id de WhatsApp ─────────────────────
+            # Meta reintenta el webhook si no recibe 200 en ~20 s. Sin este
+            # guard el mismo mensaje genera respuestas y tickets duplicados.
+            if msg.mensaje_id:
+                _ahora_w = time.time()
+                for _k in [k for k, v in _wamids_procesados.items()
+                            if _ahora_w - v > _WAMID_DEDUP_TTL]:
+                    del _wamids_procesados[_k]
+                if msg.mensaje_id in _wamids_procesados:
+                    logger.warning(
+                        f"[dedup-webhook] {msg.mensaje_id[:24]} ya procesado — ignorado"
+                    )
+                    continue
+                _wamids_procesados[msg.mensaje_id] = _ahora_w
+
             logger.info(f"Mensaje de {msg.telefono}: {msg.texto[:80]}")
 
             # ── Filtro: respuestas automáticas de WhatsApp Business ───────────
@@ -3478,28 +3493,39 @@ async def webhook_handler(request: Request):
                     except Exception as e:
                         logger.warning(f"[TIENDA] product_list falló: {e}")
 
-                # ── FALLBACK: ESCALAR a humano ────────────────────────────
-                # Si product_list falla, NO mandamos link a tienda web — eso
-                # rompe el flujo del carrito nativo (universos separados que
-                # no se sincronizan). Escalar es mejor UX: un humano abre el
-                # catálogo manualmente con el cliente y cierra la venta.
+                # ── FALLBACK: catálogo en texto ───────────────────────────
+                # Si product_list falla (403 de permisos, API caída, etc.),
+                # enviamos el catálogo como texto plano — mantiene el servicio
+                # sin depender de la API interactiva de WhatsApp.
+                # Solo escalamos si el texto tampoco llega (API completamente
+                # caída), lo que generalmente indica un problema de plataforma
+                # que ningún humano puede resolver vía WhatsApp en ese momento.
                 if not enviado_catalogo_wa:
                     await _registrar_falla_catalogo(
                         "tienda_catalogo_wa", msg.telefono,
                         f"product_list falló (query='{tienda_query}')",
                         agent_id=_agent_id,
                     )
-                    logger.info(f"[TIENDA→ESCALAR] catálogo WA no disponible para {msg.telefono}")
-                    await _escalar_meta_fallo(
-                        msg.telefono,
-                        motivo_corto=f"[[TIENDA:{tienda_query or 'completo'}]] fallido",
-                        contexto_extra=(
-                            f"Cliente pidió ver catálogo "
-                            f"({'categoría: ' + tienda_query if tienda_query else 'general'}). "
-                            f"product_list nativo falló — necesita asesor para mostrar productos."
-                        ),
-                        agent_id=_agent_id,
-                    )
+                    logger.info(f"[TIENDA→TEXTO] catálogo WA no disponible para {msg.telefono} — enviando texto")
+                    try:
+                        from agent.tools import obtener_catalogo_voco_texto
+                        _cat_texto = await obtener_catalogo_voco_texto(_agent_id)
+                        if _cat_texto:
+                            _intro = (
+                                f"🛒 *Aquí nuestros productos "
+                                f"({'categoría ' + tienda_query if tienda_query else 'completos'}):*\n\n"
+                                + _cat_texto[:3800]
+                            )
+                            _ok_txt = await _proveedor_agente.enviar_mensaje(msg.telefono, _intro)
+                            if _ok_txt:
+                                await _guardar_con_wamid(_proveedor_agente, msg.telefono, _intro, agent_id=_agent_id)
+                                logger.info(f"[TIENDA→TEXTO] catálogo texto enviado a {msg.telefono}")
+                            else:
+                                logger.warning(f"[TIENDA→TEXTO] texto también falló para {msg.telefono} — API bloqueada, sin escalar")
+                        else:
+                            logger.warning(f"[TIENDA→TEXTO] catálogo vacío para agent_id={_agent_id}")
+                    except Exception as _e_cat:
+                        logger.error(f"[TIENDA→TEXTO] error obteniendo catálogo texto: {_e_cat}")
 
             # Enviar link de checkout de Shopify si se generó Y es válido
             # (con /checkouts/ — no la home). Si es inválido, intentar
@@ -9505,6 +9531,12 @@ SHOPIFY_WEBHOOK_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET", "")
 # Shopify reintenta hasta 19 veces si no recibe 200 — guardamos los procesados por 10 min
 _shopify_dedup: dict[str, float] = {}
 _SHOPIFY_DEDUP_TTL = 600  # segundos
+
+# Cache de deduplicación para mensajes de WhatsApp entrantes.
+# Meta reintenta el webhook cuando no recibe 200 en ~20 s — sin este guard,
+# el mismo mensaje genera múltiples respuestas y escalaciones.
+_wamids_procesados: dict[str, float] = {}
+_WAMID_DEDUP_TTL = 300  # 5 minutos
 
 ADMIN_WHATSAPP_NUMBERS = [
     n.strip() for n in os.getenv("ADMIN_WHATSAPP_NUMBERS", "").split(",") if n.strip()
