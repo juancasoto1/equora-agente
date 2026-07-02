@@ -4094,7 +4094,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 style="padding:5px 8px;border:1px solid var(--voco-border);border-radius:7px;font-size:.82rem;background:var(--voco-card-bg);color:var(--voco-text)">
             </div>
             <button class="btn-secondary" onclick="pedCargarStats()">↺ Actualizar</button>
-            <button class="btn-pri" onclick="pedAbrirNuevo()">+ Nuevo pedido</button>
+            <button class="btn-primary" onclick="pedAbrirNuevo()"
+              style="padding:10px 20px;font-size:.9rem;font-weight:700;display:flex;align-items:center;gap:7px;letter-spacing:.01em">
+              <i data-lucide="plus-circle" style="width:16px;height:16px"></i> Nuevo pedido
+            </button>
           </div>
         </div>
         <div class="sec-body">
@@ -4174,7 +4177,7 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div>
                 <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">TELÉFONO *</label>
-                <input id="ped-telefono" type="text" placeholder="+573001234567"
+                <input id="ped-telefono" type="text" placeholder="573001234567"
                   onblur="pedBuscarCliente()"
                   style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
                          background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
@@ -4306,10 +4309,10 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
               </div>
             </div>
             <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px">
-              <button onclick="pedCerrarModal()"
-                style="padding:9px 20px;border-radius:8px;border:1px solid var(--voco-border);
-                       background:transparent;color:var(--voco-text);cursor:pointer;font-size:.88rem">Cancelar</button>
-              <button class="btn-pri" id="ped-btn-guardar" onclick="pedGuardar()">Guardar</button>
+              <button onclick="pedCerrarModal()" class="btn-secondary"
+                style="padding:9px 22px;font-size:.88rem;font-weight:600">Cancelar</button>
+              <button class="btn-primary" id="ped-btn-guardar" onclick="pedGuardar()"
+                style="padding:9px 26px;font-size:.88rem">Guardar</button>
             </div>
           </div>
         </div>
