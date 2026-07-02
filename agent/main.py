@@ -3243,8 +3243,8 @@ async def webhook_handler(request: Request):
                 from agent.tools import _sku_map, _normalizar, obtener_url_producto
                 # Construir índice (producto_norm + presentacion_norm) → retailer_id largo
                 _producto_idx: dict[str, str] = {}
-                for rid, info in _sku_map.items():
-                    if not (rid.isdigit() and len(rid) >= 10):
+                for rid, info in _sku_map.get(_agent_id, {}).items():
+                    if not (str(rid).isdigit() and len(str(rid)) >= 10):
                         continue  # Solo variant_id largos (los que sí están en FB Catalog)
                     prod_n = _normalizar(info.get("producto", ""))
                     pres_n = _normalizar(info.get("presentacion", ""))
@@ -3424,8 +3424,8 @@ async def webhook_handler(request: Request):
                     from agent.tools import _sku_map, _normalizar
                     q_n = _normalizar(tienda_query)
                     rid_match = ""
-                    for rid, info in _sku_map.items():
-                        if not (rid.isdigit() and len(rid) >= 10):
+                    for rid, info in _sku_map.get(_agent_id, {}).items():
+                        if not (str(rid).isdigit() and len(str(rid)) >= 10):
                             continue
                         prod_n = _normalizar(info.get("producto", ""))
                         if q_n in prod_n or prod_n in q_n:
