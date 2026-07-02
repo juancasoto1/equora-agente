@@ -372,8 +372,9 @@ class Pedido(Base):
     ciudad_entrega:    Mapped[str]    = mapped_column(String(100), default="")
     notas_cliente:    Mapped[str]      = mapped_column(Text, default="")
     notas_internas:   Mapped[str]      = mapped_column(Text, default="")
-    canal:            Mapped[str]      = mapped_column(String(20), default="whatsapp")   # whatsapp/manual
+    canal:            Mapped[str]      = mapped_column(String(20), default="whatsapp")   # whatsapp/manual/shopify
     fuente:           Mapped[str]      = mapped_column(String(20), default="bot")        # bot/manual/shopify
+    shopify_order_id: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None, index=True)
     agente_asignado_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at:       Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at:       Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -511,6 +512,9 @@ async def inicializar_db():
             # Pedidos v3 — campos de dirección extendidos
             "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS direccion2_entrega TEXT DEFAULT ''",
             "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS ciudad_entrega TEXT DEFAULT ''",
+            # Pedidos v4 — integración Shopify
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS shopify_order_id TEXT",
+            "CREATE INDEX IF NOT EXISTS ix_pedidos_shopify_id ON pedidos (agent_id, shopify_order_id)",
             # Clientes v2 — dirección 2
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS direccion2 TEXT DEFAULT ''",
         ):
@@ -4834,6 +4838,7 @@ def _pedido_a_dict(p: Pedido) -> dict:
         "notas_internas":   p.notas_internas,
         "canal":            p.canal,
         "fuente":           p.fuente,
+        "shopify_order_id": getattr(p, "shopify_order_id", None),
         "agente_asignado_id": p.agente_asignado_id,
         "created_at":       p.created_at.isoformat() if p.created_at else None,
         "updated_at":       p.updated_at.isoformat() if p.updated_at else None,
@@ -4916,6 +4921,65 @@ async def crear_pedido_manual(agent_id: int, data: dict) -> dict:
             fuente=data.get("fuente", "manual"),
         )
         session.add(pedido)
+        await session.commit()
+        await session.refresh(pedido)
+        return _pedido_a_dict(pedido)
+
+
+async def upsert_pedido_shopify(
+    agent_id: int,
+    shopify_order_id: str,
+    data: dict,
+) -> dict:
+    """Crea o actualiza un pedido que llega desde Shopify (solo lectura en Voco).
+
+    Si ya existe un Pedido con ese shopify_order_id+agent_id, actualiza estado/pago.
+    Si no existe, lo crea con fuente='shopify'.
+    """
+    async with async_session() as session:
+        result = await session.execute(
+            select(Pedido).where(
+                Pedido.agent_id == agent_id,
+                Pedido.shopify_order_id == shopify_order_id,
+            )
+        )
+        pedido = result.scalar_one_or_none()
+        if pedido:
+            if "estado" in data and data["estado"] in ESTADOS_PEDIDO:
+                pedido.estado = data["estado"]
+            if "estado_pago" in data and data["estado_pago"] in ESTADOS_PAGO:
+                pedido.estado_pago = data["estado_pago"]
+            if "total" in data:
+                pedido.total = int(data["total"])
+            pedido.updated_at = datetime.utcnow()
+        else:
+            prods = data.get("productos", [])
+            subtotal = int(data.get("subtotal", 0)) or sum(
+                int(p.get("precio_unitario", 0)) * int(p.get("cantidad", 1)) for p in prods
+            )
+            descuento   = int(data.get("descuento", 0))
+            costo_envio = int(data.get("costo_envio", 0))
+            total = int(data.get("total", 0)) or max(0, subtotal - descuento + costo_envio)
+            pedido = Pedido(
+                agent_id=agent_id,
+                shopify_order_id=shopify_order_id,
+                numero=str(data.get("numero", f"SHP-{shopify_order_id}")),
+                telefono_cliente=str(data.get("telefono_cliente", ""))[:50],
+                nombre_cliente=str(data.get("nombre_cliente", ""))[:300],
+                estado=data.get("estado", "creado"),
+                estado_pago=data.get("estado_pago", "pendiente"),
+                productos_json=json.dumps(prods, ensure_ascii=False),
+                subtotal=subtotal,
+                descuento=descuento,
+                costo_envio=costo_envio,
+                total=total,
+                direccion_entrega=str(data.get("direccion_entrega", ""))[:1000],
+                direccion2_entrega=str(data.get("direccion2_entrega", ""))[:1000],
+                ciudad_entrega=str(data.get("ciudad_entrega", ""))[:100],
+                canal="shopify",
+                fuente="shopify",
+            )
+            session.add(pedido)
         await session.commit()
         await session.refresh(pedido)
         return _pedido_a_dict(pedido)

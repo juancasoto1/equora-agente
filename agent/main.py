@@ -9775,6 +9775,63 @@ async def shopify_webhook(request: Request):
             except Exception as e:
                 logger.error(f"Error limpiando carrito_activo para {telefono} (agent_id={aid}) tras {topic}: {e}")
 
+    # ── Sync Shopify → Voco: registrar pedido nuevo en el panel ─────────────
+    if topic == "orders/create":
+        try:
+            from agent.memory import upsert_pedido_shopify
+            shopify_order_id = str(payload.get("id", ""))
+            line_items = payload.get("line_items") or []
+            prods_voco = [
+                {
+                    "nombre":          item.get("title", ""),
+                    "presentacion":    item.get("variant_title") or item.get("title", ""),
+                    "cantidad":        int(item.get("quantity", 1)),
+                    "precio_unitario": int(float(item.get("price", 0))),
+                    "subtotal":        int(float(item.get("price", 0))) * int(item.get("quantity", 1)),
+                }
+                for item in line_items
+            ]
+            addr = payload.get("shipping_address") or {}
+            dir1 = (addr.get("address1") or "").strip()
+            dir2 = (addr.get("address2") or "").strip()
+            ciudad = (addr.get("city") or "").strip()
+            financial = payload.get("financial_status", "pending")
+            ep_init = "pagado" if financial in ("paid", "voided") else "pendiente"
+            try:
+                sub_shopify = int(float(payload.get("subtotal_price") or 0))
+            except Exception:
+                sub_shopify = 0
+            try:
+                env_shopify = int(float(
+                    (payload.get("total_shipping_price_set") or {})
+                    .get("shop_money", {}).get("amount") or 0
+                ))
+            except Exception:
+                env_shopify = 0
+            nombre_cli = (
+                (datos_cliente.get("nombres") or "") + " " +
+                (datos_cliente.get("apellidos") or "")
+            ).strip()
+            data_upsert_create = {
+                "numero":             nombre_orden,
+                "telefono_cliente":   telefono,
+                "nombre_cliente":     nombre_cli,
+                "estado":             "creado",
+                "estado_pago":        ep_init,
+                "productos":          prods_voco,
+                "subtotal":           sub_shopify,
+                "costo_envio":        env_shopify,
+                "total":              total_int,
+                "direccion_entrega":  dir1,
+                "direccion2_entrega": dir2,
+                "ciudad_entrega":     ciudad,
+            }
+            for aid in agent_ids:
+                await upsert_pedido_shopify(aid, shopify_order_id, data_upsert_create)
+            logger.info(f"[shopify-sync] Pedido {nombre_orden} creado en Voco (agents={agent_ids})")
+        except Exception as _e_usq:
+            logger.error(f"[shopify-sync] Error creando pedido en Voco: {_e_usq}")
+
     if topic == "orders/fulfilled":
         # Shopify fulfillment puede traer tracking — si está, lo incluimos
         fulfillments = payload.get("fulfillments") or []
@@ -9792,6 +9849,20 @@ async def shopify_webhook(request: Request):
             extra_tracking = f"\n📦 Guía: *{tracking_num}*"
         if tracking_url:
             extra_tracking += f"\n🔗 Seguimiento: {tracking_url}"
+
+        # Sync Shopify → Voco: marcar pedido despachado
+        try:
+            from agent.memory import upsert_pedido_shopify
+            _shopify_oid_f = str(payload.get("id", ""))
+            try:
+                _aids_f = agent_ids
+            except NameError:
+                _aids_f = await obtener_agent_ids_por_telefono(telefono) or [1]
+            for _aid_f in _aids_f:
+                await upsert_pedido_shopify(_aid_f, _shopify_oid_f, {"estado": "despachado", "total": total_int})
+            logger.info(f"[shopify-sync] Pedido {nombre_orden} marcado despachado en Voco")
+        except Exception as _e_usq_f:
+            logger.error(f"[shopify-sync] Error actualizando estado despachado en Voco: {_e_usq_f}")
 
         # Resolver agent_id para leer el mensaje configurable del agente correcto.
         # Si no se resolvió antes en este handler, lo hacemos ahora.
@@ -9846,6 +9917,16 @@ async def shopify_webhook(request: Request):
             ))
         except Exception as _e_capi:
             logger.warning(f"[capi] Purchase falló (no bloqueante): {_e_capi}")
+
+        # Sync Shopify → Voco: marcar pago confirmado
+        try:
+            from agent.memory import upsert_pedido_shopify
+            _shopify_oid_p = str(payload.get("id", ""))
+            for aid in agent_ids:
+                await upsert_pedido_shopify(aid, _shopify_oid_p, {"estado_pago": "pagado", "total": total_int})
+            logger.info(f"[shopify-sync] Pedido {nombre_orden} marcado pagado en Voco")
+        except Exception as _e_usq_p:
+            logger.error(f"[shopify-sync] Error actualizando pago en Voco: {_e_usq_p}")
 
         from agent.mensajes import format_seguro as _fmt_shopify
         _ctx_shopify = await construir_contexto_placeholders(_aid_shopify)

@@ -13630,8 +13630,11 @@ async function _pedCargarPagina() {
       var colP  = _PED_PAGO_COLOR[p.estado_pago]  || '#94a3b8';
       var labP  = _PED_PAGO_LABEL[p.estado_pago]  || p.estado_pago || '—';
       var fecha = p.created_at ? p.created_at.slice(0,10) : '—';
+      var badgeSrc = p.fuente === 'shopify'
+        ? ' <span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:.67rem;font-weight:700;background:#96bf4822;color:#5e8e3e;border:1px solid #5e8e3e44">Shopify</span>'
+        : '';
       return '<tr style="border-bottom:1px solid var(--voco-border);font-size:.84rem">' +
-        '<td style="padding:10px 12px;font-weight:600;color:var(--voco-accent)">' + (p.numero||'—') + '</td>' +
+        '<td style="padding:10px 12px;font-weight:600;color:var(--voco-accent)">' + (p.numero||'—') + badgeSrc + '</td>' +
         '<td style="padding:10px 12px"><div style="font-weight:500">' + _esc(p.nombre_cliente||'—') + '</div>' +
           '<div style="font-size:.75rem;color:var(--voco-text-muted)">' + _esc(p.telefono_cliente||'') + '</div></td>' +
         '<td style="padding:10px 12px"><span style="display:inline-block;padding:2px 9px;border-radius:20px;font-size:.73rem;font-weight:600;' +
