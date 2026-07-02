@@ -1053,10 +1053,11 @@ html.dark{
 .meta2{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
 .cts{font-size:.68rem;color:var(--conv-muted)}
 .hmbadge{background:var(--voco-red);color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
-.ch-dot{position:absolute;bottom:-2px;right:-2px;width:17px;height:17px;border-radius:50%;border:2px solid var(--voco-sidebar-bg,#1a1f2e);display:flex;align-items:center;justify-content:center}
+.ch-dot{position:absolute;bottom:-3px;right:-3px;width:20px;height:20px;border-radius:50%;border:2px solid var(--voco-sidebar-bg,#1a1f2e);display:flex;align-items:center;justify-content:center}
 .ch-wa{background:#25d366}.ch-ig{background:linear-gradient(135deg,#f09433,#dc2743,#bc1888)}.ch-me{background:linear-gradient(135deg,#0084FF,#9333ea)}.ch-fb{background:#1877F2}
-.cf-btn{padding:3px 9px;border:1px solid var(--voco-border);background:transparent;color:var(--voco-text-muted);border-radius:14px;font-size:.71rem;font-weight:500;cursor:pointer;transition:all .12s;white-space:nowrap}
-.cf-btn.active,.cf-btn:hover{background:var(--voco-brand);border-color:var(--voco-brand);color:#fff}
+.cf-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border:1.5px solid var(--voco-border);background:transparent;color:var(--voco-text-muted);border-radius:14px;font-size:.71rem;font-weight:500;cursor:pointer;transition:all .12s;white-space:nowrap}
+.cf-btn.active{border-color:var(--voco-brand);color:var(--voco-brand);background:rgba(16,185,129,.08)}
+.cf-btn:hover:not(.active){border-color:var(--voco-brand);color:var(--voco-brand);background:rgba(16,185,129,.04)}
 .cat-spin{animation:spin 1s linear infinite;display:inline-block;transform-origin:center}
 .optbadge{background:var(--voco-text-muted);color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
 
@@ -2121,16 +2122,20 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           <div id="canal-filtros" style="display:flex;gap:5px;padding:8px 12px 6px;flex-wrap:wrap;border-bottom:1px solid var(--voco-border)">
             <button class="cf-btn active" onclick="filtrarCanal('',this)">Todos</button>
             <button class="cf-btn" onclick="filtrarCanal('whatsapp',this)">
-              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#25d366;margin-right:4px;vertical-align:middle"></span>WhatsApp
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="#25d366"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+              WhatsApp
             </button>
             <button class="cf-btn" onclick="filtrarCanal('instagram',this)">
-              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#f09433,#dc2743,#bc1888);margin-right:4px;vertical-align:middle"></span>Instagram
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#E1306C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="#E1306C" stroke="none"/></svg>
+              Instagram
             </button>
             <button class="cf-btn" onclick="filtrarCanal('messenger',this)">
-              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#0084FF,#9333ea);margin-right:4px;vertical-align:middle"></span>Messenger
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="#0084FF"><path d="M12 2C6.48 2 2 6.26 2 11.5c0 2.85 1.35 5.39 3.47 7.12V22l3.17-1.74C9.75 20.4 10.86 20.5 12 20.5c5.52 0 10-4.26 10-9.5S17.52 2 12 2zm1.06 12.47l-2.8-2.9-5.5 2.9 5.97-6.37 2.87 2.9 5.43-2.9-5.97 6.37z"/></svg>
+              Messenger
             </button>
             <button class="cf-btn" onclick="filtrarCanal('facebook',this)">
-              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#1877F2;margin-right:4px;vertical-align:middle"></span>Facebook
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="#1877F2"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>
+              Facebook
             </button>
           </div>
           <div id="cl"></div>
@@ -6317,14 +6322,28 @@ function filtrar() {
   renderLista();
 }
 
+var _AV_PALETTE = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6','#f97316','#0ea5e9'];
+function _avatarColor(str) {
+  var h = 0;
+  for (var i = 0; i < str.length; i++) h = str.charCodeAt(i) + ((h << 5) - h);
+  return _AV_PALETTE[Math.abs(h) % _AV_PALETTE.length];
+}
+function _avatarIni(nm, tel) {
+  if (!nm || nm === tel || /^\+?\d+$/.test(nm)) {
+    return (tel || '??').replace(/\D/g,'').slice(-2);
+  }
+  var p = nm.trim().split(/\s+/);
+  return ((p[0]||'')[0] + (p.length > 1 ? p[p.length-1][0] : '')).toUpperCase();
+}
+
 function _canalDot(canal) {
   var c = (canal || 'whatsapp').toLowerCase();
   var cls = {whatsapp:'ch-wa', instagram:'ch-ig', messenger:'ch-me', facebook:'ch-fb'};
   var svgs = {
-    whatsapp: '<svg viewBox="0 0 24 24" width="10" height="10" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>',
-    instagram: '<svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/></svg>',
-    messenger: '<svg viewBox="0 0 24 24" width="10" height="10" fill="white"><path d="M12 2C6.48 2 2 6.26 2 11.5c0 2.85 1.35 5.39 3.47 7.12V22l3.17-1.74C9.75 20.4 10.86 20.5 12 20.5c5.52 0 10-4.26 10-9.5S17.52 2 12 2zm1.06 12.47l-2.8-2.9-5.5 2.9 5.97-6.37 2.87 2.9 5.43-2.9-5.97 6.37z"/></svg>',
-    facebook:  '<svg viewBox="0 0 24 24" width="10" height="10" fill="white"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>'
+    whatsapp: '<svg viewBox="0 0 24 24" width="12" height="12" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>',
+    instagram: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/></svg>',
+    messenger: '<svg viewBox="0 0 24 24" width="12" height="12" fill="white"><path d="M12 2C6.48 2 2 6.26 2 11.5c0 2.85 1.35 5.39 3.47 7.12V22l3.17-1.74C9.75 20.4 10.86 20.5 12 20.5c5.52 0 10-4.26 10-9.5S17.52 2 12 2zm1.06 12.47l-2.8-2.9-5.5 2.9 5.97-6.37 2.87 2.9 5.43-2.9-5.97 6.37z"/></svg>',
+    facebook:  '<svg viewBox="0 0 24 24" width="12" height="12" fill="white"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z"/></svg>'
   };
   var ico = svgs[c] || svgs.whatsapp;
   return '<span class="ch-dot ' + (cls[c] || 'ch-wa') + '">' + ico + '</span>';
@@ -6362,14 +6381,19 @@ function renderLista() {
   for (var i = 0; i < lista.length; i++) {
     var c = lista[i];
     var nm = (c.nombre && c.nombre !== c.telefono) ? c.nombre : ('+' + c.telefono);
-    var icono = c.ultimo_role === 'user' ? '👤 ' : '🤖 ';
+    var ini = _avatarIni(c.nombre, c.telefono);
+    var clr = _avatarColor(c.telefono);
+    var icono = c.ultimo_role === 'user' ? '' : '🤖 ';
     var preview = he((c.ultimo_mensaje || '').substring(0, 60));
     var sel = c.telefono === TEL ? ' sel' : '';
     var badge    = c.modo_humano ? '<span class="hmbadge">HUMANO</span>' : '';
     var optBadge = c.opt_out    ? '<span class="optbadge">🚫 Baja</span>' : '';
     h += '<div class="ci' + sel + '" role="button" tabindex="0" data-tel="' + he(c.telefono) + '"'
        + ' aria-label="Conversación con ' + he(nm) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \')abrirConv(this.dataset.tel)">'
-       + '<div class="av" aria-hidden="true">👤' + _canalDot(c.canal) + '</div>'
+       + '<div class="av" style="background:' + clr + '" aria-hidden="true">'
+       + '<span style="font-size:.83rem;font-weight:700;letter-spacing:.5px;color:#fff;line-height:1;user-select:none">' + he(ini) + '</span>'
+       + _canalDot(c.canal)
+       + '</div>'
        + '<div class="inf">'
        + '<div class="nm">' + he(nm) + '</div>'
        + '<div class="lm">' + icono + preview + '</div>'
