@@ -1571,9 +1571,158 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+@app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "voco"}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def landing_page():
+    """Landing page pública de Voco — requerida por Meta Tech Provider verification."""
+    html = """<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Voco — Plataforma SaaS que automatiza la atención al cliente, ventas y seguimiento de pedidos por WhatsApp usando inteligencia artificial.">
+<title>Voco · Automatización de WhatsApp con IA</title>
+<style>
+:root{color-scheme:light}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  background:#f6f7f9;color:#1f2430;line-height:1.6;-webkit-font-smoothing:antialiased}
+a{color:#16a34a;text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* NAV */
+nav{background:#fff;border-bottom:1px solid #e5e7eb;padding:0 32px;
+  display:flex;align-items:center;justify-content:space-between;height:60px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;color:#1f2430}
+.logo-dot{width:28px;height:28px;border-radius:8px;background:#16a34a;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:.95rem}
+.nav-links{display:flex;gap:28px;font-size:.9rem}
+
+/* HERO */
+.hero{text-align:center;padding:96px 24px 72px;max-width:720px;margin:0 auto}
+.badge{display:inline-block;background:#dcfce7;color:#15803d;font-size:.78rem;
+  font-weight:600;padding:4px 12px;border-radius:20px;margin-bottom:20px;letter-spacing:.02em}
+h1{font-size:2.6rem;font-weight:800;letter-spacing:-.03em;line-height:1.15;margin-bottom:18px}
+h1 span{color:#16a34a}
+.sub{font-size:1.1rem;color:#4b5563;max-width:540px;margin:0 auto 36px}
+.cta{display:inline-block;background:#16a34a;color:#fff;font-weight:600;
+  padding:13px 30px;border-radius:10px;font-size:1rem;transition:background .15s}
+.cta:hover{background:#15803d;text-decoration:none}
+
+/* FEATURES */
+.features{max-width:960px;margin:0 auto;padding:0 24px 80px;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:20px}
+.feat{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:28px;
+  box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.feat-icon{font-size:1.8rem;margin-bottom:12px}
+.feat h3{font-size:1rem;font-weight:700;margin-bottom:6px}
+.feat p{font-size:.9rem;color:#6b7280}
+
+/* HOW */
+.how{background:#fff;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;
+  padding:64px 24px;text-align:center}
+.how h2{font-size:1.7rem;font-weight:800;letter-spacing:-.02em;margin-bottom:8px}
+.how .sub{margin-bottom:48px}
+.steps{display:flex;flex-wrap:wrap;justify-content:center;gap:32px;max-width:860px;margin:0 auto}
+.step{flex:1;min-width:180px;max-width:220px}
+.step-num{width:36px;height:36px;border-radius:50%;background:#16a34a;color:#fff;
+  font-weight:700;font-size:.95rem;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+.step h4{font-weight:700;margin-bottom:4px;font-size:.95rem}
+.step p{font-size:.85rem;color:#6b7280}
+
+/* FOOTER */
+footer{text-align:center;padding:40px 24px;font-size:.85rem;color:#9ca3af}
+footer a{color:#9ca3af}
+</style>
+</head><body>
+
+<nav>
+  <div class="logo">
+    <div class="logo-dot">V</div>
+    Voco
+  </div>
+  <div class="nav-links">
+    <a href="/inbox">Panel</a>
+    <a href="/privacy">Privacidad</a>
+    <a href="/terminos">Términos</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="badge">Plataforma SaaS · WhatsApp Business API</div>
+  <h1>Automatiza tu negocio<br>en <span>WhatsApp</span> con IA</h1>
+  <p class="sub">Voco conecta tu cuenta de WhatsApp Business con un asistente de inteligencia artificial que atiende clientes, procesa pedidos y envía difusiones — sin intervención manual.</p>
+  <a href="/inbox" class="cta">Acceder al panel →</a>
+</div>
+
+<div class="features">
+  <div class="feat">
+    <div class="feat-icon">🤖</div>
+    <h3>Asistente IA 24/7</h3>
+    <p>Responde consultas, gestiona pedidos y hace seguimiento automáticamente usando modelos de lenguaje avanzados.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">📢</div>
+    <h3>Difusiones masivas</h3>
+    <p>Envía plantillas aprobadas por Meta a cientos de contactos con métricas de entrega y lectura en tiempo real.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">🛍️</div>
+    <h3>Catálogo y pedidos</h3>
+    <p>Integra tu catálogo de productos, gestiona carritos y recibe pedidos directamente desde el chat de WhatsApp.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">👥</div>
+    <h3>Multi-tenant</h3>
+    <p>Cada negocio tiene su propio agente, número de WhatsApp, configuración y panel de administración aislado.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">📊</div>
+    <h3>Panel de gestión</h3>
+    <p>Bandeja de entrada, historial de conversaciones, escalaciones a agentes humanos y reportes de campaña.</p>
+  </div>
+  <div class="feat">
+    <div class="feat-icon">🔗</div>
+    <h3>Integraciones</h3>
+    <p>Conecta con Shopify, HubSpot y Calendly. Sincroniza pedidos, contactos y citas sin salir de WhatsApp.</p>
+  </div>
+</div>
+
+<div class="how">
+  <h2>¿Cómo funciona?</h2>
+  <p class="sub">Tres pasos para automatizar tu WhatsApp</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h4>Conecta tu WABA</h4>
+      <p>Vincula tu cuenta de WhatsApp Business API desde el panel en minutos.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h4>Configura el agente</h4>
+      <p>Define el prompt, catálogo, integraciones y plantillas de tu asistente.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h4>Empieza a atender</h4>
+      <p>El asistente responde 24/7. Tú supervisas y escalas cuando lo necesites.</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  © 2026 Juan Carlos Soto López · Voco ·
+  <a href="mailto:soporte@myvoco.ai">soporte@myvoco.ai</a> ·
+  <a href="/privacy">Política de privacidad</a> ·
+  <a href="/terminos">Términos del servicio</a> ·
+  <a href="/data-deletion">Eliminación de datos</a>
+</footer>
+
+</body></html>"""
+    return HTMLResponse(content=html)
 
 
 @app.get("/privacy", response_class=HTMLResponse)
