@@ -599,6 +599,211 @@ function togglePwd(inputId, btnId) {{
     return html.replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
 
 
+# ── Página de pricing pública ─────────────────────────────────────────────────
+def obtener_pricing_html(promo: str = "", canceled: bool = False) -> str:
+    promo_safe = promo.replace('"', "").replace("<", "").replace(">", "")
+    canceled_html = (
+        '<div class="mb-6 rounded-voco border border-amber-200 bg-amber-50 px-4 py-3 '
+        'text-sm text-amber-700 dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300">'
+        'El pago fue cancelado. Puedes intentarlo de nuevo cuando quieras.'
+        '</div>'
+    ) if canceled else ""
+    promo_badge = (
+        f'<div class="mb-6 rounded-voco border border-emerald-200 bg-emerald-50 px-4 py-3 '
+        f'text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-300">'
+        f'<strong>Código de invitación activo:</strong> {promo_safe} — se aplicará automáticamente al pagar.'
+        f'</div>'
+    ) if promo_safe else ""
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voco — Planes y precios</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' fill='none'><path d='M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z' stroke='%2310b981' stroke-width='10' stroke-linejoin='round' stroke-linecap='round'/></svg>">
+__VOCO_DS__
+</head>
+<body class="min-h-screen bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100 antialiased">
+
+<div class="fixed top-4 right-4 z-10 flex gap-2">
+  <a href="/inbox/login" class="text-sm font-medium text-brand-600 dark:text-brand-400 hover:underline px-3 py-2">
+    Iniciar sesión
+  </a>
+  <button type="button" onclick="vocoToggleTheme()" title="Cambiar tema"
+    class="inline-flex items-center justify-center w-9 h-9 rounded-voco text-surface-500
+      hover:bg-surface-100 hover:text-surface-900 dark:text-surface-400
+      dark:hover:bg-surface-800 dark:hover:text-surface-100 transition-colors">
+    <i data-lucide="sun"  class="w-4 h-4 hidden dark:inline-block"></i>
+    <i data-lucide="moon" class="w-4 h-4 inline-block dark:hidden"></i>
+  </button>
+</div>
+
+<main class="max-w-5xl mx-auto px-4 py-16">
+
+  <!-- Header -->
+  <div class="text-center mb-12">
+    <div class="flex justify-center mb-4">
+      <svg width="48" height="48" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" fill="none">
+        <path d="M30 18 H70 L82 38 V62 L70 75 H52 L42 92 L40 75 H30 L18 62 V38 Z"
+              stroke="#10b981" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h1 class="text-4xl font-bold tracking-tight mb-3">Planes simples, sin sorpresas</h1>
+    <p class="text-lg text-surface-500 dark:text-surface-400 max-w-xl mx-auto">
+      Agente de IA para WhatsApp que vende, atiende y hace seguimiento — sin que tú tengas que estar.
+    </p>
+  </div>
+
+  {canceled_html}{promo_badge}
+
+  <!-- Planes -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+
+    <!-- Trial -->
+    <div class="bg-white dark:bg-surface-900 rounded-voco-xl border border-surface-200
+      dark:border-surface-800 shadow-voco p-6">
+      <div class="mb-4">
+        <span class="text-sm font-medium text-surface-500 dark:text-surface-400">Para empezar</span>
+        <h2 class="text-2xl font-bold mt-1">Gratis</h2>
+        <p class="text-surface-500 dark:text-surface-400 text-sm mt-1">14 días de prueba</p>
+      </div>
+      <div class="text-3xl font-bold mb-1">$0</div>
+      <p class="text-sm text-surface-500 dark:text-surface-400 mb-6">sin tarjeta de crédito</p>
+      <a href="/auth/register"
+        class="block w-full text-center px-4 py-2.5 rounded-voco border border-surface-300
+          dark:border-surface-700 text-sm font-semibold hover:bg-surface-50
+          dark:hover:bg-surface-800 transition-colors mb-6">
+        Crear cuenta gratis
+      </a>
+      <ul class="space-y-2 text-sm text-surface-600 dark:text-surface-400">
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>1 número de WhatsApp</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>100 conversaciones</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Agente IA con Claude</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Catálogo y pedidos</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Panel de conversaciones</li>
+      </ul>
+    </div>
+
+    <!-- Básico -->
+    <div class="bg-white dark:bg-surface-900 rounded-voco-xl border border-surface-200
+      dark:border-surface-800 shadow-voco p-6">
+      <div class="mb-4">
+        <span class="text-sm font-medium text-surface-500 dark:text-surface-400">Negocios que crecen</span>
+        <h2 class="text-2xl font-bold mt-1">Básico</h2>
+        <p class="text-surface-500 dark:text-surface-400 text-sm mt-1">Todo lo esencial</p>
+      </div>
+      <div class="flex items-baseline gap-1 mb-1">
+        <span class="text-3xl font-bold">$59</span>
+        <span class="text-surface-500 dark:text-surface-400 text-sm">USD/mes</span>
+      </div>
+      <p class="text-sm text-surface-500 dark:text-surface-400 mb-6">&nbsp;</p>
+      <form method="POST" action="/stripe/checkout">
+        <input type="hidden" name="plan" value="basic">
+        <input type="hidden" name="promo" value="{promo_safe}">
+        <button type="submit"
+          class="w-full px-4 py-2.5 rounded-voco border border-surface-300
+            dark:border-surface-700 text-sm font-semibold hover:bg-surface-50
+            dark:hover:bg-surface-800 transition-colors mb-6">
+          Suscribirse
+        </button>
+      </form>
+      <ul class="space-y-2 text-sm text-surface-600 dark:text-surface-400">
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>1 número de WhatsApp</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>500 conversaciones/mes</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Agente IA con Claude</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Catálogo y pedidos</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Métricas y reportes</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Soporte por email</li>
+      </ul>
+    </div>
+
+    <!-- Pro -->
+    <div class="bg-white dark:bg-surface-900 rounded-voco-xl border-2 border-brand-500
+      shadow-voco p-6 relative">
+      <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+        <span class="bg-brand-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+          Más popular
+        </span>
+      </div>
+      <div class="mb-4">
+        <span class="text-sm font-medium text-surface-500 dark:text-surface-400">Para equipos</span>
+        <h2 class="text-2xl font-bold mt-1">Pro</h2>
+        <p class="text-surface-500 dark:text-surface-400 text-sm mt-1">Multicanal + integraciones</p>
+      </div>
+      <div class="flex items-baseline gap-1 mb-1">
+        <span class="text-3xl font-bold">$149</span>
+        <span class="text-surface-500 dark:text-surface-400 text-sm">USD/mes</span>
+      </div>
+      <p class="text-sm text-surface-500 dark:text-surface-400 mb-6">&nbsp;</p>
+      <form method="POST" action="/stripe/checkout">
+        <input type="hidden" name="plan" value="pro">
+        <input type="hidden" name="promo" value="{promo_safe}">
+        <button type="submit"
+          class="w-full px-4 py-2.5 rounded-voco bg-brand-600 hover:bg-brand-700
+            text-white text-sm font-semibold shadow-voco-sm transition-colors mb-6">
+          Suscribirse
+        </button>
+      </form>
+      <ul class="space-y-2 text-sm text-surface-600 dark:text-surface-400">
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>WhatsApp + Instagram + Messenger</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>2,000 conversaciones/mes</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Agente IA con Claude</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Catálogo y pedidos</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Integración HubSpot</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Métricas avanzadas</li>
+        <li class="flex gap-2"><i data-lucide="check" class="w-4 h-4 text-brand-500 shrink-0 mt-0.5"></i>Soporte prioritario</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- FAQ -->
+  <div class="text-center text-sm text-surface-500 dark:text-surface-400 space-y-1">
+    <p>Los precios no incluyen los cargos de Meta por conversaciones de WhatsApp (facturados directamente por Meta).</p>
+    <p>Puedes cancelar en cualquier momento desde tu panel. Sin contratos.</p>
+  </div>
+
+</main>
+</body>
+</html>"""
+    return html.replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
+
+
+# ── Página de éxito post-pago ─────────────────────────────────────────────────
+def obtener_stripe_success_html() -> str:
+    html = """<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voco — ¡Bienvenido!</title>
+__VOCO_DS__
+</head>
+<body class="min-h-screen bg-surface-50 dark:bg-surface-950 text-surface-900 dark:text-surface-100 antialiased">
+<main class="min-h-screen flex items-center justify-center px-4">
+  <div class="max-w-sm w-full text-center">
+    <div class="flex justify-center mb-6">
+      <div class="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+        <i data-lucide="check" class="w-8 h-8 text-emerald-600 dark:text-emerald-400"></i>
+      </div>
+    </div>
+    <h1 class="text-2xl font-bold mb-3">¡Suscripción activada!</h1>
+    <p class="text-surface-500 dark:text-surface-400 mb-8">
+      Tu plan está activo. Ya puedes usar Voco al 100%.
+    </p>
+    <a href="/inbox"
+      class="inline-flex items-center gap-2 px-6 py-3 rounded-voco bg-brand-600
+        hover:bg-brand-700 text-white font-semibold text-sm shadow-voco-sm transition-colors">
+      <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+      Ir al panel
+    </a>
+  </div>
+</main>
+</body>
+</html>"""
+    return html.replace("__VOCO_DS__", _DESIGN_SYSTEM_HEAD)
+
+
 # ── Página de verificación de email ──────────────────────────────────────────
 def obtener_verify_email_html(
     email: str = "",

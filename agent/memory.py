@@ -31,7 +31,10 @@ class Usuario(Base):
     password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
     nombre: Mapped[str] = mapped_column(String(200), default="")
     rol: Mapped[str] = mapped_column(String(20), default="user")        # "admin" | "user"
-    plan: Mapped[str] = mapped_column(String(20), default="trial")      # "trial"|"starter"|"growth"|"pro"
+    plan: Mapped[str] = mapped_column(String(20), default="trial")      # "trial"|"basic"|"pro"
+    plan_status: Mapped[str] = mapped_column(String(20), default="trialing")  # "trialing"|"active"|"past_due"|"canceled"
+    stripe_customer_id: Mapped[str] = mapped_column(String(50), default="")
+    stripe_subscription_id: Mapped[str] = mapped_column(String(50), default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)     # False hasta verificar email
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     email_verification_token: Mapped[str] = mapped_column(String(10), default="")
@@ -527,6 +530,10 @@ async def inicializar_db():
             # Verificación de email al registrarse
             "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(10) DEFAULT ''",
             "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verification_expires TIMESTAMP",
+            # Stripe billing
+            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS plan_status VARCHAR(20) DEFAULT 'trialing'",
+            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(50) DEFAULT ''",
+            "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(50) DEFAULT ''",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -3192,13 +3199,16 @@ async def listar_mensajes_agente(agent_id: int) -> list[dict]:
 
 def _usuario_to_dict(u: Usuario) -> dict:
     return {
-        "id": u.id,
-        "email": u.email,
-        "nombre": u.nombre,
-        "rol": u.rol,
-        "plan": u.plan,
-        "is_active": u.is_active,
-        "created_at": u.created_at.isoformat() if u.created_at else "",
+        "id":                    u.id,
+        "email":                 u.email,
+        "nombre":                u.nombre,
+        "rol":                   u.rol,
+        "plan":                  u.plan,
+        "plan_status":           getattr(u, "plan_status", "trialing"),
+        "stripe_customer_id":    getattr(u, "stripe_customer_id", ""),
+        "stripe_subscription_id": getattr(u, "stripe_subscription_id", ""),
+        "is_active":             u.is_active,
+        "created_at":            u.created_at.isoformat() if u.created_at else "",
     }
 
 
@@ -3233,6 +3243,41 @@ async def verificar_y_activar_email(email: str, token: str) -> dict | None:
         u.email_verification_expires     = None
         await session.commit()
         return _usuario_to_dict(u)
+
+
+async def actualizar_stripe_info(
+    user_id: int,
+    *,
+    customer_id: str = "",
+    subscription_id: str = "",
+    plan: str = "",
+    plan_status: str = "",
+) -> None:
+    """Actualiza los campos de Stripe en el usuario. Solo actualiza los campos provistos."""
+    async with async_session() as session:
+        result = await session.execute(select(Usuario).where(Usuario.id == user_id))
+        u = result.scalar_one_or_none()
+        if not u:
+            return
+        if customer_id:
+            u.stripe_customer_id = customer_id
+        if subscription_id:
+            u.stripe_subscription_id = subscription_id
+        if plan:
+            u.plan = plan
+        if plan_status:
+            u.plan_status = plan_status
+        await session.commit()
+
+
+async def obtener_usuario_por_stripe_customer(customer_id: str) -> dict | None:
+    """Busca un usuario por su stripe_customer_id."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(Usuario).where(Usuario.stripe_customer_id == customer_id)
+        )
+        u = result.scalar_one_or_none()
+        return _usuario_to_dict(u) if u else None
 
 
 async def crear_usuario(

@@ -52,6 +52,7 @@ from agent.memory import (
     crear_sesion, verificar_sesion, cerrar_sesion,
     listar_usuarios, actualizar_usuario, obtener_agentes_de_usuario,
     guardar_verification_token, verificar_y_activar_email,
+    actualizar_stripe_info, obtener_usuario_por_stripe_customer,
     # Sprint 1 — escalación multi-agente
     crear_usuario_interno, autenticar_usuario_interno, obtener_usuarios_internos,
     actualizar_usuario_interno, obtener_usuario_interno_por_id, ping_usuario_interno,
@@ -83,7 +84,7 @@ from agent.calendly import (
     crear_cita as calendly_crear_cita,
 )
 from agent.hubspot import obtener_portal_info as hubspot_portal_info
-from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html, obtener_verify_email_html
+from agent.inbox import obtener_inbox_html, obtener_login_html, obtener_global_html, obtener_register_html, obtener_verify_email_html, obtener_pricing_html, obtener_stripe_success_html
 from agent.providers import obtener_proveedor
 from agent.capi import capi_lead, capi_view_content, capi_add_to_cart, capi_initiate_checkout
 from agent.tools import (
@@ -4072,6 +4073,180 @@ async def auth_resend_verification(request: Request):
     await enviar_verificacion(email, user.get("nombre", ""), codigo)
 
     return RedirectResponse(f"/auth/verify-email?email={email}&resent=1", status_code=302)
+
+
+# ── Stripe Billing ────────────────────────────────────────────────────────────
+
+@app.get("/pricing", response_class=HTMLResponse)
+async def pricing_page(promo: str = "", canceled: str = ""):
+    return HTMLResponse(content=obtener_pricing_html(promo=promo, canceled=canceled == "1"))
+
+
+@app.post("/stripe/checkout")
+async def stripe_checkout(
+    request: Request,
+    voco_session: str = Cookie(default=""),
+    inbox_session: str = Cookie(default=""),
+    token: str = Cookie(default=""),
+):
+    from agent.billing import crear_checkout_session
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        return RedirectResponse("/inbox/login", status_code=302)
+    form = await request.form()
+    plan = str(form.get("plan", "basic"))
+    promo = str(form.get("promo", "")).strip()
+    if plan not in ("basic", "pro"):
+        plan = "basic"
+    try:
+        url = await crear_checkout_session(
+            user_id=user["id"],
+            email=user["email"],
+            plan=plan,
+            promo_code=promo,
+            customer_id=user.get("stripe_customer_id", ""),
+        )
+        return RedirectResponse(url, status_code=303)
+    except Exception as e:
+        logger.error(f"[stripe/checkout] {e}")
+        return RedirectResponse("/pricing?error=1", status_code=302)
+
+
+@app.get("/stripe/success", response_class=HTMLResponse)
+async def stripe_success(
+    session_id: str = "",
+    voco_session: str = Cookie(default=""),
+    inbox_session: str = Cookie(default=""),
+    token: str = Cookie(default=""),
+):
+    if session_id:
+        try:
+            import stripe as _stripe
+            _stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+            session = await asyncio.to_thread(
+                _stripe.checkout.Session.retrieve, session_id,
+                expand=["subscription", "customer"],
+            )
+            cust_id = session.customer.id if hasattr(session.customer, "id") else str(session.customer)
+            sub_id  = session.subscription.id if hasattr(session.subscription, "id") else str(session.subscription)
+            plan    = session.metadata.get("plan", "basic")
+            uid     = int(session.metadata.get("user_id", 0))
+            if uid:
+                await actualizar_stripe_info(
+                    uid,
+                    customer_id=cust_id,
+                    subscription_id=sub_id,
+                    plan=plan,
+                    plan_status="active",
+                )
+        except Exception as e:
+            logger.error(f"[stripe/success] {e}")
+    return HTMLResponse(content=obtener_stripe_success_html())
+
+
+@app.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    from agent.billing import verificar_webhook, plan_desde_price_id
+    payload    = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+    event      = verificar_webhook(payload, sig_header)
+    if event is None:
+        raise HTTPException(status_code=400, detail="Webhook signature inválida")
+
+    etype = event["type"]
+    data  = event["data"]["object"]
+
+    if etype == "checkout.session.completed":
+        uid  = int(data.get("metadata", {}).get("user_id", 0))
+        plan = data.get("metadata", {}).get("plan", "basic")
+        cust = data.get("customer", "")
+        sub  = data.get("subscription", "")
+        if uid:
+            await actualizar_stripe_info(uid, customer_id=cust, subscription_id=sub, plan=plan, plan_status="active")
+
+    elif etype in ("customer.subscription.updated", "customer.subscription.deleted"):
+        cust_id = data.get("customer", "")
+        status  = data.get("status", "")  # active | trialing | past_due | canceled | unpaid
+        price_id = ""
+        items = data.get("items", {}).get("data", [])
+        if items:
+            price_id = items[0].get("price", {}).get("id", "")
+        plan = plan_desde_price_id(price_id)
+        if cust_id:
+            user = await obtener_usuario_por_stripe_customer(cust_id)
+            if user:
+                await actualizar_stripe_info(
+                    user["id"],
+                    plan=plan if plan != "unknown" else "",
+                    plan_status=status,
+                )
+
+    elif etype == "invoice.payment_failed":
+        cust_id = data.get("customer", "")
+        if cust_id:
+            user = await obtener_usuario_por_stripe_customer(cust_id)
+            if user:
+                await actualizar_stripe_info(user["id"], plan_status="past_due")
+
+    return {"status": "ok"}
+
+
+@app.post("/inbox/api/stripe/portal")
+async def stripe_portal(
+    voco_session: str = Cookie(default=""),
+    inbox_session: str = Cookie(default=""),
+    token: str = Cookie(default=""),
+):
+    from agent.billing import crear_portal_session
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    cid = user.get("stripe_customer_id", "")
+    if not cid:
+        return JSONResponse({"ok": False, "error": "No hay suscripción activa"})
+    try:
+        url = await crear_portal_session(cid)
+        return JSONResponse({"ok": True, "url": url})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
+@app.post("/inbox/api/admin/beta-invite")
+async def admin_crear_beta_invite(
+    request: Request,
+    voco_session: str = Cookie(default=""),
+    inbox_session: str = Cookie(default=""),
+    token: str = Cookie(default=""),
+):
+    from agent.billing import crear_invite_beta
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user or user.get("rol") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admins")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    nombre = str(body.get("nombre", "Friend")).strip() or "Friend"
+    meses  = int(body.get("meses", 6))
+    try:
+        result = await crear_invite_beta(nombre, meses)
+        return JSONResponse({"ok": True, **result})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)})
+
+
+@app.get("/inbox/api/admin/beta-invites")
+async def admin_listar_beta_invites(
+    voco_session: str = Cookie(default=""),
+    inbox_session: str = Cookie(default=""),
+    token: str = Cookie(default=""),
+):
+    from agent.billing import listar_invites_beta
+    user = await _obtener_sesion_usuario(voco_session or inbox_session or token)
+    if not user or user.get("rol") != "admin":
+        raise HTTPException(status_code=403, detail="Solo admins")
+    invites = await listar_invites_beta()
+    return JSONResponse({"ok": True, "invites": invites})
 
 
 @app.post("/auth/logout")
