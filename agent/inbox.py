@@ -773,7 +773,7 @@ __VOCO_DS__
 
   // Focus automático en la primera caja
   if (boxes.length) boxes[0].focus();
-}});
+}})();
 </script>
 </body>
 </html>"""
