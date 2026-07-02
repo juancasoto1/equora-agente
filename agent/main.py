@@ -3047,7 +3047,12 @@ async def webhook_handler(request: Request):
                         _msg_pedido += f"🚚 Envío: ${_ped['costo_envio']:,}\n"
                     _msg_pedido += f"💰 *Total: ${_ped['total']:,}*"
                     if _ped.get("direccion_entrega"):
-                        _msg_pedido += f"\n📍 Dirección: {_ped['direccion_entrega']}"
+                        _dir_full = _ped["direccion_entrega"]
+                        if _ped.get("direccion2_entrega"):
+                            _dir_full += ", " + _ped["direccion2_entrega"]
+                        if _ped.get("ciudad_entrega"):
+                            _dir_full += " — " + _ped["ciudad_entrega"]
+                        _msg_pedido += f"\n📍 Dirección: {_dir_full}"
                     await _proveedor_agente.enviar_mensaje(msg.telefono, _msg_pedido)
                     logger.info(
                         f"[PEDIDO_CONFIRMAR] Resumen {_ped['numero']} enviado a {msg.telefono}"
@@ -6966,6 +6971,27 @@ async def inbox_opt_outs(
     return JSONResponse(content={"opt_outs": rows, "total": len(rows)})
 
 
+@app.get("/inbox/api/clientes/lookup")
+async def inbox_cliente_lookup(
+    telefono: str = "",
+    agent_id: int = 1,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Busca un cliente por teléfono exacto. 404 si no existe."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    if not telefono:
+        raise HTTPException(status_code=400, detail="Falta telefono")
+    from agent.memory import obtener_cliente
+    cli = await obtener_cliente(telefono.strip(), agent_id)
+    if not cli:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+    nombre = ((cli.get("nombres") or "") + " " + (cli.get("apellidos") or "")).strip()
+    return JSONResponse(content={**cli, "nombre": nombre})
+
+
 @app.get("/inbox/api/clientes")
 async def inbox_clientes(
     agent_id: int = 1,
@@ -7004,9 +7030,11 @@ async def inbox_editar_cliente(
         return JSONResponse({"ok": False, "error": "Falta telefono_original"}, status_code=400)
 
     datos = {
-        "nombres":  (body.get("nombres") or "").strip(),
+        "nombres":   (body.get("nombres") or "").strip(),
         "apellidos": (body.get("apellidos") or "").strip(),
-        "ciudad":   (body.get("ciudad") or "").strip(),
+        "direccion": (body.get("direccion") or "").strip(),
+        "direccion2": (body.get("direccion2") or "").strip(),
+        "ciudad":    (body.get("ciudad") or "").strip(),
     }
 
     agent_id = int(body.get("agent_id") or 1)
@@ -8902,6 +8930,9 @@ async def api_catalogo_importar(
 @app.get("/inbox/api/pedidos/stats")
 async def api_pedidos_stats(
     agent_id: int = 1,
+    dias: int = 30,
+    desde: str = "",
+    hasta: str = "",
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -8909,7 +8940,13 @@ async def api_pedidos_stats(
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     from agent.memory import obtener_stats_pedidos
-    stats = await obtener_stats_pedidos(agent_id)
+    from datetime import datetime as _dt, timedelta as _td
+    _desde = desde or None
+    _hasta = hasta or None
+    if not _desde and not _hasta and dias:
+        _hasta = _dt.utcnow().strftime("%Y-%m-%d")
+        _desde = (_dt.utcnow() - _td(days=int(dias))).strftime("%Y-%m-%d")
+    stats = await obtener_stats_pedidos(agent_id, desde=_desde, hasta=_hasta)
     return JSONResponse(content=stats)
 
 
@@ -8947,9 +8984,20 @@ async def api_pedidos_crear(
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     data = await request.json()
-    from agent.memory import crear_pedido_manual
+    from agent.memory import crear_pedido_manual, guardar_cliente
     try:
-        pedido = await crear_pedido_manual(data.get("agent_id", 1), data)
+        ag = int(data.get("agent_id", 1))
+        pedido = await crear_pedido_manual(ag, data)
+        # Crear/actualizar cliente con los datos del pedido
+        tel = str(data.get("telefono_cliente", "")).strip()
+        nombre = str(data.get("nombre_cliente", "")).strip()
+        if tel and nombre:
+            await guardar_cliente(tel, {
+                "nombres":   nombre,
+                "direccion": str(data.get("direccion_entrega", ""))[:200],
+                "direccion2": str(data.get("direccion2_entrega", ""))[:200],
+                "ciudad":    str(data.get("ciudad_entrega", ""))[:100],
+            }, agent_id=ag)
         return JSONResponse(content={"ok": True, "pedido": pedido})
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
@@ -9162,7 +9210,12 @@ async def _generar_remision_pdf(pedido: dict, agent_id: int) -> bytes:
     pdf.ln(3)
     campo("Nombre", pedido.get("nombre_cliente", "") or "—")
     campo("Telefono", pedido.get("telefono_cliente", "") or "—")
-    campo("Direccion", pedido.get("direccion_entrega", "") or "—")
+    _dir = pedido.get("direccion_entrega", "") or ""
+    if pedido.get("direccion2_entrega"):
+        _dir += ", " + pedido["direccion2_entrega"]
+    if pedido.get("ciudad_entrega"):
+        _dir += " — " + pedido["ciudad_entrega"]
+    campo("Direccion", _dir or "—")
     if pedido.get("notas_cliente"):
         campo("Notas", pedido["notas_cliente"])
     pdf.ln(5)

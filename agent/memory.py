@@ -113,6 +113,7 @@ class Cliente(Base):
     razon_social: Mapped[str] = mapped_column(String(200), default="")
     cc_nit: Mapped[str] = mapped_column(String(50), default="")
     direccion: Mapped[str] = mapped_column(String(200), default="")
+    direccion2: Mapped[str] = mapped_column(String(200), default="")
     barrio: Mapped[str] = mapped_column(String(100), default="")
     ciudad: Mapped[str] = mapped_column(String(100), default="")
     departamento: Mapped[str] = mapped_column(String(100), default="")
@@ -133,7 +134,7 @@ class Cliente(Base):
 
 CAMPOS_CLIENTE = (
     "nombres", "apellidos", "razon_social", "cc_nit",
-    "direccion", "barrio", "ciudad", "departamento", "email",
+    "direccion", "direccion2", "barrio", "ciudad", "departamento", "email",
 )
 
 
@@ -367,6 +368,8 @@ class Pedido(Base):
     costo_envio:      Mapped[int]      = mapped_column(Integer, default=0)
     total:            Mapped[int]      = mapped_column(Integer, default=0)
     direccion_entrega: Mapped[str]     = mapped_column(Text, default="")
+    direccion2_entrega: Mapped[str]   = mapped_column(Text, default="")
+    ciudad_entrega:    Mapped[str]    = mapped_column(String(100), default="")
     notas_cliente:    Mapped[str]      = mapped_column(Text, default="")
     notas_internas:   Mapped[str]      = mapped_column(Text, default="")
     canal:            Mapped[str]      = mapped_column(String(20), default="whatsapp")   # whatsapp/manual
@@ -505,6 +508,11 @@ async def inicializar_db():
             "UPDATE pedidos SET estado='creado'    WHERE estado IN ('pendiente','confirmado')",
             "UPDATE pedidos SET estado='alistado'  WHERE estado='preparando'",
             "UPDATE pedidos SET estado='despachado' WHERE estado='enviado'",
+            # Pedidos v3 — campos de dirección extendidos
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS direccion2_entrega TEXT DEFAULT ''",
+            "ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS ciudad_entrega TEXT DEFAULT ''",
+            # Clientes v2 — dirección 2
+            "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS direccion2 TEXT DEFAULT ''",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -1077,6 +1085,7 @@ async def obtener_cliente(telefono: str, agent_id: int = 1) -> dict | None:
             "razon_social": cliente.razon_social,
             "cc_nit": cliente.cc_nit,
             "direccion": cliente.direccion,
+            "direccion2": getattr(cliente, "direccion2", "") or "",
             "barrio": cliente.barrio,
             "ciudad": cliente.ciudad,
             "departamento": cliente.departamento,
@@ -4818,7 +4827,9 @@ def _pedido_a_dict(p: Pedido) -> dict:
         "descuento":        p.descuento,
         "costo_envio":      p.costo_envio,
         "total":            p.total,
-        "direccion_entrega": p.direccion_entrega,
+        "direccion_entrega":  p.direccion_entrega,
+        "direccion2_entrega": getattr(p, "direccion2_entrega", "") or "",
+        "ciudad_entrega":     getattr(p, "ciudad_entrega", "") or "",
         "notas_cliente":    p.notas_cliente,
         "notas_internas":   p.notas_internas,
         "canal":            p.canal,
@@ -4897,6 +4908,8 @@ async def crear_pedido_manual(agent_id: int, data: dict) -> dict:
             costo_envio=costo_envio,
             total=total,
             direccion_entrega=str(data.get("direccion_entrega", ""))[:1000],
+            direccion2_entrega=str(data.get("direccion2_entrega", ""))[:1000],
+            ciudad_entrega=str(data.get("ciudad_entrega", ""))[:100],
             notas_cliente=str(data.get("notas_cliente", ""))[:2000],
             notas_internas=str(data.get("notas_internas", ""))[:2000],
             canal=data.get("canal", "manual"),
@@ -4954,6 +4967,10 @@ async def actualizar_pedido(pedido_id: int, agent_id: int, data: dict) -> dict |
             p.notas_cliente = str(data["notas_cliente"])[:2000]
         if "direccion_entrega" in data:
             p.direccion_entrega = str(data["direccion_entrega"])[:1000]
+        if "direccion2_entrega" in data:
+            p.direccion2_entrega = str(data["direccion2_entrega"])[:1000]
+        if "ciudad_entrega" in data:
+            p.ciudad_entrega = str(data["ciudad_entrega"])[:100]
         if "descuento" in data:
             p.descuento = int(data["descuento"])
             p.total = max(0, p.subtotal - p.descuento + p.costo_envio)
@@ -4981,29 +4998,37 @@ async def eliminar_pedido(pedido_id: int, agent_id: int) -> bool:
         return True
 
 
-async def obtener_stats_pedidos(agent_id: int) -> dict:
+async def obtener_stats_pedidos(
+    agent_id: int,
+    desde: str | None = None,
+    hasta: str | None = None,
+) -> dict:
     """Contadores rápidos por estado y pago para el panel."""
     async with async_session() as session:
+        base = [Pedido.agent_id == agent_id]
+        if desde:
+            try:
+                base.append(Pedido.created_at >= datetime.strptime(desde, "%Y-%m-%d"))
+            except ValueError:
+                pass
+        if hasta:
+            try:
+                base.append(Pedido.created_at < datetime.strptime(hasta, "%Y-%m-%d") + timedelta(days=1))
+            except ValueError:
+                pass
         stats: dict = {}
         for estado in ESTADOS_PEDIDO:
             r = await session.execute(
-                select(func.count()).where(
-                    Pedido.agent_id == agent_id,
-                    Pedido.estado == estado,
-                )
+                select(func.count()).where(*base, Pedido.estado == estado)
             )
             stats[estado] = r.scalar() or 0
         for ep in ESTADOS_PAGO:
             r = await session.execute(
-                select(func.count()).where(
-                    Pedido.agent_id == agent_id,
-                    Pedido.estado_pago == ep,
-                )
+                select(func.count()).where(*base, Pedido.estado_pago == ep)
             )
             stats[f"pago_{ep}"] = r.scalar() or 0
-        # Total y valor total
         r_total = await session.execute(
-            select(func.count(), func.sum(Pedido.total)).where(Pedido.agent_id == agent_id)
+            select(func.count(), func.sum(Pedido.total)).where(*base)
         )
         row = r_total.one()
         stats["total"] = row[0] or 0

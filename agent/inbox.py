@@ -3398,6 +3398,14 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             Si pones un número que empieza por 3 sin indicativo, se completa con 57 automáticamente.
           </div>
 
+          <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">Dirección 1 <span style="color:var(--voco-text-muted);font-weight:400">(calle, número)</span></label>
+          <input id="edit-cli-direccion" type="text" placeholder="Calle 123 # 45-67"
+                 style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 10px;font-size:.88rem;margin-bottom:12px;box-sizing:border-box">
+
+          <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">Dirección 2 <span style="font-weight:400">(apto, local, torre…)</span></label>
+          <input id="edit-cli-direccion2" type="text" placeholder="Apto 301, Torre B"
+                 style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 10px;font-size:.88rem;margin-bottom:12px;box-sizing:border-box">
+
           <label style="font-size:.8rem;color:var(--voco-text-muted);display:block;margin-bottom:6px">Ciudad</label>
           <input id="edit-cli-ciudad" type="text"
                  style="width:100%;border:1.5px solid #e5e7eb;border-radius:8px;padding:9px 10px;font-size:.88rem;margin-bottom:16px;box-sizing:border-box">
@@ -4069,54 +4077,43 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <h1 style="display:flex;align-items:center;gap:10px"><i data-lucide="shopping-bag" style="width:22px;height:22px"></i> Pedidos</h1>
             <p style="margin:4px 0 0;font-size:.82rem;color:var(--voco-text-muted)">Gestiona los pedidos recibidos por WhatsApp</p>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="ped-periodo" onchange="pedAplicarPreset(this.value)"
+              style="padding:6px 10px;border:1px solid var(--voco-border);border-radius:8px;font-size:.82rem;color:var(--voco-text);background:var(--voco-card-bg)">
+              <option value="7">Últimos 7 días</option>
+              <option value="30" selected>Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+              <option value="custom">Rango personalizado</option>
+            </select>
+            <div id="ped-rango-custom" style="display:none;gap:6px;align-items:center">
+              <label style="font-size:.78rem;color:var(--voco-text-muted)">Desde:</label>
+              <input id="ped-desde" type="date"
+                style="padding:5px 8px;border:1px solid var(--voco-border);border-radius:7px;font-size:.82rem;background:var(--voco-card-bg);color:var(--voco-text)">
+              <label style="font-size:.78rem;color:var(--voco-text-muted)">Hasta:</label>
+              <input id="ped-hasta" type="date"
+                style="padding:5px 8px;border:1px solid var(--voco-border);border-radius:7px;font-size:.82rem;background:var(--voco-card-bg);color:var(--voco-text)">
+            </div>
+            <button class="btn-secondary" onclick="pedCargarStats()">↺ Actualizar</button>
             <button class="btn-pri" onclick="pedAbrirNuevo()">+ Nuevo pedido</button>
           </div>
         </div>
         <div class="sec-body">
           <!-- Tarjetas de stats — estado de despacho -->
-          <div style="font-size:.72rem;font-weight:700;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Estado del pedido</div>
-          <div id="ped-stats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:10px;margin-bottom:16px">
-            <div class="kpi-card" id="ped-stat-creado">
-              <div class="kpi-label">Creado</div>
-              <div class="kpi-val" id="ped-n-creado">—</div>
-            </div>
-            <div class="kpi-card" id="ped-stat-alistado">
-              <div class="kpi-label">Alistado</div>
-              <div class="kpi-val" id="ped-n-alistado">—</div>
-            </div>
-            <div class="kpi-card" id="ped-stat-despachado">
-              <div class="kpi-label">Despachado</div>
-              <div class="kpi-val" id="ped-n-despachado">—</div>
-            </div>
-            <div class="kpi-card" id="ped-stat-entregado">
-              <div class="kpi-label">Entregado</div>
-              <div class="kpi-val" id="ped-n-entregado">—</div>
-            </div>
-            <div class="kpi-card" id="ped-stat-cancelado">
-              <div class="kpi-label">Cancelado</div>
-              <div class="kpi-val" id="ped-n-cancelado">—</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Valor total</div>
-              <div class="kpi-val" id="ped-valor-total" style="font-size:.9rem">—</div>
-            </div>
+          <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px;display:flex;align-items:center;gap:6px"><i data-lucide="truck" style="width:12px;height:12px"></i> Flujo de pedidos</p>
+          <div class="cards" id="ped-cards-estado">
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
           </div>
           <!-- Tarjetas de stats — estado de pago -->
-          <div style="font-size:.72rem;font-weight:700;color:var(--voco-text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Estado de pago</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(115px,1fr));gap:10px;margin-bottom:20px">
-            <div class="kpi-card">
-              <div class="kpi-label">Por cobrar</div>
-              <div class="kpi-val" id="ped-n-pago-pendiente">—</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Pagado</div>
-              <div class="kpi-val" id="ped-n-pago-pagado" style="color:var(--voco-success)">—</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-label">Contra entrega</div>
-              <div class="kpi-val" id="ped-n-pago-cod">—</div>
-            </div>
+          <p style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--voco-text-muted);margin:0 0 10px;display:flex;align-items:center;gap:6px"><i data-lucide="credit-card" style="width:12px;height:12px"></i> Estado de pago</p>
+          <div class="cards" id="ped-cards-pago" style="margin-bottom:20px">
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
+            <div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>
           </div>
 
           <!-- Filtros -->
@@ -4172,20 +4169,26 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
           </div>
           <div style="display:grid;gap:14px">
             <input type="hidden" id="ped-id">
+
+            <!-- Teléfono + auto-fill cliente -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div>
-                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">TELÉFONO</label>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">TELÉFONO *</label>
                 <input id="ped-telefono" type="text" placeholder="+573001234567"
+                  onblur="pedBuscarCliente()"
                   style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
                          background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
+                <div id="ped-cliente-info" style="display:none;font-size:.76rem;margin-top:4px;padding:4px 8px;border-radius:6px"></div>
               </div>
               <div>
-                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">NOMBRE CLIENTE</label>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">NOMBRE CLIENTE *</label>
                 <input id="ped-nombre" type="text" placeholder="Nombre completo"
                   style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
                          background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
               </div>
             </div>
+
+            <!-- Estado del pedido + pago -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
               <div>
                 <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">ESTADO DEL PEDIDO</label>
@@ -4210,35 +4213,63 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </select>
               </div>
             </div>
+
+            <!-- Dirección de entrega — 3 campos -->
             <div>
-              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">DIRECCIÓN DE ENTREGA</label>
-              <input id="ped-direccion" type="text" placeholder="Calle 123 # 45-67, Bogotá"
+              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">DIRECCIÓN 1 *</label>
+              <input id="ped-direccion" type="text" placeholder="Calle 123 # 45-67"
                 style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
                        background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
             </div>
-            <!-- Productos del pedido (solo lectura en pedidos existentes) -->
-            <div id="ped-prods-wrap">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">DIRECCIÓN 2 <span style="font-weight:400;font-size:.72rem">(apto, local, torre…)</span></label>
+                <input id="ped-direccion2" type="text" placeholder="Apto 301, Torre B"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
+              </div>
+              <div>
+                <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">CIUDAD</label>
+                <input id="ped-ciudad" type="text" placeholder="Bogotá"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
+              </div>
+            </div>
+
+            <!-- Productos del pedido (solo lectura — pedidos existentes) -->
+            <div id="ped-prods-wrap" style="display:none">
               <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:6px">PRODUCTOS</label>
               <div id="ped-prods-lista" style="background:var(--voco-content-bg-alt);border-radius:8px;padding:12px;font-size:.85rem;color:var(--voco-text)"></div>
             </div>
-            <!-- Productos manual (solo pedido nuevo) -->
-            <div id="ped-prods-manual-wrap" style="display:none">
-              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:6px">PRODUCTOS (JSON)</label>
-              <textarea id="ped-prods-manual" rows="4" placeholder='[{"nombre":"Producto","cantidad":1,"precio_unitario":10000}]'
-                style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
-                       background:var(--voco-card-bg);color:var(--voco-text);font-size:.82rem;
-                       font-family:monospace;resize:vertical;box-sizing:border-box"></textarea>
+
+            <!-- Buscador de productos — solo pedido nuevo -->
+            <div id="ped-prods-editor" style="display:none">
+              <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:6px">PRODUCTOS</label>
+              <div style="position:relative;margin-bottom:8px">
+                <input id="ped-prod-buscar" type="text" placeholder="Buscar producto del catálogo…"
+                  oninput="pedFiltrarProductos()" onfocus="pedFiltrarProductos()"
+                  style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
+                         background:var(--voco-card-bg);color:var(--voco-text);font-size:.85rem;box-sizing:border-box">
+                <div id="ped-prod-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;
+                     background:var(--voco-card-bg);border:1px solid var(--voco-border);border-radius:8px;
+                     max-height:200px;overflow-y:auto;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,.18);margin-top:2px"></div>
+              </div>
+              <div id="ped-prod-lista" style="min-height:40px"></div>
             </div>
+
+            <!-- Descuento + envío + total -->
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
               <div>
                 <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">DESCUENTO ($)</label>
                 <input id="ped-descuento" type="number" min="0" placeholder="0"
+                  oninput="pedRenderProductos()"
                   style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
                          background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
               </div>
               <div>
                 <label style="font-size:.78rem;font-weight:600;color:var(--voco-text-muted);display:block;margin-bottom:4px">COSTO ENVÍO ($)</label>
                 <input id="ped-envio" type="number" min="0" placeholder="0"
+                  oninput="pedRenderProductos()"
                   style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--voco-border);
                          background:var(--voco-card-bg);color:var(--voco-text);font-size:.88rem;box-sizing:border-box">
               </div>
@@ -6668,10 +6699,12 @@ function abrirEditarCliente(telefono) {
   var apellidos = partes.length > 1 ? partes[partes.length - 1] : '';
 
   document.getElementById('edit-cli-tel-original').value = cli.telefono;
-  document.getElementById('edit-cli-nombres').value   = nombres;
-  document.getElementById('edit-cli-apellidos').value = apellidos;
-  document.getElementById('edit-cli-telefono').value  = cli.telefono;
-  document.getElementById('edit-cli-ciudad').value    = cli.ciudad || '';
+  document.getElementById('edit-cli-nombres').value    = nombres;
+  document.getElementById('edit-cli-apellidos').value  = apellidos;
+  document.getElementById('edit-cli-telefono').value   = cli.telefono;
+  document.getElementById('edit-cli-direccion').value  = cli.direccion  || '';
+  document.getElementById('edit-cli-direccion2').value = cli.direccion2 || '';
+  document.getElementById('edit-cli-ciudad').value     = cli.ciudad     || '';
   document.getElementById('editar-cli-sub').textContent = '+' + cli.telefono;
 
   var msg = document.getElementById('edit-cli-msg');
@@ -6705,11 +6738,13 @@ async function guardarEditarCliente() {
   var tel_nuevo    = document.getElementById('edit-cli-telefono').value.trim();
   var payload = {
     telefono_original: tel_original,
-    nombres:   document.getElementById('edit-cli-nombres').value.trim(),
-    apellidos: document.getElementById('edit-cli-apellidos').value.trim(),
-    ciudad:    document.getElementById('edit-cli-ciudad').value.trim(),
-    telefono:  tel_nuevo,
-    agent_id:  _escAgentId || 1,
+    nombres:    document.getElementById('edit-cli-nombres').value.trim(),
+    apellidos:  document.getElementById('edit-cli-apellidos').value.trim(),
+    direccion:  document.getElementById('edit-cli-direccion').value.trim(),
+    direccion2: document.getElementById('edit-cli-direccion2').value.trim(),
+    ciudad:     document.getElementById('edit-cli-ciudad').value.trim(),
+    telefono:   tel_nuevo,
+    agent_id:   _escAgentId || 1,
   };
 
   btn.disabled = true; btn.textContent = 'Guardando…';
@@ -12384,6 +12419,15 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// Cerrar dropdown de productos al hacer click fuera
+document.addEventListener('click', function(e) {
+  var dd = document.getElementById('ped-prod-dropdown');
+  var buscar = document.getElementById('ped-prod-buscar');
+  if (dd && buscar && !dd.contains(e.target) && e.target !== buscar) {
+    dd.style.display = 'none';
+  }
+});
+
 /* ── Mensajes del sistema configurables por agente (#28) ────────
    El catálogo viene del backend (autogenerado a partir de
    agent/mensajes.py:MENSAJES) — la UI se auto-puebla con cualquier
@@ -13334,6 +13378,8 @@ async function catImportar() {
 var _pedOffset  = 0;
 var _pedLimit   = 30;
 var _pedIdActual = null;  // id del pedido abierto en el modal
+var _pedProductos = [];   // [{nombre, cantidad, precio_unitario}] — carrito del nuevo pedido
+var _pedCatalogCache = null; // cache del catálogo cargado
 
 var _PED_ESTADO_COLOR = {
   creado:     '#f97316',
@@ -13353,32 +13399,203 @@ var _PED_PAGO_LABEL = {
   cod:       'COD',
 };
 
-async function pedCargarStats() {
+/* ── Catálogo y carrito del modal de pedido ────────── */
+async function pedCargarCatalogo() {
+  if (_pedCatalogCache !== null) return;
   var ag = _escAgentId || 1;
   try {
-    var r = await fetch('/inbox/api/pedidos/stats?agent_id=' + ag, {credentials:'include'});
+    var r = await fetch('/inbox/api/catalogo?agent_id=' + ag, {credentials:'include'});
     var d = await r.json();
-    ['creado','alistado','despachado','entregado','cancelado'].forEach(function(e) {
-      var el = document.getElementById('ped-n-' + e);
-      if (el) el.textContent = d[e] || 0;
-    });
-    var vt = document.getElementById('ped-valor-total');
-    if (vt) vt.textContent = '$' + ((d.valor_total || 0) / 1000000).toFixed(1) + 'M';
-    // Stats de pago
-    var ep = document.getElementById('ped-n-pago-pendiente');
-    if (ep) ep.textContent = d['pago_pendiente'] || 0;
-    var ep2 = document.getElementById('ped-n-pago-pagado');
-    if (ep2) ep2.textContent = d['pago_pagado'] || 0;
-    var ep3 = document.getElementById('ped-n-pago-cod');
-    if (ep3) ep3.textContent = d['pago_cod'] || 0;
-    // Badge sidebar: pedidos creados (pendientes de atender)
+    _pedCatalogCache = (d.productos || []).filter(function(p){ return p.activo !== false; });
+  } catch(e) { _pedCatalogCache = []; }
+}
+
+function pedFiltrarProductos() {
+  var buscarEl = document.getElementById('ped-prod-buscar');
+  var dd = document.getElementById('ped-prod-dropdown');
+  if (!buscarEl || !dd) return;
+  var q = (buscarEl.value || '').toLowerCase().trim();
+  if (!_pedCatalogCache) { pedCargarCatalogo(); return; }
+  if (!q) { dd.style.display = 'none'; return; }
+  var matches = _pedCatalogCache.filter(function(p) {
+    return ((p.nombre||'')+(p.categoria||'')+(p.presentacion||'')).toLowerCase().includes(q);
+  }).slice(0, 8);
+  if (!matches.length) { dd.style.display = 'none'; return; }
+  dd.innerHTML = matches.map(function(p) {
+    var safe = JSON.stringify(p).replace(/'/g,'\\\'');
+    var label = he(p.nombre) + (p.presentacion ? ' — ' + he(p.presentacion) : '');
+    return '<div onclick=\'pedAgregarProducto(' + safe + ')\''
+      + ' style="padding:9px 12px;cursor:pointer;font-size:.84rem;border-bottom:1px solid var(--voco-border)"'
+      + ' onmouseenter="this.style.background=\'var(--voco-content-bg-alt)\'"'
+      + ' onmouseleave="this.style.background=\'\'">'
+      + '<div style="font-weight:600">' + label + '</div>'
+      + '<div style="font-size:.75rem;color:var(--voco-text-muted)">$' + ((p.precio||0)).toLocaleString('es-CO') + '</div>'
+      + '</div>';
+  }).join('');
+  dd.style.display = '';
+}
+
+function pedAgregarProducto(prod) {
+  var dd = document.getElementById('ped-prod-dropdown');
+  var buscar = document.getElementById('ped-prod-buscar');
+  if (dd) dd.style.display = 'none';
+  if (buscar) buscar.value = '';
+  var nombreFull = ((prod.nombre||'') + (prod.presentacion ? ' ' + prod.presentacion : '')).trim();
+  var idx = _pedProductos.findIndex(function(p){ return p.nombre === nombreFull; });
+  if (idx >= 0) {
+    _pedProductos[idx].cantidad++;
+  } else {
+    _pedProductos.push({ nombre: nombreFull, cantidad: 1, precio_unitario: prod.precio || 0 });
+  }
+  pedRenderProductos();
+}
+
+function pedRenderProductos() {
+  var lista = document.getElementById('ped-prod-lista');
+  if (!lista) return;
+  var descuento = parseInt((document.getElementById('ped-descuento')||{}).value)||0;
+  var envio     = parseInt((document.getElementById('ped-envio')||{}).value)||0;
+  var subtotal  = 0;
+  if (!_pedProductos.length) {
+    lista.innerHTML = '<div style="text-align:center;color:var(--voco-text-muted);font-size:.82rem;'
+      + 'padding:14px;border:1px dashed var(--voco-border);border-radius:8px">Busca y agrega productos arriba</div>';
+  } else {
+    lista.innerHTML = '<div style="border:1px solid var(--voco-border);border-radius:8px;overflow:hidden">'
+      + _pedProductos.map(function(p, i) {
+          var sub = p.cantidad * p.precio_unitario;
+          subtotal += sub;
+          return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--voco-border);font-size:.84rem">'
+            + '<span style="flex:1;font-weight:500">' + he(p.nombre) + '</span>'
+            + '<div style="display:flex;align-items:center;gap:4px">'
+            + '<button onclick="pedCambiarCantidad(' + i + ',-1)" style="width:24px;height:24px;border:1px solid var(--voco-border);border-radius:4px;background:transparent;cursor:pointer;color:var(--voco-text);font-size:.9rem;line-height:1">−</button>'
+            + '<span style="min-width:26px;text-align:center">' + p.cantidad + '</span>'
+            + '<button onclick="pedCambiarCantidad(' + i + ',1)" style="width:24px;height:24px;border:1px solid var(--voco-border);border-radius:4px;background:transparent;cursor:pointer;color:var(--voco-text);font-size:.9rem;line-height:1">+</button>'
+            + '</div>'
+            + '<span style="min-width:82px;text-align:right;color:var(--voco-accent)">$' + sub.toLocaleString('es-CO') + '</span>'
+            + '<button onclick="pedQuitarProducto(' + i + ')" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:1.1rem;padding:0 2px;line-height:1">×</button>'
+            + '</div>';
+        }).join('') + '</div>';
+  }
+  var total = Math.max(0, subtotal - descuento + envio);
+  var disp = document.getElementById('ped-total-display');
+  if (disp) disp.textContent = '$' + total.toLocaleString('es-CO');
+}
+
+function pedCambiarCantidad(idx, delta) {
+  if (!_pedProductos[idx]) return;
+  _pedProductos[idx].cantidad = Math.max(1, (_pedProductos[idx].cantidad||1) + delta);
+  pedRenderProductos();
+}
+
+function pedQuitarProducto(idx) {
+  _pedProductos.splice(idx, 1);
+  pedRenderProductos();
+}
+
+/* ── Lookup de cliente por teléfono ─────────────── */
+async function pedBuscarCliente() {
+  var telEl = document.getElementById('ped-telefono');
+  var infoEl = document.getElementById('ped-cliente-info');
+  if (!telEl || !infoEl) return;
+  var tel = telEl.value.trim();
+  infoEl.style.display = 'none';
+  if (!tel || tel.length < 7) return;
+  var ag = _escAgentId || 1;
+  try {
+    var r = await fetch('/inbox/api/clientes/lookup?telefono=' + encodeURIComponent(tel) + '&agent_id=' + ag, {credentials:'include'});
+    if (r.ok) {
+      var c = await r.json();
+      // Auto-fill campos vacíos con los datos del cliente
+      var nombreEl = document.getElementById('ped-nombre');
+      var dir1El   = document.getElementById('ped-direccion');
+      var dir2El   = document.getElementById('ped-direccion2');
+      var ciudadEl = document.getElementById('ped-ciudad');
+      if (nombreEl && !nombreEl.value && c.nombre) nombreEl.value = c.nombre;
+      if (dir1El   && !dir1El.value   && c.direccion)  dir1El.value  = c.direccion;
+      if (dir2El   && !dir2El.value   && c.direccion2) dir2El.value  = c.direccion2;
+      if (ciudadEl && !ciudadEl.value  && c.ciudad)    ciudadEl.value = c.ciudad;
+      infoEl.textContent = '✓ Cliente encontrado';
+      infoEl.style.background = 'rgba(34,197,94,.1)';
+      infoEl.style.color      = 'var(--voco-success)';
+    } else {
+      infoEl.textContent = 'Cliente nuevo — sus datos se guardarán al crear el pedido';
+      infoEl.style.background = 'rgba(148,163,184,.1)';
+      infoEl.style.color      = 'var(--voco-text-muted)';
+    }
+    infoEl.style.display = '';
+  } catch(e) { /* sin red — silencioso */ }
+}
+
+function pedAplicarPreset(v) {
+  var custom = document.getElementById('ped-rango-custom');
+  if (custom) custom.style.display = v === 'custom' ? 'flex' : 'none';
+  if (v !== 'custom') pedCargarStats();
+}
+
+async function pedCargarStats() {
+  var ag = _escAgentId || 1;
+  var cardsEstado = document.getElementById('ped-cards-estado');
+  var cardsPago   = document.getElementById('ped-cards-pago');
+
+  function skelCard() {
+    return '<div class="skel-card"><span class="skel skel-ic"></span><span class="skel skel-lbl"></span><span class="skel skel-val"></span><span class="skel skel-sub"></span></div>';
+  }
+  if (cardsEstado) cardsEstado.innerHTML = skelCard().repeat(6);
+  if (cardsPago)   cardsPago.innerHTML   = skelCard().repeat(3);
+
+  var periodo = (document.getElementById('ped-periodo') || {}).value || '30';
+  var qs = 'agent_id=' + ag;
+  if (periodo === 'custom') {
+    var desde = (document.getElementById('ped-desde') || {}).value;
+    var hasta = (document.getElementById('ped-hasta') || {}).value;
+    if (!desde || !hasta) {
+      var errHtml = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">⚠️ Selecciona fecha desde y hasta</div>';
+      if (cardsEstado) cardsEstado.innerHTML = errHtml;
+      if (cardsPago)   cardsPago.innerHTML   = errHtml;
+      return;
+    }
+    qs += '&desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
+  } else {
+    qs += '&dias=' + encodeURIComponent(periodo);
+  }
+
+  try {
+    var r = await fetch('/inbox/api/pedidos/stats?' + qs, {credentials:'include'});
+    var d = await r.json();
+    var fmtM = function(n) { return '$' + ((n || 0) / 1000000).toFixed(1) + 'M'; };
+
+    // Badge sidebar
     var badge = document.getElementById('ped-badge');
     if (badge) {
       var nCreados = d['creado'] || 0;
       badge.textContent = nCreados;
       badge.style.display = nCreados > 0 ? '' : 'none';
     }
-  } catch(e) { console.error('pedCargarStats', e); }
+
+    if (cardsEstado) {
+      cardsEstado.innerHTML =
+        mkCard(lic('plus-circle'),   'Creado',       d.creado     || 0, 'Pedidos nuevos')
+      + mkCard(lic('package'),       'Alistando',    d.alistado   || 0, 'En preparación')
+      + mkCard(lic('truck'),         'Despachado',   d.despachado || 0, 'En camino')
+      + mkCard(lic('package-check'), 'Entregado',    d.entregado  || 0, 'Completados')
+      + mkCard(lic('x-circle'),      'Cancelado',    d.cancelado  || 0, 'Anulados')
+      + mkCard(lic('dollar-sign'),   'Valor total',  fmtM(d.valor_total), 'Prom: ' + fmtM(d.valor_promedio));
+      lucide.createIcons();
+    }
+
+    if (cardsPago) {
+      cardsPago.innerHTML =
+        mkCard(lic('clock'),        'Por cobrar',     d.pago_pendiente || 0, 'Sin confirmar pago')
+      + mkCard(lic('check-circle'), 'Pagado',         d.pago_pagado    || 0, 'Pago confirmado')
+      + mkCard(lic('credit-card'),  'Contra entrega', d.pago_cod       || 0, 'Pago al recibir');
+      lucide.createIcons();
+    }
+  } catch(e) {
+    console.error('pedCargarStats', e);
+    var errHtml = '<div class="loading-txt" style="grid-column:1/-1;color:#721c24">⚠️ Error al cargar estadísticas</div>';
+    if (cardsEstado) cardsEstado.innerHTML = errHtml;
+    if (cardsPago)   cardsPago.innerHTML   = errHtml;
+  }
 }
 
 async function pedCargar() {
@@ -13453,22 +13670,30 @@ async function _pedCargarPagina() {
 
 function pedAbrirNuevo() {
   _pedIdActual = null;
+  _pedProductos = [];
   document.getElementById('ped-id').value = '';
   document.getElementById('ped-telefono').value = '';
   document.getElementById('ped-nombre').value = '';
   document.getElementById('ped-estado').value = 'creado';
   document.getElementById('ped-estado-pago').value = 'pendiente';
   document.getElementById('ped-direccion').value = '';
+  document.getElementById('ped-direccion2').value = '';
+  document.getElementById('ped-ciudad').value = '';
   document.getElementById('ped-descuento').value = '';
   document.getElementById('ped-envio').value = '';
   document.getElementById('ped-notas').value = '';
-  document.getElementById('ped-total-display').textContent = '—';
+  document.getElementById('ped-total-display').textContent = '$0';
+  document.getElementById('ped-cliente-info').style.display = 'none';
   document.getElementById('ped-prods-wrap').style.display = 'none';
-  document.getElementById('ped-prods-manual-wrap').style.display = '';
+  document.getElementById('ped-prods-editor').style.display = '';
   document.getElementById('ped-remision-btns').style.display = 'none';
   document.getElementById('ped-modal-error').style.display = 'none';
   document.getElementById('ped-modal-titulo').textContent = 'Nuevo pedido';
   document.getElementById('ped-telefono').readOnly = false;
+  document.getElementById('ped-prod-buscar').value = '';
+  document.getElementById('ped-prod-dropdown').style.display = 'none';
+  pedRenderProductos();
+  pedCargarCatalogo();
   if (window.lucide) window.lucide.createIcons();
   document.getElementById('ped-modal').style.display = 'flex';
 }
@@ -13481,30 +13706,35 @@ async function pedAbrirEditar(id) {
     var p = await r.json();
     _pedIdActual = p.id;
     document.getElementById('ped-id').value = p.id;
-    document.getElementById('ped-telefono').value    = p.telefono_cliente || '';
-    document.getElementById('ped-nombre').value      = p.nombre_cliente   || '';
-    document.getElementById('ped-estado').value      = p.estado           || 'creado';
-    document.getElementById('ped-estado-pago').value = p.estado_pago      || 'pendiente';
-    document.getElementById('ped-direccion').value   = p.direccion_entrega|| '';
-    document.getElementById('ped-descuento').value   = p.descuento        || 0;
-    document.getElementById('ped-envio').value       = p.costo_envio      || 0;
-    document.getElementById('ped-notas').value       = p.notas_internas   || '';
+    document.getElementById('ped-telefono').value    = p.telefono_cliente    || '';
+    document.getElementById('ped-nombre').value      = p.nombre_cliente      || '';
+    document.getElementById('ped-estado').value      = p.estado              || 'creado';
+    document.getElementById('ped-estado-pago').value = p.estado_pago         || 'pendiente';
+    document.getElementById('ped-direccion').value   = p.direccion_entrega   || '';
+    document.getElementById('ped-direccion2').value  = p.direccion2_entrega  || '';
+    document.getElementById('ped-ciudad').value      = p.ciudad_entrega      || '';
+    document.getElementById('ped-descuento').value   = p.descuento           || 0;
+    document.getElementById('ped-envio').value       = p.costo_envio         || 0;
+    document.getElementById('ped-notas').value       = p.notas_internas      || '';
     document.getElementById('ped-total-display').textContent = '$' + (p.total||0).toLocaleString('es-CO');
     document.getElementById('ped-modal-titulo').textContent = p.numero || ('Pedido #' + p.id);
     document.getElementById('ped-telefono').readOnly = true;
+    document.getElementById('ped-cliente-info').style.display = 'none';
     // Productos (solo lectura)
     var prods = p.productos || [];
     var listaHtml = prods.length
-      ? prods.map(function(pr) {
-          return '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
-            '<span>' + _esc(pr.nombre||'') + ' ×' + (pr.cantidad||1) + '</span>' +
-            '<span>$' + (pr.precio_unitario||0).toLocaleString('es-CO') + '</span>' +
-          '</div>';
-        }).join('')
-      : '<span style="color:var(--voco-text-muted)">Sin productos registrados</span>';
+      ? '<div style="background:var(--voco-content-bg-alt);border-radius:8px;padding:12px">'
+        + prods.map(function(pr) {
+            var sub = (pr.cantidad||1) * (pr.precio_unitario||0);
+            return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--voco-border)">'
+              + '<span style="font-size:.84rem">' + _esc(pr.nombre||'') + ' ×' + (pr.cantidad||1) + '</span>'
+              + '<span style="font-size:.84rem;color:var(--voco-accent)">$' + sub.toLocaleString('es-CO') + '</span>'
+              + '</div>';
+          }).join('') + '</div>'
+      : '<span style="color:var(--voco-text-muted);font-size:.84rem">Sin productos registrados</span>';
     document.getElementById('ped-prods-lista').innerHTML = listaHtml;
     document.getElementById('ped-prods-wrap').style.display = '';
-    document.getElementById('ped-prods-manual-wrap').style.display = 'none';
+    document.getElementById('ped-prods-editor').style.display = 'none';
     document.getElementById('ped-remision-btns').style.display = '';
     document.getElementById('ped-modal-error').style.display = 'none';
     if (window.lucide) window.lucide.createIcons();
@@ -13527,26 +13757,28 @@ async function pedGuardar() {
   try {
     var data;
     if (!id) {
-      // Nuevo pedido manual
-      var prodsRaw = document.getElementById('ped-prods-manual').value.trim();
-      var prods = [];
-      if (prodsRaw) {
-        try { prods = JSON.parse(prodsRaw); } catch(e) {
-          err.textContent = 'JSON de productos inválido: ' + e.message;
-          err.style.display = ''; btn.disabled = false; btn.textContent = 'Guardar'; return;
-        }
-      }
+      // Nuevo pedido manual — los productos vienen de _pedProductos
+      var tel = document.getElementById('ped-telefono').value.trim();
+      if (!tel) { err.textContent = 'El teléfono es obligatorio'; err.style.display = ''; btn.disabled = false; btn.textContent = 'Guardar'; return; }
+      var nombre = document.getElementById('ped-nombre').value.trim();
+      if (!nombre) { err.textContent = 'El nombre del cliente es obligatorio'; err.style.display = ''; btn.disabled = false; btn.textContent = 'Guardar'; return; }
+      var subtotal = _pedProductos.reduce(function(s,p){return s+p.cantidad*p.precio_unitario;},0);
+      var descuento = parseInt(document.getElementById('ped-descuento').value)||0;
+      var envio    = parseInt(document.getElementById('ped-envio').value)||0;
       data = {
-        agent_id:         ag,
-        telefono_cliente: document.getElementById('ped-telefono').value.trim(),
-        nombre_cliente:   document.getElementById('ped-nombre').value.trim(),
-        estado:           document.getElementById('ped-estado').value,
-        estado_pago:      document.getElementById('ped-estado-pago').value,
-        direccion_entrega:document.getElementById('ped-direccion').value.trim(),
-        descuento:        parseInt(document.getElementById('ped-descuento').value)||0,
-        costo_envio:      parseInt(document.getElementById('ped-envio').value)||0,
-        notas_internas:   document.getElementById('ped-notas').value.trim(),
-        productos:        prods,
+        agent_id:          ag,
+        telefono_cliente:  tel,
+        nombre_cliente:    nombre,
+        estado:            document.getElementById('ped-estado').value,
+        estado_pago:       document.getElementById('ped-estado-pago').value,
+        direccion_entrega: document.getElementById('ped-direccion').value.trim(),
+        direccion2_entrega:document.getElementById('ped-direccion2').value.trim(),
+        ciudad_entrega:    document.getElementById('ped-ciudad').value.trim(),
+        descuento:         descuento,
+        costo_envio:       envio,
+        subtotal:          subtotal,
+        notas_internas:    document.getElementById('ped-notas').value.trim(),
+        productos:         _pedProductos,
       };
       var r = await fetch('/inbox/api/pedidos', {
         method:'POST', credentials:'include',
@@ -13558,12 +13790,14 @@ async function pedGuardar() {
     } else {
       // Editar pedido existente
       data = {
-        estado:            document.getElementById('ped-estado').value,
-        estado_pago:       document.getElementById('ped-estado-pago').value,
-        direccion_entrega: document.getElementById('ped-direccion').value.trim(),
-        descuento:         parseInt(document.getElementById('ped-descuento').value)||0,
-        costo_envio:       parseInt(document.getElementById('ped-envio').value)||0,
-        notas_internas:    document.getElementById('ped-notas').value.trim(),
+        estado:             document.getElementById('ped-estado').value,
+        estado_pago:        document.getElementById('ped-estado-pago').value,
+        direccion_entrega:  document.getElementById('ped-direccion').value.trim(),
+        direccion2_entrega: document.getElementById('ped-direccion2').value.trim(),
+        ciudad_entrega:     document.getElementById('ped-ciudad').value.trim(),
+        descuento:          parseInt(document.getElementById('ped-descuento').value)||0,
+        costo_envio:        parseInt(document.getElementById('ped-envio').value)||0,
+        notas_internas:     document.getElementById('ped-notas').value.trim(),
       };
       var r = await fetch('/inbox/api/pedidos/' + id + '?agent_id=' + ag, {
         method:'PUT', credentials:'include',
