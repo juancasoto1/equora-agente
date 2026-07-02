@@ -100,6 +100,7 @@ class Mensaje(Base):
     # Antes el panel solo mostraba un triángulo genérico sin explicar por qué.
     error_code:   Mapped[int | None]      = mapped_column(Integer, nullable=True)
     error_title:  Mapped[str]            = mapped_column(String(500), default="")
+    canal:        Mapped[str]            = mapped_column(String(20),  default="whatsapp")
 
 
 class Cliente(Base):
@@ -349,6 +350,7 @@ class Ticket(Base):
     tomado_at:         Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
     resuelto_at:       Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
     actualizado_at:    Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
+    canal:             Mapped[str]           = mapped_column(String(20), default="whatsapp")
 
 
 class Pedido(Base):
@@ -517,6 +519,9 @@ async def inicializar_db():
             "CREATE INDEX IF NOT EXISTS ix_pedidos_shopify_id ON pedidos (agent_id, shopify_order_id)",
             # Clientes v2 — dirección 2
             "ALTER TABLE clientes ADD COLUMN IF NOT EXISTS direccion2 TEXT DEFAULT ''",
+            # Multi-canal inbox (WhatsApp, Instagram, Messenger, Facebook)
+            "ALTER TABLE mensajes ADD COLUMN IF NOT EXISTS canal VARCHAR(20) DEFAULT 'whatsapp'",
+            "ALTER TABLE tickets ADD COLUMN IF NOT EXISTS canal VARCHAR(20) DEFAULT 'whatsapp'",
         ):
             try:
                 await conn.exec_driver_sql(sql)
@@ -581,7 +586,7 @@ async def inicializar_db():
 
 async def guardar_mensaje(
     telefono: str, role: str, content: str, agent_id: int = 1,
-    wamid: str = "", status: str = "",
+    wamid: str = "", status: str = "", canal: str = "whatsapp",
 ) -> int:
     """Guarda un mensaje. wamid + status opcionales para tracking de
     confirmación WhatsApp (#79). Solo aplican a salientes (role='assistant')
@@ -599,6 +604,7 @@ async def guardar_mensaje(
             timestamp=datetime.utcnow(),
             wamid=(wamid or "")[:200],
             status=(status or "")[:20],
+            canal=(canal or "whatsapp")[:20],
         )
         session.add(mensaje)
         await session.commit()
@@ -1775,6 +1781,7 @@ async def obtener_todas_conversaciones(agent_id: int = 1) -> list[dict]:
                 "timestamp": msg.timestamp.isoformat() if msg.timestamp else "",
                 "modo_humano": bool(estado.modo_humano) if estado else False,
                 "opt_out": opt_out is not None,
+                "canal": getattr(msg, "canal", "whatsapp") or "whatsapp",
             })
         return convs
 
@@ -3586,6 +3593,7 @@ def _ticket_to_dict(t: Ticket, agente_nombre: str = "", agente_rol: str = "") ->
         "urgencia":         t.urgencia,
         "motivo":           t.motivo,
         "contexto":         t.contexto,
+        "canal":            getattr(t, "canal", "whatsapp") or "whatsapp",
         "agente_humano_id": t.agente_humano_id,
         "agente_nombre":    agente_nombre,
         "agente_rol":       agente_rol,
@@ -3603,6 +3611,7 @@ async def crear_ticket(
     motivo: str,
     urgencia: str = "normal",
     contexto: str = "",
+    canal: str = "whatsapp",
 ) -> dict:
     """Crea un ticket de escalación y lo deja en estado sin_asignar."""
     async with async_session() as session:
@@ -3631,6 +3640,7 @@ async def crear_ticket(
             motivo=motivo,
             urgencia=urgencia,
             contexto=contexto,
+            canal=(canal or "whatsapp")[:20],
             estado="sin_asignar",
             actualizado_at=datetime.utcnow(),
         )

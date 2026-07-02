@@ -1045,7 +1045,7 @@ html.dark{
   border-bottom:1px solid var(--conv-border);transition:background .12s, border-color .12s}
 .ci:hover{background:var(--conv-hover)}
 .ci.sel{background:var(--conv-active)}
-.av{width:46px;height:46px;border-radius:50%;background:#10b981;display:flex;
+.av{position:relative;width:46px;height:46px;border-radius:50%;background:#10b981;display:flex;
   align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;color:#fff}
 .inf{flex:1;min-width:0}
 .nm{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--conv-text)}
@@ -1053,6 +1053,11 @@ html.dark{
 .meta2{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
 .cts{font-size:.68rem;color:var(--conv-muted)}
 .hmbadge{background:var(--voco-red);color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
+.ch-dot{position:absolute;bottom:-1px;right:-1px;width:14px;height:14px;border-radius:50%;border:2px solid var(--voco-sidebar-bg,#1a1f2e)}
+.ch-wa{background:#25d366}.ch-ig{background:linear-gradient(135deg,#f09433,#dc2743,#bc1888)}.ch-me{background:linear-gradient(135deg,#0084FF,#9333ea)}.ch-fb{background:#1877F2}
+.cf-btn{padding:3px 9px;border:1px solid var(--voco-border);background:transparent;color:var(--voco-text-muted);border-radius:14px;font-size:.71rem;font-weight:500;cursor:pointer;transition:all .12s;white-space:nowrap}
+.cf-btn.active,.cf-btn:hover{background:var(--voco-brand);border-color:var(--voco-brand);color:#fff}
+.cat-spin{animation:spin 1s linear infinite;display:inline-block}
 .optbadge{background:var(--voco-text-muted);color:#fff;border-radius:8px;padding:1px 6px;font-size:.64rem;font-weight:700}
 
 /* chat vacío */
@@ -2112,6 +2117,21 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
             <label for="srinput" style="display:none">Buscar conversaciones</label>
             <input id="srinput" placeholder="Buscar por nombre o número…"
                    aria-label="Buscar conversaciones" oninput="filtrar()">
+          </div>
+          <div id="canal-filtros" style="display:flex;gap:5px;padding:8px 12px 6px;flex-wrap:wrap;border-bottom:1px solid var(--voco-border)">
+            <button class="cf-btn active" onclick="filtrarCanal('',this)">Todos</button>
+            <button class="cf-btn" onclick="filtrarCanal('whatsapp',this)">
+              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#25d366;margin-right:4px;vertical-align:middle"></span>WhatsApp
+            </button>
+            <button class="cf-btn" onclick="filtrarCanal('instagram',this)">
+              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#f09433,#dc2743,#bc1888);margin-right:4px;vertical-align:middle"></span>Instagram
+            </button>
+            <button class="cf-btn" onclick="filtrarCanal('messenger',this)">
+              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#0084FF,#9333ea);margin-right:4px;vertical-align:middle"></span>Messenger
+            </button>
+            <button class="cf-btn" onclick="filtrarCanal('facebook',this)">
+              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#1877F2;margin-right:4px;vertical-align:middle"></span>Facebook
+            </button>
           </div>
           <div id="cl"></div>
         </aside>
@@ -6236,6 +6256,7 @@ function api(path, opts) {
 var TEL = '';
 var CONVS = [];
 var Q = '';
+var _filtroCanal = '';
 var _convTimer = null;
 var _msgTimer = null;
 
@@ -6280,12 +6301,29 @@ function filtrar() {
   renderLista();
 }
 
+function _canalDot(canal) {
+  var cls = {whatsapp:'ch-wa', instagram:'ch-ig', messenger:'ch-me', facebook:'ch-fb'};
+  var c = (canal || 'whatsapp').toLowerCase();
+  return '<span class="ch-dot ' + (cls[c] || 'ch-wa') + '"></span>';
+}
+
+function filtrarCanal(canal, btn) {
+  _filtroCanal = canal;
+  document.querySelectorAll('.cf-btn').forEach(function(b){ b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  renderLista();
+}
+
 function renderLista() {
-  var lista = Q ? CONVS.filter(function(c) {
+  var lista = CONVS;
+  if (Q) lista = lista.filter(function(c) {
     return c.telefono.includes(Q) ||
            (c.nombre || '').toLowerCase().includes(Q) ||
            (c.ultimo_mensaje || '').toLowerCase().includes(Q);
-  }) : CONVS;
+  });
+  if (_filtroCanal) lista = lista.filter(function(c) {
+    return (c.canal || 'whatsapp') === _filtroCanal;
+  });
 
   if (!lista.length) {
     document.getElementById('cl').innerHTML =
@@ -6308,7 +6346,7 @@ function renderLista() {
     var optBadge = c.opt_out    ? '<span class="optbadge">🚫 Baja</span>' : '';
     h += '<div class="ci' + sel + '" role="button" tabindex="0" data-tel="' + he(c.telefono) + '"'
        + ' aria-label="Conversación con ' + he(nm) + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \')abrirConv(this.dataset.tel)">'
-       + '<div class="av" aria-hidden="true">👤</div>'
+       + '<div class="av" aria-hidden="true">👤' + _canalDot(c.canal) + '</div>'
        + '<div class="inf">'
        + '<div class="nm">' + he(nm) + '</div>'
        + '<div class="lm">' + icono + preview + '</div>'
@@ -10750,11 +10788,18 @@ function _escRenderLista(tickets) {
       var rolPretty = rol ? ' · ' + rol : '';
       agenteLabel = '<span>👤 ' + _escEsc(t.agente_nombre) + _escEsc(rolPretty) + '</span>';
     }
+    var canalMap = {whatsapp:'#25d366',instagram:'#E1306C',messenger:'#0084FF',facebook:'#1877F2'};
+    var canalKey = (t.canal || 'whatsapp').toLowerCase();
+    var canalColor = canalMap[canalKey] || '#25d366';
+    var canalLabel = {whatsapp:'WhatsApp',instagram:'Instagram',messenger:'Messenger',facebook:'Facebook'}[canalKey] || 'WhatsApp';
+    var canalBadge = '<span style="display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:10px;background:' + canalColor + '22;color:' + canalColor + ';font-size:.62rem;font-weight:700;border:1px solid ' + canalColor + '44">'
+      + '<span style="width:5px;height:5px;border-radius:50%;background:' + canalColor + ';display:inline-block"></span>' + canalLabel + '</span>';
     card.innerHTML =
       '<div class="esc-card-nombre">' + _escEsc(t.nombre_cliente || t.telefono_cliente) + '</div>' +
       '<div class="esc-card-motivo">' + _escEsc(t.motivo) + '</div>' +
       '<div class="esc-card-meta">' +
         '<span class="esc-urg ' + urgClass + '">' + (t.urgencia||'normal') + '</span>' +
+        canalBadge +
         agenteLabel +
         '<span style="margin-left:auto">' + tiempo + '</span>' +
       '</div>';
@@ -13203,16 +13248,20 @@ async function catSincronizar() {
   var ag  = _escAgentId || 1;
   var lbl = document.getElementById('cat-sync-label');
   var btn = document.getElementById('cat-btn-sync');
+  var ico = btn ? btn.querySelector('i[data-lucide]') : null;
   if (btn) btn.disabled = true;
+  if (ico) ico.classList.add('cat-spin');
   if (lbl) lbl.textContent = 'Sincronizando…';
   try {
     var r = await fetch('/inbox/api/catalogo/sincronizar?agent_id=' + ag,
       {method:'POST', credentials:'include'});
     var d = await r.json();
+    if (ico) ico.classList.remove('cat-spin');
     if (lbl) lbl.textContent = '✓ ' + (d.total || 0) + ' productos';
     await catCargar();
     setTimeout(function(){ if (lbl) lbl.textContent = 'Sincronizar'; if (btn) btn.disabled = false; }, 3000);
   } catch(e) {
+    if (ico) ico.classList.remove('cat-spin');
     if (lbl) lbl.textContent = 'Error';
     if (btn) btn.disabled = false;
   }
