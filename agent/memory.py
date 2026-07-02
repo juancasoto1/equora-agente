@@ -4532,6 +4532,35 @@ async def obtener_integration_config(agent_id: int, tipo: str) -> dict | None:
         return _integration_config_a_dict(row) if row else None
 
 
+async def buscar_agente_por_integration_setting(tipo: str, campo: str, valor: str) -> dict | None:
+    """Encuentra el agente que tiene `campo`=`valor` en settings_json de la integración `tipo`.
+    Usado para resolver agent_id a partir de ig_account_id o page_id al recibir webhooks."""
+    async with async_session() as session:
+        result = await session.execute(
+            select(IntegrationConfig).where(
+                IntegrationConfig.tipo == tipo,
+                IntegrationConfig.activo == True,  # noqa: E712
+            )
+        )
+        rows = result.scalars().all()
+        for row in rows:
+            try:
+                settings = json.loads(row.settings_json or "{}")
+                if settings.get(campo) == valor:
+                    ag_result = await session.execute(select(Agent).where(Agent.id == row.agent_id))
+                    ag = ag_result.scalar_one_or_none()
+                    if ag:
+                        return {
+                            "id": ag.id, "slug": ag.slug, "name": ag.name,
+                            "agent_name": ag.agent_name, "status": ag.status,
+                            "api_token": row.api_token,
+                            "settings": settings,
+                        }
+            except Exception:
+                continue
+    return None
+
+
 async def listar_integration_configs(agent_id: int) -> list[dict]:
     async with async_session() as session:
         result = await session.execute(

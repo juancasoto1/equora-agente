@@ -4432,6 +4432,33 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                   <div class="cfg-ov-status cfg-pill-pend" id="ov-hubspot-status">Verificando…</div>
                 </div>
               </div>
+              <div class="cfg-ov-item">
+                <span class="cfg-ov-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <defs><radialGradient id="ig-ov-g" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="5%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs>
+                    <rect width="24" height="24" rx="6" fill="url(#ig-ov-g)"/>
+                    <circle cx="12" cy="12" r="4.5" stroke="white" stroke-width="1.8" fill="none"/>
+                    <circle cx="17.5" cy="6.5" r="1.2" fill="white"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="cfg-ov-name">Instagram</div>
+                  <div class="cfg-ov-status cfg-pill-pend" id="ov-instagram-status">Sin configurar</div>
+                </div>
+              </div>
+              <div class="cfg-ov-item">
+                <span class="cfg-ov-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <rect width="24" height="24" rx="6" fill="#0099FF"/>
+                    <path d="M12 3C7.03 3 3 6.8 3 11.5c0 2.66 1.32 5.03 3.38 6.6V21l3.08-1.7c.82.23 1.69.35 2.59.35 4.97 0 9-3.8 9-8.5S16.97 3 12 3z" fill="white"/>
+                    <path d="M13 14.5l-2.3-2.45-4.45 2.45 4.9-5.2 2.35 2.45 4.4-2.45-4.9 5.2z" fill="#0099FF"/>
+                  </svg>
+                </span>
+                <div>
+                  <div class="cfg-ov-name">Messenger</div>
+                  <div class="cfg-ov-status cfg-pill-pend" id="ov-messenger-status">Sin configurar</div>
+                </div>
+              </div>
             </div>
 
             <!-- ── Card: Meta ── -->
@@ -4804,6 +4831,170 @@ html.dark .estado-card small{color:var(--voco-text-muted)!important}
                 </button>
               </div>
             </div><!-- /card-hubspot -->
+
+            <!-- ══════════════════════════════════════════════════════════
+                 INSTAGRAM DM
+                 ══════════════════════════════════════════════════════════ -->
+            <div class="cfg-card" id="card-instagram">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:10px">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <defs><radialGradient id="ig-hdr-g" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="5%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="60%" stop-color="#d6249f"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs>
+                    <rect width="24" height="24" rx="6" fill="url(#ig-hdr-g)"/>
+                    <circle cx="12" cy="12" r="4.5" stroke="white" stroke-width="1.8" fill="none"/>
+                    <circle cx="17.5" cy="6.5" r="1.2" fill="white"/>
+                  </svg>
+                  Instagram DM
+                </div>
+                <span class="cfg-status-pill cfg-pill-pending" id="pill-instagram">Sin configurar</span>
+              </div>
+
+              <div style="margin-bottom:16px;padding:12px 14px;background:rgba(249,115,22,.07);border-left:3px solid #f97316;border-radius:6px;font-size:.82rem;color:var(--voco-text-muted)">
+                <b style="color:var(--voco-text)">Prerequisitos (responsabilidad del cliente):</b><br>
+                1. Cuenta de Instagram Business o Creator conectada a una Página de Facebook.<br>
+                2. En Meta Business Manager → Integraciones → Instagram: conectar la cuenta IG a la Página.<br>
+                3. En la App de Meta para Desarrolladores: agregar el producto "Instagram" y suscribir el webhook al campo <code>messages</code>.<br>
+                4. El <b>Page Access Token</b> debe tener los permisos <code>instagram_manage_messages</code> e <code>instagram_basic</code>.
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">1</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Page Access Token
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-ig-token')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-ig-token">
+                    Token de la Página de Facebook vinculada a tu cuenta de Instagram Business.<br>
+                    <b>Cómo generarlo:</b><br>
+                    1. Meta for Developers → tu app → Instagram → Configuración de la API<br>
+                    2. Genera un token con permisos <code>instagram_manage_messages</code> e <code>instagram_basic</code>.<br>
+                    Para producción usa un <b>System User Token</b> desde Meta Business Suite (no vence).<br>
+                    Empieza con <code>EAAxxxxx…</code>
+                  </div>
+                  <input type="password" id="ig-token" class="f-inp" placeholder="EAAxxxxx…" autocomplete="new-password">
+                  <span class="cfg-field-status" id="st-ig-token"></span>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">2</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    ID de cuenta de Instagram
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-ig-acc')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-ig-acc">
+                    El ID numérico de la cuenta de Instagram Business (no el @usuario).<br>
+                    Lo encuentras en Meta for Developers → Instagram → Configuración de la API → "ID de cuenta de Instagram Business".
+                  </div>
+                  <input type="text" id="ig-account-id" class="f-inp" placeholder="ej: 17841400000000000">
+                  <span class="cfg-field-status" id="st-ig-acc"></span>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">3</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    ID de la Página de Facebook
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-ig-page')" type="button" aria-label="Ayuda">?</button>
+                  </div>
+                  <div class="cfg-help-box" id="help-ig-page">
+                    El ID numérico de la Página de Facebook vinculada a tu Instagram.<br>
+                    En Meta for Developers: menú "Herramientas" → "Explorador de la API de Graph" → consulta <code>/me?fields=id,name</code> con tu Page Token.
+                  </div>
+                  <input type="text" id="ig-page-id" class="f-inp" placeholder="ej: 106780000000000">
+                  <span class="cfg-field-status" id="st-ig-page"></span>
+                </div>
+              </div>
+
+              <div class="cfg-actions">
+                <div id="cfg-instagram-result" class="cfg-test-result" style="display:none;flex-basis:100%"></div>
+                <button class="btn-secondary" onclick="verificarInstagram()" type="button">
+                  <i data-lucide="wifi" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Verificar token
+                </button>
+                <button class="btn-primary" onclick="guardarInstagram()" type="button">
+                  <i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Guardar
+                </button>
+              </div>
+            </div><!-- /card-instagram -->
+
+            <!-- ══════════════════════════════════════════════════════════
+                 FACEBOOK MESSENGER
+                 ══════════════════════════════════════════════════════════ -->
+            <div class="cfg-card" id="card-messenger">
+              <div class="cfg-card-hdr">
+                <div class="cfg-card-title" style="display:flex;align-items:center;gap:10px">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <rect width="24" height="24" rx="6" fill="#0099FF"/>
+                    <path d="M12 3C7.03 3 3 6.8 3 11.5c0 2.66 1.32 5.03 3.38 6.6V21l3.08-1.7c.82.23 1.69.35 2.59.35 4.97 0 9-3.8 9-8.5S16.97 3 12 3z" fill="white"/>
+                    <path d="M13 14.5l-2.3-2.45-4.45 2.45 4.9-5.2 2.35 2.45 4.4-2.45-4.9 5.2z" fill="#0099FF"/>
+                  </svg>
+                  Facebook Messenger
+                </div>
+                <span class="cfg-status-pill cfg-pill-pending" id="pill-messenger">Sin configurar</span>
+              </div>
+
+              <div style="margin-bottom:16px;padding:12px 14px;background:rgba(249,115,22,.07);border-left:3px solid #f97316;border-radius:6px;font-size:.82rem;color:var(--voco-text-muted)">
+                <b style="color:var(--voco-text)">Prerequisitos (responsabilidad del cliente):</b><br>
+                1. Página de Facebook publicada (no borrador).<br>
+                2. En la App de Meta para Desarrolladores: agregar el producto "Messenger" y suscribir el webhook al campo <code>messages</code>.<br>
+                3. El <b>Page Access Token</b> debe tener los permisos <code>pages_messaging</code> y <code>pages_manage_metadata</code>.<br>
+                4. La Página debe estar en <b>Modo Producción</b> (no modo desarrollo) para recibir mensajes de usuarios externos.
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">1</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    Page Access Token
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-me-token')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-me-token">
+                    Token de la Página de Facebook a través de la cual envías mensajes por Messenger.<br>
+                    <b>Cómo generarlo:</b><br>
+                    1. Meta for Developers → tu app → Messenger → Configuración de la API<br>
+                    2. En "Tokens de acceso" selecciona tu Página y genera el token.<br>
+                    Para producción usa un <b>System User Token</b> desde Meta Business Suite (no vence).<br>
+                    Empieza con <code>EAAxxxxx…</code>
+                  </div>
+                  <input type="password" id="me-token" class="f-inp" placeholder="EAAxxxxx…" autocomplete="new-password">
+                  <span class="cfg-field-status" id="st-me-token"></span>
+                </div>
+              </div>
+
+              <div class="cfg-step">
+                <div class="cfg-step-num">2</div>
+                <div class="cfg-step-body">
+                  <div class="cfg-field-lbl">
+                    ID de la Página de Facebook
+                    <button class="cfg-help-btn" onclick="toggleHelp('help-me-page')" type="button" aria-label="Ayuda">?</button>
+                    <span class="req">*</span>
+                  </div>
+                  <div class="cfg-help-box" id="help-me-page">
+                    El ID numérico de la Página de Facebook que enviará los mensajes de Messenger.<br>
+                    En Meta for Developers: en la sección "Tokens de acceso" el ID aparece junto al nombre de la Página.<br>
+                    También: consulta <code>/me?fields=id,name</code> en el API Explorer con tu token.
+                  </div>
+                  <input type="text" id="me-page-id" class="f-inp" placeholder="ej: 106780000000000">
+                  <span class="cfg-field-status" id="st-me-page"></span>
+                </div>
+              </div>
+
+              <div class="cfg-actions">
+                <div id="cfg-messenger-result" class="cfg-test-result" style="display:none;flex-basis:100%"></div>
+                <button class="btn-secondary" onclick="verificarMessenger()" type="button">
+                  <i data-lucide="wifi" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Verificar token
+                </button>
+                <button class="btn-primary" onclick="guardarMessenger()" type="button">
+                  <i data-lucide="save" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"></i>Guardar
+                </button>
+              </div>
+            </div><!-- /card-messenger -->
 
             <!-- ══════════════════════════════════════════════════════════
                  REGLAS DEL NEGOCIO (Sprint 4 — multi-tenant)
@@ -9575,6 +9766,8 @@ async function cargarConfiguracion() {
 
   cargarCalendly();
   cargarHubspot();
+  cargarInstagram();
+  cargarMessenger();
   cargarModulos();
 }
 
@@ -9783,6 +9976,143 @@ async function guardarHubspot() {
     }
   } catch (e) {
     _showCfgResult('cfg-hubspot-result', false, 'Error de red');
+  }
+}
+
+/* ── Instagram DM ─────────────────────────────────────────────────────── */
+async function cargarInstagram() {
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/instagram', {credentials:'include'});
+    var d = await r.json();
+    var pill = document.getElementById('pill-instagram');
+    var ov   = document.getElementById('ov-instagram-status');
+    if (d.activo && d.api_token) {
+      if (pill) { pill.className = 'cfg-status-pill cfg-pill-ok'; pill.textContent = 'Conectado'; }
+      if (ov)   { ov.className = 'cfg-ov-status cfg-pill-ok'; ov.textContent = 'Conectado'; }
+      var st = d.settings || {};
+      if (st.ig_account_id) document.getElementById('ig-account-id').value = st.ig_account_id;
+      if (st.page_id)       document.getElementById('ig-page-id').value    = st.page_id;
+    } else {
+      if (pill) { pill.className = 'cfg-status-pill cfg-pill-pending'; pill.textContent = 'Sin configurar'; }
+      if (ov)   { ov.className = 'cfg-ov-status cfg-pill-pend'; ov.textContent = 'Sin configurar'; }
+    }
+  } catch(e) {}
+}
+
+async function verificarInstagram() {
+  var token = (document.getElementById('ig-token').value || '').trim();
+  var res   = document.getElementById('cfg-instagram-result');
+  if (!token) { _showCfgResult('cfg-instagram-result', false, 'Ingresa el Page Access Token primero'); return; }
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/instagram/verify', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({api_token: token}),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      _showCfgResult('cfg-instagram-result', true, 'Token válido — Página: ' + (d.page_name || d.page_id));
+      if (d.page_id && !document.getElementById('ig-page-id').value) {
+        document.getElementById('ig-page-id').value = d.page_id;
+      }
+    } else {
+      _showCfgResult('cfg-instagram-result', false, d.error || 'Token inválido');
+    }
+  } catch(e) {
+    _showCfgResult('cfg-instagram-result', false, 'Error de red');
+  }
+}
+
+async function guardarInstagram() {
+  var token   = (document.getElementById('ig-token').value      || '').trim();
+  var accId   = (document.getElementById('ig-account-id').value || '').trim();
+  var pageId  = (document.getElementById('ig-page-id').value    || '').trim();
+  if (!accId) { _showCfgResult('cfg-instagram-result', false, 'El ID de cuenta de Instagram es obligatorio'); return; }
+  try {
+    var body = { activo: true, settings: { ig_account_id: accId, page_id: pageId } };
+    if (token) body.api_token = token;
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/instagram', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      document.getElementById('ig-token').value = '';
+      _showCfgResult('cfg-instagram-result', true, 'Guardado ✓');
+      await cargarInstagram();
+    } else {
+      _showCfgResult('cfg-instagram-result', false, d.error || 'Error guardando');
+    }
+  } catch(e) {
+    _showCfgResult('cfg-instagram-result', false, 'Error de red');
+  }
+}
+
+/* ── Facebook Messenger ───────────────────────────────────────────────── */
+async function cargarMessenger() {
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/messenger', {credentials:'include'});
+    var d = await r.json();
+    var pill = document.getElementById('pill-messenger');
+    var ov   = document.getElementById('ov-messenger-status');
+    if (d.activo && d.api_token) {
+      if (pill) { pill.className = 'cfg-status-pill cfg-pill-ok'; pill.textContent = 'Conectado'; }
+      if (ov)   { ov.className = 'cfg-ov-status cfg-pill-ok'; ov.textContent = 'Conectado'; }
+      var st = d.settings || {};
+      if (st.page_id) document.getElementById('me-page-id').value = st.page_id;
+    } else {
+      if (pill) { pill.className = 'cfg-status-pill cfg-pill-pending'; pill.textContent = 'Sin configurar'; }
+      if (ov)   { ov.className = 'cfg-ov-status cfg-pill-pend'; ov.textContent = 'Sin configurar'; }
+    }
+  } catch(e) {}
+}
+
+async function verificarMessenger() {
+  var token = (document.getElementById('me-token').value || '').trim();
+  if (!token) { _showCfgResult('cfg-messenger-result', false, 'Ingresa el Page Access Token primero'); return; }
+  try {
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/messenger/verify', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({api_token: token}),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      _showCfgResult('cfg-messenger-result', true, 'Token válido — Página: ' + (d.page_name || d.page_id));
+      if (d.page_id && !document.getElementById('me-page-id').value) {
+        document.getElementById('me-page-id').value = d.page_id;
+      }
+    } else {
+      _showCfgResult('cfg-messenger-result', false, d.error || 'Token inválido');
+    }
+  } catch(e) {
+    _showCfgResult('cfg-messenger-result', false, 'Error de red');
+  }
+}
+
+async function guardarMessenger() {
+  var token  = (document.getElementById('me-token').value   || '').trim();
+  var pageId = (document.getElementById('me-page-id').value || '').trim();
+  if (!pageId) { _showCfgResult('cfg-messenger-result', false, 'El ID de Página es obligatorio'); return; }
+  try {
+    var body = { activo: true, settings: { page_id: pageId } };
+    if (token) body.api_token = token;
+    var r = await fetch('/inbox/api/agents/' + (_escAgentId || 1) + '/integrations/messenger', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    var d = await r.json();
+    if (d.ok) {
+      document.getElementById('me-token').value = '';
+      _showCfgResult('cfg-messenger-result', true, 'Guardado ✓');
+      await cargarMessenger();
+    } else {
+      _showCfgResult('cfg-messenger-result', false, d.error || 'Error guardando');
+    }
+  } catch(e) {
+    _showCfgResult('cfg-messenger-result', false, 'Error de red');
   }
 }
 

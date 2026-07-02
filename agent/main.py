@@ -111,6 +111,8 @@ PORT = int(os.getenv("PORT", 8000))
 # ── Cache de agentes por phone_number_id ─────────────────────────────────────
 # Evita consultar la BD en cada mensaje entrante para resolver el agente
 _phone_agent_cache: dict[str, dict] = {}
+# Cache para Instagram y Messenger (ig_account_id / page_id → agent dict)
+_ig_agent_cache: dict[str, dict] = {}
 # Sandbox hub: teléfono → agent_id del agente que validó (in-memory, se resetea al reiniciar)
 _sandbox_sessions: dict[str, int] = {}
 
@@ -163,6 +165,165 @@ async def _get_meta_para_agente(agent: dict) -> "ProveedorMeta":
         verify_token=verify_token,
         catalog_id=catalog_id,
     )
+
+
+async def _resolver_agente_ig_messenger(entry_id: str, canal: str) -> dict | None:
+    """Busca el agente que tiene este ig_account_id (Instagram) o page_id (Messenger).
+    Retorna None si ningún agente tiene configurado ese ID."""
+    from agent.memory import buscar_agente_por_integration_setting
+    if not entry_id:
+        return None
+    cache_key = f"{canal}:{entry_id}"
+    if cache_key in _ig_agent_cache:
+        return _ig_agent_cache[cache_key]
+    campo = "ig_account_id" if canal == "instagram" else "page_id"
+    result = await buscar_agente_por_integration_setting(canal, campo, entry_id)
+    if result:
+        _ig_agent_cache[cache_key] = result
+    return result
+
+
+def _get_ig_messenger_provider(agent_info: dict, canal: str) -> "ProveedorIGMessenger":
+    """Crea ProveedorIGMessenger a partir del dict devuelto por
+    buscar_agente_por_integration_setting (ya incluye api_token y settings)."""
+    from agent.providers.ig_messenger import ProveedorIGMessenger
+    settings = agent_info.get("settings", {})
+    return ProveedorIGMessenger(
+        page_access_token=agent_info.get("api_token", ""),
+        page_id=settings.get("page_id", ""),
+        ig_account_id=settings.get("ig_account_id", ""),
+        canal=canal,
+    )
+
+
+async def _procesar_ig_messenger(body: dict, canal: str) -> None:
+    """Handler principal para webhooks de Instagram DM y Facebook Messenger.
+
+    Reutiliza brain.py (generar_respuesta) y markers.py (aplicar_marcadores).
+    Los marcadores WhatsApp-específicos (BOTONES, LISTA, TIENDA, PRODUCTO)
+    se ignoran — solo se envía el texto limpio.
+    """
+    from agent.providers.ig_messenger import ProveedorIGMessenger
+    from agent.brain import generar_respuesta
+    from agent.memory import (
+        obtener_historial, guardar_mensaje as _guardar_msg,
+        registrar_mensaje_usuario, registrar_mensaje_asistente,
+        get_modo_humano, crear_ticket, obtener_cliente,
+    )
+    from agent.markers import MarkerContext, aplicar_marcadores
+
+    # ── Resolver agente por entry id ─────────────────────────────────────────
+    entry_id = ""
+    try:
+        entry_id = body["entry"][0]["id"]
+    except Exception:
+        pass
+
+    agent_info = await _resolver_agente_ig_messenger(entry_id, canal)
+    if not agent_info:
+        logger.warning(
+            f"[{canal}] entry_id={entry_id!r} sin agente configurado — ignorado"
+        )
+        return
+
+    agent_id = agent_info["id"]
+
+    if agent_info.get("status") in ("paused", "draft"):
+        return
+
+    proveedor = _get_ig_messenger_provider(agent_info, canal)
+
+    # ── Parsear mensajes ──────────────────────────────────────────────────────
+    eventos = proveedor.parsear_body(body)
+    if not eventos:
+        return
+
+    for ev in eventos:
+        sender_id = ev["sender_id"]
+        mid       = ev["mid"]
+        texto     = ev["texto"]
+
+        # ── Deduplicación ─────────────────────────────────────────────────────
+        if mid:
+            _ahora = time.time()
+            for k in [k for k, v in _wamids_procesados.items() if _ahora - v > _WAMID_DEDUP_TTL]:
+                del _wamids_procesados[k]
+            if mid in _wamids_procesados:
+                logger.warning(f"[{canal}] dedup: {mid[:24]} ya procesado")
+                continue
+            _wamids_procesados[mid] = _ahora
+
+        logger.info(f"[{canal}] {sender_id}: {texto[:80]}")
+
+        # Marcar como leído
+        asyncio.create_task(proveedor.marcar_leido(sender_id))
+
+        # Resetear timers de seguimiento
+        await registrar_mensaje_usuario(sender_id, agent_id=agent_id)
+
+        # Modo humano: guardar y no responder
+        if await get_modo_humano(sender_id, agent_id=agent_id):
+            await _guardar_msg(sender_id, "user", texto, agent_id=agent_id, canal=canal)
+            logger.info(f"[{canal}] modo humano activo — no responde")
+            continue
+
+        historial = await obtener_historial(sender_id, agent_id=agent_id)
+
+        # ── Brain ─────────────────────────────────────────────────────────────
+        # Typing indicator mientras Claude procesa
+        asyncio.create_task(proveedor.enviar_typing(sender_id))
+
+        try:
+            respuesta = await generar_respuesta(
+                texto, historial, telefono=sender_id, agent_id=agent_id,
+            )
+        except Exception as e:
+            logger.error(f"[{canal}] generar_respuesta error: {e}")
+            continue
+
+        # Guardar mensajes
+        await _guardar_msg(sender_id, "user",      texto,    agent_id=agent_id, canal=canal)
+        await _guardar_msg(sender_id, "assistant", respuesta, agent_id=agent_id, canal=canal)
+        await registrar_mensaje_asistente(sender_id, agent_id=agent_id)
+
+        # ── Marcadores ────────────────────────────────────────────────────────
+        ctx = MarkerContext(respuesta=respuesta, telefono=sender_id, agent_id=agent_id)
+        try:
+            ctx = await aplicar_marcadores(ctx)
+        except Exception as e:
+            logger.warning(f"[{canal}] aplicar_marcadores error: {e}")
+
+        texto_final = ctx.respuesta.strip()
+
+        # Escalación: misma lógica que WhatsApp
+        if ctx.datos_escalacion:
+            try:
+                _esc = ctx.datos_escalacion
+                _nombre = ""
+                _cli = await obtener_cliente(sender_id, agent_id=agent_id)
+                if _cli:
+                    _nombre = f"{_cli.get('nombres','')} {_cli.get('apellidos','')}".strip()
+                await crear_ticket(
+                    agent_id=agent_id,
+                    telefono_cliente=sender_id,
+                    nombre_cliente=_nombre or sender_id,
+                    motivo=_esc.get("motivo", ""),
+                    urgencia=_esc.get("urgencia", "normal"),
+                    contexto=_esc.get("contexto", ""),
+                    canal=canal,
+                )
+            except Exception as e:
+                logger.error(f"[{canal}] crear_ticket error: {e}")
+
+        # Checkout URL: añadir al texto si hay
+        if ctx.checkout_url:
+            texto_final = f"{texto_final}\n\n🛒 {ctx.checkout_url}".strip()
+
+        if not texto_final:
+            continue
+
+        # ── Enviar respuesta ──────────────────────────────────────────────────
+        await proveedor.enviar_mensaje(sender_id, texto_final)
 
 
 async def _get_proveedor_panel(agent_id: int) -> "ProveedorMeta":
@@ -2170,6 +2331,13 @@ async def webhook_handler(request: Request):
         _body_raw = await request.json()
     except Exception:
         pass
+
+    # ── Routing Instagram / Facebook Messenger ────────────────────────────────
+    _wb_object = _body_raw.get("object", "")
+    if _wb_object in ("instagram", "page"):
+        _canal_ig = "instagram" if _wb_object == "instagram" else "messenger"
+        asyncio.create_task(_procesar_ig_messenger(_body_raw, _canal_ig))
+        return {"status": "ok"}
 
     _phone_id = ""
     try:
@@ -5850,7 +6018,7 @@ async def api_crear_actividad_deal(
 # ningún endpoint que la usara. Un (agent_id, tipo) por integración.
 # ══════════════════════════════════════════════════════════════════════════════
 
-TIPOS_INTEGRACION_VALIDOS = {"calendly", "hubspot", "sendgrid", "pipedrive"}
+TIPOS_INTEGRACION_VALIDOS = {"calendly", "hubspot", "sendgrid", "pipedrive", "instagram", "messenger"}
 
 
 def _integracion_para_frontend(config: dict) -> dict:
@@ -5900,6 +6068,63 @@ async def api_verificar_calendly(
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     resultado = await calendly_usuario(agent_id_param)
+    return JSONResponse(content=resultado)
+
+
+@app.post("/inbox/api/agents/{agent_id_param}/integrations/instagram/verify")
+async def api_verificar_instagram(
+    agent_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Verifica el Page Access Token de Instagram llamando a /me en Graph API."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    page_token = (body.get("api_token") or "").strip()
+    if not page_token:
+        # Intentar leer token guardado en BD
+        cfg = await obtener_integration_config(agent_id_param, "instagram")
+        page_token = (getattr(cfg, "api_token", None) or "").strip()
+    if not page_token:
+        return JSONResponse(content={"ok": False, "error": "Sin token"})
+    from agent.providers.ig_messenger import ProveedorIGMessenger
+    prov = ProveedorIGMessenger(page_access_token=page_token, canal="instagram")
+    resultado = await prov.verificar_token()
+    return JSONResponse(content=resultado)
+
+
+@app.post("/inbox/api/agents/{agent_id_param}/integrations/messenger/verify")
+async def api_verificar_messenger(
+    agent_id_param: int,
+    request: Request,
+    token: str = "",
+    inbox_session: str = Cookie(default=""),
+    voco_session: str = Cookie(default=""),
+):
+    """Verifica el Page Access Token de Messenger llamando a /me en Graph API."""
+    if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
+        raise HTTPException(status_code=401, detail="No autorizado")
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    page_token = (body.get("api_token") or "").strip()
+    if not page_token:
+        cfg = await obtener_integration_config(agent_id_param, "messenger")
+        page_token = (getattr(cfg, "api_token", None) or "").strip()
+    if not page_token:
+        return JSONResponse(content={"ok": False, "error": "Sin token"})
+    from agent.providers.ig_messenger import ProveedorIGMessenger
+    prov = ProveedorIGMessenger(page_access_token=page_token, canal="messenger")
+    resultado = await prov.verificar_token()
     return JSONResponse(content=resultado)
 
 
