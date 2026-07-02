@@ -7498,6 +7498,7 @@ async function enviarDifusion() {
           header_url:  tpl.header_url  || null,
           campaign_name: campaignName,
           campaign_id:   campaignId,
+          agent_id:      _escAgentId,
           // #71 — mandamos el texto del body para que backend lo guarde en
           // el historial del cliente con las variables sustituidas.
           body_text:     tpl.preview || tpl.body || '',
@@ -7536,7 +7537,7 @@ async function cargarHistorialDif() {
   var tbody = document.getElementById('dif-hist-body');
   if (!tbody) return;
   try {
-    var r = await fetch('/inbox/difusiones/historial', {credentials:'include'});
+    var r = await fetch('/inbox/difusiones/historial?agent_id=' + _escAgentId, {credentials:'include'});
     var d = await r.json();
     var rows = d.difusiones || [];
     if (!rows.length) {

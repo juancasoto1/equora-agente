@@ -6229,6 +6229,7 @@ async def inbox_broadcast_send(
     header_url    = body.get("header_url")       # URL de imagen del header (si aplica)
     campaign_name = body.get("campaign_name", "")  # nombre de la campaña dado por el usuario
     campaign_id   = body.get("campaign_id", "")    # ID único compartido entre todos los lotes
+    agent_id_dif  = int(body.get("agent_id", 1))   # agente que envía la difusión
     # Texto del body del template — el frontend lo manda para que podamos
     # guardarlo en el historial del cliente con variables sustituidas (#71).
     # Si no viene, usamos un fallback descriptivo.
@@ -6332,6 +6333,7 @@ async def inbox_broadcast_send(
                                 campaign_id=campaign_id,
                                 campaign_name=campaign_name,
                                 telefono=tel,
+                                agent_id=agent_id_dif,
                             )
                             logger.warning(f"[broadcast✅] wamid guardado para {tel[-4:]}**** campaign={campaign_id[:20]}")
                         except Exception as _e:
@@ -6393,6 +6395,7 @@ async def inbox_broadcast_send(
             errores=errores,
             campaign_name=campaign_name,
             campaign_id=campaign_id,
+            agent_id=agent_id_dif,
         )
     except Exception as e:
         logger.warning(f"[broadcast] No se pudo registrar difusión en BD: {e}")
@@ -6407,6 +6410,7 @@ async def inbox_broadcast_send(
 
 @app.get("/inbox/difusiones/historial")
 async def inbox_difusiones_historial(
+    agent_id: int = 1,
     token: str = "",
     inbox_session: str = Cookie(default=""),
     voco_session: str = Cookie(default=""),
@@ -6415,7 +6419,7 @@ async def inbox_difusiones_historial(
     if not await _obtener_sesion_usuario(voco_session or inbox_session or token):
         raise HTTPException(status_code=401, detail="No autorizado")
     try:
-        rows = await obtener_difusiones(100)
+        rows = await obtener_difusiones(100, agent_id=agent_id)
         return JSONResponse(content={"difusiones": rows})
     except Exception as e:
         logger.error(f"[historial-dif] Error: {e}", exc_info=True)

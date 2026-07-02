@@ -1837,12 +1837,14 @@ async def guardar_mensaje_difusion(
     campaign_id: str,
     campaign_name: str,
     telefono: str,
+    agent_id: int = 1,
 ) -> None:
     """Registra un mensaje de difusión recién enviado para tracking posterior."""
     if not wamid or not campaign_id:
         return
     async with async_session() as session:
         msg = DifusionMensaje(
+            agent_id=agent_id,
             wamid=wamid,
             campaign_id=campaign_id,
             campaign_name=campaign_name,
@@ -1960,11 +1962,13 @@ async def registrar_difusion(
     errores: list[str],
     campaign_name: str = "",
     campaign_id: str = "",
+    agent_id: int = 1,
 ):
     """Guarda el resultado de un lote de difusión. Cada lote de 50 es un registro;
     se agrupan por campaign_id al consultar el historial."""
     async with async_session() as session:
         dif = Difusion(
+            agent_id=agent_id,
             campaign_name=campaign_name,
             campaign_id=campaign_id,
             template_name=template_name,
