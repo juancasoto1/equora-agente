@@ -3290,7 +3290,9 @@ async def webhook_handler(request: Request):
                         continue
                     # 1) Enviar producto del catálogo nativo
                     try:
-                        await _proveedor_agente.enviar_producto(msg.telefono, rid_match)
+                        _res_prod = await _proveedor_agente.enviar_producto(msg.telefono, rid_match)
+                        if isinstance(_res_prod, dict) and not _res_prod.get("ok"):
+                            raise Exception(_res_prod.get("error", "single_product falló"))
                         logger.info(f"[PRODUCTO] single_product '{nombre_prod}' (rid={rid_match}) enviado")
                     except Exception as e:
                         logger.error(f"[PRODUCTO] Error enviando single_product: {e}")
