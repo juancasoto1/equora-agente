@@ -3508,8 +3508,8 @@ async def webhook_handler(request: Request):
                     )
                     logger.info(f"[TIENDA→TEXTO] catálogo WA no disponible para {msg.telefono} — enviando texto")
                     try:
-                        from agent.tools import obtener_catalogo_voco_texto
-                        _cat_texto = await obtener_catalogo_voco_texto(_agent_id)
+                        from agent.tools import obtener_catalogo_shopify
+                        _cat_texto = await obtener_catalogo_shopify(_agent_id)
                         if _cat_texto:
                             _intro = (
                                 f"🛒 *Aquí nuestros productos "
